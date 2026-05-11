@@ -185,8 +185,9 @@ final featuredShowcase = [
     title: 'Sunset Pool Sanctuary',
     roomType: 'Pool Area',
     style: 'Bali Resort',
-    beforeImageUrl: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800',
-    afterImageUrl: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=800',
+    // before: plain concrete pool deck / after: dramatic infinity pool villa
+    beforeImageUrl: 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=800',
+    afterImageUrl: 'https://images.unsplash.com/photo-1613977257363-707ba9348227?w=800',
     status: ProjectStatus.completed,
     createdAt: DateTime(2026, 5, 1),
     lastUpdatedAt: DateTime(2026, 5, 10),
@@ -198,6 +199,7 @@ final featuredShowcase = [
     title: 'Warm Japandi Haven',
     roomType: 'Living Room',
     style: 'Japandi',
+    // before: plain neutral living room / after: warm Japandi interior
     beforeImageUrl: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800',
     afterImageUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800',
     status: ProjectStatus.completed,
@@ -211,7 +213,8 @@ final featuredShowcase = [
     title: 'Tropical Villa Terrace',
     roomType: 'Terrace',
     style: 'Tropical Modern',
-    beforeImageUrl: 'https://images.unsplash.com/photo-1504279577054-acfeccf8fc52?w=800',
+    // before: plain terrace / after: lush tropical villa terrace
+    beforeImageUrl: 'https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?w=800',
     afterImageUrl: 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800',
     status: ProjectStatus.completed,
     createdAt: DateTime(2026, 4, 25),
@@ -224,6 +227,7 @@ final featuredShowcase = [
     title: 'Modern Zen Bedroom',
     roomType: 'Bedroom',
     style: 'Modern Zen',
+    // before: standard bedroom / after: serene minimal bedroom
     beforeImageUrl: 'https://images.unsplash.com/photo-1560185007-cde436f6a4d0?w=800',
     afterImageUrl: 'https://images.unsplash.com/photo-1616046229478-9f05a400b3ed?w=800',
     status: ProjectStatus.completed,

@@ -13,6 +13,7 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/session_provider.dart';
 import '../../data/mock/mock_projects.dart';
+import '../../data/services/supabase_service.dart';
 import '../../data/models/message_model.dart';
 import '../../data/models/project_model.dart';
 import '../../shared/widgets/app_button.dart';
@@ -62,15 +63,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   late String _currentRoomType;
   late String _currentStyle;
 
-  late final ProjectModel _project;
-  late final List<MessageModel> _messages;
+  late ProjectModel _project;
+  late List<MessageModel> _messages;
   late int _iterationCount;
+
+  late final SupabaseService _svc;
+  // Messages queued while the Supabase session is still being created.
+  final List<MessageModel> _pendingMessages = [];
 
   late final AnimationController _entryController;
   late final Animation<double> _fadeAnim;
 
   List<String> get _suggestions =>
-      (_hasGenerated || _project.iterationCount > 0)
+      (_hasGenerated || _iterationCount > 0)
           ? postGenerationSuggestions
           : preGenerationSuggestions;
 
@@ -95,6 +100,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
+    _svc = ref.read(supabaseServiceProvider);
 
     if (widget.projectId == 'new') {
       final roomType = widget.initialRoomType ?? 'Living Room';
@@ -121,6 +127,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         ),
       ];
       _iterationCount = 0;
+      // Initialize before _initNewSession() reads them synchronously.
+      _currentRoomType = roomType;
+      _currentStyle = style;
+      _sessionTitle = 'New Design Session';
+      _initNewSession();
     } else {
       // Look up from provider state (populated from Supabase).
       // Falls back to a placeholder if the session hasn't loaded yet.
@@ -141,12 +152,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       );
       _messages = List.from(_project.messages);
       _iterationCount = _project.iterationCount;
+      _currentRoomType = _project.roomType;
+      _currentStyle = _project.style;
+      _sessionTitle = _project.title;
+      _loadMessages();
     }
-
-    _currentRoomType = _project.roomType;
-    _currentStyle = _project.style;
-
-    _sessionTitle = widget.projectId == 'new' ? 'New Design Session' : _project.title;
     _titleFocusNode.addListener(() {
       if (!_titleFocusNode.hasFocus && _isEditingTitle) _applyTitleEdit();
     });
@@ -168,6 +178,96 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     super.dispose();
   }
 
+  // ── Supabase persistence ──────────────────────────────────────────────────
+
+  /// Called once for new sessions. Creates the row in Supabase, persists the
+  /// initial greeting, flushes any messages sent before the row was ready,
+  /// then updates _project with the real UUID so subsequent writes work.
+  Future<void> _initNewSession() async {
+    debugPrint('[DB] _initNewSession() started — title: "$_sessionTitle" room: "$_currentRoomType" style: "$_currentStyle"');
+    try {
+      final realProject = await ref.read(sessionProvider.notifier).createSession(
+        title: _sessionTitle,
+        roomType: _currentRoomType,
+        atmosphere: _currentStyle,
+      );
+      debugPrint('[DB] _initNewSession() session created — id: ${realProject.id}');
+
+      // Persist the initial AI greeting.
+      await _svc.insertMessage(
+        sessionId: realProject.id,
+        role: 'ai',
+        content: _messages.first.content,
+      );
+      debugPrint('[DB] _initNewSession() initial greeting persisted');
+
+      // Flush user messages that arrived before the session row existed.
+      if (_pendingMessages.isNotEmpty) {
+        debugPrint('[DB] _initNewSession() flushing ${_pendingMessages.length} pending messages');
+        for (final msg in _pendingMessages) {
+          await _svc.insertMessage(
+            sessionId: realProject.id,
+            role: msg.isAi ? 'ai' : 'user',
+            content: msg.content,
+            messageType: msg.type == MessageType.imageResult ? 'image_result' : 'text',
+          );
+        }
+        _pendingMessages.clear();
+      }
+
+      if (mounted) setState(() => _project = realProject);
+      debugPrint('[DB] _initNewSession() complete — _project.id updated to ${realProject.id}');
+    } catch (e, st) {
+      debugPrint('[DB] _initNewSession() ERROR: $e');
+      debugPrint('[DB] _initNewSession() STACK: $st');
+    }
+  }
+
+  /// Fetches full message history from Supabase for an existing session.
+  Future<void> _loadMessages() async {
+    debugPrint('[DB] _loadMessages() started — session_id: ${_project.id}');
+    try {
+      final rows = await _svc.fetchMessages(_project.id);
+      debugPrint('[DB] _loadMessages() — got ${rows.length} rows');
+      if (!mounted || rows.isEmpty) return;
+      final msgs = rows.map(_rowToMessage).toList();
+      final imageCount = msgs.where((m) => m.type == MessageType.imageResult).length;
+      setState(() {
+        _messages = msgs;
+        _iterationCount = imageCount;
+        _hasGenerated = imageCount > 0;
+      });
+      _scrollToBottom();
+    } catch (e, st) {
+      debugPrint('[DB] _loadMessages() ERROR: $e');
+      debugPrint('[DB] _loadMessages() STACK: $st');
+    }
+  }
+
+  MessageModel _rowToMessage(Map<String, dynamic> row) {
+    final typeStr = (row['message_type'] as String?) ?? 'text';
+    final isImageResult = typeStr == 'image_result';
+    return MessageModel(
+      id: row['id'] as String,
+      content: row['content'] as String,
+      isAi: (row['role'] as String) == 'ai',
+      type: isImageResult
+          ? MessageType.imageResult
+          : typeStr == 'system'
+              ? MessageType.system
+              : MessageType.text,
+      result: isImageResult
+          ? GeneratedResult(
+              beforeImageUrl: (row['before_image_url'] as String?) ?? '',
+              afterImageUrl: (row['after_image_url'] as String?) ?? '',
+              styleLabel: (row['style_label'] as String?) ?? '',
+              projectId: _project.id,
+            )
+          : null,
+      createdAt: DateTime.parse(row['created_at'] as String),
+    );
+  }
+
   void _applyTitleEdit() {
     final trimmed = _titleEditController.text.trim();
     setState(() {
@@ -181,16 +281,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
 
   void _send(String text) {
     if (text.trim().isEmpty) return;
-    setState(() {
-      _messages.add(MessageModel(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        content: text.trim(),
-        isAi: false,
-        createdAt: DateTime.now(),
-      ));
-    });
+    final msg = MessageModel(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      content: text.trim(),
+      isAi: false,
+      createdAt: DateTime.now(),
+    );
+    setState(() => _messages.add(msg));
     _inputController.clear();
     _scrollToBottom();
+
+    if (_project.id != 'new') {
+      _svc.insertMessage(sessionId: _project.id, role: 'user', content: msg.content);
+    } else {
+      _pendingMessages.add(msg);
+    }
   }
 
   Future<void> _generate() async {
@@ -212,6 +317,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     if (!mounted) return;
 
     final newCount = _iterationCount + 1;
+    const aiText = 'Here\'s your redesigned space. Warm walnut finishes, layered ambient lighting, and the reading nook as a real architectural moment. Want to refine further?';
+    final afterUrl = _project.afterImageUrl ??
+        'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800';
+    final styleLabel = '${_project.style} · Vision $newCount';
 
     setState(() {
       _isGenerating = false;
@@ -220,20 +329,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       _messages.removeWhere((m) => m.type == MessageType.loading);
       _messages.add(MessageModel(
         id: 'result_${DateTime.now().millisecondsSinceEpoch}',
-        content: 'Here\'s your redesigned space. Warm walnut finishes, layered ambient lighting, and the reading nook as a real architectural moment. Want to refine further?',
+        content: aiText,
         isAi: true,
         type: MessageType.imageResult,
         result: GeneratedResult(
           beforeImageUrl: _project.beforeImageUrl ?? '',
-          afterImageUrl: _project.afterImageUrl ??
-              'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800',
-          styleLabel: '${_project.style} · Vision $newCount',
+          afterImageUrl: afterUrl,
+          styleLabel: styleLabel,
           projectId: _project.id,
         ),
         createdAt: DateTime.now(),
       ));
     });
     _scrollToBottom();
+
+    if (_project.id != 'new') {
+      _svc.insertMessage(
+        sessionId: _project.id,
+        role: 'ai',
+        content: aiText,
+        messageType: 'image_result',
+        beforeImageUrl: _project.beforeImageUrl,
+        afterImageUrl: afterUrl,
+        styleLabel: styleLabel,
+      );
+      ref.read(sessionProvider.notifier).updateLatestPreview(_project.id, afterUrl);
+    }
   }
 
   void _scrollToBottom() {

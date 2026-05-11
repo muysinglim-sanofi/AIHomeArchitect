@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseService {
@@ -7,11 +7,15 @@ class SupabaseService {
   // ── Sessions ──────────────────────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> fetchSessions() async {
+    final userId = _db.auth.currentUser?.id;
+    debugPrint('[DB] fetchSessions() — user_id: $userId');
     final res = await _db
         .from('sessions')
         .select()
         .order('updated_at', ascending: false);
-    return List<Map<String, dynamic>>.from(res as List);
+    final rows = List<Map<String, dynamic>>.from(res as List);
+    debugPrint('[DB] fetchSessions() — returned ${rows.length} rows');
+    return rows;
   }
 
   Future<Map<String, dynamic>> createSession({
@@ -20,44 +24,49 @@ class SupabaseService {
     required String atmosphere,
     String? beforeImageUrl,
   }) async {
-    final userId = _db.auth.currentUser!.id;
-    final res = await _db
-        .from('sessions')
-        .insert({
-          'user_id': userId,
-          'title': title,
-          'room_type': roomType,
-          'atmosphere': atmosphere,
-          'before_image_url': beforeImageUrl,
-        })
-        .select()
-        .single();
-    return Map<String, dynamic>.from(res as Map);
+    final userId = _db.auth.currentUser?.id;
+    debugPrint('[DB] createSession() — user_id: $userId | title: "$title" | room: "$roomType" | atm: "$atmosphere"');
+    if (userId == null) throw StateError('[DB] createSession() aborted: currentUser is null (not authenticated)');
+
+    final payload = {
+      'user_id': userId,
+      'title': title,
+      'room_type': roomType,
+      'atmosphere': atmosphere,
+      'before_image_url': beforeImageUrl,
+    };
+    debugPrint('[DB] createSession() insert payload: $payload');
+
+    final res = await _db.from('sessions').insert(payload).select().single();
+    final row = Map<String, dynamic>.from(res as Map);
+    debugPrint('[DB] createSession() — created id: ${row['id']}');
+    return row;
   }
 
   Future<void> updateSessionTitle(String sessionId, String title) async {
-    await _db
-        .from('sessions')
-        .update({'title': title})
-        .eq('id', sessionId);
+    debugPrint('[DB] updateSessionTitle() — id: $sessionId | title: "$title"');
+    await _db.from('sessions').update({'title': title}).eq('id', sessionId);
+    debugPrint('[DB] updateSessionTitle() — done');
   }
 
   Future<void> updateLatestPreview(String sessionId, String previewUrl) async {
-    await _db
-        .from('sessions')
-        .update({'latest_preview': previewUrl})
-        .eq('id', sessionId);
+    debugPrint('[DB] updateLatestPreview() — id: $sessionId');
+    await _db.from('sessions').update({'latest_preview': previewUrl}).eq('id', sessionId);
+    debugPrint('[DB] updateLatestPreview() — done');
   }
 
   // ── Messages ──────────────────────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> fetchMessages(String sessionId) async {
+    debugPrint('[DB] fetchMessages() — session_id: $sessionId');
     final res = await _db
         .from('messages')
         .select()
         .eq('session_id', sessionId)
         .order('created_at', ascending: true);
-    return List<Map<String, dynamic>>.from(res as List);
+    final rows = List<Map<String, dynamic>>.from(res as List);
+    debugPrint('[DB] fetchMessages() — returned ${rows.length} rows');
+    return rows;
   }
 
   Future<void> insertMessage({
@@ -69,6 +78,7 @@ class SupabaseService {
     String? afterImageUrl,
     String? styleLabel,
   }) async {
+    debugPrint('[DB] insertMessage() — session_id: $sessionId | role: $role | type: $messageType | content: "${content.substring(0, content.length.clamp(0, 40))}..."');
     await _db.from('messages').insert({
       'session_id': sessionId,
       'role': role,
@@ -78,6 +88,7 @@ class SupabaseService {
       'after_image_url': afterImageUrl,
       'style_label': styleLabel,
     });
+    debugPrint('[DB] insertMessage() — done');
   }
 
   // ── Storage ───────────────────────────────────────────────────────────────
@@ -89,15 +100,14 @@ class SupabaseService {
   }) async {
     final userId = _db.auth.currentUser!.id;
     final path = '$userId/$sessionId/$filename';
+    debugPrint('[DB] uploadSourceImage() — path: $path | bytes: ${bytes.length}');
     await _db.storage.from('uploads').uploadBinary(
       path,
       bytes,
       fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
     );
-    // uploads bucket is private — return a signed URL valid for 1 hour
-    final signedUrl = await _db.storage
-        .from('uploads')
-        .createSignedUrl(path, 3600);
+    final signedUrl = await _db.storage.from('uploads').createSignedUrl(path, 3600);
+    debugPrint('[DB] uploadSourceImage() — signed URL: $signedUrl');
     return signedUrl;
   }
 }

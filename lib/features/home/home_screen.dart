@@ -178,6 +178,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
 
   Widget _buildContinueSection(BuildContext context, AppLocalizations l10n) {
     final sessions = ref.watch(sessionProvider);
+    if (sessions.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -492,7 +493,6 @@ class _AiThinkingOverlayState extends State<_AiThinkingOverlay>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _userFade;
-  late final Animation<double> _aiFade;
   late final Animation<double> _genFade;
 
   @override
@@ -500,19 +500,15 @@ class _AiThinkingOverlayState extends State<_AiThinkingOverlay>
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2800),
+      duration: const Duration(milliseconds: 2400),
     );
     _userFade = CurvedAnimation(
       parent: _ctrl,
-      curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
-    );
-    _aiFade = CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.33, 0.6, curve: Curves.easeOut),
+      curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
     );
     _genFade = CurvedAnimation(
       parent: _ctrl,
-      curve: const Interval(0.65, 1.0, curve: Curves.easeOut),
+      curve: const Interval(0.55, 1.0, curve: Curves.easeOut),
     );
     Future.delayed(const Duration(milliseconds: 900), () {
       if (mounted) _ctrl.forward();
@@ -528,9 +524,9 @@ class _AiThinkingOverlayState extends State<_AiThinkingOverlay>
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 58),
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 64),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           FadeTransition(
@@ -538,13 +534,13 @@ class _AiThinkingOverlayState extends State<_AiThinkingOverlay>
             child: Align(
               alignment: Alignment.centerRight,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
                 decoration: BoxDecoration(
-                  color: AppColors.surface.withAlpha(230),
+                  color: AppColors.surface.withAlpha(235),
                   borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(14),
-                    topRight: Radius.circular(14),
-                    bottomLeft: Radius.circular(14),
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
                     bottomRight: Radius.circular(4),
                   ),
                 ),
@@ -553,33 +549,7 @@ class _AiThinkingOverlayState extends State<_AiThinkingOverlay>
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w500,
-                        fontSize: 11,
-                      ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          FadeTransition(
-            opacity: _aiFade,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: AppColors.textPrimary.withAlpha(210),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(14),
-                    topRight: Radius.circular(14),
-                    bottomLeft: Radius.circular(4),
-                    bottomRight: Radius.circular(14),
-                  ),
-                ),
-                child: Text(
-                  'Exploring textures and evening atmosphere…',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.surface,
-                        fontSize: 11,
+                        fontSize: 11.5,
                       ),
                 ),
               ),
@@ -591,7 +561,7 @@ class _AiThinkingOverlayState extends State<_AiThinkingOverlay>
             child: Align(
               alignment: Alignment.centerLeft,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
                 decoration: BoxDecoration(
                   color: AppColors.accent.withAlpha(230),
                   borderRadius: BorderRadius.circular(50),
@@ -607,13 +577,13 @@ class _AiThinkingOverlayState extends State<_AiThinkingOverlay>
                         color: AppColors.surface,
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 7),
                     Text(
                       'Generating your vision…',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppColors.surface,
                             fontWeight: FontWeight.w600,
-                            fontSize: 10,
+                            fontSize: 10.5,
                           ),
                     ),
                   ],

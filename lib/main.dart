@@ -12,17 +12,32 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
 
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
-  );
+  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
+  final supabaseKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 
-  // Anonymous sign-in persists across restarts automatically via local storage.
-  // No action needed if a session already exists.
+  debugPrint('[DB] SUPABASE_URL loaded: ${supabaseUrl.isNotEmpty} (${supabaseUrl.substring(0, supabaseUrl.length.clamp(0, 30))}...)');
+  debugPrint('[DB] SUPABASE_ANON_KEY loaded: ${supabaseKey.isNotEmpty} (${supabaseKey.substring(0, supabaseKey.length.clamp(0, 20))}...)');
+
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
+  debugPrint('[DB] Supabase.initialize() complete');
+
   final auth = Supabase.instance.client.auth;
-  if (auth.currentSession == null) {
-    await auth.signInAnonymously();
+  final existingSession = auth.currentSession;
+
+  if (existingSession == null) {
+    debugPrint('[DB] No existing session — calling signInAnonymously()');
+    try {
+      final res = await auth.signInAnonymously();
+      debugPrint('[DB] signInAnonymously() success — user_id: ${res.user?.id}');
+    } catch (e) {
+      debugPrint('[DB] signInAnonymously() FAILED: $e');
+    }
+  } else {
+    debugPrint('[DB] Existing session RESTORED — user_id: ${existingSession.user.id} | expires: ${existingSession.expiresAt}');
   }
+
+  final userId = auth.currentUser?.id;
+  debugPrint('[DB] Active user_id at app start: $userId');
 
   runApp(const ProviderScope(child: App()));
 }

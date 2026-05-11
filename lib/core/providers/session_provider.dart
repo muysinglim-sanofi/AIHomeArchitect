@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/message_model.dart';
 import '../../data/models/project_model.dart';
@@ -24,11 +25,14 @@ class SessionNotifier extends StateNotifier<List<ProjectModel>> {
   // ── Load ───────────────────────────────────────────────────────────────────
 
   Future<void> _load() async {
+    debugPrint('[DB] SessionNotifier._load() started');
     try {
       final rows = await _svc.fetchSessions();
+      debugPrint('[DB] SessionNotifier._load() — got ${rows.length} sessions');
       if (mounted) state = rows.map(_rowToProject).toList();
-    } catch (_) {
-      // Supabase not configured yet — state stays empty, app still usable.
+    } catch (e, st) {
+      debugPrint('[DB] SessionNotifier._load() ERROR: $e');
+      debugPrint('[DB] SessionNotifier._load() STACK: $st');
     }
   }
 
