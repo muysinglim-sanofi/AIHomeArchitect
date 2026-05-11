@@ -49,3 +49,5 @@ app.*.map.json
 !android/gradlew.bat
 !android/app/src/main/java/**
 !android/app/src/main/kotlin/**
+
+.env
