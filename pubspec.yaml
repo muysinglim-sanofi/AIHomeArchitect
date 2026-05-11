@@ -1,0 +1,55 @@
+name: ai_home_architect
+description: AI Home Architect Companion — V1
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Navigation
+  go_router: ^14.2.7
+
+  # Network
+  dio: ^5.4.3+1
+
+  # Images
+  image_picker: ^1.1.2
+  cached_network_image: ^3.3.1
+
+  # Sharing
+  share_plus: ^10.0.0
+
+  # Environment
+  flutter_dotenv: ^5.1.0
+
+  # Fonts
+  google_fonts: ^6.2.1
+
+  # Voice
+  speech_to_text: ^7.3.0
+
+  # Utils
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - .env
+    - assets/images/
