@@ -39,6 +39,10 @@ dependencies:
   # Voice
   speech_to_text: ^7.3.0
 
+  # Backend
+  supabase_flutter: ^2.8.4
+  shared_preferences: ^2.3.5
+
   # Utils
   intl: ^0.20.2
 

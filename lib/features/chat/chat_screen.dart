@@ -122,9 +122,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       ];
       _iterationCount = 0;
     } else {
-      _project = mockProjects.firstWhere(
+      // Look up from provider state (populated from Supabase).
+      // Falls back to a placeholder if the session hasn't loaded yet.
+      final sessions = ref.read(sessionProvider);
+      _project = sessions.firstWhere(
         (p) => p.id == widget.projectId,
-        orElse: () => mockProjects.first,
+        orElse: () => ProjectModel(
+          id: widget.projectId,
+          title: 'Design Session',
+          roomType: widget.initialRoomType ?? '',
+          style: widget.initialStyle ?? '',
+          status: ProjectStatus.inProgress,
+          createdAt: DateTime.now(),
+          lastUpdatedAt: DateTime.now(),
+          messages: const [],
+          iterationCount: 0,
+        ),
       );
       _messages = List.from(_project.messages);
       _iterationCount = _project.iterationCount;
