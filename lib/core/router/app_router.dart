@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/splash/splash_screen.dart';
@@ -77,8 +79,14 @@ final appRouter = GoRouter(
         final projectId = state.pathParameters['projectId'] ?? '1';
         final roomType = state.uri.queryParameters['roomType'];
         final style = state.uri.queryParameters['style'];
+        final sourceImageFile = state.extra as File?;
         return _slideUpPage(
-          ChatScreen(projectId: projectId, initialRoomType: roomType, initialStyle: style),
+          ChatScreen(
+            projectId: projectId,
+            initialRoomType: roomType,
+            initialStyle: style,
+            sourceImageFile: sourceImageFile,
+          ),
           state,
         );
       },
@@ -91,7 +99,7 @@ final appRouter = GoRouter(
       path: '/result/:projectId',
       pageBuilder: (context, state) {
         final projectId = state.pathParameters['projectId'] ?? '1';
-        return _slideUpPage(BeforeAfterScreen(projectId: projectId), state);
+        return _slideUpPage(BeforeAfterScreen(projectId: projectId, resultExtra: state.extra), state);
       },
     ),
     GoRoute(

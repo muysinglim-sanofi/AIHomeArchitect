@@ -166,6 +166,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                   onPressed: _canProceed
                       ? () => context.pushReplacement(
                             '/chat/new?roomType=${Uri.encodeComponent(_selectedRoom!)}&style=${Uri.encodeComponent(_selectedStyle!)}',
+                            extra: _image,
                           )
                       : null,
                 ),

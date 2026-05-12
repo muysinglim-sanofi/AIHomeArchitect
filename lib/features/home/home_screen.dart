@@ -243,7 +243,7 @@ class _HeroCarouselState extends State<_HeroCarousel> {
   }
 
   void _startTimer() {
-    _timer = Timer.periodic(const Duration(seconds: 6), (_) {
+    _timer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted) return;
       final next = (_currentPage + 1) % featuredShowcase.length;
       _pageController.animateToPage(
@@ -276,6 +276,7 @@ class _HeroCarouselState extends State<_HeroCarousel> {
             aspectRatio: 16 / 9,
             child: PageView.builder(
               controller: _pageController,
+              physics: const NeverScrollableScrollPhysics(),
               itemCount: featuredShowcase.length,
               onPageChanged: (i) {
                 _timer?.cancel();
@@ -283,8 +284,8 @@ class _HeroCarouselState extends State<_HeroCarousel> {
                 _startTimer();
               },
               itemBuilder: (_, index) => _HeroSlide(
+                key: ValueKey(featuredShowcase[index].id),
                 project: featuredShowcase[index],
-                isAiSlide: index == 0,
               ),
             ),
           ),
@@ -326,272 +327,282 @@ class _HeroProgressDot extends StatelessWidget {
 
 class _HeroSlide extends StatefulWidget {
   final ProjectModel project;
-  final bool isAiSlide;
-  const _HeroSlide({required this.project, this.isAiSlide = false});
+  const _HeroSlide({super.key, required this.project});
 
   @override
   State<_HeroSlide> createState() => _HeroSlideState();
 }
 
-class _HeroSlideState extends State<_HeroSlide> with TickerProviderStateMixin {
-  late final AnimationController _revealController;
-  late final Animation<double> _revealAnim;
-  late final AnimationController _zoomController;
-  late final Animation<double> _zoomAnim;
+class _HeroSlideState extends State<_HeroSlide>
+    with SingleTickerProviderStateMixin {
+  // Fraction of the slide occupied by the "before" image on the left.
+  // 0.30 = 70% after visible — AI result is the dominant first impression.
+  double _sliderFraction = 0.30;
+  bool _userHasInteracted = false;
+
+  late final AnimationController _hintCtrl;
+  late final Animation<double> _hintAnim;
 
   @override
   void initState() {
     super.initState();
-    _revealController = AnimationController(
+    _hintCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 1800),
     );
-    _revealAnim = Tween<double>(begin: 1.0, end: 0.33).animate(
-      CurvedAnimation(
-        parent: _revealController,
-        curve: const Interval(0.15, 1.0, curve: Curves.easeInOutCubic),
-      ),
-    );
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) _revealController.forward();
+    // Sweeps to 0.65 (revealing more "before"), then reverses back to 0.30.
+    // Users see: the AI result → the original → back to the AI result.
+    _hintAnim = Tween<double>(begin: 0.30, end: 0.65)
+        .animate(CurvedAnimation(parent: _hintCtrl, curve: Curves.easeInOutCubic));
+    _hintAnim.addListener(_onHintTick);
+    Future.delayed(const Duration(milliseconds: 900), () {
+      if (mounted && !_userHasInteracted) {
+        debugPrint('[Slider] hint start — before=${widget.project.beforeImageUrl} '
+            'after=${widget.project.afterImageUrl} '
+            'same=${widget.project.beforeImageUrl == widget.project.afterImageUrl}');
+        _hintCtrl.forward().then((_) {
+          if (mounted && !_userHasInteracted) _hintCtrl.reverse();
+        });
+      }
     });
+  }
 
-    _zoomController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 14),
-    )..repeat(reverse: true);
-    _zoomAnim = Tween<double>(begin: 1.0, end: 1.05)
-        .animate(CurvedAnimation(parent: _zoomController, curve: Curves.easeInOut));
+  void _onHintTick() {
+    if (mounted) setState(() => _sliderFraction = _hintAnim.value);
   }
 
   @override
   void dispose() {
-    _revealController.dispose();
-    _zoomController.dispose();
+    _hintAnim.removeListener(_onHintTick);
+    _hintCtrl.dispose();
     super.dispose();
+  }
+
+  void _onDragStart(DragStartDetails _) {
+    if (!_userHasInteracted) {
+      _hintCtrl.stop();
+      _userHasInteracted = true;
+    }
+  }
+
+  void _onDragUpdate(DragUpdateDetails details, double width) {
+    final updated = _sliderFraction + details.delta.dx / width;
+    final clamped = updated.clamp(0.02, 0.98);
+    debugPrint('[Slider] drag: fraction=${clamped.toStringAsFixed(3)} '
+        'clipPx=${(clamped * width).toStringAsFixed(0)}/${width.toStringAsFixed(0)}');
+    setState(() => _sliderFraction = clamped);
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return _TapScaleWidget(
-      onTap: () => context.push('/result/${widget.project.id}'),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          AnimatedBuilder(
-            animation: _revealAnim,
-            builder: (context, _) => Stack(
-              fit: StackFit.expand,
-              children: [
-                AnimatedBuilder(
-                  animation: _zoomAnim,
-                  builder: (_, child) =>
-                      Transform.scale(scale: _zoomAnim.value, child: child),
-                  child: _NetImage(
-                    url: widget.project.afterImageUrl ?? widget.project.beforeImageUrl,
+    final hasBefore = widget.project.beforeImageUrl != null;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final sliderX = _sliderFraction * width;
+
+        return GestureDetector(
+          onHorizontalDragStart: hasBefore ? _onDragStart : null,
+          onHorizontalDragUpdate: hasBefore ? (d) => _onDragUpdate(d, width) : null,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // After image — full-bleed background (AI-designed result)
+              _ShowcaseImage(path: widget.project.afterImageUrl ?? widget.project.beforeImageUrl),
+
+              // Before image — Positioned so StackFit.expand doesn't impose tight
+              // constraints, then OverflowBox lets the image render at full width
+              // so ClipRect reveals only the left sliderX pixels.
+              if (hasBefore)
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: sliderX,
+                  child: ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.centerLeft,
+                      minWidth: width,
+                      maxWidth: width,
+                      child: _ShowcaseImage(path: widget.project.beforeImageUrl),
+                    ),
                   ),
                 ),
-                ClipRect(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: _revealAnim.value,
-                    child: _NetImage(url: widget.project.beforeImageUrl),
+
+              // Subtle top/bottom vignette
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        AppColors.textPrimary.withAlpha(50),
+                        Colors.transparent,
+                        AppColors.textPrimary.withAlpha(60),
+                      ],
+                      stops: const [0.0, 0.38, 1.0],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            top: 14,
-            left: 14,
-            child: _RevealLabel(text: l10n.beforeLabel),
-          ),
-          Positioned(
-            top: 14,
-            right: 14,
-            child: _RevealLabel(text: l10n.afterLabel, dark: true),
-          ),
-          if (widget.isAiSlide) Positioned.fill(child: _AiThinkingOverlay()),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(14, 32, 14, 16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [
-                    AppColors.textPrimary.withAlpha(230),
-                    AppColors.textPrimary.withAlpha(100),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.55, 1.0],
                 ),
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l10n.featuredVision,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.surface.withAlpha(160),
-                                letterSpacing: 0.3,
-                              ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.project.title,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                color: AppColors.surface,
-                                fontWeight: FontWeight.w700,
-                                height: 1.1,
-                              ),
+
+              // Divider line
+              if (hasBefore)
+                Positioned(
+                  left: sliderX - 1,
+                  top: 0,
+                  bottom: 0,
+                  width: 2,
+                  child: Container(
+                    color: Colors.white.withAlpha(220),
+                    foregroundDecoration: BoxDecoration(
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(30),
+                          blurRadius: 6,
+                          spreadRadius: 1,
                         ),
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface.withAlpha(25),
-                      borderRadius: BorderRadius.circular(50),
-                      border: Border.all(color: AppColors.surface.withAlpha(50)),
-                    ),
-                    child: Text(
-                      widget.project.style,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.surface,
-                            fontWeight: FontWeight.w500,
-                          ),
+                ),
+
+              // Drag handle centred on the divider
+              if (hasBefore)
+                Positioned(
+                  left: sliderX - 20,
+                  top: 0,
+                  bottom: 0,
+                  width: 40,
+                  child: const Center(child: _CompareHandle()),
+                ),
+
+              // "Original" pill — top left
+              if (hasBefore)
+                const Positioned(
+                  top: 14,
+                  left: 14,
+                  child: _SlideLabel(text: 'Original'),
+                ),
+
+              // Style / AI vision pill — top right
+              Positioned(
+                top: 14,
+                right: 14,
+                child: _SlideLabel(text: widget.project.style, dark: true),
+              ),
+
+              // Bottom gradient bar — title only, style already shown above
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(14, 36, 14, 16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        AppColors.textPrimary.withAlpha(210),
+                        AppColors.textPrimary.withAlpha(80),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.55, 1.0],
                     ),
                   ),
-                ],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        l10n.featuredVision,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.surface.withAlpha(160),
+                              letterSpacing: 0.3,
+                            ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.project.title,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              color: AppColors.surface,
+                              fontWeight: FontWeight.w700,
+                              height: 1.1,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
+        );
+      },
+    );
+  }
+}
+
+// ── Compare handle ────────────────────────────────────────────────────────────
+
+class _CompareHandle extends StatelessWidget {
+  const _CompareHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(55),
+            blurRadius: 10,
+            spreadRadius: 0,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.chevron_left, size: 15, color: Color(0xFF1A1A1A)),
+          Icon(Icons.chevron_right, size: 15, color: Color(0xFF1A1A1A)),
         ],
       ),
     );
   }
 }
 
-// ── AI thinking overlay (slide 0 only) ───────────────────────────────────────
+// ── Slide label ───────────────────────────────────────────────────────────────
 
-class _AiThinkingOverlay extends StatefulWidget {
-  @override
-  State<_AiThinkingOverlay> createState() => _AiThinkingOverlayState();
-}
-
-class _AiThinkingOverlayState extends State<_AiThinkingOverlay>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _userFade;
-  late final Animation<double> _genFade;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2400),
-    );
-    _userFade = CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
-    );
-    _genFade = CurvedAnimation(
-      parent: _ctrl,
-      curve: const Interval(0.55, 1.0, curve: Curves.easeOut),
-    );
-    Future.delayed(const Duration(milliseconds: 900), () {
-      if (mounted) _ctrl.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
+class _SlideLabel extends StatelessWidget {
+  final String text;
+  final bool dark;
+  const _SlideLabel({required this.text, this.dark = false});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 64),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          FadeTransition(
-            opacity: _userFade,
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-                decoration: BoxDecoration(
-                  color: AppColors.surface.withAlpha(235),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16),
-                    bottomLeft: Radius.circular(16),
-                    bottomRight: Radius.circular(4),
-                  ),
-                ),
-                child: Text(
-                  'Warm natural materials, tropical feel',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 11.5,
-                      ),
-                ),
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: dark
+            ? AppColors.textPrimary.withAlpha(190)
+            : AppColors.surface.withAlpha(220),
+        borderRadius: BorderRadius.circular(50),
+      ),
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: dark ? AppColors.surface : AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
             ),
-          ),
-          const SizedBox(height: 10),
-          FadeTransition(
-            opacity: _genFade,
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withAlpha(230),
-                  borderRadius: BorderRadius.circular(50),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(
-                      width: 10,
-                      height: 10,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.5,
-                        color: AppColors.surface,
-                      ),
-                    ),
-                    const SizedBox(width: 7),
-                    Text(
-                      'Generating your vision…',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.surface,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 10.5,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -730,45 +741,18 @@ class _SessionsBadge extends StatelessWidget {
   }
 }
 
-class _RevealLabel extends StatelessWidget {
-  final String text;
-  final bool dark;
-  const _RevealLabel({required this.text, this.dark = false});
+
+class _ShowcaseImage extends StatelessWidget {
+  final String? path;
+  const _ShowcaseImage({this.path});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: dark
-            ? AppColors.textPrimary.withAlpha(200)
-            : AppColors.surface.withAlpha(220),
-        borderRadius: BorderRadius.circular(50),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: dark ? AppColors.surface : AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
-              fontSize: 11,
-            ),
-      ),
-    );
-  }
-}
-
-class _NetImage extends StatelessWidget {
-  final String? url;
-  const _NetImage({this.url});
-
-  @override
-  Widget build(BuildContext context) {
-    if (url == null) return Container(color: AppColors.shimmerBase);
-    return CachedNetworkImage(
-      imageUrl: url!,
+    if (path == null) return const ColoredBox(color: AppColors.shimmerBase);
+    return Image.asset(
+      path!,
       fit: BoxFit.cover,
-      placeholder: (_, _) => Container(color: AppColors.shimmerBase),
-      errorWidget: (_, _, _) => Container(color: AppColors.shimmerBase),
+      errorBuilder: (_, _, _) => const ColoredBox(color: AppColors.shimmerBase),
     );
   }
 }

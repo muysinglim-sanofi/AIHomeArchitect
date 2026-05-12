@@ -13,6 +13,7 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/session_provider.dart';
 import '../../data/mock/mock_projects.dart';
+import '../../data/services/generation_service.dart';
 import '../../data/services/supabase_service.dart';
 import '../../data/models/message_model.dart';
 import '../../data/models/project_model.dart';
@@ -35,11 +36,13 @@ class ChatScreen extends ConsumerStatefulWidget {
   final String projectId;
   final String? initialRoomType;
   final String? initialStyle;
+  final File? sourceImageFile;
   const ChatScreen({
     super.key,
     required this.projectId,
     this.initialRoomType,
     this.initialStyle,
+    this.sourceImageFile,
   });
 
   @override
@@ -131,6 +134,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       _currentRoomType = roomType;
       _currentStyle = style;
       _sessionTitle = 'New Design Session';
+      _sourceImageFile = widget.sourceImageFile;
       _initNewSession();
     } else {
       // Look up from provider state (populated from Supabase).
@@ -193,6 +197,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       );
       debugPrint('[DB] _initNewSession() session created — id: ${realProject.id}');
 
+      // Upload source image (fire after session exists so we have the real ID for the path).
+      String? beforeUrl;
+      final imageFile = _sourceImageFile;
+      if (imageFile != null) {
+        debugPrint('[DB] _initNewSession() uploading source image…');
+        try {
+          final bytes = await imageFile.readAsBytes();
+          final filename = 'source_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          beforeUrl = await _svc.uploadSourceImage(
+            sessionId: realProject.id,
+            filename: filename,
+            bytes: bytes,
+          );
+          await _svc.updateBeforeImageUrl(realProject.id, beforeUrl);
+          debugPrint('[DB] _initNewSession() source image uploaded — url: $beforeUrl');
+        } catch (uploadErr) {
+          debugPrint('[DB] _initNewSession() image upload failed (non-fatal): $uploadErr');
+        }
+      }
+
       // Persist the initial AI greeting.
       await _svc.insertMessage(
         sessionId: realProject.id,
@@ -215,7 +239,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         _pendingMessages.clear();
       }
 
-      if (mounted) setState(() => _project = realProject);
+      if (mounted) {
+        setState(() {
+          _project = beforeUrl != null
+              ? realProject.copyWith(beforeImageUrl: beforeUrl)
+              : realProject;
+        });
+      }
       debugPrint('[DB] _initNewSession() complete — _project.id updated to ${realProject.id}');
     } catch (e, st) {
       debugPrint('[DB] _initNewSession() ERROR: $e');
@@ -301,6 +331,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   Future<void> _generate() async {
     if (_isGenerating) return;
 
+    final beforeUrl = _project.beforeImageUrl;
+    if (beforeUrl == null || beforeUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please upload a source photo first.'),
+          backgroundColor: AppColors.accentDark,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isGenerating = true;
       _messages.add(MessageModel(
@@ -313,47 +357,75 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     });
     _scrollToBottom();
 
-    await Future.delayed(const Duration(seconds: 4));
-    if (!mounted) return;
-
+    final lastUserMsg = _messages
+        .where((m) => !m.isAi && m.type == MessageType.text)
+        .lastOrNull;
+    final prompt = lastUserMsg?.content ?? '';
     final newCount = _iterationCount + 1;
-    const aiText = 'Here\'s your redesigned space. Warm walnut finishes, layered ambient lighting, and the reading nook as a real architectural moment. Want to refine further?';
-    final afterUrl = _project.afterImageUrl ??
-        'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800';
-    final styleLabel = '${_project.style} · Vision $newCount';
+    final styleLabel = '$_currentStyle · Vision $newCount';
 
-    setState(() {
-      _isGenerating = false;
-      _hasGenerated = true;
-      _iterationCount = newCount;
-      _messages.removeWhere((m) => m.type == MessageType.loading);
-      _messages.add(MessageModel(
-        id: 'result_${DateTime.now().millisecondsSinceEpoch}',
-        content: aiText,
-        isAi: true,
-        type: MessageType.imageResult,
-        result: GeneratedResult(
-          beforeImageUrl: _project.beforeImageUrl ?? '',
+    try {
+      final result = await GenerationService().generate(
+        sessionId: _project.id,
+        prompt: prompt,
+        beforeImageUrl: beforeUrl,
+        styleLabel: styleLabel,
+        roomType: _currentRoomType,
+      );
+
+      if (!mounted) return;
+
+      final afterUrl = result['after_image_url'] as String;
+      final aiText = result['ai_message'] as String;
+
+      setState(() {
+        _isGenerating = false;
+        _hasGenerated = true;
+        _iterationCount = newCount;
+        _messages.removeWhere((m) => m.type == MessageType.loading);
+        _messages.add(MessageModel(
+          id: 'result_${DateTime.now().millisecondsSinceEpoch}',
+          content: aiText,
+          isAi: true,
+          type: MessageType.imageResult,
+          result: GeneratedResult(
+            beforeImageUrl: beforeUrl,
+            afterImageUrl: afterUrl,
+            styleLabel: styleLabel,
+            projectId: _project.id,
+          ),
+          createdAt: DateTime.now(),
+        ));
+      });
+      _scrollToBottom();
+
+      if (_project.id != 'new') {
+        _svc.insertMessage(
+          sessionId: _project.id,
+          role: 'ai',
+          content: aiText,
+          messageType: 'image_result',
+          beforeImageUrl: beforeUrl,
           afterImageUrl: afterUrl,
           styleLabel: styleLabel,
-          projectId: _project.id,
+        );
+        ref.read(sessionProvider.notifier).updateLatestPreview(_project.id, afterUrl);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isGenerating = false;
+        _messages.removeWhere((m) => m.type == MessageType.loading);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Generation failed — please try again.'),
+          backgroundColor: AppColors.accentDark,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
         ),
-        createdAt: DateTime.now(),
-      ));
-    });
-    _scrollToBottom();
-
-    if (_project.id != 'new') {
-      _svc.insertMessage(
-        sessionId: _project.id,
-        role: 'ai',
-        content: aiText,
-        messageType: 'image_result',
-        beforeImageUrl: _project.beforeImageUrl,
-        afterImageUrl: afterUrl,
-        styleLabel: styleLabel,
       );
-      ref.read(sessionProvider.notifier).updateLatestPreview(_project.id, afterUrl);
     }
   }
 
@@ -985,7 +1057,7 @@ class _GeneratedImageCard extends StatelessWidget {
                   icon: Icons.compare,
                   label: l10n.viewBeforeAfter,
                   primary: true,
-                  onTap: () => context.push('/result/${result.projectId}'),
+                  onTap: () => context.push('/result/${result.projectId}', extra: result),
                 ),
                 const SizedBox(height: 8),
                 Row(

@@ -178,44 +178,54 @@ final _p3Messages = [
 ];
 
 // ── Featured editorial showcase (hero carousel — not user sessions) ────────────
+//
+// Curation rules for every pair:
+//   BEFORE = plain, un-styled, relatable (real estate listing feel)
+//   AFTER  = dramatically aspirational, clearly AI-designed
+//   Both sides = same ROOM TYPE (living room → living room, etc.)
+//   Visual contrast must be OBVIOUS in under 2 seconds
+//
+// "Before" IDs sourced from Unsplash search for plain/neutral rooms.
+// "After"  IDs are the app's own atmosphere showcase images — already vetted
+//          as aspirational and style-distinct.
+//
+// To swap a pair: change beforeImageUrl or afterImageUrl.
+// Verify both sides load and look dramatically different before shipping.
 
 final featuredShowcase = [
   ProjectModel(
     id: 'featured_1',
-    title: 'Sunset Pool Sanctuary',
-    roomType: 'Pool Area',
-    style: 'Bali Resort',
-    // before: plain concrete pool deck / after: dramatic infinity pool villa
-    beforeImageUrl: 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=800',
-    afterImageUrl: 'https://images.unsplash.com/photo-1613977257363-707ba9348227?w=800',
+    title: 'Home — Tropical Villa',
+    roomType: 'Living Room',
+    style: 'Tropical Luxury',
+    beforeImageUrl: 'assets/showcase/villa_before.jpg',
+    afterImageUrl: 'assets/showcase/villa_after.jpg',
     status: ProjectStatus.completed,
     createdAt: DateTime(2026, 5, 1),
     lastUpdatedAt: DateTime(2026, 5, 10),
     messages: const [],
-    iterationCount: 5,
+    iterationCount: 3,
   ),
   ProjectModel(
     id: 'featured_2',
-    title: 'Warm Japandi Haven',
-    roomType: 'Living Room',
-    style: 'Japandi',
-    // before: plain neutral living room / after: warm Japandi interior
-    beforeImageUrl: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=800',
-    afterImageUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=800',
+    title: 'Facade — Night Architecture',
+    roomType: 'House Facade',
+    style: 'Luxury Night',
+    beforeImageUrl: 'assets/showcase/facade_before.jpg',
+    afterImageUrl: 'assets/showcase/facade_after.jpg',
     status: ProjectStatus.completed,
     createdAt: DateTime(2026, 4, 28),
     lastUpdatedAt: DateTime(2026, 5, 8),
     messages: const [],
-    iterationCount: 3,
+    iterationCount: 4,
   ),
   ProjectModel(
     id: 'featured_3',
-    title: 'Tropical Villa Terrace',
-    roomType: 'Terrace',
-    style: 'Tropical Modern',
-    // before: plain terrace / after: lush tropical villa terrace
-    beforeImageUrl: 'https://images.unsplash.com/photo-1600047509807-ba8f99d2cdde?w=800',
-    afterImageUrl: 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800',
+    title: 'Apartment — Warm Premium',
+    roomType: 'Living Room',
+    style: 'Warm Premium',
+    beforeImageUrl: 'assets/showcase/apartment_before.jpg',
+    afterImageUrl: 'assets/showcase/apartment_after.jpg',
     status: ProjectStatus.completed,
     createdAt: DateTime(2026, 4, 25),
     lastUpdatedAt: DateTime(2026, 5, 5),
@@ -224,12 +234,11 @@ final featuredShowcase = [
   ),
   ProjectModel(
     id: 'featured_4',
-    title: 'Modern Zen Bedroom',
-    roomType: 'Bedroom',
-    style: 'Modern Zen',
-    // before: standard bedroom / after: serene minimal bedroom
-    beforeImageUrl: 'https://images.unsplash.com/photo-1560185007-cde436f6a4d0?w=800',
-    afterImageUrl: 'https://images.unsplash.com/photo-1616046229478-9f05a400b3ed?w=800',
+    title: 'Small Space — Cozy Elegant',
+    roomType: 'Interior',
+    style: 'Cozy Elegant',
+    beforeImageUrl: 'assets/showcase/smallspace_before.jpg',
+    afterImageUrl: 'assets/showcase/smallspace_after.jpg',
     status: ProjectStatus.completed,
     createdAt: DateTime(2026, 4, 20),
     lastUpdatedAt: DateTime(2026, 5, 2),

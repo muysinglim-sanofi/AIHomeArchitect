@@ -55,6 +55,12 @@ class SupabaseService {
     debugPrint('[DB] updateLatestPreview() — done');
   }
 
+  Future<void> updateBeforeImageUrl(String sessionId, String url) async {
+    debugPrint('[DB] updateBeforeImageUrl() — id: $sessionId');
+    await _db.from('sessions').update({'before_image_url': url}).eq('id', sessionId);
+    debugPrint('[DB] updateBeforeImageUrl() — done');
+  }
+
   // ── Messages ──────────────────────────────────────────────────────────────
 
   Future<List<Map<String, dynamic>>> fetchMessages(String sessionId) async {
@@ -106,7 +112,7 @@ class SupabaseService {
       bytes,
       fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
     );
-    final signedUrl = await _db.storage.from('uploads').createSignedUrl(path, 3600);
+    final signedUrl = await _db.storage.from('uploads').createSignedUrl(path, 31536000);
     debugPrint('[DB] uploadSourceImage() — signed URL: $signedUrl');
     return signedUrl;
   }

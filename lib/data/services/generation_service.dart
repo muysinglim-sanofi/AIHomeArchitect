@@ -19,6 +19,7 @@ class GenerationService {
     required String prompt,
     required String beforeImageUrl,
     required String styleLabel,
+    String roomType = '',
   }) async {
     final res = await _dio.post<Map<String, dynamic>>(
       '/generate',
@@ -27,6 +28,7 @@ class GenerationService {
         'prompt': prompt,
         'before_image_url': beforeImageUrl,
         'style_label': styleLabel,
+        'room_type': roomType,
       }),
     );
     return res.data!;
