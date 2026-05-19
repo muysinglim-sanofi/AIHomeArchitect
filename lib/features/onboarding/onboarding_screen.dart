@@ -673,15 +673,37 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
 
   @override
   Widget build(BuildContext context) {
-    final atm = kAtmospheres[_selected];
-    final screenH = MediaQuery.sizeOf(context).height;
-    final heroH = AppAdaptive.ftueHeroHeight(screenH);
-    final stripH = AppAdaptive.ftueCardStripHeight(screenH);
-    final cardW = AppAdaptive.ftueCardWidth(screenH);
-    final innerSpacing = AppAdaptive.ftueInnerSpacing(screenH);
-    final titleSpacing = AppAdaptive.ftueTitleSpacing(screenH);
+    return LayoutBuilder(builder: (context, constraints) {
+      final atm = kAtmospheres[_selected];
+      final screenH = MediaQuery.sizeOf(context).height;
+      final stripH = AppAdaptive.ftueCardStripHeight(screenH);
+      final cardW = AppAdaptive.ftueCardWidth(screenH);
+      final innerSpacing = AppAdaptive.ftueInnerSpacing(screenH);
+      final titleSpacing = AppAdaptive.ftueTitleSpacing(screenH);
 
-    return Column(
+      // Wave 4.10e (#1): Screen 3 must be editorial / architecture-first,
+      // not a catalog — match slides 1–2's image dominance by targeting
+      // ~47% of the viewport (decision B: not a forced 50%). SE-safe guard:
+      // never let the hero push the atmosphere strip + editorial title past
+      // the real slide-region height. Cap the hero by available height minus
+      // everything below it (plus a small title floor), so SE degrades
+      // gracefully with NO clipping while standard/Max land at ~47%.
+      // app_adaptive.dart is left untouched (read-only): the other ftue*
+      // helpers still drive strip/spacing — only the hero height is local.
+      const minTitleBlock = 96.0;
+      final reserved = AppSpacing.sm +
+          innerSpacing +
+          stripH +
+          titleSpacing +
+          minTitleBlock;
+      final avail = constraints.maxHeight;
+      final heroDesired = (screenH * 0.47).clamp(220.0, 460.0).toDouble();
+      final maxNoClip = avail - reserved;
+      final heroH = (avail.isFinite && maxNoClip < heroDesired)
+          ? maxNoClip.clamp(180.0, heroDesired).toDouble()
+          : heroDesired;
+
+      return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: AppSpacing.sm),
@@ -814,6 +836,7 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
           ),
         ),
       ],
-    );
+      );
+    });
   }
 }

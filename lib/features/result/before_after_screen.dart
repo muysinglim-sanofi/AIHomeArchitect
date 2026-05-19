@@ -1,10 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart' show Share;
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
+import '../../core/providers/session_provider.dart';
 import '../../data/mock/mock_projects.dart';
 import '../../data/models/message_model.dart';
 import '../../core/layout/adaptive_layout.dart';
@@ -28,7 +30,7 @@ import '../../shared/widgets/reveal_hero.dart';
 // 4.9, out of scope); Share (real); back navigation; mock/featured fallback.
 // No backend / routing / session / generation changes.
 
-class BeforeAfterScreen extends StatefulWidget {
+class BeforeAfterScreen extends ConsumerStatefulWidget {
   final String projectId;
   // GeneratedResult passed as Object? so the router doesn't need a direct import.
   final Object? resultExtra;
@@ -36,10 +38,10 @@ class BeforeAfterScreen extends StatefulWidget {
       {super.key, required this.projectId, this.resultExtra});
 
   @override
-  State<BeforeAfterScreen> createState() => _BeforeAfterScreenState();
+  ConsumerState<BeforeAfterScreen> createState() => _BeforeAfterScreenState();
 }
 
-class _BeforeAfterScreenState extends State<BeforeAfterScreen>
+class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _entryController;
   late final Animation<double> _fadeAnim;
@@ -61,6 +63,13 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
   ImageStream? _sizeStream;
   ImageStreamListener? _sizeListener;
 
+  // Wave 4.10e (#2): the ORIGINAL's own intrinsic ratio, resolved
+  // independently of the generated image's ratio, for the hold-to-original
+  // overlay (true photographed proportions, not a cover-cropped expansion).
+  double? _beforeAspectRatio;
+  ImageStream? _beforeSizeStream;
+  ImageStreamListener? _beforeSizeListener;
+
   @override
   void initState() {
     super.initState();
@@ -74,17 +83,33 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
       final after = extra.afterImageUrl.isNotEmpty ? extra.afterImageUrl : null;
       final beforeRaw =
           extra.beforeImageUrl.isNotEmpty ? extra.beforeImageUrl : null;
+      // Wave 4.10e (#3, P0): the reveal "original" must ALWAYS be the very
+      // first user-uploaded photo — never the previous generated vision that
+      // chat's V2/V3 chaining passes as extra.beforeImageUrl. The initial
+      // upload is held immutably on the session row (ProjectModel
+      // .beforeImageUrl — set once at createSession, never mutated). Resolve
+      // it authoritatively by projectId; fall back to extra.beforeImageUrl
+      // ONLY when there is no session match / it is null (featured · mock ·
+      // deep-link · legacy · no persisted upload). The generation source
+      // (_afterUrl) is untouched — generation may keep chaining from the
+      // latest vision; reveal-original vs generation-source are different
+      // concepts.
+      final sessionOriginal = _sessionOriginalUrl();
+      final originalCandidate = sessionOriginal ?? beforeRaw;
       // Deterministic fallback rules — never a broken/empty/inconsistent
-      // slider. The reveal is shown ONLY when there is a distinct before
+      // slider. The reveal is shown ONLY when there is a distinct original
       // image; otherwise it is intentionally hidden (single full-bleed
-      // after image), which is the safe degraded state for legacy/corrupted
-      // rows persisted before the per-step source fix.
-      final before =
-          (beforeRaw != null && beforeRaw != after) ? beforeRaw : null;
+      // after image), the safe degraded state for legacy/corrupted rows.
+      final before = (originalCandidate != null && originalCandidate != after)
+          ? originalCandidate
+          : null;
+      final src = sessionOriginal != null ? 'session' : 'extra';
       final mode = before != null
           ? 'pair'
-          : (beforeRaw == null ? 'fallback_no_source' : 'fallback_same_pair');
-      debugPrint('[Reveal] full-reveal resolve — mode=$mode '
+          : (originalCandidate == null
+              ? 'fallback_no_source'
+              : 'fallback_same_pair');
+      debugPrint('[Reveal] full-reveal resolve — mode=$mode src=$src '
           'before=$before after=$after');
       _beforeUrl = before;
       _afterUrl = after;
@@ -107,6 +132,46 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
       _subtitle = '${project.style} · ${project.roomType}';
     }
     _loadImageAspectRatio();
+    _loadBeforeAspectRatio();
+  }
+
+  // Wave 4.10e (#3): authoritative initial-upload URL for this project from
+  // session state. ProjectModel.beforeImageUrl is set once at createSession
+  // and never mutated (only afterImageUrl/title/messages change), so it is a
+  // reliable source of the very first uploaded photo. Null ⇒ the caller
+  // falls back to the GeneratedResult's before (featured · mock · deep-link ·
+  // legacy · session with no persisted upload) — an honest fallback, never a
+  // fabricated original.
+  String? _sessionOriginalUrl() {
+    for (final p in ref.read(sessionProvider)) {
+      if (p.id == widget.projectId) {
+        final b = p.beforeImageUrl;
+        return (b != null && b.isNotEmpty) ? b : null;
+      }
+    }
+    return null;
+  }
+
+  // Wave 4.10e (#2): resolve the ORIGINAL's true intrinsic ratio using the
+  // exact same mechanism as _loadImageAspectRatio for the generated image,
+  // so the hold-to-original overlay shows the real photographed proportions
+  // (landscape stays landscape, portrait stays portrait) instead of a
+  // cover-cropped vertical expansion.
+  void _loadBeforeAspectRatio() {
+    final url = _beforeUrl;
+    if (url == null || url.isEmpty) return;
+    final ImageProvider provider = url.startsWith('assets/')
+        ? AssetImage(url) as ImageProvider
+        : CachedNetworkImageProvider(url);
+    _beforeSizeListener = ImageStreamListener((info, _) {
+      if (mounted) {
+        setState(() =>
+            _beforeAspectRatio = info.image.width / info.image.height);
+      }
+      _beforeSizeStream?.removeListener(_beforeSizeListener!);
+    });
+    _beforeSizeStream = provider.resolve(ImageConfiguration.empty);
+    _beforeSizeStream!.addListener(_beforeSizeListener!);
   }
 
   void _loadImageAspectRatio() {
@@ -134,6 +199,9 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
   @override
   void dispose() {
     if (_sizeListener != null) _sizeStream?.removeListener(_sizeListener!);
+    if (_beforeSizeListener != null) {
+      _beforeSizeStream?.removeListener(_beforeSizeListener!);
+    }
     _entryController.dispose();
     super.dispose();
   }
@@ -260,7 +328,23 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
                         fit: StackFit.expand,
                         children: [
                           ColoredBox(color: AppColors.textPrimary),
-                          _RevealImage(url: _beforeUrl),
+                          // Wave 4.10e (#2): the ORIGINAL is shown at its true
+                          // photographed proportions, centred over the
+                          // intentional ink base (RevealCanvas's ink-base
+                          // philosophy — never a harsh void). No forced
+                          // vertical/cover expansion. Falls back to the prior
+                          // cover fill until the intrinsic ratio resolves, so
+                          // the overlay is never blank. The RevealHero compare
+                          // wipe is intentionally NOT changed (shared-frame
+                          // honest comparison — confirmed decision A).
+                          Center(
+                            child: _beforeAspectRatio != null
+                                ? AspectRatio(
+                                    aspectRatio: _beforeAspectRatio!,
+                                    child: _RevealImage(url: _beforeUrl),
+                                  )
+                                : _RevealImage(url: _beforeUrl),
+                          ),
                           const Positioned(
                             top: 60,
                             left: 16,
