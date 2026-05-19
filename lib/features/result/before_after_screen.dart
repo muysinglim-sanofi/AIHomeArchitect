@@ -112,9 +112,14 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
   void _loadImageAspectRatio() {
     final url = _afterUrl;
     if (url == null || url.isEmpty) return;
+    // Wave 4.10b (#5): resolve the ratio from the SAME cached provider the
+    // RevealHero/RevealCanvas actually display (CachedNetworkImage), not a
+    // separate NetworkImage. This makes _imageAspectRatio resolve reliably
+    // and quickly → RevealCanvas centres at the true ratio (no forced
+    // portrait crop of landscape renders), with a single decode.
     final ImageProvider provider = url.startsWith('assets/')
         ? AssetImage(url) as ImageProvider
-        : NetworkImage(url);
+        : CachedNetworkImageProvider(url);
     _sizeListener = ImageStreamListener((info, _) {
       if (mounted) {
         setState(
@@ -280,6 +285,27 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Wave 4.10b (#6): make the hold-to-original gesture discoverable —
+          // a calm hint (only when a distinct original exists).
+          if (_hasBefore) ...[
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.touch_app_outlined,
+                    size: 13,
+                    color: AppColors.surface.withValues(alpha: 0.55)),
+                const SizedBox(width: 6),
+                Text(
+                  'Press & hold to see the original',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.surface.withValues(alpha: 0.55),
+                        fontSize: 11,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           // Secondary action — a single real, quiet pill. The no-op Save
           // affordance was removed (no storage backend — Wave-4.9 parity);
           // no dead premium actions remain.

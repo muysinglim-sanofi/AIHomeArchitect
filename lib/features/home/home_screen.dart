@@ -148,18 +148,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            l10n.appName.toUpperCase(),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 2.0,
-                  fontSize: 11,
-                  color: AppColors.textSecondary,
-                ),
+          // Flexible + ellipsis: the trailing controls grew (intro replay +
+          // credits), so guard the wordmark against narrow devices / long
+          // localized app names / large text scale (no row overflow).
+          Flexible(
+            child: Text(
+              l10n.appName.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 2.0,
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+            ),
           ),
-          AppPill(
-            text: '5 credits',
-            onTap: () => context.push('/sessions'),
+          const SizedBox(width: AppSpacing.sm),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Calm return-to-intro affordance — re-enters the FTUE
+              // (route already exists; no router change). Quiet ghost
+              // icon, never competes with the credits pill or CTA.
+              _IntroReplayButton(
+                onTap: () => context.push('/onboarding'),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              AppPill(
+                text: '5 credits',
+                onTap: () => context.push('/sessions'),
+              ),
+            ],
           ),
         ],
       ),
@@ -238,7 +258,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           ),
         ),
         SizedBox(
-          height: 196,
+          height: 214,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(
@@ -409,11 +429,15 @@ class _ContinueCard extends StatelessWidget {
           border: Border.all(color: AppColors.border),
         ),
         clipBehavior: Clip.antiAlias,
+        // Fixed image band + flexible text region. The text sits in an
+        // Expanded so the card total height is pinned to the strip height
+        // (214) regardless of font scaling — no vertical overflow, no
+        // clipped/hidden text (each line keeps maxLines + ellipsis).
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SizedBox(
-              height: 124,
+              height: 120,
               width: double.infinity,
               child: previewUrl != null
                   ? CachedNetworkImage(
@@ -426,40 +450,85 @@ class _ContinueCard extends StatelessWidget {
                     )
                   : Container(color: AppColors.shimmerBase),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    project.title,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          project.title,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    project.style,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
+                        const SizedBox(height: 2),
+                        Text(
+                          project.style,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: AppColors.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    meta,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textTertiary,
-                          fontSize: 10,
-                        ),
-                  ),
-                ],
+                      ],
+                    ),
+                    Text(
+                      meta,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.textTertiary,
+                            fontSize: 10,
+                          ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// Quiet "replay the intro" affordance. A bordered ghost icon (matches the
+// calm AppPill language) — discoverable but never loud. Returns the user to
+// the existing /onboarding route; no routing changes.
+class _IntroReplayButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _IntroReplayButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Replay introduction',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.border),
+          ),
+          child: const Icon(
+            Icons.auto_stories_outlined,
+            size: 17,
+            color: AppColors.textSecondary,
+          ),
         ),
       ),
     );

@@ -1575,7 +1575,7 @@ class _ImageResultBubbleState extends State<_ImageResultBubble>
   }
 }
 
-class _GeneratedImageCard extends StatelessWidget {
+class _GeneratedImageCard extends StatefulWidget {
   final GeneratedResult result;
   final VoidCallback onRevealTap;
   const _GeneratedImageCard({
@@ -1584,8 +1584,45 @@ class _GeneratedImageCard extends StatelessWidget {
   });
 
   @override
+  State<_GeneratedImageCard> createState() => _GeneratedImageCardState();
+}
+
+class _GeneratedImageCardState extends State<_GeneratedImageCard> {
+  // Wave 4.10b (#4): one shared provider for the focal image, the ambient
+  // backdrop AND the ratio probe → a single decode (RevealCanvas guidance),
+  // and the intrinsic aspect ratio resolves reliably so a landscape render
+  // is no longer cropped to the card's portrait box.
+  late final ImageProvider _provider =
+      CachedNetworkImageProvider(widget.result.afterImageUrl);
+  double? _aspectRatio;
+  ImageStream? _sizeStream;
+  ImageStreamListener? _sizeListener;
+
+  @override
+  void initState() {
+    super.initState();
+    _sizeListener = ImageStreamListener((info, _) {
+      if (mounted) {
+        setState(
+            () => _aspectRatio = info.image.width / info.image.height);
+      }
+      _sizeStream?.removeListener(_sizeListener!);
+    });
+    _sizeStream = _provider.resolve(ImageConfiguration.empty);
+    _sizeStream!.addListener(_sizeListener!);
+  }
+
+  @override
+  void dispose() {
+    if (_sizeListener != null) _sizeStream?.removeListener(_sizeListener!);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final result = widget.result;
+    final onRevealTap = widget.onRevealTap;
     final h =
         (MediaQuery.sizeOf(context).height * 0.52).clamp(280.0, 560.0);
     return ClipRRect(
@@ -1594,7 +1631,11 @@ class _GeneratedImageCard extends StatelessWidget {
         height: h,
         width: double.infinity,
         child: RevealCanvas(
-          ambientImage: CachedNetworkImageProvider(result.afterImageUrl),
+          ambientImage: _provider,
+          // Null until the intrinsic ratio resolves → the focal image then
+          // centres at its true ratio over the ambient backdrop (no crop,
+          // no letterbox void), staying image-dominant.
+          focalAspectRatio: _aspectRatio,
           bottomScrim: true,
           topOverlay: Padding(
             padding: const EdgeInsets.all(12),
@@ -2294,8 +2335,13 @@ class _EvolutionStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Wave 4.10b (#7): the strip was 104 while the content (72 image + 5 +
+    // 'Vision N' + label) summed to ~107 → a few-px overflow that worsened
+    // with text scaling. Raise to 122 and let the caption block flex, so it
+    // fits with margin across SE/standard/Max and larger font scales while
+    // keeping the image-led hierarchy.
     return SizedBox(
-      height: 104,
+      height: 122,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         clipBehavior: Clip.none,
@@ -2311,7 +2357,6 @@ class _EvolutionStrip extends StatelessWidget {
               width: 124,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Stack(
                     children: [
@@ -2351,23 +2396,37 @@ class _EvolutionStrip extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 5),
-                  Text(
-                    'Vision ${i + 1}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 11,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Vision ${i + 1}',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11,
+                              ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    v.label,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textTertiary,
-                          fontSize: 10,
+                        Text(
+                          v.label,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color: AppColors.textTertiary,
+                                fontSize: 10,
+                              ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                      ],
+                    ),
                   ),
                 ],
               ),
