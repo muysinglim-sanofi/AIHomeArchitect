@@ -20,9 +20,11 @@ import '../../data/services/generation_service.dart';
 import '../../data/services/supabase_service.dart';
 import '../../data/models/message_model.dart';
 import '../../data/models/project_model.dart';
-import '../../core/layout/adaptive_layout.dart';
+import '../../core/widgets/scrim.dart';
 import '../../shared/widgets/app_button.dart';
+import '../../shared/widgets/app_pill.dart';
 import '../../shared/widgets/atmosphere_card.dart';
+import '../../shared/widgets/sticky_action_bar.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -768,6 +770,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       builder: (_) => _SourcePhotoSheet(
         project: _project,
         sourceFile: _sourceImageFile,
+        // Wave 4.6: the latest generated vision powers the "evolving this
+        // vision" continuity header. Null (no vision yet) gracefully falls
+        // back to the source photo. Read-only — no contract change.
+        currentVisionUrl: _generationSourceUrl,
         initialRoomType: _currentRoomType,
         initialStyle: _currentStyle,
         onReplace: _replaceSourcePhoto,
@@ -2021,6 +2027,9 @@ class _SourceContextStrip extends StatelessWidget {
 class _SourcePhotoSheet extends StatefulWidget {
   final ProjectModel project;
   final File? sourceFile;
+  // Wave 4.6: latest generated vision (continuity header). Null => fall back
+  // to the source photo. Read-only context — not part of any contract.
+  final String? currentVisionUrl;
   final String initialRoomType;
   final String initialStyle;
   final VoidCallback onReplace;
@@ -2029,6 +2038,7 @@ class _SourcePhotoSheet extends StatefulWidget {
   const _SourcePhotoSheet({
     required this.project,
     this.sourceFile,
+    this.currentVisionUrl,
     required this.initialRoomType,
     required this.initialStyle,
     required this.onReplace,
@@ -2043,12 +2053,6 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
   late String _selectedRoomType;
   late String _selectedStyle;
 
-  static const _roomTypes = [
-    'Living Room', 'Bedroom', 'Kitchen', 'Terrace',
-    'Villa Exterior', 'Home Office', 'Pool Area', 'Dining Room',
-  ];
-
-
   @override
   void initState() {
     super.initState();
@@ -2056,22 +2060,25 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
     _selectedStyle = widget.initialStyle;
   }
 
+  void _apply() {
+    // Contract preserved verbatim: chat consumes (roomType, style) then the
+    // sheet pops.
+    widget.onDirectionChanged(_selectedRoomType, _selectedStyle);
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final safeBottom = MediaQuery.of(context).padding.bottom;
+    final screenH = MediaQuery.sizeOf(context).height;
 
-    return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.pagePadding,
-        20,
-        AppSpacing.pagePadding,
-        AppSpacing.xl + safeBottom,
-      ),
+    // A tall sheet (not a full new screen) — the chat stays visible behind the
+    // rounded top so it reads as "continuing the conversation", not a reset.
+    return SizedBox(
+      height: screenH * 0.9,
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const SizedBox(height: 10),
           Center(
             child: Container(
               width: 36,
@@ -2082,161 +2089,314 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
               ),
             ),
           ),
-          const SizedBox(height: 20),
-          Text(
-            'Design Direction',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            'Currently: $_selectedRoomType · $_selectedStyle',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary),
-          ),
-          const SizedBox(height: 16),
-          // Compact photo row
-          Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: 52,
-                  height: 52,
-                  child: widget.sourceFile != null
-                      ? Image.file(widget.sourceFile!, fit: BoxFit.cover,
-                          filterQuality: FilterQuality.medium)
-                      : widget.project.beforeImageUrl != null
-                          ? CachedNetworkImage(
-                              imageUrl: widget.project.beforeImageUrl!,
-                              fit: BoxFit.cover,
-                              placeholder: (_, _) => Container(color: AppColors.shimmerBase),
-                              errorWidget: (_, _, _) => Container(color: AppColors.shimmerBase),
-                            )
-                          : Container(color: AppColors.shimmerBase),
+          const SizedBox(height: 14),
+
+          // ── Continuity header — the CURRENT vision, image-first ───────────
+          // Communicates "I'm evolving THIS space", never a blank reset.
+          Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.pagePadding),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+              child: SizedBox(
+                height: 168,
+                width: double.infinity,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _SheetVisionImage(
+                      visionUrl: widget.currentVisionUrl,
+                      sourceFile: widget.sourceFile,
+                      beforeUrl: widget.project.beforeImageUrl,
+                    ),
+                    const Positioned.fill(
+                      child: AppScrim(
+                        edge: ScrimEdge.bottom,
+                        opacity: 0.58,
+                        extent: 0.6,
+                      ),
+                    ),
+                    Positioned(
+                      left: 14,
+                      right: 14,
+                      bottom: 14,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const AppPill(text: 'Evolving this vision'),
+                          const SizedBox(height: 6),
+                          Text(
+                            '$_selectedRoomType · $_selectedStyle',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color: AppColors.surface
+                                      .withValues(alpha: 0.85),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Column(
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Scrollable direction controls ─────────────────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.pagePadding, 0, AppSpacing.pagePadding, 16),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    l10n.sourcePhoto,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textTertiary,
-                          fontSize: 10,
+                  // Source reference + calm Replace affordance.
+                  Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: widget.sourceFile != null
+                              ? Image.file(widget.sourceFile!,
+                                  fit: BoxFit.cover,
+                                  filterQuality: FilterQuality.medium)
+                              : widget.project.beforeImageUrl != null
+                                  ? CachedNetworkImage(
+                                      imageUrl: widget.project.beforeImageUrl!,
+                                      fit: BoxFit.cover,
+                                      placeholder: (_, _) => Container(
+                                          color: AppColors.shimmerBase),
+                                      errorWidget: (_, _, _) => Container(
+                                          color: AppColors.shimmerBase),
+                                    )
+                                  : Container(color: AppColors.shimmerBase),
                         ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        l10n.sourcePhoto,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.textTertiary,
+                              fontSize: 11,
+                            ),
+                      ),
+                      const Spacer(),
+                      AppPill(
+                        text: l10n.replacePhoto,
+                        icon: Icons.image_outlined,
+                        onTap: widget.onReplace,
+                      ),
+                    ],
                   ),
-                  GestureDetector(
-                    onTap: widget.onReplace,
-                    child: Text(
-                      l10n.replacePhoto,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.accent,
-                            fontWeight: FontWeight.w600,
+                  const SizedBox(height: 22),
+
+                  // Space type — Wave-4.3 room language (shared l10n rooms).
+                  const _SheetEyebrow(label: 'SPACE TYPE'),
+                  const SizedBox(height: 10),
+                  _SheetRoomLabel(label: l10n.interiorSection),
+                  const SizedBox(height: 8),
+                  _SheetRoomRow(
+                    rooms: l10n.interiorRooms,
+                    selected: _selectedRoomType,
+                    onSelected: (r) =>
+                        setState(() => _selectedRoomType = r),
+                  ),
+                  const SizedBox(height: 14),
+                  _SheetRoomLabel(label: l10n.exteriorSection),
+                  const SizedBox(height: 8),
+                  _SheetRoomRow(
+                    rooms: l10n.exteriorRooms,
+                    selected: _selectedRoomType,
+                    onSelected: (r) =>
+                        setState(() => _selectedRoomType = r),
+                  ),
+                  const SizedBox(height: 22),
+
+                  // Atmosphere — shared AtmosphereCard V2 horizontal strip.
+                  const _SheetEyebrow(label: 'ATMOSPHERE'),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 190,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      clipBehavior: Clip.none,
+                      padding: EdgeInsets.zero,
+                      itemCount: AppLocalizations.atmospheres.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 10),
+                      itemBuilder: (context, i) {
+                        final a = AppLocalizations.atmospheres[i];
+                        return SizedBox(
+                          width: 150,
+                          child: AtmosphereCard(
+                            atmosphere: a,
+                            selected: a.name == _selectedStyle,
+                            onTap: () =>
+                                setState(() => _selectedStyle = a.name),
                           ),
+                        );
+                      },
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          // Space type
-          Text(
-            'SPACE TYPE',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textTertiary,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 10,
-                  letterSpacing: 0.8,
-                ),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 36,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _roomTypes.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, i) {
-                final rt = _roomTypes[i];
-                final selected = rt == _selectedRoomType;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedRoomType = rt),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: selected ? AppColors.textPrimary : AppColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(50),
-                      border: Border.all(
-                        color: selected ? AppColors.textPrimary : AppColors.border,
-                      ),
-                    ),
-                    child: Text(
-                      rt,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: selected ? AppColors.surface : AppColors.textSecondary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                    ),
-                  ),
-                );
-              },
             ),
           ),
-          const SizedBox(height: 22),
-          // Atmosphere
-          Text(
-            'ATMOSPHERE',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textTertiary,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 10,
-                  letterSpacing: 0.8,
-                ),
-          ),
-          const SizedBox(height: 10),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              childAspectRatio: AppAdaptive.modalAtmosphereAspectRatio,
-            ),
-            itemCount: AppLocalizations.atmospheres.length,
-            itemBuilder: (context, i) {
-              final a = AppLocalizations.atmospheres[i];
-              return AtmosphereCard(
-                atmosphere: a,
-                selected: a.name == _selectedStyle,
-                onTap: () => setState(() => _selectedStyle = a.name),
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                widget.onDirectionChanged(_selectedRoomType, _selectedStyle);
-                Navigator.of(context).pop();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.textPrimary,
-                foregroundColor: AppColors.surface,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
-              child: Text(
-                'Apply Direction',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.surface),
-              ),
+
+          // ── Sticky CTA — always reachable; sheet-toned ────────────────────
+          StickyActionBar(
+            background: AppColors.surface,
+            primary: AppButton(
+              label: 'Apply Direction',
+              onPressed: _apply,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// Resolves the continuity header image: current vision → source file →
+// original → calm shimmer. Image-first, BoxFit.cover.
+class _SheetVisionImage extends StatelessWidget {
+  final String? visionUrl;
+  final File? sourceFile;
+  final String? beforeUrl;
+  const _SheetVisionImage({
+    this.visionUrl,
+    this.sourceFile,
+    this.beforeUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (visionUrl != null && visionUrl!.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: visionUrl!,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        placeholder: (_, _) => const ColoredBox(color: AppColors.shimmerBase),
+        errorWidget: (_, _, _) =>
+            const ColoredBox(color: AppColors.shimmerBase),
+      );
+    }
+    if (sourceFile != null) {
+      return Image.file(sourceFile!,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          filterQuality: FilterQuality.medium);
+    }
+    if (beforeUrl != null && beforeUrl!.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: beforeUrl!,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        placeholder: (_, _) => const ColoredBox(color: AppColors.shimmerBase),
+        errorWidget: (_, _, _) =>
+            const ColoredBox(color: AppColors.shimmerBase),
+      );
+    }
+    return const ColoredBox(color: AppColors.shimmerBase);
+  }
+}
+
+class _SheetEyebrow extends StatelessWidget {
+  final String label;
+  const _SheetEyebrow({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: AppColors.textTertiary,
+            fontWeight: FontWeight.w600,
+            fontSize: 11,
+            letterSpacing: 1.2,
+          ),
+    );
+  }
+}
+
+class _SheetRoomLabel extends StatelessWidget {
+  final String label;
+  const _SheetRoomLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w500,
+            color: AppColors.textTertiary,
+          ),
+    );
+  }
+}
+
+class _SheetRoomRow extends StatelessWidget {
+  final List<String> rooms;
+  final String? selected;
+  final ValueChanged<String> onSelected;
+  const _SheetRoomRow({
+    required this.rooms,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        padding: EdgeInsets.zero,
+        itemCount: rooms.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final r = rooms[i];
+          final isSel = selected == r;
+          return GestureDetector(
+            onTap: () => onSelected(r),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              decoration: BoxDecoration(
+                color: isSel ? AppColors.textPrimary : AppColors.surface,
+                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+                border: Border.all(
+                  color: isSel ? AppColors.textPrimary : AppColors.border,
+                ),
+              ),
+              child: Text(
+                r,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: isSel
+                          ? AppColors.surface
+                          : AppColors.textSecondary,
+                      fontWeight:
+                          isSel ? FontWeight.w600 : FontWeight.w400,
+                    ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
