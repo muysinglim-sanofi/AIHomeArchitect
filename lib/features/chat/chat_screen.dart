@@ -24,6 +24,7 @@ import '../../core/widgets/scrim.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_pill.dart';
 import '../../shared/widgets/atmosphere_card.dart';
+import '../../shared/widgets/reveal_canvas.dart';
 import '../../shared/widgets/sticky_action_bar.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -927,6 +928,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
                             atmosphere: msg.content.contains('|')
                                 ? msg.content.split('|').last
                                 : '',
+                            // Wave 4.9: the image being transformed powers the
+                            // cinematic wait (V2+ = latest vision, V1 = source
+                            // photo). Read-only context; the 4.9.1b "<n>|<style>"
+                            // content encoding is unchanged.
+                            sourceFile: _sourceImageFile,
+                            backdropUrl: _generationSourceUrl ??
+                                _project.beforeImageUrl,
                           ),
                     MessageType.imageResult => _ImageResultBubble(
                         key: ValueKey(msg.id),
@@ -1146,7 +1154,16 @@ String? _atmospherePhase(String atmosphere) {
 class _LoadingBubble extends StatefulWidget {
   final int iteration;
   final String atmosphere;
-  const _LoadingBubble({super.key, this.iteration = 1, this.atmosphere = ''});
+  // Wave 4.9: the image being transformed (cinematic wait presence).
+  final File? sourceFile;
+  final String? backdropUrl;
+  const _LoadingBubble({
+    super.key,
+    this.iteration = 1,
+    this.atmosphere = '',
+    this.sourceFile,
+    this.backdropUrl,
+  });
 
   @override
   State<_LoadingBubble> createState() => _LoadingBubbleState();
@@ -1219,85 +1236,126 @@ class _LoadingBubbleState extends State<_LoadingBubble> with TickerProviderState
     super.dispose();
   }
 
+  // Backdrop = the image being transformed (cinematic wait presence).
+  Widget? _backdrop() {
+    if (widget.sourceFile != null) {
+      return Image.file(widget.sourceFile!,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          filterQuality: FilterQuality.medium);
+    }
+    final u = widget.backdropUrl;
+    if (u != null && u.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: u,
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        placeholder: (_, _) => const ColoredBox(color: AppColors.textPrimary),
+        errorWidget: (_, _, _) =>
+            const ColoredBox(color: AppColors.textPrimary),
+      );
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final h =
+        (MediaQuery.sizeOf(context).height * 0.52).clamp(280.0, 560.0);
+    final img = _backdrop();
     return FadeTransition(
       opacity: _fade,
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            _AiAvatar(),
-            const SizedBox(width: 8),
-            Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(18),
-                  topRight: Radius.circular(18),
-                  bottomRight: Radius.circular(18),
-                  bottomLeft: Radius.circular(4),
-                ),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _DotsIndicator(),
-                  const SizedBox(height: 6),
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 420),
-                    transitionBuilder: (child, anim) => FadeTransition(
-                      opacity: anim,
-                      child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0, 0.18), end: Offset.zero,
-                        ).animate(anim),
-                        child: child,
-                      ),
-                    ),
-                    child: Text(
-                      _sequence[_phraseIndex],
-                      key: ValueKey(_phraseIndex),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.textTertiary,
-                          ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  AnimatedBuilder(
-                    animation: Listenable.merge([_progress, _breathCtrl]),
-                    builder: (_, _) {
-                      // Calm breathing on the fill alpha so the bar stays
-                      // visibly "alive" even when growth is slow (Task 4/6).
-                      final breath = 150 + (70 * _breathCtrl.value).round();
-                      return SizedBox(
-                        width: 160,
-                        height: 2,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(1),
-                          child: Stack(
-                            children: [
-                              Container(color: AppColors.border),
-                              FractionallySizedBox(
-                                widthFactor: _progress.value,
-                                child: Container(
-                                  color: AppColors.accent.withAlpha(breath)),
-                              ),
-                            ],
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+          child: SizedBox(
+            height: h,
+            width: double.infinity,
+            child: RevealCanvas(
+              ambientImage: widget.sourceFile != null
+                  ? FileImage(widget.sourceFile!)
+                  : (widget.backdropUrl != null &&
+                          widget.backdropUrl!.isNotEmpty)
+                      ? CachedNetworkImageProvider(widget.backdropUrl!)
+                      : null,
+              ambientBlur: 18,
+              ambientDarken: 0.5,
+              bottomScrim: true,
+              bottomOverlay: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 22),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _DotsIndicator(),
+                    const SizedBox(height: 10),
+                    // Fixed transition — outgoing vanishes immediately and
+                    // only the incoming fades in (no stacked double-text);
+                    // reserved height prevents layout jitter (Wave 4.9 §4).
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 360),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: const Threshold(0),
+                      layoutBuilder: (cur, _) =>
+                          cur ?? const SizedBox.shrink(),
+                      transitionBuilder: (child, anim) =>
+                          FadeTransition(opacity: anim, child: child),
+                      child: SizedBox(
+                        key: ValueKey(_phraseIndex),
+                        height: 24,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _sequence[_phraseIndex],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
+                                  color: AppColors.surface,
+                                  fontWeight: FontWeight.w500,
+                                ),
                           ),
                         ),
-                      );
-                    },
-                  ),
-                ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    AnimatedBuilder(
+                      animation: Listenable.merge([_progress, _breathCtrl]),
+                      builder: (_, _) {
+                        final breath = 150 + (90 * _breathCtrl.value).round();
+                        return SizedBox(
+                          width: 200,
+                          height: 2,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(1),
+                            child: Stack(
+                              children: [
+                                Container(
+                                    color: AppColors.surface
+                                        .withValues(alpha: 0.22)),
+                                FractionallySizedBox(
+                                  widthFactor: _progress.value,
+                                  child: Container(
+                                      color: AppColors.surface
+                                          .withAlpha(breath)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
+              child: img ?? const ColoredBox(color: AppColors.textPrimary),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1447,45 +1505,37 @@ class _ImageResultBubbleState extends State<_ImageResultBubble>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _AiAvatar(),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Container(
-                    constraints:
-                        BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(18),
-                        topRight: Radius.circular(18),
-                        bottomRight: Radius.circular(18),
-                        bottomLeft: Radius.circular(4),
-                      ),
-                      border: Border.all(color: AppColors.border),
+            // Calm editorial caption (the architect's message) — no bubble
+            // box, no avatar, no 36px indent: the image, not the chat
+            // chrome, leads. Still a chronological list item (bridge — no
+            // Wave 4.11 inversion).
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+              child: Text(
+                widget.message.content,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textSecondary,
+                      height: 1.5,
                     ),
-                    child: Text(
-                      widget.message.content,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
-                    ),
-                  ),
-                ),
-              ],
+              ),
+            ),
+            // The generated vision — a dominant mini cinematic canvas.
+            ScaleTransition(
+              scale: _scale,
+              child: _GeneratedImageCard(
+                result: result,
+                onRevealTap: widget.onRevealTap,
+              ),
             ),
             Padding(
-              padding: const EdgeInsets.only(left: 36, bottom: 10),
-              child: ScaleTransition(
-                scale: _scale,
-                child: _GeneratedImageCard(
-                  result: result,
-                  createdAt: widget.message.createdAt,
-                  onRevealTap: widget.onRevealTap,
-                ),
+              padding: const EdgeInsets.fromLTRB(4, 6, 4, 6),
+              child: Text(
+                '${context.l10n.visionCreated} '
+                '${_timeAgo(widget.message.createdAt)}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textTertiary,
+                      fontSize: 10,
+                    ),
               ),
             ),
           ],
@@ -1497,168 +1547,71 @@ class _ImageResultBubbleState extends State<_ImageResultBubble>
 
 class _GeneratedImageCard extends StatelessWidget {
   final GeneratedResult result;
-  final DateTime createdAt;
   final VoidCallback onRevealTap;
   const _GeneratedImageCard({
     required this.result,
-    required this.createdAt,
     required this.onRevealTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-        border: Border.all(color: AppColors.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Tappable image with style badge
-          GestureDetector(
-            onTap: onRevealTap,
-            child: Stack(
-              children: [
-                AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: CachedNetworkImage(
-                    imageUrl: result.afterImageUrl,
-                    fit: BoxFit.cover,
-                    placeholder: (_, _) => Container(color: AppColors.shimmerBase),
-                    errorWidget: (_, _, _) => Container(color: AppColors.shimmerBase),
-                  ),
-                ),
-                Positioned(
-                  top: 10,
-                  left: 10,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: AppColors.textPrimary.withAlpha(200),
-                      borderRadius: BorderRadius.circular(50),
-                    ),
-                    child: Text(
-                      result.styleLabel,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.surface,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 10,
-                          ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Actions + timestamp
-          Padding(
+    final h =
+        (MediaQuery.sizeOf(context).height * 0.52).clamp(280.0, 560.0);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+      child: SizedBox(
+        height: h,
+        width: double.infinity,
+        child: RevealCanvas(
+          ambientImage: CachedNetworkImageProvider(result.afterImageUrl),
+          bottomScrim: true,
+          topOverlay: Padding(
             padding: const EdgeInsets.all(12),
-            child: Column(
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: AppPill(text: result.styleLabel, dark: true),
+            ),
+          ),
+          bottomOverlay: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+            child: Row(
               children: [
-                _CardAction(
-                  icon: Icons.compare,
-                  label: l10n.viewBeforeAfter,
-                  primary: true,
-                  onTap: onRevealTap,
+                Expanded(
+                  child: AppButton(
+                    label: l10n.viewBeforeAfter,
+                    icon: Icons.compare,
+                    variant: AppButtonVariant.onImage,
+                    onPressed: onRevealTap,
+                  ),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _CardAction(
-                        icon: Icons.bookmark_outline,
-                        label: l10n.saveDesign,
-                        onTap: () => _showSnack(context, 'Saved to your transformations.'),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: _CardAction(
-                        icon: Icons.ios_share,
-                        label: l10n.shareDesign,
-                        onTap: () => Share.share(
-                          'Check out my AI home transformation — ${result.styleLabel}!',
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${l10n.visionCreated} ${_timeAgo(createdAt)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textTertiary,
-                        fontSize: 10,
-                      ),
-                  textAlign: TextAlign.center,
+                const SizedBox(width: 10),
+                AppPill(
+                  text: l10n.shareDesign,
+                  icon: Icons.ios_share,
+                  dark: true,
+                  onTap: () => Share.share(
+                    'Check out my AI home transformation — '
+                    '${result.styleLabel}!',
+                  ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  void _showSnack(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.textPrimary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
-}
-
-class _CardAction extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool primary;
-  const _CardAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.primary = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: primary ? 16 : 10,
-          vertical: primary ? 12 : 10,
-        ),
-        decoration: BoxDecoration(
-          color: primary ? AppColors.textPrimary : AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 14, color: primary ? AppColors.surface : AppColors.textSecondary),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: primary ? AppColors.surface : AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+          // Tap the image itself → open the full reveal (preserved).
+          child: GestureDetector(
+            onTap: onRevealTap,
+            child: CachedNetworkImage(
+              imageUrl: result.afterImageUrl,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+              placeholder: (_, _) =>
+                  const ColoredBox(color: AppColors.shimmerBase),
+              errorWidget: (_, _, _) =>
+                  const ColoredBox(color: AppColors.shimmerBase),
             ),
-          ],
+          ),
         ),
       ),
     );

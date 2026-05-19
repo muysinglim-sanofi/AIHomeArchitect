@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
+import '../../core/theme/app_theme.dart';
 
 class GenerationLoadingScreen extends StatefulWidget {
   const GenerationLoadingScreen({super.key});
@@ -83,17 +84,37 @@ class _GenerationLoadingScreenState extends State<GenerationLoadingScreen>
               const SizedBox(height: AppSpacing.xxxl),
               Text(
                 l10n.generatingTitle,
-                style: Theme.of(context).textTheme.displayMedium,
+                style: AppTheme.displayEditorial(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w500,
+                  height: 1.12,
+                  letterSpacing: -0.4,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppSpacing.md),
+              // Non-stacking transition (consistent with Wave 4.9 §4): the
+              // outgoing step vanishes immediately, only the incoming fades
+              // in — no double-text overlap, fixed height = no jitter.
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 400),
-                child: Text(
-                  _steps.isNotEmpty ? _steps[_stepIndex] : '',
+                duration: const Duration(milliseconds: 360),
+                switchInCurve: Curves.easeOut,
+                switchOutCurve: const Threshold(0),
+                layoutBuilder: (cur, _) => cur ?? const SizedBox.shrink(),
+                transitionBuilder: (child, anim) =>
+                    FadeTransition(opacity: anim, child: child),
+                child: SizedBox(
                   key: ValueKey(_stepIndex),
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
+                  height: 22,
+                  child: Center(
+                    child: Text(
+                      _steps.isNotEmpty ? _steps[_stepIndex] : '',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 ),
               ),
               const Spacer(),
@@ -135,25 +156,22 @@ class _PulsingCanvas extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: animation,
+      // Calm architectural pulse — a soft breathing surface, no gamified
+      // sparkle icon (premium, abstract).
       builder: (context, _) => Container(
-        width: 200,
-        height: 200,
+        width: 220,
+        height: 220,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(32),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusHero),
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color.lerp(AppColors.accentLight, AppColors.shimmerBase, animation.value)!,
-              Color.lerp(AppColors.shimmerBase, AppColors.accentLight, animation.value)!,
+              Color.lerp(AppColors.accentLight, AppColors.shimmerBase,
+                  animation.value)!,
+              Color.lerp(AppColors.shimmerBase, AppColors.accentLight,
+                  animation.value)!,
             ],
-          ),
-        ),
-        child: Center(
-          child: Icon(
-            Icons.auto_awesome,
-            size: 56 + (8 * animation.value),
-            color: AppColors.accentDark.withAlpha((180 + 75 * animation.value).toInt()),
           ),
         ),
       ),
