@@ -5,9 +5,23 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
-import '../../core/layout/adaptive_layout.dart';
+import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/app_button.dart';
+import '../../shared/widgets/app_pill.dart';
 import '../../shared/widgets/atmosphere_card.dart';
+import '../../shared/widgets/sticky_action_bar.dart';
+
+// ── Wave 4.3 — New Design Session V2 ──────────────────────────────────────────
+// Premium architectural-direction flow. Consumes the Wave 4 spine
+// (AtmosphereCard V2 incl. .custom, StickyActionBar, AppPill, editorial type).
+// In scope: atmosphere V2 + custom fold, premium room-type horizontal scroller
+// (exact l10n room strings preserved — route/backend contract), calmer
+// dropzone, sticky CTA with a clear premium disabled state, editorial
+// hierarchy. NOT included (deferred to a future routing+chat wave, by
+// decision): AI-Decide, Surprise-Me, free-text description — they cannot be
+// wired honestly without route/chat_screen/backend changes. No backend /
+// routing / session / generation changes; picker, validation, route contract
+// and session creation preserved verbatim.
 
 class UploadScreen extends StatefulWidget {
   const UploadScreen({super.key});
@@ -16,7 +30,8 @@ class UploadScreen extends StatefulWidget {
   State<UploadScreen> createState() => _UploadScreenState();
 }
 
-class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderStateMixin {
+class _UploadScreenState extends State<UploadScreen>
+    with SingleTickerProviderStateMixin {
   File? _image;
   String? _selectedRoom;
   String? _selectedStyle;
@@ -28,7 +43,8 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    _entryController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600))
+    _entryController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 600))
       ..forward();
     _fadeAnim = CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
   }
@@ -39,6 +55,7 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
+  // ── Picker (preserved verbatim — non-regression) ──────────────────────────
   Future<void> _pickImage(ImageSource source) async {
     final picked = await _picker.pickImage(source: source, imageQuality: 85);
     if (picked != null) setState(() => _image = File(picked.path));
@@ -61,30 +78,43 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
               Container(
                 width: 36,
                 height: 4,
-                decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(
+                    color: AppColors.border,
+                    borderRadius: BorderRadius.circular(2)),
               ),
               const SizedBox(height: AppSpacing.lg),
-              Text(l10n.uploadYourSpace, style: Theme.of(sheetCtx).textTheme.headlineSmall),
+              Text(l10n.uploadYourSpace,
+                  style: Theme.of(sheetCtx).textTheme.headlineSmall),
               const SizedBox(height: AppSpacing.md),
               ListTile(
                 leading: Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: AppColors.surfaceVariant, shape: BoxShape.circle),
+                  decoration: const BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      shape: BoxShape.circle),
                   child: const Icon(Icons.camera_alt_outlined, size: 20),
                 ),
                 title: Text(l10n.takePhoto),
                 subtitle: Text(l10n.takePhotoSub),
-                onTap: () { Navigator.pop(sheetCtx); _pickImage(ImageSource.camera); },
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _pickImage(ImageSource.camera);
+                },
               ),
               ListTile(
                 leading: Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: AppColors.surfaceVariant, shape: BoxShape.circle),
+                  decoration: const BoxDecoration(
+                      color: AppColors.surfaceVariant,
+                      shape: BoxShape.circle),
                   child: const Icon(Icons.photo_library_outlined, size: 20),
                 ),
                 title: Text(l10n.chooseGallery),
                 subtitle: Text(l10n.chooseGallerySub),
-                onTap: () { Navigator.pop(sheetCtx); _pickImage(ImageSource.gallery); },
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _pickImage(ImageSource.gallery);
+                },
               ),
             ],
           ),
@@ -93,7 +123,22 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
     );
   }
 
-  bool get _canProceed => _image != null && _selectedRoom != null && _selectedStyle != null;
+  bool get _canProceed =>
+      _image != null && _selectedRoom != null && _selectedStyle != null;
+
+  // Calm, specific hint for the disabled state (premium, never a dead button).
+  String get _missingHint {
+    if (_image == null) return 'Add a photo of your space to begin';
+    if (_selectedRoom == null) return 'Choose what you\'re transforming';
+    return 'Pick an atmosphere direction';
+  }
+
+  void _start() {
+    context.pushReplacement(
+      '/chat/new?roomType=${Uri.encodeComponent(_selectedRoom!)}&style=${Uri.encodeComponent(_selectedStyle!)}',
+      extra: _image,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,7 +147,8 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Text(l10n.uploadTitle),
-        leading: IconButton(icon: const Icon(Icons.close), onPressed: () => context.pop()),
+        leading: IconButton(
+            icon: const Icon(Icons.close), onPressed: () => context.pop()),
       ),
       body: FadeTransition(
         opacity: _fadeAnim,
@@ -121,26 +167,34 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                   children: [
                     Text(
                       l10n.uploadSubtitle,
-                      style: Theme.of(context).textTheme.headlineMedium,
+                      style: AppTheme.displayEditorial(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w500,
+                        height: 1.15,
+                        letterSpacing: -0.3,
+                      ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
                       l10n.uploadHint,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textSecondary,
+                            height: 1.5,
+                          ),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
+                    const SizedBox(height: AppSpacing.xl),
                     _UploadZone(image: _image, onTap: _showImagePicker),
                     const SizedBox(height: AppSpacing.xl),
-                    _SectionLabel(label: l10n.roomTypeLabel),
-                    const SizedBox(height: AppSpacing.sm),
-                    _GroupedRoomSelector(
+                    _Eyebrow(label: l10n.roomTypeLabel),
+                    const SizedBox(height: AppSpacing.md),
+                    _RoomScroller(
                       selected: _selectedRoom,
                       onSelected: (v) => setState(() => _selectedRoom = v),
                     ),
                     const SizedBox(height: AppSpacing.xl),
-                    _SectionLabel(label: l10n.styleLabel),
-                    const SizedBox(height: AppSpacing.sm),
-                    _StyleGrid(
+                    _Eyebrow(label: l10n.styleLabel),
+                    const SizedBox(height: AppSpacing.md),
+                    _AtmosphereScroller(
                       selected: _selectedStyle,
                       onSelected: (v) => setState(() => _selectedStyle = v),
                     ),
@@ -149,30 +203,20 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
                 ),
               ),
             ),
-            Container(
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.pagePadding,
-                AppSpacing.md,
-                AppSpacing.pagePadding,
-                AppSpacing.md + MediaQuery.of(context).padding.bottom,
+            StickyActionBar(
+              primary: AppButton(
+                label: l10n.startDesign,
+                onPressed: _canProceed ? _start : null,
               ),
-              decoration: const BoxDecoration(
-                color: AppColors.background,
-                border: Border(top: BorderSide(color: AppColors.borderLight)),
-              ),
-              child: AnimatedOpacity(
-                opacity: _canProceed ? 1.0 : 0.45,
-                duration: const Duration(milliseconds: 300),
-                child: AppButton(
-                  label: l10n.startDesign,
-                  onPressed: _canProceed
-                      ? () => context.pushReplacement(
-                            '/chat/new?roomType=${Uri.encodeComponent(_selectedRoom!)}&style=${Uri.encodeComponent(_selectedStyle!)}',
-                            extra: _image,
-                          )
-                      : null,
-                ),
-              ),
+              secondary: _canProceed
+                  ? null
+                  : Text(
+                      _missingHint,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.textTertiary,
+                          ),
+                    ),
             ),
           ],
         ),
@@ -181,15 +225,26 @@ class _UploadScreenState extends State<UploadScreen> with SingleTickerProviderSt
   }
 }
 
-class _SectionLabel extends StatelessWidget {
+// Quiet editorial section label (calmer than a titleMedium heading).
+class _Eyebrow extends StatelessWidget {
   final String label;
-  const _SectionLabel({required this.label});
+  const _Eyebrow({required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return Text(label, style: Theme.of(context).textTheme.titleMedium);
+    return Text(
+      label.toUpperCase(),
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.2,
+            fontSize: 11,
+            color: AppColors.textTertiary,
+          ),
+    );
   }
 }
+
+// ── Upload zone — calmer premium empty/filled state ───────────────────────────
 
 class _UploadZone extends StatelessWidget {
   final File? image;
@@ -205,10 +260,10 @@ class _UploadZone extends StatelessWidget {
         curve: Curves.easeInOut,
         decoration: BoxDecoration(
           color: image == null ? AppColors.surfaceVariant : AppColors.surface,
-          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
           border: Border.all(
             color: image != null ? AppColors.accent : AppColors.border,
-            width: image != null ? 2 : 1.5,
+            width: image != null ? 1.5 : 1,
           ),
         ),
         clipBehavior: Clip.antiAlias,
@@ -218,21 +273,22 @@ class _UploadZone extends StatelessWidget {
               ? Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: const Icon(Icons.add_photo_alternate_outlined, size: 28, color: AppColors.textSecondary),
+                    const Icon(Icons.add_photo_alternate_outlined,
+                        size: 30, color: AppColors.textTertiary),
+                    const SizedBox(height: 12),
+                    Text(
+                      context.l10n.uploadPrompt,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
                     ),
-                    const SizedBox(height: 14),
-                    Text(context.l10n.uploadPrompt, style: Theme.of(context).textTheme.bodyMedium),
                     const SizedBox(height: 4),
                     Text(
                       'JPG · PNG · HEIC',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.textTertiary,
+                          ),
                     ),
                   ],
                 )
@@ -243,16 +299,11 @@ class _UploadZone extends StatelessWidget {
                     Positioned(
                       top: 12,
                       right: 12,
-                      child: GestureDetector(
+                      child: AppPill(
+                        text: 'Replace',
+                        icon: Icons.edit_outlined,
+                        dark: true,
                         onTap: onTap,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: AppColors.surface,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.edit_outlined, size: 16, color: AppColors.textPrimary),
-                        ),
                       ),
                     ),
                   ],
@@ -263,10 +314,12 @@ class _UploadZone extends StatelessWidget {
   }
 }
 
-class _GroupedRoomSelector extends StatelessWidget {
+// ── Room-type — premium horizontal scroller (exact l10n strings kept) ─────────
+
+class _RoomScroller extends StatelessWidget {
   final String? selected;
   final ValueChanged<String> onSelected;
-  const _GroupedRoomSelector({this.selected, required this.onSelected});
+  const _RoomScroller({this.selected, required this.onSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -274,146 +327,85 @@ class _GroupedRoomSelector extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          l10n.interiorSection,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.8,
-                color: AppColors.textTertiary,
-              ),
-        ),
+        _RoomGroupLabel(label: l10n.interiorSection),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: l10n.interiorRooms
-              .map((r) => _Chip(label: r, selected: selected == r, onTap: () => onSelected(r)))
-              .toList(),
+        _RoomRow(
+          rooms: l10n.interiorRooms,
+          selected: selected,
+          onSelected: onSelected,
         ),
-        const SizedBox(height: 14),
-        Text(
-          l10n.exteriorSection,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.8,
-                color: AppColors.textTertiary,
-              ),
-        ),
+        const SizedBox(height: 16),
+        _RoomGroupLabel(label: l10n.exteriorSection),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: l10n.exteriorRooms
-              .map((r) => _Chip(label: r, selected: selected == r, onTap: () => onSelected(r)))
-              .toList(),
+        _RoomRow(
+          rooms: l10n.exteriorRooms,
+          selected: selected,
+          onSelected: onSelected,
         ),
       ],
     );
   }
 }
 
-class _StyleGrid extends StatelessWidget {
+class _RoomGroupLabel extends StatelessWidget {
+  final String label;
+  const _RoomGroupLabel({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontWeight: FontWeight.w500,
+            color: AppColors.textTertiary,
+          ),
+    );
+  }
+}
+
+class _RoomRow extends StatelessWidget {
+  final List<String> rooms;
   final String? selected;
   final ValueChanged<String> onSelected;
-  const _StyleGrid({this.selected, required this.onSelected});
-
-  static const _customLabel = 'Describe Your Dream Space';
+  const _RoomRow({
+    required this.rooms,
+    required this.selected,
+    required this.onSelected,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final atmospheres = AppLocalizations.atmospheres;
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: AppAdaptive.uploadAtmosphereAspectRatio,
-      ),
-      itemCount: atmospheres.length + 1,
-      itemBuilder: (context, index) {
-        if (index < atmospheres.length) {
-          final a = atmospheres[index];
-          return AtmosphereCard(
-            atmosphere: a,
-            selected: selected == a.name,
-            onTap: () => onSelected(a.name),
+    return SizedBox(
+      height: 42,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        itemCount: rooms.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final r = rooms[i];
+          return _RoomChip(
+            label: r,
+            selected: selected == r,
+            onTap: () => onSelected(r),
           );
-        }
-        return _CustomAtmosphereCard(
-          selected: selected == _customLabel,
-          onTap: () => onSelected(_customLabel),
-        );
-      },
-    );
-  }
-}
-
-class _CustomAtmosphereCard extends StatelessWidget {
-  final bool selected;
-  final VoidCallback onTap;
-  const _CustomAtmosphereCard({required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.textPrimary : AppColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-          border: Border.all(
-            color: selected ? AppColors.textPrimary : AppColors.border,
-            width: selected ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.edit_note_outlined,
-              size: 32,
-              color: selected ? AppColors.surface : AppColors.textSecondary,
-            ),
-            const SizedBox(height: 10),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                'Describe Your\nDream Space',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: selected ? AppColors.surface : AppColors.textPrimary,
-                    ),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                'Tell us in your own words',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: selected
-                          ? AppColors.surface.withValues(alpha: 0.7)
-                          : AppColors.textTertiary,
-                    ),
-              ),
-            ),
-          ],
-        ),
+        },
       ),
     );
   }
 }
 
-class _Chip extends StatelessWidget {
+// Selectable room chip — a *control* (selected = filled). Intentionally NOT
+// AppPill (which is a label/badge with no selectable state).
+class _RoomChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _Chip({required this.label, required this.selected, required this.onTap});
+  const _RoomChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -421,10 +413,11 @@ class _Chip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 18),
         decoration: BoxDecoration(
           color: selected ? AppColors.textPrimary : AppColors.surface,
-          borderRadius: BorderRadius.circular(AppSpacing.chipRadius),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
           border: Border.all(
             color: selected ? AppColors.textPrimary : AppColors.border,
           ),
@@ -436,6 +429,55 @@ class _Chip extends StatelessWidget {
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
               ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Atmosphere — shared AtmosphereCard V2 horizontal scroller + custom fold ───
+
+class _AtmosphereScroller extends StatelessWidget {
+  final String? selected;
+  final ValueChanged<String> onSelected;
+  const _AtmosphereScroller({this.selected, required this.onSelected});
+
+  // Exact value preserved — route/backend interpret this literal (chat custom
+  // path). Do NOT change.
+  static const _customLabel = 'Describe Your Dream Space';
+
+  @override
+  Widget build(BuildContext context) {
+    final atmospheres = AppLocalizations.atmospheres;
+    return SizedBox(
+      height: 200,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        itemCount: atmospheres.length + 1,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          if (index < atmospheres.length) {
+            final a = atmospheres[index];
+            return SizedBox(
+              width: 150,
+              child: AtmosphereCard(
+                atmosphere: a,
+                selected: selected == a.name,
+                onTap: () => onSelected(a.name),
+              ),
+            );
+          }
+          // Custom — folded into the shared shell (AtmosphereCard.custom).
+          return SizedBox(
+            width: 150,
+            child: AtmosphereCard.custom(
+              label: _customLabel,
+              sublabel: 'Tell us in your own words',
+              selected: selected == _customLabel,
+              onTap: () => onSelected(_customLabel),
+            ),
+          );
+        },
       ),
     );
   }
