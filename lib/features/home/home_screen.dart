@@ -79,13 +79,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     super.dispose();
   }
 
-  String _greeting(AppLocalizations l10n) {
-    final h = DateTime.now().hour;
-    if (h < 12) return l10n.homeGreetingMorning;
-    if (h < 18) return l10n.homeGreetingAfternoon;
-    return l10n.homeGreetingEvening;
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -141,7 +134,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.pagePadding,
-        AppSpacing.md,
+        AppSpacing.sm,
         AppSpacing.pagePadding,
         0,
       ),
@@ -186,28 +179,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  // Compact editorial header → prominent image-led hero. The 40px display
-  // headline is reduced to a calm editorial line and the marketing subtitle
-  // is dropped (less vertical waste); the transformation is now the lead.
+  // Wave 4.10g (#1): vertical compression. The generic "Good afternoon"
+  // greeting is removed entirely (SaaS-feel, zero emotional value, wasted
+  // viewport); top spacing is tightened (header→headline lg→md, headline→
+  // hero lg→md) so the editorial headline + image-led hero begin
+  // significantly higher and the Continue Designing title clears the fold.
   Widget _buildHeroSection(BuildContext context, AppLocalizations l10n) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.pagePadding,
-        AppSpacing.lg,
+        AppSpacing.md,
         AppSpacing.pagePadding,
         0,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            _greeting(l10n),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textTertiary,
-                  fontWeight: FontWeight.w500,
-                ),
-          ),
-          const SizedBox(height: 4),
           Text(
             l10n.homeHeadline,
             maxLines: 2,
@@ -219,7 +206,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               letterSpacing: -0.4,
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           const _HeroCarousel(),
         ],
       ),
@@ -233,9 +220,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
+          // Wave 4.10g (#1): xl→lg so the Continue Designing title clears
+          // the fold on standard viewports (still calm breathing, not dead
+          // space).
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.pagePadding,
-            AppSpacing.xl,
+            AppSpacing.lg,
             AppSpacing.pagePadding,
             AppSpacing.sm,
           ),
@@ -316,8 +306,12 @@ class _HeroCarouselState extends State<_HeroCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    // Wave 4.10g (#1): 0.42→0.45 — the hero is slightly more emotionally
+    // dominant. The reclaimed top space (removed greeting + tightened
+    // paddings) more than offsets this, so the Continue Designing title
+    // still clears the fold and there is no overflow (CustomScrollView).
     final heroH =
-        (MediaQuery.sizeOf(context).height * 0.42).clamp(260.0, 460.0);
+        (MediaQuery.sizeOf(context).height * 0.45).clamp(260.0, 460.0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [

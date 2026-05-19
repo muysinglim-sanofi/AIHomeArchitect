@@ -25,6 +25,7 @@ import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_pill.dart';
 import '../../shared/widgets/atmosphere_card.dart';
 import '../../shared/widgets/reveal_canvas.dart';
+import '../../shared/widgets/room_type_card.dart';
 import '../../shared/widgets/sticky_action_bar.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -2256,7 +2257,7 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
                   const SizedBox(height: 10),
                   _SheetRoomLabel(label: l10n.interiorSection),
                   const SizedBox(height: 8),
-                  _SheetRoomRow(
+                  RoomTypeRow(
                     rooms: l10n.interiorRooms,
                     selected: _selectedRoomType,
                     onSelected: (r) =>
@@ -2265,7 +2266,7 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
                   const SizedBox(height: 14),
                   _SheetRoomLabel(label: l10n.exteriorSection),
                   const SizedBox(height: 8),
-                  _SheetRoomRow(
+                  RoomTypeRow(
                     rooms: l10n.exteriorRooms,
                     selected: _selectedRoomType,
                     onSelected: (r) =>
@@ -2522,59 +2523,11 @@ class _SheetRoomLabel extends StatelessWidget {
   }
 }
 
-class _SheetRoomRow extends StatelessWidget {
-  final List<String> rooms;
-  final String? selected;
-  final ValueChanged<String> onSelected;
-  const _SheetRoomRow({
-    required this.rooms,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 42,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
-        padding: EdgeInsets.zero,
-        itemCount: rooms.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final r = rooms[i];
-          final isSel = selected == r;
-          return GestureDetector(
-            onTap: () => onSelected(r),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              decoration: BoxDecoration(
-                color: isSel ? AppColors.textPrimary : AppColors.surface,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-                border: Border.all(
-                  color: isSel ? AppColors.textPrimary : AppColors.border,
-                ),
-              ),
-              child: Text(
-                r,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: isSel
-                          ? AppColors.surface
-                          : AppColors.textSecondary,
-                      fontWeight:
-                          isSel ? FontWeight.w600 : FontWeight.w400,
-                    ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
+// Wave 4.10h: `_SheetRoomRow` (text pills) removed — the chat re-upload
+// sheet now uses the SAME shared `RoomTypeRow` as the upload screen (one
+// foundation, zero duplicated room-type UI logic). `_SheetRoomLabel` /
+// `_SheetEyebrow` grouping is preserved; the `(rooms, selected, onSelected)`
+// contract — and routing / session / generation — is unchanged.
 
 // ── System message bubble ─────────────────────────────────────────────────────
 

@@ -9,6 +9,7 @@ import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_pill.dart';
 import '../../shared/widgets/atmosphere_card.dart';
+import '../../shared/widgets/room_type_card.dart';
 import '../../shared/widgets/sticky_action_bar.dart';
 
 // ── Wave 4.3 — New Design Session V2 ──────────────────────────────────────────
@@ -329,7 +330,7 @@ class _RoomScroller extends StatelessWidget {
       children: [
         _RoomGroupLabel(label: l10n.interiorSection),
         const SizedBox(height: 8),
-        _RoomRow(
+        RoomTypeRow(
           rooms: l10n.interiorRooms,
           selected: selected,
           onSelected: onSelected,
@@ -337,7 +338,7 @@ class _RoomScroller extends StatelessWidget {
         const SizedBox(height: 16),
         _RoomGroupLabel(label: l10n.exteriorSection),
         const SizedBox(height: 8),
-        _RoomRow(
+        RoomTypeRow(
           rooms: l10n.exteriorRooms,
           selected: selected,
           onSelected: onSelected,
@@ -363,76 +364,11 @@ class _RoomGroupLabel extends StatelessWidget {
   }
 }
 
-class _RoomRow extends StatelessWidget {
-  final List<String> rooms;
-  final String? selected;
-  final ValueChanged<String> onSelected;
-  const _RoomRow({
-    required this.rooms,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 42,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
-        itemCount: rooms.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final r = rooms[i];
-          return _RoomChip(
-            label: r,
-            selected: selected == r,
-            onTap: () => onSelected(r),
-          );
-        },
-      ),
-    );
-  }
-}
-
-// Selectable room chip — a *control* (selected = filled). Intentionally NOT
-// AppPill (which is a label/badge with no selectable state).
-class _RoomChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _RoomChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(horizontal: 18),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.textPrimary : AppColors.surface,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
-          border: Border.all(
-            color: selected ? AppColors.textPrimary : AppColors.border,
-          ),
-        ),
-        child: Text(
-          label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: selected ? AppColors.surface : AppColors.textSecondary,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              ),
-        ),
-      ),
-    );
-  }
-}
+// Wave 4.10h: the old `_RoomRow` / `_RoomChip` text pills were removed —
+// the shared image-led `RoomTypeRow` / `RoomTypeCard` now drive room
+// selection in BOTH upload and the chat re-upload sheet (one foundation,
+// zero duplicated room-type UI logic). The `(rooms, selected, onSelected)`
+// contract — and therefore routing / session / generation — is unchanged.
 
 // ── Atmosphere — shared AtmosphereCard V2 horizontal scroller + custom fold ───
 

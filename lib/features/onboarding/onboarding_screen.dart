@@ -676,34 +676,50 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
     return LayoutBuilder(builder: (context, constraints) {
       final atm = kAtmospheres[_selected];
       final screenH = MediaQuery.sizeOf(context).height;
-      final stripH = AppAdaptive.ftueCardStripHeight(screenH);
-      final cardW = AppAdaptive.ftueCardWidth(screenH);
-      final innerSpacing = AppAdaptive.ftueInnerSpacing(screenH);
-      final titleSpacing = AppAdaptive.ftueTitleSpacing(screenH);
 
-      // Wave 4.10e (#1): Screen 3 must be editorial / architecture-first,
-      // not a catalog — match slides 1–2's image dominance by targeting
-      // ~47% of the viewport (decision B: not a forced 50%). SE-safe guard:
-      // never let the hero push the atmosphere strip + editorial title past
-      // the real slide-region height. Cap the hero by available height minus
-      // everything below it (plus a small title floor), so SE degrades
-      // gracefully with NO clipping while standard/Max land at ~47%.
-      // app_adaptive.dart is left untouched (read-only): the other ftue*
-      // helpers still drive strip/spacing — only the hero height is local.
-      const minTitleBlock = 96.0;
+      // Wave 4.10f (#4 — Option C, hybrid balance): a literal ~47% hero is
+      // geometrically impossible alongside the full 140-px strip + the
+      // editorial title without overflow (proven: only ~210 px of vertical
+      // room exists on an 812-pt device after the preserved strip/title/
+      // chrome — which is exactly the old AppAdaptive value). Hybrid: a
+      // MODESTLY compacted strip + tighter LOCAL spacings + a 2-line
+      // subtitle let the hero be the dominant element (~40% intent — it
+      // fills the remaining space, ≈40% of the slide region on SE rising
+      // to ≈40% of the full viewport on Max) with a guaranteed no-overflow
+      // scroll safety-net for sub-SE / huge font scale. app_adaptive.dart
+      // stays untouched (read-only): strip/spacing are capped LOCALLY here.
+      final adaptiveStrip = AppAdaptive.ftueCardStripHeight(screenH);
+      final stripH = adaptiveStrip > 100.0 ? 100.0 : adaptiveStrip;
+      final cardW = AppAdaptive.ftueCardWidth(screenH);
+      final innerSpacing =
+          AppAdaptive.ftueInnerSpacing(screenH).clamp(4.0, 10.0).toDouble();
+      final titleSpacing =
+          AppAdaptive.ftueTitleSpacing(screenH).clamp(6.0, 14.0).toDouble();
+
+      // Realistic editorial title reservation: title 2 lines (~72) + sm(8)
+      // + subtitle 2 lines (~52) + bottom breathing(16) + margin.
+      const titleReserve = 150.0;
       final reserved = AppSpacing.sm +
           innerSpacing +
           stripH +
           titleSpacing +
-          minTitleBlock;
+          titleReserve;
       final avail = constraints.maxHeight;
-      final heroDesired = (screenH * 0.47).clamp(220.0, 460.0).toDouble();
-      final maxNoClip = avail - reserved;
-      final heroH = (avail.isFinite && maxNoClip < heroDesired)
-          ? maxNoClip.clamp(180.0, heroDesired).toDouble()
-          : heroDesired;
+      // Hero FILLS the remaining space (no fixed % → on normal devices the
+      // column equals avail exactly: no overflow AND no empty gap). The
+      // floor keeps it image-led on small devices; the high ceiling only
+      // guards pathologically tall viewports. If even the floor cannot fit
+      // (sub-SE / large text scale) the SingleChildScrollView below scrolls
+      // — never a hard overflow, never fake clipping.
+      final raw = avail.isFinite ? (avail - reserved) : (screenH * 0.40);
+      // Ceiling ≥ floor even on pathologically short windows (split-screen)
+      // so clamp never asserts; the scroll wrapper handles the rest.
+      final heroCeil = (screenH * 0.52) < 168.0 ? 168.0 : (screenH * 0.52);
+      final heroH = raw.clamp(168.0, heroCeil).toDouble();
 
-      return Column(
+      return SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: AppSpacing.sm),
@@ -801,41 +817,44 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
         SizedBox(height: titleSpacing),
 
         // ── Title + subtitle — editorial display token ──────────────────────
-        Flexible(
-          fit: FlexFit.loose,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.pagePadding),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  widget.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTheme.displayEditorial(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w500,
-                    height: 1.12,
-                    letterSpacing: -0.4,
-                  ),
+        // No Flexible (invalid inside the scroll view): natural-height
+        // block; the texts are bounded by maxLines + ellipsis. Subtitle
+        // trimmed to 2 lines (Option C) — tighter editorial cadence and
+        // part of the no-overflow budget.
+        Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.pagePadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTheme.displayEditorial(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w500,
+                  height: 1.12,
+                  letterSpacing: -0.4,
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  widget.subtitle,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: AppColors.textSecondary,
-                        height: 1.6,
-                      ),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                widget.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: AppColors.textSecondary,
+                      height: 1.6,
+                    ),
+              ),
+            ],
           ),
         ),
+        const SizedBox(height: AppSpacing.md),
       ],
+        ),
       );
     });
   }

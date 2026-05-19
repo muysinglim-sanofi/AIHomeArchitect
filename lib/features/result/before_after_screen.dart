@@ -46,7 +46,17 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
   late final AnimationController _entryController;
   late final Animation<double> _fadeAnim;
 
+  // Wave 4.10f — three distinct concepts kept separate:
+  //   _beforeUrl        → reveal SLIDER "before" = PREVIOUS SOURCE VISION
+  //                       (per-step generation source: V1→upload, V2→V1,
+  //                       V3→V2). Restored 4.8.3 semantics (4.10e wrongly
+  //                       forced the initial upload onto the slider).
+  //   _originalUploadUrl → HOLD-to-original = the INITIAL uploaded user
+  //                       photo (4.10e session resolution retained, now on
+  //                       its own field, independent of the slider).
+  //   _afterUrl         → CURRENT vision (generation source — untouched).
   String? _beforeUrl;
+  String? _originalUploadUrl;
   String? _afterUrl;
   String _title = '';
   String _subtitle = '';
@@ -63,12 +73,13 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
   ImageStream? _sizeStream;
   ImageStreamListener? _sizeListener;
 
-  // Wave 4.10e (#2): the ORIGINAL's own intrinsic ratio, resolved
-  // independently of the generated image's ratio, for the hold-to-original
-  // overlay (true photographed proportions, not a cover-cropped expansion).
-  double? _beforeAspectRatio;
-  ImageStream? _beforeSizeStream;
-  ImageStreamListener? _beforeSizeListener;
+  // Wave 4.10e (#2) / 4.10f: the INITIAL UPLOAD's own intrinsic ratio,
+  // resolved independently of the generated image's ratio, for the
+  // hold-to-original overlay (true photographed proportions, not a
+  // cover-cropped expansion). Tracks _originalUploadUrl, not the slider.
+  double? _originalAspectRatio;
+  ImageStream? _originalSizeStream;
+  ImageStreamListener? _originalSizeListener;
 
   @override
   void initState() {
@@ -83,35 +94,32 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
       final after = extra.afterImageUrl.isNotEmpty ? extra.afterImageUrl : null;
       final beforeRaw =
           extra.beforeImageUrl.isNotEmpty ? extra.beforeImageUrl : null;
-      // Wave 4.10e (#3, P0): the reveal "original" must ALWAYS be the very
-      // first user-uploaded photo — never the previous generated vision that
-      // chat's V2/V3 chaining passes as extra.beforeImageUrl. The initial
-      // upload is held immutably on the session row (ProjectModel
-      // .beforeImageUrl — set once at createSession, never mutated). Resolve
-      // it authoritatively by projectId; fall back to extra.beforeImageUrl
-      // ONLY when there is no session match / it is null (featured · mock ·
-      // deep-link · legacy · no persisted upload). The generation source
-      // (_afterUrl) is untouched — generation may keep chaining from the
-      // latest vision; reveal-original vs generation-source are different
-      // concepts.
-      final sessionOriginal = _sessionOriginalUrl();
-      final originalCandidate = sessionOriginal ?? beforeRaw;
-      // Deterministic fallback rules — never a broken/empty/inconsistent
-      // slider. The reveal is shown ONLY when there is a distinct original
-      // image; otherwise it is intentionally hidden (single full-bleed
-      // after image), the safe degraded state for legacy/corrupted rows.
-      final before = (originalCandidate != null && originalCandidate != after)
-          ? originalCandidate
-          : null;
-      final src = sessionOriginal != null ? 'session' : 'extra';
+      // Wave 4.10f (#1): the SLIDER compares the PREVIOUS SOURCE VISION →
+      // CURRENT vision. extra.beforeImageUrl IS that per-step source (the
+      // 4.8.3 branch-safe source chat passes): for V1 it is the initial
+      // upload, for V2 it is V1, for V3 it is V2 — exactly the natural
+      // evolution comparison. 4.10e wrongly overrode this with the initial
+      // upload; restore the 4.8.3 deterministic dedup here.
+      final before =
+          (beforeRaw != null && beforeRaw != after) ? beforeRaw : null;
       final mode = before != null
           ? 'pair'
-          : (originalCandidate == null
-              ? 'fallback_no_source'
-              : 'fallback_same_pair');
-      debugPrint('[Reveal] full-reveal resolve — mode=$mode src=$src '
-          'before=$before after=$after');
+          : (beforeRaw == null ? 'fallback_no_source' : 'fallback_same_pair');
+      // Wave 4.10f (#2): the HOLD-to-original is a DIFFERENT concept — it
+      // ALWAYS shows the very first uploaded user photo, independent of the
+      // slider. The initial upload lives immutably on the session row
+      // (ProjectModel.beforeImageUrl — set once at createSession, never
+      // mutated). Resolve it by projectId; honest fallback to the per-step
+      // source ONLY when no session upload exists (featured · mock ·
+      // deep-link · legacy · no persisted upload). _afterUrl (generation
+      // source) is untouched — three different concepts.
+      final sessionOriginal = _sessionOriginalUrl();
+      final originalUpload = sessionOriginal ?? beforeRaw;
+      final src = sessionOriginal != null ? 'session' : 'extra';
+      debugPrint('[Reveal] resolve — slider mode=$mode before=$before '
+          'after=$after | hold-original src=$src original=$originalUpload');
       _beforeUrl = before;
+      _originalUploadUrl = originalUpload;
       _afterUrl = after;
       _title = extra.styleLabel;
       _subtitle = '';
@@ -126,13 +134,16 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
               (p) => p.id == widget.projectId,
               orElse: () => mockProjects.first,
             );
+      // Showcase/mock has no separate vision chain — the project "before"
+      // is also the only original; slider and hold coincide here.
       _beforeUrl = project.beforeImageUrl;
+      _originalUploadUrl = project.beforeImageUrl;
       _afterUrl = project.afterImageUrl;
       _title = project.title;
       _subtitle = '${project.style} · ${project.roomType}';
     }
     _loadImageAspectRatio();
-    _loadBeforeAspectRatio();
+    _loadOriginalAspectRatio();
   }
 
   // Wave 4.10e (#3): authoritative initial-upload URL for this project from
@@ -152,26 +163,27 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
     return null;
   }
 
-  // Wave 4.10e (#2): resolve the ORIGINAL's true intrinsic ratio using the
-  // exact same mechanism as _loadImageAspectRatio for the generated image,
-  // so the hold-to-original overlay shows the real photographed proportions
-  // (landscape stays landscape, portrait stays portrait) instead of a
-  // cover-cropped vertical expansion.
-  void _loadBeforeAspectRatio() {
-    final url = _beforeUrl;
+  // Wave 4.10e (#2) / 4.10f: resolve the INITIAL UPLOAD's true intrinsic
+  // ratio (the image the hold-to-original overlay shows) using the exact
+  // same mechanism as _loadImageAspectRatio for the generated image, so the
+  // original keeps its real photographed proportions (landscape stays
+  // landscape, portrait stays portrait) instead of a cover-cropped
+  // vertical expansion. Tracks _originalUploadUrl, NOT the slider before.
+  void _loadOriginalAspectRatio() {
+    final url = _originalUploadUrl;
     if (url == null || url.isEmpty) return;
     final ImageProvider provider = url.startsWith('assets/')
         ? AssetImage(url) as ImageProvider
         : CachedNetworkImageProvider(url);
-    _beforeSizeListener = ImageStreamListener((info, _) {
+    _originalSizeListener = ImageStreamListener((info, _) {
       if (mounted) {
         setState(() =>
-            _beforeAspectRatio = info.image.width / info.image.height);
+            _originalAspectRatio = info.image.width / info.image.height);
       }
-      _beforeSizeStream?.removeListener(_beforeSizeListener!);
+      _originalSizeStream?.removeListener(_originalSizeListener!);
     });
-    _beforeSizeStream = provider.resolve(ImageConfiguration.empty);
-    _beforeSizeStream!.addListener(_beforeSizeListener!);
+    _originalSizeStream = provider.resolve(ImageConfiguration.empty);
+    _originalSizeStream!.addListener(_originalSizeListener!);
   }
 
   void _loadImageAspectRatio() {
@@ -199,8 +211,8 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
   @override
   void dispose() {
     if (_sizeListener != null) _sizeStream?.removeListener(_sizeListener!);
-    if (_beforeSizeListener != null) {
-      _beforeSizeStream?.removeListener(_beforeSizeListener!);
+    if (_originalSizeListener != null) {
+      _originalSizeStream?.removeListener(_originalSizeListener!);
     }
     _entryController.dispose();
     super.dispose();
@@ -216,7 +228,15 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
         : CachedNetworkImageProvider(url);
   }
 
+  // Slider availability (previous-source-vision → current). Gates the
+  // RevealHero before-image + its compare wipe.
   bool get _hasBefore => _beforeUrl != null && _beforeUrl!.isNotEmpty;
+
+  // Hold-to-original availability — INDEPENDENT of the slider (Wave 4.10f
+  // distinction). Gates the long-press gesture + the discoverability hint:
+  // hold is offered whenever there is a real initial upload to reveal.
+  bool get _hasOriginal =>
+      _originalUploadUrl != null && _originalUploadUrl!.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -294,11 +314,12 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                 behavior: HitTestBehavior.opaque,
                 // Tap toggles cinematic immersive mode.
                 onTap: () => setState(() => _immersive = !_immersive),
-                // Hold = temporary original override (only if a before exists).
-                onLongPressStart: _hasBefore
+                // Hold = temporary INITIAL-UPLOAD override — gated on the
+                // original's availability (independent of the slider).
+                onLongPressStart: _hasOriginal
                     ? (_) => setState(() => _holdingOriginal = true)
                     : null,
-                onLongPressEnd: _hasBefore
+                onLongPressEnd: _hasOriginal
                     ? (_) => setState(() => _holdingOriginal = false)
                     : null,
                 child: RevealHero(
@@ -328,22 +349,24 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                         fit: StackFit.expand,
                         children: [
                           ColoredBox(color: AppColors.textPrimary),
-                          // Wave 4.10e (#2): the ORIGINAL is shown at its true
-                          // photographed proportions, centred over the
-                          // intentional ink base (RevealCanvas's ink-base
-                          // philosophy — never a harsh void). No forced
-                          // vertical/cover expansion. Falls back to the prior
-                          // cover fill until the intrinsic ratio resolves, so
-                          // the overlay is never blank. The RevealHero compare
-                          // wipe is intentionally NOT changed (shared-frame
-                          // honest comparison — confirmed decision A).
+                          // Wave 4.10e (#2) / 4.10f: the INITIAL UPLOAD is
+                          // shown at its true photographed proportions,
+                          // centred over the intentional ink base
+                          // (RevealCanvas's ink-base philosophy — never a
+                          // harsh void). No forced vertical/cover expansion.
+                          // Falls back to cover fill until the intrinsic
+                          // ratio resolves, so the overlay is never blank.
+                          // This is the ORIGINAL UPLOAD, distinct from the
+                          // slider's previous-source-vision; the RevealHero
+                          // compare wipe is unchanged (decision A).
                           Center(
-                            child: _beforeAspectRatio != null
+                            child: _originalAspectRatio != null
                                 ? AspectRatio(
-                                    aspectRatio: _beforeAspectRatio!,
-                                    child: _RevealImage(url: _beforeUrl),
+                                    aspectRatio: _originalAspectRatio!,
+                                    child:
+                                        _RevealImage(url: _originalUploadUrl),
                                   )
-                                : _RevealImage(url: _beforeUrl),
+                                : _RevealImage(url: _originalUploadUrl),
                           ),
                           const Positioned(
                             top: 60,
@@ -375,9 +398,10 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Wave 4.10b (#6): make the hold-to-original gesture discoverable —
-          // a calm hint (only when a distinct original exists).
-          if (_hasBefore) ...[
+          // Wave 4.10b (#6) / 4.10f: make the hold-to-original gesture
+          // discoverable — a calm hint, shown whenever a real initial
+          // upload exists (gated on _hasOriginal, independent of slider).
+          if (_hasOriginal) ...[
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
