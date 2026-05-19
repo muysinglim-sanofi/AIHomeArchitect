@@ -887,6 +887,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
                     ),
                     Text(
                       headerSubtitle,
+                      // Polish: match the title's overflow handling so a long
+                      // "<style> · Vision N" ellipsizes cleanly instead of
+                      // hard-clipping mid-glyph in the constrained AppBar.
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppColors.textTertiary,
                           ),

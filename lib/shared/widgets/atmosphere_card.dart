@@ -21,8 +21,11 @@ import '../../core/widgets/scrim.dart';
 ///   • size-adaptive: `compact` vs `editorial` auto-derived from the available
 ///     box via `AppAdaptive.cardMode` so the tiny FTUE/Reveal strip cards
 ///     (~76–100 px) degrade gracefully and are never visually broken
-///   • the robust 3-level image fallback (local hero → showcase → network
-///     → shimmer) is preserved exactly
+///   • Wave 4.10d: the image fallback is now a robust 4-tier chain
+///     (local hero → showcase → ftue local hero → network → shimmer) so
+///     every atmosphere renders a real LOCAL image with no network
+///     dependency, plus a deterministic ink legibility floor so the
+///     overlaid name is always readable even on the shimmer/failure plate
 ///
 /// Backward compatible: the primary constructor keeps the exact public shape
 /// `AtmosphereCard({atmosphere, selected, onTap, key})` so all existing
@@ -187,6 +190,27 @@ class AtmosphereCard extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 background,
+                // Legibility floor (Wave 4.10d): a deterministic ink ramp in
+                // the lower band, present regardless of which image tier
+                // resolved. On a real photo it stacks imperceptibly with the
+                // atmospheric AppScrim; on the shimmer/failure plate it is the
+                // sole anchor, so the overlaid name is ALWAYS legible (no more
+                // light-grey "floating text"). Image cards only — the custom
+                // tile is already a solid ink surface.
+                if (!_isCustom)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0.55, 1.0],
+                        colors: [
+                          AppColors.textPrimary.withValues(alpha: 0.0),
+                          AppColors.textPrimary.withValues(alpha: 0.58),
+                        ],
+                      ),
+                    ),
+                  ),
                 Align(
                   alignment: Alignment.bottomLeft,
                   child: textColumn(),
@@ -200,12 +224,17 @@ class AtmosphereCard extends StatelessWidget {
   }
 }
 
-// ── Hero image — three-level fallback (preserved from V1) ─────────────────────
-// 1. heroImagePath   — local, assets/atmospheres/{id}.jpg
-// 2. showcaseAsset   — local AI output (only some atmospheres have this)
-// 3. fallbackImageUrl — Unsplash network (last resort)
-// Shimmer placeholder while network loads; warm grey on complete failure.
-// Now rendered FULL-BLEED (image-led) instead of in a top 65% slot.
+// ── Hero image — four-level fallback (Wave 4.10d) ─────────────────────────────
+// 1. heroImagePath    — local, assets/atmospheres/{id}.jpg (none ship yet)
+// 2. showcaseAsset    — local AI output (only 4 atmospheres have this)
+// 3. ftueHeroImagePath — local, assets/atmospheres/ftue/ftue_{id}.jpg
+//                        (ALL 10 ship → guarantees a real local image with
+//                        zero network dependency; this is the reliability fix)
+// 4. fallbackImageUrl — Unsplash network (last resort)
+// Shimmer placeholder while network loads; warm grey on complete failure
+// (paired with a deterministic ink legibility floor in the card Stack so the
+// name is always legible even in that worst case).
+// Rendered FULL-BLEED (image-led) instead of in a top 65% slot.
 class _AtmosphereHeroImage extends StatelessWidget {
   final AtmosphereStyle atmosphere;
   const _AtmosphereHeroImage({required this.atmosphere});
@@ -231,10 +260,19 @@ class _AtmosphereHeroImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Built bottom-up so the chain reads exactly:
+    //   heroImagePath → showcaseAsset → ftueHeroImagePath → network → shimmer
+    final network = _net(atmosphere.fallbackImageUrl);
+    // New reliable local tier: all 10 ftue heroes ship, so this resolves
+    // locally for every atmosphere — no card is blank when offline / when an
+    // Unsplash URL is dead. (Public data/contract unchanged: ftueHeroImagePath
+    // is already on AtmosphereStyle; only the card chooses to use it here.)
+    final ftueTier =
+        _asset(atmosphere.ftueHeroImagePath, onError: network);
     final showcase = atmosphere.showcaseAsset;
-    final level2 = showcase != null
-        ? _asset(showcase, onError: _net(atmosphere.fallbackImageUrl))
-        : _net(atmosphere.fallbackImageUrl);
-    return _asset(atmosphere.heroImagePath, onError: level2);
+    final showcaseTier = showcase != null
+        ? _asset(showcase, onError: ftueTier)
+        : ftueTier;
+    return _asset(atmosphere.heroImagePath, onError: showcaseTier);
   }
 }

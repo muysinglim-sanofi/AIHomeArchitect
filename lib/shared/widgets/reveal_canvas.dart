@@ -58,6 +58,14 @@ class RevealCanvas extends StatelessWidget {
   /// Bottom scrim (behind [bottomOverlay] for legibility).
   final bool bottomScrim;
 
+  /// Bottom-scrim strength. Defaults preserve the original wash (0.6 / 0.5).
+  /// A consuming screen can soften it (lower opacity / tighter extent) so an
+  /// already-dim render is not over-darkened, while controls still seat on a
+  /// gradient. Top scrim is intentionally left fixed (it only backs a small
+  /// title/back zone, never the focal mid-tones).
+  final double bottomScrimOpacity;
+  final double bottomScrimExtent;
+
   /// Safe overlay zones — editorial text, CTA, atmosphere, title. Positioned
   /// above their scrim; the caller owns the content and its own padding.
   final Widget? bottomOverlay;
@@ -72,6 +80,8 @@ class RevealCanvas extends StatelessWidget {
     this.ambientDarken = 0.42,
     this.topScrim = false,
     this.bottomScrim = true,
+    this.bottomScrimOpacity = 0.6,
+    this.bottomScrimExtent = 0.5,
     this.bottomOverlay,
     this.topOverlay,
   });
@@ -130,8 +140,12 @@ class RevealCanvas extends StatelessWidget {
       ));
     }
     if (bottomScrim) {
-      layers.add(const Positioned.fill(
-        child: AppScrim(edge: ScrimEdge.bottom, opacity: 0.6, extent: 0.5),
+      layers.add(Positioned.fill(
+        child: AppScrim(
+          edge: ScrimEdge.bottom,
+          opacity: bottomScrimOpacity.clamp(0.0, 1.0),
+          extent: bottomScrimExtent.clamp(0.0, 1.0),
+        ),
       ));
     }
 

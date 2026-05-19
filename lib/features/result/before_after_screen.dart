@@ -214,6 +214,12 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
               focalAspectRatio: _imageAspectRatio,
               topScrim: true,
               bottomScrim: !_immersive,
+              // Softer than the 0.6/0.5 default: tighten the gradient toward
+              // the bottom edge (where the controls actually sit) so a dim
+              // evening render is no longer murky through its lower half,
+              // while the controls keep enough backing for legibility.
+              bottomScrimOpacity: 0.55,
+              bottomScrimExtent: 0.38,
               bottomOverlay:
                   _immersive ? null : _buildControls(context, l10n, screenH),
               child: GestureDetector(
