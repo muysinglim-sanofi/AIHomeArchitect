@@ -8,10 +8,24 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/layout/adaptive_layout.dart';
 import '../../core/models/atmosphere_style.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/widgets/scrim.dart';
 import '../../shared/widgets/app_button.dart';
+import '../../shared/widgets/app_dots.dart';
+import '../../shared/widgets/app_pill.dart';
 import '../../shared/widgets/atmosphere_card.dart';
 
-// ── Root screen ───────────────────────────────────────────────────────────────
+// ── Wave 4.2 — FTUE Premium Rework ────────────────────────────────────────────
+// First real screen migration. Consumes the Wave 4 spine (AppDots / AppPill /
+// AppScrim / AppTheme editorial tokens) + AtmosphereCard V2. Image-led,
+// full-bleed, calm editorial hierarchy. Removed: local `_Dot`, `_OverlayPill`,
+// the two duplicated *SlideLayout widgets, the second "Skip" affordance, and
+// inline gradient duplication. Asset paths UNCHANGED (asset-content is a
+// separate creative deliverable). l10n titles/subtitles unchanged (translation
+// files are out of scope); only in-file hard-coded microcopy was rewritten to
+// a calmer architectural-editorial tone. No backend / routing / generation
+// changes. Slide behaviour (auto-sweep, chat loop, atmosphere cycle) preserved
+// verbatim; navigation stays CTA/dots-reliable.
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -52,7 +66,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Top bar ──────────────────────────────────────────────────────
+            // ── Top bar — quiet brand wordmark + single dismissal ────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 AppSpacing.pagePadding, AppSpacing.sm,
@@ -62,20 +76,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    l10n.appName,
+                    l10n.appName.toUpperCase(),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textTertiary,
+                          letterSpacing: 2.0,
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
                         ),
                   ),
                   TextButton(
                     onPressed: () => context.go('/home'),
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(0, 0),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 6),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
                     child: Text(
                       l10n.skip,
                       style: Theme.of(context)
                           .textTheme
                           .bodyMedium
-                          ?.copyWith(color: AppColors.textTertiary),
+                          ?.copyWith(color: AppColors.textSecondary),
                     ),
                   ),
                 ],
@@ -88,47 +110,34 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 controller: _controller,
                 onPageChanged: (i) => setState(() => _page = i),
                 children: [
-                  _RevealSlide(title: l10n.onboarding1Title, subtitle: l10n.onboarding1Sub),
-                  _ChatDemoSlide(title: l10n.onboarding2Title, subtitle: l10n.onboarding2Sub),
-                  _AtmosphereExplorerSlide(title: l10n.onboarding3Title, subtitle: l10n.onboarding3Sub),
+                  _RevealSlide(
+                      title: l10n.onboarding1Title,
+                      subtitle: l10n.onboarding1Sub),
+                  _ChatDemoSlide(
+                      title: l10n.onboarding2Title,
+                      subtitle: l10n.onboarding2Sub),
+                  _AtmosphereExplorerSlide(
+                      title: l10n.onboarding3Title,
+                      subtitle: l10n.onboarding3Sub),
                 ],
               ),
             ),
 
-            // ── Bottom nav ───────────────────────────────────────────────────
+            // ── Bottom nav — reliable CTA + shared dots ──────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.pagePadding, 0,
+                AppSpacing.pagePadding, AppSpacing.md,
                 AppSpacing.pagePadding, AppSpacing.xl,
               ),
               child: Column(
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      _slideCount,
-                      (i) => _Dot(active: i == _page),
-                    ),
-                  ),
+                  AppDots(count: _slideCount, index: _page),
                   const SizedBox(height: AppSpacing.xl),
                   AppButton(
                     label: isLast ? l10n.getStarted : l10n.continueLabel,
                     icon: isLast ? null : Icons.arrow_forward,
                     onPressed: _next,
                   ),
-                  if (!isLast) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    TextButton(
-                      onPressed: () => context.go('/home'),
-                      child: Text(
-                        l10n.skipForNow,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: AppColors.textTertiary),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -139,78 +148,93 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-// ── Dot indicator ─────────────────────────────────────────────────────────────
+// ── Shared slide shell ────────────────────────────────────────────────────────
+// One image-led layout (replaces the two duplicated *SlideLayout widgets):
+// full-bleed responsive hero + a calm editorial text block. Defensive against
+// small-device overflow via Flexible + ellipsis (validated SE→Max).
 
-class _Dot extends StatelessWidget {
-  final bool active;
-  const _Dot({required this.active});
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeInOut,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      width: active ? 24 : 7,
-      height: 7,
-      decoration: BoxDecoration(
-        color: active ? AppColors.textPrimary : AppColors.border,
-        borderRadius: BorderRadius.circular(50),
-      ),
-    );
-  }
+double _heroHeight(BuildContext context) {
+  final h = MediaQuery.sizeOf(context).height;
+  return (h * 0.50).clamp(240.0, 470.0);
 }
 
-// ── Shared overlay pill ───────────────────────────────────────────────────────
-
-class _OverlayPill extends StatelessWidget {
-  final String text;
-  final bool dark;
-  const _OverlayPill({super.key, required this.text, this.dark = false});
+class _SlideShell extends StatelessWidget {
+  final Widget hero;
+  final String title;
+  final String subtitle;
+  const _SlideShell({
+    required this.hero,
+    required this.title,
+    required this.subtitle,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: dark
-            ? AppColors.textPrimary.withAlpha(200)
-            : AppColors.surface.withAlpha(230),
-        borderRadius: BorderRadius.circular(50),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: dark ? AppColors.surface : AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
-              fontSize: 11,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: AppSpacing.sm),
+        // Full-bleed hero — image dominates; only the lower corners soften so
+        // it reads as one immersive editorial plate, not a card in UI.
+        ClipRRect(
+          borderRadius: const BorderRadius.vertical(
+            bottom: Radius.circular(AppSpacing.radiusHero),
+          ),
+          child: SizedBox(
+            height: _heroHeight(context),
+            width: double.infinity,
+            child: hero,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        Flexible(
+          fit: FlexFit.loose,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.pagePadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTheme.displayEditorial(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w500,
+                    height: 1.12,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  subtitle,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: AppColors.textSecondary,
+                        height: 1.6,
+                      ),
+                ),
+              ],
             ),
-      ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-// ── Shared image helper — three-level fallback ────────────────────────────────
-// 1. url            — primary local asset (e.g. assets/atmospheres/ftue/ftue_x.jpg)
-// 2. secondaryAsset — optional secondary local asset (only used outside FTUE hero)
-// 3. networkFallback — network URL (Unsplash) — last resort
-// Shimmer shown while network loads; clean grey on full failure.
-//
-// IMPORTANT: The FTUE atmosphere hero (Screen 3) uses a TWO-level chain only:
-//   ftueHeroImagePath → fallbackImageUrl (Unsplash)
-// The showcaseAsset level is intentionally skipped for the FTUE hero — showcase
-// assets show different spaces, which would violate the same-baseline-space
-// transformation principle that is the core product proposition of Screen 3.
+// ── Shared image helper — local asset → network fallback (kept) ───────────────
+// There is no shared image primitive yet; keep this local helper. Asset paths
+// are intentionally unchanged in this PR.
 
 class _SpaceImage extends StatelessWidget {
   final String url;
   final String? networkFallback;
 
-  const _SpaceImage({
-    super.key,
-    required this.url,
-    this.networkFallback,
-  });
+  const _SpaceImage({super.key, required this.url, this.networkFallback});
 
   static const _placeholder = Color(0xFFE8E5E0);
 
@@ -240,7 +264,7 @@ class _SpaceImage extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCREEN 1 — Cinematic reveal slider
+// SCREEN 1 — Cinematic reveal slider (mechanic preserved; presentation reworked)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _RevealSlide extends StatefulWidget {
@@ -254,8 +278,6 @@ class _RevealSlide extends StatefulWidget {
 
 class _RevealSlideState extends State<_RevealSlide>
     with SingleTickerProviderStateMixin {
-  // fraction: proportion of width showing the "before" (Original) on the left.
-  // 0.0 = full AI Vision, 1.0 = full Original — matches _CompareView in before_after_screen.
   double _fraction = 0.12;
   bool _userInteracted = false;
 
@@ -265,7 +287,6 @@ class _RevealSlideState extends State<_RevealSlide>
   @override
   void initState() {
     super.initState();
-    // Start mostly AI Vision (0.12) → reveal Original (0.75) → settle mid (0.42)
     _sweepCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2800),
@@ -276,10 +297,7 @@ class _RevealSlideState extends State<_RevealSlide>
             .chain(CurveTween(curve: Curves.easeInOutCubic)),
         weight: 50,
       ),
-      TweenSequenceItem(
-        tween: ConstantTween(0.75),
-        weight: 12,
-      ),
+      TweenSequenceItem(tween: ConstantTween(0.75), weight: 12),
       TweenSequenceItem(
         tween: Tween(begin: 0.75, end: 0.42)
             .chain(CurveTween(curve: Curves.easeInOutCubic)),
@@ -309,7 +327,6 @@ class _RevealSlideState extends State<_RevealSlide>
     _userInteracted = true;
   }
 
-  // Matches _CompareView: dragging right increases fraction → reveals more Original.
   void _onDragUpdate(DragUpdateDetails d, double width) {
     setState(() {
       _fraction = (_fraction + d.delta.dx / width).clamp(0.02, 0.98);
@@ -318,10 +335,10 @@ class _RevealSlideState extends State<_RevealSlide>
 
   @override
   Widget build(BuildContext context) {
-    return _RevealSlideLayout(
+    return _SlideShell(
       title: widget.title,
       subtitle: widget.subtitle,
-      visual: LayoutBuilder(
+      hero: LayoutBuilder(
         builder: (context, constraints) {
           final width = constraints.maxWidth;
           final divX = _fraction * width;
@@ -332,10 +349,7 @@ class _RevealSlideState extends State<_RevealSlide>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // AI Vision — full base layer (right side dominant initially)
                 const _SpaceImage(url: 'assets/showcase/smallspace_after.jpg'),
-
-                // Original — clipped to divX pixels from the left
                 Positioned(
                   left: 0, top: 0, bottom: 0,
                   width: divX,
@@ -345,49 +359,32 @@ class _RevealSlideState extends State<_RevealSlide>
                       minWidth: width,
                       maxWidth: width,
                       child: const _SpaceImage(
-                        url: 'assets/showcase/smallspace_before.jpg',
-                      ),
+                          url: 'assets/showcase/smallspace_before.jpg'),
                     ),
                   ),
                 ),
-
-                // Divider line
+                // Calm top scrim — keeps the labels legible on any render
+                // without darkening the architecture (shared AppScrim).
+                const Positioned.fill(
+                  child: AppScrim(
+                    edge: ScrimEdge.top,
+                    opacity: 0.26,
+                    extent: 0.30,
+                  ),
+                ),
                 Positioned(
                   left: divX - 1, top: 0, bottom: 0, width: 2,
-                  child: Container(color: Colors.white.withAlpha(230)),
+                  child: Container(color: Colors.white.withValues(alpha: 0.9)),
                 ),
-
-                // Handle
                 Positioned(
                   left: divX - 20, top: 0, bottom: 0, width: 40,
-                  child: Center(
-                    child: Container(
-                      width: 38, height: 38,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withAlpha(60),
-                            blurRadius: 12,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.chevron_left, size: 14, color: Color(0xFF1A1A1A)),
-                          Icon(Icons.chevron_right, size: 14, color: Color(0xFF1A1A1A)),
-                        ],
-                      ),
-                    ),
-                  ),
+                  child: const Center(child: _RevealHandle()),
                 ),
-
-                // Labels
-                const Positioned(top: 12, left: 12, child: _OverlayPill(text: 'Original')),
-                const Positioned(top: 12, right: 12, child: _OverlayPill(text: 'AI Vision', dark: true)),
+                const Positioned(
+                    top: 14, left: 14, child: AppPill(text: 'Before')),
+                const Positioned(
+                    top: 14, right: 14,
+                    child: AppPill(text: 'AI Vision', dark: true)),
               ],
             ),
           );
@@ -397,68 +394,41 @@ class _RevealSlideState extends State<_RevealSlide>
   }
 }
 
-// Separate layout widget so Screen 1 visual fills full width (no horizontal padding on visual).
-class _RevealSlideLayout extends StatelessWidget {
-  final Widget visual;
-  final String title;
-  final String subtitle;
-  const _RevealSlideLayout({
-    required this.visual,
-    required this.title,
-    required this.subtitle,
-  });
+// Slider handle — shadowless (spine baseline); a clean ring, not a lifted chip.
+class _RevealHandle extends StatelessWidget {
+  const _RevealHandle();
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: AppSpacing.md),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.cardRadius * 2),
-            child: SizedBox(height: 300, width: double.infinity, child: visual),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xl),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: Theme.of(context).textTheme.displayMedium?.copyWith(height: 1.15),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.textSecondary,
-                      height: 1.65,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ],
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 2),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.chevron_left, size: 14, color: Color(0xFF1A1A1A)),
+          Icon(Icons.chevron_right, size: 14, color: Color(0xFF1A1A1A)),
+        ],
+      ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCREEN 2 — Conversational AI architect demo
-// Uses villa_before → villa_after to show a REAL refinement of the same space.
+// SCREEN 2 — Conversational architect demo (loop preserved; presentation calmed)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Loop timing (ms)
-const _d1UserIn  = 0;
-const _d2AiIn    = 900;
+const _d1UserIn = 0;
+const _d2AiIn = 900;
 const _d3Spinner = 1900;
-const _d4Image   = 3100; // crossfade to "after"
-const _d6Clear   = 6400; // fade bubbles
-const _d7Reset   = 7200; // back to "before", restart
+const _d4Image = 3100;
+const _d6Clear = 6400;
+const _d7Reset = 7200;
 
 class _ChatDemoSlide extends StatefulWidget {
   final String title;
@@ -470,9 +440,9 @@ class _ChatDemoSlide extends StatefulWidget {
 }
 
 class _ChatDemoSlideState extends State<_ChatDemoSlide> {
-  bool _showAfter  = false;
-  bool _showUser   = false;
-  bool _showAi     = false;
+  bool _showAfter = false;
+  bool _showUser = false;
+  bool _showAi = false;
   bool _showSpinner = false;
 
   Timer? _t;
@@ -494,12 +464,10 @@ class _ChatDemoSlideState extends State<_ChatDemoSlide> {
   }
 
   void _runLoop() {
-    // Reset to "before" state
     setState(() {
       _showAfter = false; _showUser = false;
       _showAi = false; _showSpinner = false;
     });
-
     _at(_d1UserIn,  () => setState(() => _showUser = true));
     _at(_d2AiIn,    () => setState(() => _showAi = true));
     _at(_d3Spinner, () => setState(() => _showSpinner = true));
@@ -510,13 +478,12 @@ class _ChatDemoSlideState extends State<_ChatDemoSlide> {
 
   @override
   Widget build(BuildContext context) {
-    return _ChatSlideLayout(
+    return _SlideShell(
       title: widget.title,
       subtitle: widget.subtitle,
-      visual: Stack(
+      hero: Stack(
         fit: StackFit.expand,
         children: [
-          // Background crossfades between villa_before and villa_after
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 750),
             child: _SpaceImage(
@@ -526,49 +493,41 @@ class _ChatDemoSlideState extends State<_ChatDemoSlide> {
                   : 'assets/showcase/villa_before.jpg',
             ),
           ),
-
-          // Dark gradient — keeps bubbles readable over any image
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  AppColors.textPrimary.withAlpha(210),
-                ],
-                stops: const [0.25, 1.0],
-              ),
+          // Calmer bottom scrim — the architecture leads; captions read over
+          // a gentle gradient instead of a heavy 82% blackout.
+          const Positioned.fill(
+            child: AppScrim(
+              edge: ScrimEdge.bottom,
+              opacity: 0.5,
+              extent: 0.6,
             ),
           ),
-
-          // "Original Space" / "Refined Warm Version" label
           Positioned(
-            top: 12, left: 12,
+            top: 14, left: 14,
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 400),
-              child: _OverlayPill(
+              child: AppPill(
                 key: ValueKey(_showAfter),
-                text: _showAfter ? 'Refined Warm Version' : 'Original Space',
+                text: _showAfter ? 'After' : 'Before',
               ),
             ),
           ),
-
-          // Chat bubbles
+          // Conversation as cinematic caption — two calm lines, no avatar
+          // chrome, premium architectural tone.
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.end,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _ChatBubble(
-                  text: 'Make it warmer and more inviting.',
+                _CaptionLine(
+                  text: 'A little warmer. A little calmer.',
                   isUser: true,
                   visible: _showUser,
                 ),
                 const SizedBox(height: 6),
-                _ChatBubble(
-                  text: 'Preserving the structure while adding warm lighting, natural materials and a more inviting atmosphere.',
+                _CaptionLine(
+                  text: 'Same architecture — warmer light, softer materials.',
                   isUser: false,
                   visible: _showAi,
                 ),
@@ -579,10 +538,12 @@ class _ChatDemoSlideState extends State<_ChatDemoSlide> {
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: AppColors.accent.withAlpha(230),
-                        borderRadius: BorderRadius.circular(50),
+                        color: AppColors.accent.withValues(alpha: 0.92),
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusPill),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -595,8 +556,11 @@ class _ChatDemoSlideState extends State<_ChatDemoSlide> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'Applying your vision…',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            'Refining the space…',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
                                   color: AppColors.surface,
                                   fontWeight: FontWeight.w600,
                                   fontSize: 10,
@@ -616,60 +580,12 @@ class _ChatDemoSlideState extends State<_ChatDemoSlide> {
   }
 }
 
-class _ChatSlideLayout extends StatelessWidget {
-  final Widget visual;
-  final String title;
-  final String subtitle;
-  const _ChatSlideLayout({
-    required this.visual,
-    required this.title,
-    required this.subtitle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: AppSpacing.md),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.cardRadius * 2),
-            child: SizedBox(height: 300, width: double.infinity, child: visual),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xl),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: Theme.of(context).textTheme.displayMedium?.copyWith(height: 1.15),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.textSecondary,
-                      height: 1.65,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ChatBubble extends StatelessWidget {
+// A single conversational caption line — editorial, restrained, avatar-free.
+class _CaptionLine extends StatelessWidget {
   final String text;
   final bool isUser;
   final bool visible;
-  const _ChatBubble({
+  const _CaptionLine({
     required this.text,
     required this.isUser,
     required this.visible,
@@ -683,48 +599,25 @@ class _ChatBubble extends StatelessWidget {
       curve: Curves.easeOut,
       child: Align(
         alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            if (!isUser) ...[
-              Container(
-                width: 22, height: 22,
-                decoration: const BoxDecoration(
-                  color: AppColors.textPrimary, shape: BoxShape.circle,
+        child: Container(
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.7,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: isUser
+                ? AppColors.surface.withValues(alpha: 0.92)
+                : AppColors.textPrimary.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: isUser ? AppColors.textPrimary : AppColors.surface,
+                  fontSize: 12,
+                  height: 1.4,
                 ),
-                child: const Icon(Icons.architecture, color: AppColors.background, size: 11),
-              ),
-              const SizedBox(width: 6),
-            ],
-            Flexible(
-              child: Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.65,
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isUser
-                      ? AppColors.surface.withAlpha(235)
-                      : AppColors.textPrimary.withAlpha(220),
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(14),
-                    topRight: const Radius.circular(14),
-                    bottomLeft: Radius.circular(isUser ? 14 : 4),
-                    bottomRight: Radius.circular(isUser ? 4 : 14),
-                  ),
-                ),
-                child: Text(
-                  text,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: isUser ? AppColors.textPrimary : AppColors.surface,
-                        fontSize: 11.5,
-                        height: 1.45,
-                      ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -732,18 +625,18 @@ class _ChatBubble extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SCREEN 3 — Atmosphere explorer
-// Shows the SAME space (AI-generated architectural outputs) in multiple directions.
-// Hero crossfades; cards auto-cycle. All images are real architectural outputs.
+// SCREEN 3 — Atmosphere explorer (consumes AtmosphereCard V2; editorial hero)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AtmosphereExplorerSlide extends StatefulWidget {
   final String title;
   final String subtitle;
-  const _AtmosphereExplorerSlide({required this.title, required this.subtitle});
+  const _AtmosphereExplorerSlide(
+      {required this.title, required this.subtitle});
 
   @override
-  State<_AtmosphereExplorerSlide> createState() => _AtmosphereExplorerSlideState();
+  State<_AtmosphereExplorerSlide> createState() =>
+      _AtmosphereExplorerSlideState();
 }
 
 class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
@@ -791,84 +684,82 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: AppSpacing.md),
+        const SizedBox(height: AppSpacing.sm),
 
-        // ── Hero image ────────────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.cardRadius * 2),
-            child: SizedBox(
-              height: heroH,
-              width: double.infinity,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 500),
-                    child: _SpaceImage(
-                      key: ValueKey(atm.id),
-                      url: atm.ftueHeroImagePath,
-                      // showcaseAsset excluded: shows different spaces —
-                      // violates the same-baseline-space product principle.
-                      networkFallback: atm.fallbackImageUrl,
+        // ── Editorial hero — full-bleed, name set in the atmosphere type ────
+        ClipRRect(
+          borderRadius: const BorderRadius.vertical(
+            bottom: Radius.circular(AppSpacing.radiusHero),
+          ),
+          child: SizedBox(
+            height: heroH,
+            width: double.infinity,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 500),
+                  child: _SpaceImage(
+                    key: ValueKey(atm.id),
+                    url: atm.ftueHeroImagePath,
+                    networkFallback: atm.fallbackImageUrl,
+                  ),
+                ),
+                const Positioned.fill(
+                  child: AppScrim(
+                    edge: ScrimEdge.bottom,
+                    opacity: 0.6,
+                    extent: 0.55,
+                  ),
+                ),
+                Positioned(
+                  left: 16, right: 16, bottom: 14,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: Column(
+                      key: ValueKey(atm.name),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          atm.name,
+                          style: AppTheme.atmosphereTitle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.surface,
+                            height: 1.1,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          atm.tagline,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color:
+                                    AppColors.surface.withValues(alpha: 0.78),
+                                fontSize: 11,
+                              ),
+                        ),
+                      ],
                     ),
                   ),
-                  // Bottom gradient + name overlay
-                  Positioned(
-                    left: 0, right: 0, bottom: 0,
-                    child: Container(
-                      padding: const EdgeInsets.fromLTRB(14, 40, 14, 14),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            AppColors.textPrimary.withAlpha(210),
-                          ],
-                        ),
-                      ),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        child: Column(
-                          key: ValueKey(atm.name),
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              atm.name,
-                              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                    color: AppColors.surface,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                            ),
-                            Text(
-                              atm.tagline,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppColors.surface.withAlpha(175),
-                                    fontSize: 11,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
 
         SizedBox(height: innerSpacing),
 
-        // ── Atmosphere card strip ─────────────────────────────────────────────
+        // ── Atmosphere strip — shared AtmosphereCard V2 ─────────────────────
         SizedBox(
           height: stripH,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.pagePadding),
             itemCount: kAtmospheres.length,
             separatorBuilder: (_, _) => const SizedBox(width: 8),
             itemBuilder: (context, i) {
@@ -887,13 +778,12 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
 
         SizedBox(height: titleSpacing),
 
-        // ── Title + subtitle ──────────────────────────────────────────────────
-        // Flexible(loose): takes whatever space remains after fixed children;
-        // prevents parent Column overflow on small screens (e.g. iPhone SE).
+        // ── Title + subtitle — editorial display token ──────────────────────
         Flexible(
           fit: FlexFit.loose,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.pagePadding),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -902,16 +792,21 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
                   widget.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.displayMedium?.copyWith(height: 1.15),
+                  style: AppTheme.displayEditorial(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w500,
+                    height: 1.12,
+                    letterSpacing: -0.4,
+                  ),
                 ),
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.sm),
                 Text(
                   widget.subtitle,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: AppColors.textSecondary,
-                        height: 1.65,
+                        height: 1.6,
                       ),
                 ),
               ],
@@ -922,4 +817,3 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
     );
   }
 }
-
