@@ -25,10 +25,13 @@ heuristics only (Task 5: "do not build a giant parser").
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
 from .intent_classifier import is_confirmation, _REFINE as _ATMOS_REFINE
+
+log = logging.getLogger("aih")
 
 # ── Change-intent detection (lightweight) ────────────────────────────────────
 # Any of these signals an explicit, actionable modification request. Pure
@@ -248,6 +251,26 @@ def accumulate_refinements(history: list[dict], current_prompt: str) -> Accumula
         if len(prior_user) >= _WINDOW:
             break
 
+    cur = (current_prompt or "").strip()
+
+    # Wave 4.9.3b — confirmation-echo exemption (post-freeze critical bugfix).
+    # The frontend appends the triggering confirmation ("go ahead") to the
+    # history it sends to /generate, so that same confirmation ALSO appears as
+    # the NEWEST prior_user turn (prior_user[0]; list is newest→oldest). That
+    # single trailing echo must NOT act as a historical reset boundary — it is
+    # the confirmation EXECUTING the pending batch, not a past completed one.
+    # Drop exactly that one turn, and ONLY when current_prompt itself is that
+    # same confirmation. Older confirmations stay reset boundaries, so
+    # cross-generation anti-leak is byte-unchanged.
+    _echo_exempted = (
+        bool(prior_user) and bool(cur) and is_confirmation(cur)
+        and is_confirmation(prior_user[0])
+        and prior_user[0].strip().lower() == cur.lower()
+    )
+    if _echo_exempted:
+        prior_user = prior_user[1:]
+        log.debug("[RefinementAccumulation] confirmation_echo_exempted=True")
+
     # Replay oldest → newest so ordering (and latest-wins conflicts) is natural.
     for txt in reversed(prior_user):
         if is_confirmation(txt):
@@ -265,7 +288,6 @@ def accumulate_refinements(history: list[dict], current_prompt: str) -> Accumula
         if _is_actionable(txt):
             collected.append(txt)
 
-    cur = (current_prompt or "").strip()
     if cur and not is_confirmation(cur):
         if _FULL_REDIRECT.search(cur):
             collected = []
