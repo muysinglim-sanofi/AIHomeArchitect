@@ -1,72 +1,9 @@
 import 'package:flutter/material.dart';
 import 'translations/en.dart';
 import 'translations/km.dart';
+import '../models/atmosphere_style.dart';
 
-// ── Atmosphere style model ────────────────────────────────────────────────────
-
-class AtmosphereStyle {
-  final String name;
-  final String tagline;
-  final String imageUrl;
-  const AtmosphereStyle({
-    required this.name,
-    required this.tagline,
-    required this.imageUrl,
-  });
-}
-
-const _atmosphereList = <AtmosphereStyle>[
-  AtmosphereStyle(
-    name: 'Tropical Escape',
-    tagline: 'Lush resort warmth with natural textures',
-    imageUrl: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=400',
-  ),
-  AtmosphereStyle(
-    name: 'Warm Modern',
-    tagline: 'Contemporary comfort with inviting warmth',
-    imageUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400',
-  ),
-  AtmosphereStyle(
-    name: 'Zen Retreat',
-    tagline: 'Balanced, peaceful and calming minimalism',
-    imageUrl: 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=400',
-  ),
-  AtmosphereStyle(
-    name: 'Bali Sanctuary',
-    tagline: 'Open-air luxury of tropical villas',
-    imageUrl: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=400',
-  ),
-  AtmosphereStyle(
-    name: 'Japandi Calm',
-    tagline: 'Japanese-Scandinavian harmony and restraint',
-    imageUrl: 'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400',
-  ),
-  AtmosphereStyle(
-    name: 'Soft Luxury',
-    tagline: 'Elegant materials and refined evening light',
-    imageUrl: 'https://images.unsplash.com/photo-1560184897-ae75f418493e?w=400',
-  ),
-  AtmosphereStyle(
-    name: 'Nordic Warmth',
-    tagline: 'Cozy Scandinavian tones and natural light',
-    imageUrl: 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=400',
-  ),
-  AtmosphereStyle(
-    name: 'Dark Contemporary',
-    tagline: 'Bold tones with sharp architectural lines',
-    imageUrl: 'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?w=400',
-  ),
-  AtmosphereStyle(
-    name: 'Nature Retreat',
-    tagline: 'Biophilic design immersed in greenery',
-    imageUrl: 'https://images.unsplash.com/photo-1582268611958-ebfd161ef9cf?w=400',
-  ),
-  AtmosphereStyle(
-    name: 'Desert Luxe',
-    tagline: 'Warm earth tones with artisanal warmth',
-    imageUrl: 'https://images.unsplash.com/photo-1504279577054-acfeccf8fc52?w=400',
-  ),
-];
+export '../models/atmosphere_style.dart' show AtmosphereStyle;
 
 class AppLocalizations {
   final Locale locale;
@@ -172,8 +109,8 @@ class AppLocalizations {
       ];
 
   // Emotional atmosphere styles — image-first, evocative naming
-  static List<AtmosphereStyle> get atmospheres => _atmosphereList;
-  static List<String> get styleNames => _atmosphereList.map((a) => a.name).toList();
+  static List<AtmosphereStyle> get atmospheres => kAtmospheres;
+  static List<String> get styleNames => kAtmospheres.map((a) => a.name).toList();
 
   // ── Chat ──────────────────────────────────────────────────────────────────
   String get chatTitle => _get('chatTitle');

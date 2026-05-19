@@ -5,12 +5,12 @@ const Map<String, String> enTranslations = {
   'taglineSub': 'Interior · Exterior · Architecture',
 
   // Onboarding
-  'onboarding1Title': 'Your Dream Home,\nWithin Reach',
-  'onboarding1Sub': 'Any space — living rooms, villa facades, gardens, terraces, pools. Upload a photo and discover what it could become.',
-  'onboarding2Title': 'Your Personal\nAI Architect',
-  'onboarding2Sub': 'Tell your architect what you feel, not just what you want. It guides, refines, and iterates — until the vision is exactly right.',
-  'onboarding3Title': 'The Moment\nYou\'ve Been Waiting For',
-  'onboarding3Sub': 'A cinematic before & after reveal. The transformation you imagined, made real. Save it, share it, keep going.',
+  'onboarding1Title': 'Your space.\nTransformed.',
+  'onboarding1Sub': 'Upload a photo. Your architecture is preserved — the vision is entirely new.',
+  'onboarding2Title': 'Talk to your\narchitect.',
+  'onboarding2Sub': 'Describe what you want. The AI refines your space iteration by iteration.',
+  'onboarding3Title': 'Infinite architectural\ndirections.',
+  'onboarding3Sub': 'Bali sanctuary. Japandi calm. Desert luxe. Every atmosphere is a complete redesign.',
   'getStarted': 'Get Started',
   'continue': 'Continue',
   'skip': 'Skip',

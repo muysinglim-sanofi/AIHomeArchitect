@@ -5,6 +5,58 @@ import '../constants/app_colors.dart';
 import '../constants/app_spacing.dart';
 
 class AppTheme {
+  // ── Wave 4 — Design-System Spine: editorial typography tokens ─────────────
+  // Additive ONLY. These tokens are NOT wired into the global textTheme yet —
+  // they have zero visual effect until a screen wave consumes them. The audit
+  // identified "Inter-only headings" as the #1 premium gap; the editorial face
+  // (a restrained luxury serif via the existing google_fonts mechanism — same
+  // runtime path already used for Inter) is reserved for hero + atmosphere
+  // identity, pairing with Inter body. Calm-premium calibration spirit kept
+  // (light-leaning weight, tight tracking). Khmer glyph fallback preserved on
+  // every token so bilingual rendering never breaks.
+
+  /// Shared Khmer fallback chain — mirrors the body textTheme exactly.
+  static const List<String> khmerFallback = [
+    'Noto Sans Khmer',
+    'Khmer OS',
+    'sans-serif',
+  ];
+
+  /// Large editorial display — hero headlines (FTUE, Home, Cinematic).
+  /// Replaces Inter `displayLarge/Medium` ONLY where a screen opts in.
+  static TextStyle displayEditorial({
+    double fontSize = 38,
+    FontWeight fontWeight = FontWeight.w500,
+    Color color = AppColors.textPrimary,
+    double height = 1.08,
+    double letterSpacing = -0.5,
+  }) =>
+      GoogleFonts.cormorantGaramond(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+        height: height,
+        letterSpacing: letterSpacing,
+      ).copyWith(fontFamilyFallback: khmerFallback);
+
+  /// Atmosphere identity — atmosphere name over imagery / on cards.
+  /// One canonical type for the product's signature element (replaces the
+  /// hard-coded 'Lato' fracture once cards migrate).
+  static TextStyle atmosphereTitle({
+    double fontSize = 20,
+    FontWeight fontWeight = FontWeight.w600,
+    Color color = AppColors.textPrimary,
+    double height = 1.15,
+    double letterSpacing = 0.0,
+  }) =>
+      GoogleFonts.cormorantGaramond(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        color: color,
+        height: height,
+        letterSpacing: letterSpacing,
+      ).copyWith(fontFamilyFallback: khmerFallback);
+
   static ThemeData get light {
     final base = ThemeData.light(useMaterial3: true);
     final textTheme = GoogleFonts.interTextTheme(base.textTheme).copyWith(

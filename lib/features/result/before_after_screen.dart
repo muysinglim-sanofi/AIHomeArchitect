@@ -7,6 +7,8 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../data/mock/mock_projects.dart';
 import '../../data/models/message_model.dart';
+import '../../core/layout/adaptive_layout.dart';
+import '../../shared/widgets/atmosphere_card.dart';
 
 class BeforeAfterScreen extends StatefulWidget {
   final String projectId;
@@ -27,6 +29,7 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
   String? _afterUrl;
   String _title = '';
   String _subtitle = '';
+  String? _selectedAtmosphere;
 
   double? _imageAspectRatio;
   ImageStream? _sizeStream;
@@ -42,8 +45,22 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
 
     final extra = widget.resultExtra;
     if (extra is GeneratedResult) {
-      _beforeUrl = extra.beforeImageUrl.isNotEmpty ? extra.beforeImageUrl : null;
-      _afterUrl = extra.afterImageUrl.isNotEmpty ? extra.afterImageUrl : null;
+      final after = extra.afterImageUrl.isNotEmpty ? extra.afterImageUrl : null;
+      final beforeRaw =
+          extra.beforeImageUrl.isNotEmpty ? extra.beforeImageUrl : null;
+      // Deterministic fallback rules — never a broken/empty/inconsistent
+      // slider. The reveal is shown ONLY when there is a distinct before
+      // image; otherwise it is intentionally hidden (single full-bleed
+      // after image), which is the safe degraded state for legacy/corrupted
+      // rows persisted before the per-step source fix.
+      final before = (beforeRaw != null && beforeRaw != after) ? beforeRaw : null;
+      final mode = before != null
+          ? 'pair'
+          : (beforeRaw == null ? 'fallback_no_source' : 'fallback_same_pair');
+      debugPrint('[Reveal] full-reveal resolve — mode=$mode '
+          'before=$before after=$after');
+      _beforeUrl = before;
+      _afterUrl = after;
       _title = extra.styleLabel;
       _subtitle = '';
     } else {
@@ -91,6 +108,7 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final screenH = MediaQuery.sizeOf(context).height;
     return Scaffold(
       backgroundColor: AppColors.textPrimary,
       extendBodyBehindAppBar: true,
@@ -156,46 +174,112 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
             ),
             Container(
               color: AppColors.textPrimary,
-              padding: EdgeInsets.fromLTRB(
-                AppSpacing.pagePadding,
-                AppSpacing.md,
-                AppSpacing.pagePadding,
-                AppSpacing.md + MediaQuery.of(context).padding.bottom,
-              ),
               child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _DarkButton(
-                          label: l10n.saveResult,
-                          icon: Icons.bookmark_outline,
-                          onPressed: () =>
-                              _showSnack(context, 'Saved to your transformations.'),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: _DarkButton(
-                          label: l10n.shareResult,
-                          icon: Icons.ios_share,
-                          filled: true,
-                          onPressed: () => Share.share(
-                            'Check out my AI home transformation — $_title!',
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.pagePadding, AppSpacing.md,
+                      AppSpacing.pagePadding, 0,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _DarkButton(
+                            label: l10n.saveResult,
+                            icon: Icons.bookmark_outline,
+                            onPressed: () =>
+                                _showSnack(context, 'Saved to your transformations.'),
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: _DarkButton(
+                            label: l10n.shareResult,
+                            icon: Icons.ios_share,
+                            filled: true,
+                            onPressed: () => Share.share(
+                              'Check out my AI home transformation — $_title!',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: AppSpacing.sm),
-                  TextButton(
-                    onPressed: () => context.pop(),
+                  const SizedBox(height: AppSpacing.md),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
                     child: Text(
-                      '↺  ${l10n.newVariation}',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      'Explore another atmosphere',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppColors.surface.withAlpha(140),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11,
+                            letterSpacing: 0.4,
                           ),
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: AppAdaptive.revealStripHeight(screenH),
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
+                      itemCount: AppLocalizations.atmospheres.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
+                      itemBuilder: (context, i) {
+                        final a = AppLocalizations.atmospheres[i];
+                        return SizedBox(
+                          width: AppAdaptive.revealCardWidth(screenH),
+                          child: AtmosphereCard(
+                            atmosphere: a,
+                            selected: _selectedAtmosphere == a.name,
+                            onTap: () => setState(() {
+                              _selectedAtmosphere =
+                                  _selectedAtmosphere == a.name ? null : a.name;
+                            }),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    child: _selectedAtmosphere != null
+                        ? Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.pagePadding, 10,
+                              AppSpacing.pagePadding, 0,
+                            ),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () => context.pop(_selectedAtmosphere),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.accent,
+                                  foregroundColor: AppColors.surface,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 0,
+                                ),
+                                child: Text(
+                                  'Generate $_selectedAtmosphere',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .labelLarge
+                                      ?.copyWith(color: AppColors.surface),
+                                ),
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                  SizedBox(
+                    height: AppSpacing.md + MediaQuery.of(context).padding.bottom,
                   ),
                 ],
               ),
@@ -354,12 +438,14 @@ class _CompareViewState extends State<_CompareView> with SingleTickerProviderSta
                   ),
                 ),
 
-              // "Original" pill — top left
+              // "Before" pill — top left. Generic on purpose: the before
+              // image is the original upload for V1 but the previous vision
+              // for V2+, so "Before" stays accurate across the whole chain.
               if (hasBefore)
                 const Positioned(
                   top: 14,
                   left: 14,
-                  child: _CompareLabel(text: 'Original'),
+                  child: _CompareLabel(text: 'Before'),
                 ),
 
               // "AI Vision" pill — top right

@@ -5,7 +5,9 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
+import '../../core/layout/adaptive_layout.dart';
 import '../../shared/widgets/app_button.dart';
+import '../../shared/widgets/atmosphere_card.dart';
 
 class UploadScreen extends StatefulWidget {
   const UploadScreen({super.key});
@@ -327,13 +329,13 @@ class _StyleGrid extends StatelessWidget {
         crossAxisCount: 2,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
-        childAspectRatio: 0.82,
+        childAspectRatio: AppAdaptive.uploadAtmosphereAspectRatio,
       ),
       itemCount: atmospheres.length + 1,
       itemBuilder: (context, index) {
         if (index < atmospheres.length) {
           final a = atmospheres[index];
-          return _AtmosphereCard(
+          return AtmosphereCard(
             atmosphere: a,
             selected: selected == a.name,
             onTap: () => onSelected(a.name),
@@ -344,95 +346,6 @@ class _StyleGrid extends StatelessWidget {
           onTap: () => onSelected(_customLabel),
         );
       },
-    );
-  }
-}
-
-class _AtmosphereCard extends StatelessWidget {
-  final AtmosphereStyle atmosphere;
-  final bool selected;
-  final VoidCallback onTap;
-  const _AtmosphereCard({required this.atmosphere, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-          border: Border.all(
-            color: selected ? AppColors.textPrimary : AppColors.border,
-            width: selected ? 2 : 1,
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 55,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    atmosphere.imageUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Container(color: AppColors.surfaceVariant),
-                  ),
-                  if (selected)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(
-                          color: AppColors.textPrimary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.check, size: 12, color: AppColors.surface),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            Expanded(
-              flex: 45,
-              child: Container(
-                color: selected ? AppColors.textPrimary : AppColors.surface,
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      atmosphere.name,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: selected ? AppColors.surface : AppColors.textPrimary,
-                          ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      atmosphere.tagline,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: selected
-                                ? AppColors.surface.withValues(alpha: 0.7)
-                                : AppColors.textTertiary,
-                          ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

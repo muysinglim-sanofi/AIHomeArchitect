@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 
-enum AppButtonVariant { primary, secondary, ghost, accent }
+// Wave 4 — Design-System Spine: `onImage` + `dark` added so every CTA in the
+// app can route through ONE button (replacing _DarkButton / _CardAction / raw
+// ElevatedButtons in later waves). Existing variants are byte-unchanged; new
+// variants reuse the same radius/padding language (no app-wide redesign here).
+enum AppButtonVariant { primary, secondary, ghost, accent, onImage, dark }
 
 class AppButton extends StatelessWidget {
   final String label;
@@ -66,6 +70,38 @@ class AppButton extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppSpacing.buttonRadius),
+            ),
+          ),
+          child: child,
+        );
+      // Solid light CTA for dark / non-image surfaces (e.g. reveal bottom bar).
+      // High-contrast cream-on-ink so it reads on the dark scaffold.
+      case AppButtonVariant.dark:
+        button = ElevatedButton(
+          onPressed: loading ? null : onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.surface,
+            foregroundColor: AppColors.textPrimary,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusButton),
+            ),
+          ),
+          child: child,
+        );
+      // CTA placed over imagery — near-solid ink keeps affordance while
+      // hinting "over media"; pairs with the scrim system.
+      case AppButtonVariant.onImage:
+        button = ElevatedButton(
+          onPressed: loading ? null : onPressed,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.textPrimary.withAlpha(235),
+            foregroundColor: AppColors.surface,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppSpacing.radiusButton),
             ),
           ),
           child: child,
