@@ -4,171 +4,208 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/layout/adaptive_layout.dart';
 import '../../core/models/atmosphere_style.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/widgets/scrim.dart';
+
+/// Wave 4 — Task B: AtmosphereCard **V2** (shared image-led atmosphere system).
+///
+/// One unified, premium, editorial card reused by FTUE-3, New Design Session,
+/// the Reveal strip and the Re-upload flow. Replaces the previous fractured
+/// implementation:
+///   • image now DOMINATES (full-bleed); typography is OVERLAID, not a panel
+///   • typography routed through `AppTheme.atmosphereTitle()` — the hard-coded
+///     'Lato' fracture is gone (one type system)
+///   • removed: floating icon badge, cream text panel, all box shadows,
+///     gamified "filter pill" feel
+///   • selection is calm: a subtle inset accent border — it does NOT scream
+///   • size-adaptive: `compact` vs `editorial` auto-derived from the available
+///     box via `AppAdaptive.cardMode` so the tiny FTUE/Reveal strip cards
+///     (~76–100 px) degrade gracefully and are never visually broken
+///   • the robust 3-level image fallback (local hero → showcase → network
+///     → shimmer) is preserved exactly
+///
+/// Backward compatible: the primary constructor keeps the exact public shape
+/// `AtmosphereCard({atmosphere, selected, onTap, key})` so all existing
+/// callsites compile and render unchanged in structure (no screen migration in
+/// this PR — screens consume the improved widget as-is). `dark` + `variant`
+/// are optional with size-aware defaults.
+///
+/// `AtmosphereCard.custom(...)` provides the shared "describe your own" shell
+/// NOW so Wave 4.3 can fold `_CustomAtmosphereCard` (currently private inside
+/// upload_screen.dart — not modifiable in this PR) into this component later.
+enum AtmosphereCardVariant { auto, editorial, compact }
 
 class AtmosphereCard extends StatelessWidget {
-  final AtmosphereStyle atmosphere;
+  /// Null only for the `.custom` "describe your dream space" tile.
+  final AtmosphereStyle? atmosphere;
   final bool selected;
   final VoidCallback onTap;
+  final bool dark;
+  final AtmosphereCardVariant variant;
+
+  // Custom-tile payload (null for normal atmosphere cards).
+  final String? _customLabel;
+  final String? _customSublabel;
 
   const AtmosphereCard({
     super.key,
-    required this.atmosphere,
+    required AtmosphereStyle this.atmosphere,
     required this.selected,
     required this.onTap,
-  });
+    this.dark = false,
+    this.variant = AtmosphereCardVariant.auto,
+  })  : _customLabel = null,
+        _customSublabel = null;
 
-  static const _cardBg = Color(0xFFFAF8F5);
+  /// Shared "describe your own" tile — same shell language as the atmosphere
+  /// cards (no image; calm editorial surface; identical selection cue).
+  /// Capability-now / fold-later: upload_screen's `_CustomAtmosphereCard`
+  /// migrates onto this in Wave 4.3.
+  const AtmosphereCard.custom({
+    super.key,
+    required String label,
+    String? sublabel,
+    required this.selected,
+    required this.onTap,
+    this.dark = true,
+    this.variant = AtmosphereCardVariant.auto,
+  })  : atmosphere = null,
+        _customLabel = label,
+        _customSublabel = sublabel;
+
+  bool get _isCustom => atmosphere == null;
+
+  bool _isCompact(double h) {
+    switch (variant) {
+      case AtmosphereCardVariant.compact:
+        return true;
+      case AtmosphereCardVariant.editorial:
+        return false;
+      case AtmosphereCardVariant.auto:
+        return AppAdaptive.cardMode(h) == AtmCardMode.compact;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        decoration: BoxDecoration(
-          color: _cardBg,
-          borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
-          border: Border.all(
-            color: selected ? AppColors.accent : const Color(0xFFE5E1DB),
-            width: selected ? 2 : 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: selected
-                  ? AppColors.accent.withValues(alpha: 0.20)
-                  : Colors.black.withValues(alpha: 0.06),
-              blurRadius: selected ? 14 : 6,
-              spreadRadius: selected ? 1 : 0,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        // Clip.antiAlias is the final visual safety net —
-        // any content that escapes inner layout is trimmed here.
-        clipBehavior: Clip.antiAlias,
-        child: LayoutBuilder(
-          builder: (ctx, box) {
-            final h = box.maxHeight;
+      child: LayoutBuilder(
+        builder: (ctx, box) {
+          final h = box.maxHeight;
+          final mode = AppAdaptive.cardMode(h);
+          final compact = _isCompact(h);
 
-            // ── Adaptive sizing from AppAdaptive ──────────────────────────────
-            final iconD = AppAdaptive.cardIconDiameter(h);
-            final iconR = iconD / 2;
-            final imageH = h * AppAdaptive.cardImageRatio(h);
-            final iconTextGap = AppAdaptive.cardIconTextGap(h);
-            // Where the text column top begins (below icon center + gap).
-            final textTop = imageH + iconR + iconTextGap;
-            // Available vertical space for the text column.
-            final textAvail = h - textTop;
+          // Editorial type scale — calibrated for the OVERLAY (not a panel).
+          final nameSize = switch (mode) {
+            AtmCardMode.full => 18.0,
+            AtmCardMode.semi => 15.0,
+            AtmCardMode.compact => 12.5,
+          };
+          final showTagline =
+              !compact && !_isCustom && AppAdaptive.cardShowsTagline(h);
+          final nameMaxLines = AppAdaptive.cardNameMaxLines(h);
+          final taglineMaxLines = AppAdaptive.cardTaglineMaxLines(h);
 
-            final showTagline = AppAdaptive.cardShowsTagline(h);
-            final nameMaxLines = AppAdaptive.cardNameMaxLines(h);
-            final taglineMaxLines = AppAdaptive.cardTaglineMaxLines(h);
-            final nameFontSize = AppAdaptive.cardNameFontSize(h);
-            final taglineFontSize = AppAdaptive.cardTaglineFontSize(h);
-            final nameTaglineGap = AppAdaptive.cardNameTaglineGap(h);
+          final borderColor = selected
+              ? AppColors.accent
+              : (dark
+                  ? Colors.white.withValues(alpha: 0.14)
+                  : AppColors.border);
 
-            return Stack(
-              // Clip.none: icon deliberately straddles image/text boundary.
-              // The outer AnimatedContainer(Clip.antiAlias) is the visual fence.
-              clipBehavior: Clip.none,
-              children: [
-                // ── Hero image ────────────────────────────────────────────────
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: imageH,
-                  child: _AtmosphereHeroImage(atmosphere: atmosphere),
-                ),
+          // Text sits on a scrim/dark surface → light type for legibility.
+          const onSurface = AppColors.surface;
 
-                // ── Cream text background ─────────────────────────────────────
-                Positioned(
-                  top: imageH,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: const ColoredBox(color: _cardBg),
-                ),
-
-                // ── Floating icon — centered on image/text boundary ───────────
-                Positioned(
-                  top: imageH - iconR,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: _AtmosphereFloatingIcon(
-                      atmosphere: atmosphere,
-                      diameter: iconD,
+          Widget textColumn() => Padding(
+                padding: EdgeInsets.fromLTRB(
+                    compact ? 8 : 10, 0, compact ? 8 : 10, compact ? 8 : 10),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isCustom ? _customLabel! : atmosphere!.name,
+                      maxLines: nameMaxLines,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTheme.atmosphereTitle(
+                        fontSize: nameSize,
+                        fontWeight: FontWeight.w600,
+                        color: onSurface,
+                        height: 1.12,
+                      ),
                     ),
-                  ),
-                ),
-
-                // ── Text column ───────────────────────────────────────────────
-                // Primary strategy: adaptive — only renders what fits.
-                // Defensive fallback: OverflowBox handles a11y font scaling
-                // edge cases; outer Clip.antiAlias trims any visual bleed.
-                Positioned(
-                  top: textTop,
-                  left: 6,
-                  right: 6,
-                  // Use all remaining space; OverflowBox handles the rest.
-                  height: textAvail.clamp(0.0, double.infinity),
-                  child: OverflowBox(
-                    alignment: Alignment.topCenter,
-                    maxHeight: double.infinity,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Text(
-                          atmosphere.name,
-                          textAlign: TextAlign.center,
-                          maxLines: nameMaxLines,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: 'Lato',
-                            fontWeight: FontWeight.w600,
-                            fontSize: nameFontSize,
-                            color: selected
-                                ? AppColors.accent
-                                : AppColors.textPrimary,
-                            height: 1.2,
-                          ),
-                        ),
-                        if (showTagline) ...[
-                          SizedBox(height: nameTaglineGap),
-                          Text(
-                            atmosphere.tagline,
-                            textAlign: TextAlign.center,
-                            maxLines: taglineMaxLines,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontFamily: 'Lato',
-                              fontSize: taglineFontSize,
-                              color: AppColors.textTertiary,
-                              height: 1.3,
+                    if (showTagline || (_isCustom && _customSublabel != null)) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        _isCustom
+                            ? _customSublabel!
+                            : atmosphere!.tagline,
+                        maxLines: _isCustom ? 2 : taglineMaxLines,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: onSurface.withValues(alpha: 0.78),
+                              fontSize: mode == AtmCardMode.full ? 11 : 10,
+                              height: 1.25,
                             ),
-                          ),
-                        ],
-                      ],
+                      ),
+                    ],
+                  ],
+                ),
+              );
+
+          // ── Background layer ──────────────────────────────────────────────
+          // Atmosphere card → full-bleed photo + bottom scrim.
+          // Custom tile    → calm solid editorial surface (no image).
+          final Widget background = _isCustom
+              ? const ColoredBox(color: AppColors.textPrimary)
+              : Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _AtmosphereHeroImage(atmosphere: atmosphere!),
+                    const AppScrim(
+                      edge: ScrimEdge.bottom,
+                      opacity: 0.62,
+                      extent: 0.62,
                     ),
-                  ),
+                  ],
+                );
+
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: AppColors.surfaceVariant,
+              borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+              border: Border.all(
+                color: borderColor,
+                width: selected ? 2 : 1,
+              ),
+            ),
+            // No boxShadow — depth comes from the image + scrim + type only.
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                background,
+                Align(
+                  alignment: Alignment.bottomLeft,
+                  child: textColumn(),
                 ),
               ],
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 }
 
-// ── Hero image — three-level fallback ─────────────────────────────────────────
-// 1. heroImagePath  — local, assets/atmospheres/{id}.jpg
-// 2. showcaseAsset  — local AI output (4 atmospheres have this)
+// ── Hero image — three-level fallback (preserved from V1) ─────────────────────
+// 1. heroImagePath   — local, assets/atmospheres/{id}.jpg
+// 2. showcaseAsset   — local AI output (only some atmospheres have this)
 // 3. fallbackImageUrl — Unsplash network (last resort)
-// Shimmer placeholder while network loads; clean warm grey on complete failure.
-
+// Shimmer placeholder while network loads; warm grey on complete failure.
+// Now rendered FULL-BLEED (image-led) instead of in a top 65% slot.
 class _AtmosphereHeroImage extends StatelessWidget {
   final AtmosphereStyle atmosphere;
   const _AtmosphereHeroImage({required this.atmosphere});
@@ -199,53 +236,5 @@ class _AtmosphereHeroImage extends StatelessWidget {
         ? _asset(showcase, onError: _net(atmosphere.fallbackImageUrl))
         : _net(atmosphere.fallbackImageUrl);
     return _asset(atmosphere.heroImagePath, onError: level2);
-  }
-}
-
-// ── Floating icon ─────────────────────────────────────────────────────────────
-// Diameter driven by AppAdaptive — scales with card height.
-// Local PNG asset with Material icon fallback.
-
-class _AtmosphereFloatingIcon extends StatelessWidget {
-  final AtmosphereStyle atmosphere;
-  final double diameter;
-  const _AtmosphereFloatingIcon({
-    required this.atmosphere,
-    required this.diameter,
-  });
-
-  static const _bg = Color(0xFFFAF8F5);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: diameter,
-      height: diameter,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: _bg,
-        border: Border.all(color: const Color(0xFFE0DCD6), width: 1),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ClipOval(
-        child: Image.asset(
-          atmosphere.iconImagePath,
-          width: diameter,
-          height: diameter,
-          fit: BoxFit.cover,
-          errorBuilder: (_, _, _) => Icon(
-            atmosphere.iconData,
-            size: diameter * 0.50,
-            color: const Color(0xFF8A8480),
-          ),
-        ),
-      ),
-    );
   }
 }
