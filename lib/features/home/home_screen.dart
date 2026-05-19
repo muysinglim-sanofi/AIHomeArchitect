@@ -390,12 +390,14 @@ class _ContinueCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final previewUrl = _latestVisionUrl(project);
-    final l10n = context.l10n;
     // "0 visions" reads as a broken/empty session — show a calm "Draft"
-    // instead. (The real session-naming/version surfacing is Wave 4.7.)
+    // instead. Wave 4.7: progression-forward, real data only.
+    // Wave 4.7: lead with real progression so the card reads as an evolving
+    // architectural project over time (no fabricated naming — real
+    // iterationCount + timestamp only).
     final meta = project.iterationCount > 0
-        ? '${_timeAgo(project.lastUpdatedAt)} · ${l10n.visionCount(project.iterationCount)}'
-        : '${_timeAgo(project.lastUpdatedAt)} · Draft';
+        ? 'Vision ${project.iterationCount} · ${_timeAgo(project.lastUpdatedAt)}'
+        : 'Draft · ${_timeAgo(project.lastUpdatedAt)}';
 
     return _TapScaleWidget(
       onTap: () => context.push('/chat/${project.id}'),

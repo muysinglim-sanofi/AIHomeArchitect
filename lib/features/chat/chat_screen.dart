@@ -775,6 +775,36 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         // vision" continuity header. Null (no vision yet) gracefully falls
         // back to the source photo. Read-only — no contract change.
         currentVisionUrl: _generationSourceUrl,
+        // Wave 4.7: the session's prior visions, surfaced (read-only) from
+        // the chat thread as the de-facto evolution history.
+        visions: [
+          for (final m in _messages)
+            if (m.type == MessageType.imageResult && m.result != null)
+              _VisionRef(
+                afterUrl: m.result!.afterImageUrl,
+                label: m.result!.styleLabel,
+              ),
+        ],
+        // Wave 4.7: "continue from this vision" — lightweight in-session
+        // re-source. Reassigns the 4.8.3 branch-safe _generationSourceUrl so
+        // the NEXT existing generation flows from the chosen vision. No
+        // pipeline / model / routing change; chat stays chronological.
+        onContinueFromVision: (v) {
+          Navigator.of(context).pop();
+          setState(() {
+            _generationSourceUrl = v.afterUrl;
+            _messages.add(MessageModel(
+              id: 'sys_${DateTime.now().millisecondsSinceEpoch}',
+              content:
+                  'Continuing from this vision. Describe the next change, '
+                  'or open Design Direction to explore another atmosphere.',
+              isAi: false,
+              type: MessageType.system,
+              createdAt: DateTime.now(),
+            ));
+          });
+          _scrollToBottom();
+        },
         initialRoomType: _currentRoomType,
         initialStyle: _currentStyle,
         onReplace: _replaceSourcePhoto,
@@ -1983,6 +2013,11 @@ class _SourcePhotoSheet extends StatefulWidget {
   // Wave 4.6: latest generated vision (continuity header). Null => fall back
   // to the source photo. Read-only context — not part of any contract.
   final String? currentVisionUrl;
+  // Wave 4.7: the session's prior visions (chronological) + a "continue from
+  // this vision" callback. Read-only history surfaced from the chat thread;
+  // no model/contract change.
+  final List<_VisionRef> visions;
+  final void Function(_VisionRef) onContinueFromVision;
   final String initialRoomType;
   final String initialStyle;
   final VoidCallback onReplace;
@@ -1992,6 +2027,8 @@ class _SourcePhotoSheet extends StatefulWidget {
     required this.project,
     this.sourceFile,
     this.currentVisionUrl,
+    this.visions = const [],
+    required this.onContinueFromVision,
     required this.initialRoomType,
     required this.initialStyle,
     required this.onReplace,
@@ -2154,6 +2191,20 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
                   ),
                   const SizedBox(height: 22),
 
+                  // ── Design evolution — the project's visions, image-led ───
+                  // Calm progression (V1 → … → latest), not a technical
+                  // version tree. Tapping a vision continues from it.
+                  if (widget.visions.isNotEmpty) ...[
+                    const _SheetEyebrow(label: 'DESIGN EVOLUTION'),
+                    const SizedBox(height: 10),
+                    _EvolutionStrip(
+                      visions: widget.visions,
+                      currentUrl: widget.currentVisionUrl,
+                      onContinue: widget.onContinueFromVision,
+                    ),
+                    const SizedBox(height: 22),
+                  ],
+
                   // Space type — Wave-4.3 room language (shared l10n rooms).
                   const _SheetEyebrow(label: 'SPACE TYPE'),
                   const SizedBox(height: 10),
@@ -2222,6 +2273,112 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
 
 // Resolves the continuity header image: current vision → source file →
 // original → calm shimmer. Image-first, BoxFit.cover.
+// Wave 4.7 — a single prior vision (read-only history element).
+class _VisionRef {
+  final String afterUrl;
+  final String label;
+  const _VisionRef({required this.afterUrl, required this.label});
+}
+
+// Image-led evolution strip — calm progression V1 → … → latest. Not a
+// technical version tree. Tapping a vision continues the project from it.
+class _EvolutionStrip extends StatelessWidget {
+  final List<_VisionRef> visions;
+  final String? currentUrl;
+  final void Function(_VisionRef) onContinue;
+  const _EvolutionStrip({
+    required this.visions,
+    required this.currentUrl,
+    required this.onContinue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 104,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        padding: EdgeInsets.zero,
+        itemCount: visions.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (context, i) {
+          final v = visions[i];
+          final isCurrent = currentUrl != null && v.afterUrl == currentUrl;
+          return GestureDetector(
+            onTap: () => onContinue(v),
+            child: SizedBox(
+              width: 124,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusCard),
+                        child: SizedBox(
+                          width: 124,
+                          height: 72,
+                          child: CachedNetworkImage(
+                            imageUrl: v.afterUrl,
+                            fit: BoxFit.cover,
+                            placeholder: (_, _) => const ColoredBox(
+                                color: AppColors.shimmerBase),
+                            errorWidget: (_, _, _) => const ColoredBox(
+                                color: AppColors.shimmerBase),
+                          ),
+                        ),
+                      ),
+                      if (isCurrent)
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(
+                                  AppSpacing.radiusCard),
+                              border: Border.all(
+                                  color: AppColors.accent, width: 2),
+                            ),
+                          ),
+                        ),
+                      if (isCurrent)
+                        const Positioned(
+                          top: 6,
+                          left: 6,
+                          child: AppPill(text: 'Current', dark: true),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    'Vision ${i + 1}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                        ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    v.label,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textTertiary,
+                          fontSize: 10,
+                        ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _SheetVisionImage extends StatelessWidget {
   final String? visionUrl;
   final File? sourceFile;
