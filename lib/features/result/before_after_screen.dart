@@ -280,17 +280,11 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Secondary actions — quiet pills, not loud buttons.
+          // Secondary action — a single real, quiet pill. The no-op Save
+          // affordance was removed (no storage backend — Wave-4.9 parity);
+          // no dead premium actions remain.
           Row(
             children: [
-              AppPill(
-                text: l10n.saveResult,
-                icon: Icons.bookmark_outline,
-                dark: true,
-                onTap: () =>
-                    _showSnack(context, 'Saved to your transformations.'),
-              ),
-              const SizedBox(width: AppSpacing.sm),
               AppPill(
                 text: l10n.shareResult,
                 icon: Icons.ios_share,
@@ -358,17 +352,6 @@ class _BeforeAfterScreenState extends State<BeforeAfterScreen>
     );
   }
 
-  void _showSnack(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.accentDark,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-      ),
-    );
-  }
 }
 
 // ── Image widget — handles local assets and network URLs (kept) ───────────────
