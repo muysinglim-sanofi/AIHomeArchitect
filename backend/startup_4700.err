@@ -1,0 +1,283 @@
+INFO:     Will watch for changes in these directories: ['C:\\Projects\\AIHomeArchitect\\backend']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [6980] using WatchFiles
+19:20:01  DEBUG     [GenerationProfile] active=MOBILE_MVP_BASELINE  quality=medium  input_fidelity=omitted  size_override=auto  max_attempts=1  compact_prompts=False  use_mask=False  vision_analysis_fv=False
+19:20:01  INFO      [GenerationProfile] ACTIVE: MOBILE_MVP_BASELINE  quality=medium  input_fidelity=None  size=auto  max_attempts=1  compact_prompts=False  (APP_ENV='mobile_mvp_baseline', available: ['dev', 'prod', 'mobile_mvp_baseline'])
+19:20:01  INFO      [OpenAI Client] max_retries=0  timeout=Timeout(connect=5.0, read=600, write=600, pool=600)  — SDK internal retries DISABLED; backend retry_classifier is the sole retry authority. Worst-case API calls per request: max_attempts(1) × 1 = 1
+INFO:     Started server process [16272]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+19:23:57  DEBUG     Calling on_part_begin with no data
+19:23:57  DEBUG     Calling on_header_field with data[29:48]
+19:23:57  DEBUG     Calling on_header_value with data[50:78]
+19:23:57  DEBUG     Calling on_header_end with no data
+19:23:57  DEBUG     Calling on_headers_finished with no data
+19:23:57  DEBUG     Calling on_part_data with data[82:118]
+19:23:57  DEBUG     Calling on_part_end with no data
+19:23:57  DEBUG     Calling on_part_begin with no data
+19:23:57  DEBUG     Calling on_header_field with data[149:168]
+19:23:57  DEBUG     Calling on_header_value with data[170:194]
+19:23:57  DEBUG     Calling on_header_end with no data
+19:23:57  DEBUG     Calling on_headers_finished with no data
+19:23:57  DEBUG     Calling on_part_data with data[198:253]
+19:23:57  DEBUG     Calling on_part_end with no data
+19:23:57  DEBUG     Calling on_part_begin with no data
+19:23:57  DEBUG     Calling on_header_field with data[284:303]
+19:23:57  DEBUG     Calling on_header_value with data[305:339]
+19:23:57  DEBUG     Calling on_header_end with no data
+19:23:57  DEBUG     Calling on_headers_finished with no data
+19:23:57  DEBUG     Calling on_part_data with data[343:877]
+19:23:57  DEBUG     Calling on_part_end with no data
+19:23:57  DEBUG     Calling on_part_begin with no data
+19:23:57  DEBUG     Calling on_header_field with data[908:927]
+19:23:57  DEBUG     Calling on_header_value with data[929:958]
+19:23:57  DEBUG     Calling on_header_end with no data
+19:23:57  DEBUG     Calling on_headers_finished with no data
+19:23:57  DEBUG     Calling on_part_data with data[962:985]
+19:23:57  DEBUG     Calling on_part_end with no data
+19:23:57  DEBUG     Calling on_part_begin with no data
+19:23:57  DEBUG     Calling on_header_field with data[1016:1035]
+19:23:57  DEBUG     Calling on_header_value with data[1037:1064]
+19:23:57  DEBUG     Calling on_header_end with no data
+19:23:57  DEBUG     Calling on_headers_finished with no data
+19:23:57  DEBUG     Calling on_part_data with data[1068:1079]
+19:23:57  DEBUG     Calling on_part_end with no data
+19:23:57  DEBUG     Calling on_part_begin with no data
+19:23:57  DEBUG     Calling on_header_field with data[1110:1129]
+19:23:57  DEBUG     Calling on_header_value with data[1131:1158]
+19:23:57  DEBUG     Calling on_header_end with no data
+19:23:57  DEBUG     Calling on_headers_finished with no data
+19:23:57  DEBUG     Calling on_part_data with data[1162:1163]
+19:23:57  DEBUG     Calling on_part_end with no data
+19:23:57  DEBUG     Calling on_part_begin with no data
+19:23:57  DEBUG     Calling on_header_field with data[1194:1213]
+19:23:57  DEBUG     Calling on_header_value with data[1215:1240]
+19:23:57  DEBUG     Calling on_header_end with no data
+19:23:57  DEBUG     Calling on_headers_finished with no data
+19:23:57  DEBUG     Calling on_part_data with data[1244:1338]
+19:23:57  DEBUG     Calling on_part_end with no data
+19:23:57  DEBUG     Calling on_part_begin with no data
+19:23:57  DEBUG     Calling on_header_field with data[1369:1388]
+19:23:57  DEBUG     Calling on_header_value with data[1390:1426]
+19:23:57  DEBUG     Calling on_header_end with no data
+19:23:57  DEBUG     Calling on_headers_finished with no data
+19:23:57  DEBUG     Calling on_part_data with data[1430:1460]
+19:23:57  DEBUG     Calling on_part_data with data[0:504]
+19:23:57  DEBUG     Calling on_part_end with no data
+19:23:57  DEBUG     Calling on_part_begin with no data
+19:23:57  DEBUG     Calling on_header_field with data[535:554]
+19:23:57  DEBUG     Calling on_header_value with data[556:591]
+19:23:57  DEBUG     Calling on_header_end with no data
+19:23:57  DEBUG     Calling on_headers_finished with no data
+19:23:57  DEBUG     Calling on_part_data with data[595:627]
+19:23:57  DEBUG     Calling on_part_end with no data
+19:23:57  DEBUG     Calling on_end with no data
+19:23:57  DEBUG     [GenerationProfile] active=MOBILE_MVP_BASELINE  quality=medium  input_fidelity=omitted  size_override=auto  max_attempts=1  compact_prompts=False  use_mask=False  vision_analysis_fv=False
+19:23:57  INFO      === /generate called ===
+19:23:57  INFO        request_id    : c3b14ed6ddec1ecf6f944adf68067d58
+19:23:57  INFO        session_id    : cf9b74b4-cf9d-4c77-9e3b-0916ed89ba34
+19:23:57  INFO        style_label   : Soft Luxury · Vision 1
+19:23:57  INFO        room_type     : Living Room
+19:23:57  INFO        iteration     : 1
+19:23:57  INFO        prompt        : Generate the first architectural vision for this space.
+19:23:57  INFO        before_url    : https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/sign/uploads/f9b13abc...
+19:23:57  INFO        original_url  : https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/sign/uploads/f9b13abc...
+19:23:57  INFO      [GenerationProfile] mode=MOBILE_MVP_BASELINE  quality=medium  input_fidelity=None  size=auto  max_attempts=1  compact_prompts=False
+19:23:57  INFO      --- fetching source image ---
+19:23:57  INFO        generation anchor: before (iteration=1, original_provided=True)
+19:23:57  DEBUG     connect_tcp.started host='vtxkciupyafukhdsgxgw.supabase.co' port=443 local_address=None timeout=30 socket_options=None
+19:23:58  DEBUG     connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001DC66D08DF0>
+19:23:58  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000001DC66CA0C40> server_hostname='vtxkciupyafukhdsgxgw.supabase.co' timeout=30
+19:23:59  DEBUG     start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001DC66D08040>
+19:23:59  DEBUG     send_request_headers.started request=<Request [b'GET']>
+19:23:59  DEBUG     send_request_headers.complete
+19:23:59  DEBUG     send_request_body.started request=<Request [b'GET']>
+19:23:59  DEBUG     send_request_body.complete
+19:23:59  DEBUG     receive_response_headers.started request=<Request [b'GET']>
+19:24:01  DEBUG     receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Sun, 17 May 2026 17:24:00 GMT'), (b'Content-Type', b'image/jpeg'), (b'Content-Length', b'258885'), (b'Connection', b'keep-alive'), (b'CF-Ray', b'9fd4502cfb516cbe-CDG'), (b'CF-Cache-Status', b'MISS'), (b'Accept-Ranges', b'bytes'), (b'Access-Control-Allow-Origin', b'*'), (b'ETag', b'"cd960f7cd839eef015b8b8e866b38173"'), (b'Expires', b'Mon, 17 May 2027 17:23:53 GMT'), (b'Last-Modified', b'Sun, 17 May 2026 17:23:52 GMT'), (b'Server', b'cloudflare'), (b'sb-gateway-mode', b'direct'), (b'sb-gateway-version', b'1'), (b'sb-project-ref', b'vtxkciupyafukhdsgxgw'), (b'sb-request-id', b'019e36f7-5824-799c-806c-9bc054218ab6'), (b'x-robots-tag', b'none'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), (b'set-cookie', b'__cf_bm=UKUamy2pqcuCG3oixu0d4Gcw6KEaALIxK8FvozdYdoQ-1779038640.158005-1.0.1.1-Ptc4uN3pjeRriqENE.DNnNay7sy17dZ_w.8PW0qt0ZI85oatmat5sH1_mn4WJC3a4Sp8giMZET.LXufc9tu4VkFCmycYhRsVwTb2lur0xekC4XeZ8qrmEx5NOsZPVxv6; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Sun, 17 May 2026 17:54:00 GMT'), (b'alt-svc', b'h3=":443"; ma=86400')])
+19:24:01  INFO      HTTP Request: GET https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/sign/uploads/f9b13abc-eced-4001-bb80-873d10660b6e/cf9b74b4-cf9d-4c77-9e3b-0916ed89ba34/source_1779038624308.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9mMjdhOTZkYi1hOTI5LTRiN2EtYTQ5Yi01M2ZkMWQ3MzQwNTYiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJ1cGxvYWRzL2Y5YjEzYWJjLWVjZWQtNDAwMS1iYjgwLTg3M2QxMDY2MGI2ZS9jZjliNzRiNC1jZjlkLTRjNzctOWUzYi0wOTE2ZWQ4OWJhMzQvc291cmNlXzE3NzkwMzg2MjQzMDguanBnIiwiaWF0IjoxNzc5MDM4NjMzLCJleHAiOjE4MTA1NzQ2MzN9.wSV5YE2V15wsTRoD9l4UkaAE0QjoV6pZfG7Kby1rCwc "HTTP/1.1 200 OK"
+19:24:01  DEBUG     receive_response_body.started request=<Request [b'GET']>
+19:24:06  DEBUG     receive_response_body.complete
+19:24:06  DEBUG     response_closed.started
+19:24:06  DEBUG     response_closed.complete
+19:24:06  INFO        HTTP 200
+19:24:06  INFO        size: 258885 bytes (252.8 KB)
+19:24:06  INFO      [PERF] stage=image_fetch  duration_ms=8906  size_bytes=258885
+19:24:06  DEBUG     close.started
+19:24:06  DEBUG     close.complete
+19:24:06  INFO        refinement — keep:0 add:0 remove:0 directions:0
+19:24:06  INFO      --- GPT-4o-mini vision analysis (detail=high) ---
+19:24:06  INFO        vision analysis SKIPPED for FIRST_VISION (profile=MOBILE_MVP_BASELINE — Wave 4.7.0 runtime isolation; room_description unused for FV since 4.6.1)
+19:24:06  INFO      [PERF] stage=vision_analysis  duration_ms=0
+19:24:06  INFO        atmosphere_id: soft_luxury
+19:24:06  INFO        intent: generate  sub_intent: redesign
+19:24:06  INFO      --- transformation: unknown ---
+19:24:06  INFO        addendum: 0 chars  enriched: 55 chars
+19:24:06  INFO      --- edit mode: first_vision ---
+19:24:06  INFO        edit_mode: first_vision  atmosphere: soft_luxury  room: Living Room
+19:24:06  DEBUG     [Prompt Audit] mode=FIRST_VISION  budget=3550  total=2985  est_tokens~746
+  task: 238
+  full_contract: 702
+  openings_anchor: 201
+  source_space: 0
+  design_intel: 1039
+  interior_completeness: 0
+  scene_completion: 0
+  wow_directive: 382
+  natural_enrichment: 217
+  visible_spaces: 0
+  design_direction: 73
+  compact_realism: 133
+19:24:06  INFO      [Prompt Budget] mode=FIRST_VISION  budget=3550  actual=2992  compression_applied=False  removed_sections=[]
+19:24:06  INFO      --- prompt composed (2992 chars, compact_prompts=False) ---
+19:24:06  INFO      [PERF] stage=prompt_composition  duration_ms=0  chars=2992
+19:24:06  DEBUG       prompt:
+SAME APARTMENT PHOTO-EDIT — apply Soft Luxury atmosphere. The photo defines spatial truth: preserve this Living Room's geometry, camera, windows, openings, depth exactly. Restyle only — transform surfaces, materials, lighting, atmosphere.
+CAMERA LOCK — FROZEN: camera position, focal length, vanishing points, horizon line. Room proportions, spatial depth, and all structural lines are fixed. Output must look like a photograph of the SAME apartment, preserving its architectural identity. DO NOT reinterpret geometry. DO NOT redesign architecture. STRUCTURAL LOCK — FORBIDDEN: windows (positions, frames, unblocked, natural light visible), doors, walls, ceiling height, floor plan, structural columns. CHANGE ONLY: surfaces, materials, furniture, lighting, textiles, colours, atmosphere. ATMOSPHERE BOUNDARY — geometry, openings, and topology override atmosphere. Atmosphere is applied last. Any perspective or geometry change is a failure.
+OPENINGS ANCHOR — Bay windows and openings are photographed facts, not design decisions. Do not resize, narrow, simplify, or standardize any opening. Preserve exact proportions from the uploaded photo.
+ATMOSPHERE (Soft Luxury): Refined hospitality luxury emphasizing softness, elegance, tactile richness, and timeless sophistication. — Indulgent, serene, tactile, quietly opulent, feminine-refined, sensorially rich.. [Rosewood / Aman / luxury suite]
+ROOM (Living Room): fluted ivory plaster walls, honed cream marble floor, brushed champagne metal accents. LIGHT: Concealed perimeter cove + silk shade floor lamps; warm evening tone, no ceiling spotlights. ATMOSPHERE STYLE (restyle existing elements): warm bouclé in ivory or blush — plush tactile richness; honed marble or stone — champagne brass accents, premium surface warmth; cashmere or velvet in cream — layered textile softness; oversized ceramic vessel with dried pampas or lunaria; layered silk and bouclé cushions in cream and blush. REALISM: sofa sized to room — not oversized for space; marble floor with correct 3–5 mm grout lines. AVOID: no jewel-tone colour pops, no gold leaf or metallic wallpaper, no asymmetric art gallery wall, Bling luxury, crystal chandelier clichés.
+TRANSFORMATION AMBITION — premium photo-edit of THIS exact apartment, not a new apartment. Apply luxury atmosphere to the photographed space without altering its architecture. Visible architecture stays recognizable: windows, openings, partitions, existing equipment. WOW through: materials, finishes, lighting quality, atmosphere conviction. Decorate this photo — do not recompose.
+NATURAL ENRICHMENT — Enrich the photographed space with light natural layering: plants, floor lamp, cushions, textiles, hospitality accessories, TV if appropriate. Secondary to architecture — enrich, do not recompose.
+DESIGN DIRECTION: Generate the first architectural vision for this space.
+NOT a CGI render. DSLR real estate photograph quality. Real materials, natural light physics, no plastic surfaces, no render feeling.
+19:24:06  DEBUG     tag: ImageWidth (256) - type: long (4) - value: b'\x00\x00\x06\x00'
+19:24:06  DEBUG     tag: ImageLength (257) - type: long (4) - value: b'\x00\x00\x04\x80'
+19:24:06  DEBUG     tag: ExifIFD (34665) - type: long (4) - value: b'\x00\x00\x00>'
+19:24:06  DEBUG     tag: Orientation (274) - type: short (3) - value: b'\x00\x01'
+19:24:06  DEBUG     tag: ImageWidth (256) - type: long (4) - value: b'\x00\x00\x06\x00'
+19:24:06  DEBUG     tag: ImageLength (257) - type: long (4) - value: b'\x00\x00\x04\x80'
+19:24:06  DEBUG     tag: ExifIFD (34665) - type: long (4) - value: b'\x00\x00\x00>'
+19:24:06  DEBUG     tag: Orientation (274) - type: short (3) - value: b'\x00\x01'
+19:24:06  INFO        source image: 1536x1152 mode=RGB size_bytes=258885 -> output_size=1536x1024
+19:24:06  INFO        structural mask: disabled (profile=MOBILE_MVP_BASELINE use_mask=False — Wave 4.7.0 runtime isolation)
+19:24:06  INFO      [PERF] payload_estimate  total_bytes=262512  image_bytes=258885  mask_bytes=0  prompt_bytes=3027
+19:24:06  INFO      --- calling OpenAI images.edit (gpt-image-1, quality=medium, input_fidelity=omitted, size=1536x1024, mask=no, max_attempts=1) ---
+19:24:06  INFO      [OpenAI Attempt 1/1] starting  (backend-controlled; SDK max_retries=0)
+19:24:06  INFO        input_fidelity: OMITTED from API call (profile=MOBILE_MVP_BASELINE)
+19:24:06  DEBUG     Request options: {'method': 'post', 'url': '/images/edits', 'headers': {'Content-Type': 'multipart/form-data'}, 'files': [('image', SerializationIterator(index=0, iterator=SerializationIterator(index=0, iterator=<_io.BytesIO object at 0x000001DC66E0AE30>)))], 'idempotency_key': 'stainless-python-retry-edc2172d-055c-4d1d-bbce-150a42feca08', 'security': {'bearer_auth': True}, 'content': None, 'json_data': {'prompt': "SAME APARTMENT PHOTO-EDIT — apply Soft Luxury atmosphere. The photo defines spatial truth: preserve this Living Room's geometry, camera, windows, openings, depth exactly. Restyle only — transform surfaces, materials, lighting, atmosphere.\nCAMERA LOCK — FROZEN: camera position, focal length, vanishing points, horizon line. Room proportions, spatial depth, and all structural lines are fixed. Output must look like a photograph of the SAME apartment, preserving its architectural identity. DO NOT reinterpret geometry. DO NOT redesign architecture. STRUCTURAL LOCK — FORBIDDEN: windows (positions, frames, unblocked, natural light visible), doors, walls, ceiling height, floor plan, structural columns. CHANGE ONLY: surfaces, materials, furniture, lighting, textiles, colours, atmosphere. ATMOSPHERE BOUNDARY — geometry, openings, and topology override atmosphere. Atmosphere is applied last. Any perspective or geometry change is a failure.\nOPENINGS ANCHOR — Bay windows and openings are photographed facts, not design decisions. Do not resize, narrow, simplify, or standardize any opening. Preserve exact proportions from the uploaded photo.\nATMOSPHERE (Soft Luxury): Refined hospitality luxury emphasizing softness, elegance, tactile richness, and timeless sophistication. — Indulgent, serene, tactile, quietly opulent, feminine-refined, sensorially rich.. [Rosewood / Aman / luxury suite]\nROOM (Living Room): fluted ivory plaster walls, honed cream marble floor, brushed champagne metal accents. LIGHT: Concealed perimeter cove + silk shade floor lamps; warm evening tone, no ceiling spotlights. ATMOSPHERE STYLE (restyle existing elements): warm bouclé in ivory or blush — plush tactile richness; honed marble or stone — champagne brass accents, premium surface warmth; cashmere or velvet in cream — layered textile softness; oversized ceramic vessel with dried pampas or lunaria; layered silk and bouclé cushions in cream and blush. REALISM: sofa sized to room — not oversized for space; marble floor with correct 3–5 mm grout lines. AVOID: no jewel-tone colour pops, no gold leaf or metallic wallpaper, no asymmetric art gallery wall, Bling luxury, crystal chandelier clichés.\nTRANSFORMATION AMBITION — premium photo-edit of THIS exact apartment, not a new apartment. Apply luxury atmosphere to the photographed space without altering its architecture. Visible architecture stays recognizable: windows, openings, partitions, existing equipment. WOW through: materials, finishes, lighting quality, atmosphere conviction. Decorate this photo — do not recompose.\nNATURAL ENRICHMENT — Enrich the photographed space with light natural layering: plants, floor lamp, cushions, textiles, hospitality accessories, TV if appropriate. Secondary to architecture — enrich, do not recompose.\nDESIGN DIRECTION: Generate the first architectural vision for this space.\nNOT a CGI render. DSLR real estate photograph quality. Real materials, natural light physics, no plastic surfaces, no render feeling.", 'model': 'gpt-image-1', 'n': 1, 'quality': 'medium', 'size': '1536x1024'}}
+19:24:07  DEBUG     Sending HTTP Request: POST https://api.openai.com/v1/images/edits
+19:24:07  DEBUG     connect_tcp.started host='api.openai.com' port=443 local_address=None timeout=5.0 socket_options=None
+19:24:08  DEBUG     connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001DC67809DE0>
+19:24:08  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000001DC66A9F540> server_hostname='api.openai.com' timeout=5.0
+19:24:09  DEBUG     start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000001DC67809990>
+19:24:09  DEBUG     send_request_headers.started request=<Request [b'POST']>
+19:24:09  DEBUG     send_request_headers.complete
+19:24:09  DEBUG     send_request_body.started request=<Request [b'POST']>
+19:24:14  DEBUG     send_request_body.complete
+19:24:14  DEBUG     receive_response_headers.started request=<Request [b'POST']>
+19:25:14  DEBUG     receive_response_headers.failed exception=RemoteProtocolError('Server disconnected without sending a response.')
+19:25:14  DEBUG     response_closed.started
+19:25:14  DEBUG     response_closed.complete
+19:25:14  DEBUG     Encountered Exception
+Traceback (most recent call last):
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_transports\default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_transports\default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\http11.py", line 136, in handle_async_request
+    raise exc
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\http11.py", line 231, in _receive_event
+    raise RemoteProtocolError(msg)
+httpcore.RemoteProtocolError: Server disconnected without sending a response.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\openai\_base_client.py", line 1648, in request
+    response = await self._send_request(
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\openai\_client.py", line 946, in _send_request
+    return await self._send_with_auth_retry(request, stream=stream, **kwargs)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\openai\_client.py", line 924, in _send_with_auth_retry
+    response = await super()._send_request(request, stream=stream, **kwargs)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\openai\_base_client.py", line 1571, in _send_request
+    return await self._client.send(request, stream=stream, **kwargs)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_transports\default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+  File "C:\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_transports\default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.RemoteProtocolError: Server disconnected without sending a response.
+19:25:14  DEBUG     Raising connection error
+19:25:14  ERROR     [OpenAI Attempt 1/1] final failure in 68.7s  (APIConnectionError: Connection error.)  verdict=TRANSIENT  reason=openai-connection-error  — all attempts exhausted
+19:25:14  ERROR     Traceback (most recent call last):
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_transports\default.py", line 101, in map_httpcore_exceptions
+    yield
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_transports\default.py", line 394, in handle_async_request
+    resp = await self._pool.handle_async_request(req)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\connection_pool.py", line 256, in handle_async_request
+    raise exc from None
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\connection_pool.py", line 236, in handle_async_request
+    response = await connection.handle_async_request(
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\connection.py", line 103, in handle_async_request
+    return await self._connection.handle_async_request(request)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\http11.py", line 136, in handle_async_request
+    raise exc
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\http11.py", line 106, in handle_async_request
+    ) = await self._receive_response_headers(**kwargs)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\http11.py", line 177, in _receive_response_headers
+    event = await self._receive_event(timeout=timeout)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpcore\_async\http11.py", line 231, in _receive_event
+    raise RemoteProtocolError(msg)
+httpcore.RemoteProtocolError: Server disconnected without sending a response.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\openai\_base_client.py", line 1648, in request
+    response = await self._send_request(
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\openai\_client.py", line 946, in _send_request
+    return await self._send_with_auth_retry(request, stream=stream, **kwargs)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\openai\_client.py", line 924, in _send_with_auth_retry
+    response = await super()._send_request(request, stream=stream, **kwargs)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\openai\_base_client.py", line 1571, in _send_request
+    return await self._client.send(request, stream=stream, **kwargs)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_transports\default.py", line 393, in handle_async_request
+    with map_httpcore_exceptions():
+  File "C:\Python310\lib\contextlib.py", line 153, in __exit__
+    self.gen.throw(typ, value, traceback)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\httpx\_transports\default.py", line 118, in map_httpcore_exceptions
+    raise mapped_exc(message) from exc
+httpx.RemoteProtocolError: Server disconnected without sending a response.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Projects\AIHomeArchitect\backend\main.py", line 793, in generate
+    response = await openai.images.edit(**edit_kwargs)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\openai\resources\images.py", line 1575, in edit
+    return await self._post(
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\openai\_base_client.py", line 1931, in post
+    return await self.request(cast_to, opts, stream=stream, stream_cls=stream_cls)
+  File "C:\Projects\AIHomeArchitect\backend\.venv\lib\site-packages\openai\_base_client.py", line 1683, in request
+    raise APIConnectionError(request=request) from err
+openai.APIConnectionError: Connection error.
+
+19:25:14  WARNING   GenerationError  code=OPENAI_FAILED  retryable=True  request_id=c3b14ed6ddec1ecf6f944adf68067d58
