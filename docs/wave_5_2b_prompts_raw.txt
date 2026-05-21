@@ -1,0 +1,431 @@
+WAVE 5.2b — REAL FINAL PROMPTS (composer v1 vs composer_v2)
+Complex benchmark apartment: sliding door + balcony + glass partition + visible rear-room window.
+
+structural_identity clause (330 chars):
+  STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+structural_negative_anchors (282 chars):
+  STRUCTURAL NEGATIVE ANCHORS — Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.
+
+
+====================================================================================================
+SCENARIO A — V1 Warm Modern (complex apartment)
+====================================================================================================
+
+--- INPUTS (identical for both composers, except internal routing) ---
+{
+  "style_label": "Warm Modern \u00b7 Vision 1",
+  "room_type": "Living Room",
+  "room_description": "Living room with a large floor-to-ceiling sliding glass door on the left wall opening to a balcony with vertical louvered shutters visible. Eye-level single-point perspective, medium spatial depth. Black-framed glass partition on the right separating the living zone from a rear room visible through the partition; a window is visible on the rear wall of the back room. Standard ceiling height. Herri\u2026[trunc display]",
+  "user_instruction": "",
+  "iteration": 1,
+  "secondary_visible_spaces": [
+    "kitchen"
+  ],
+  "compact_prompts": false,
+  "structural_identity": "STRUCTURAL IDENTITY \u2014 this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.",
+  "source_continuity": "",
+  "structural_negative_anchors": "STRUCTURAL NEGATIVE ANCHORS \u2014 Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.",
+  "authorized_user_changes": ""
+}
+
+--- COMPOSER_V1 FULL PROMPT ---
+size=3509 chars
+section breakdown:
+  [ 3509]  SAME APARTMENT PHOTO-EDIT — apply Warm Modern atmosphere. Th
+
+>>> RAW v1:
+SAME APARTMENT PHOTO-EDIT — apply Warm Modern atmosphere. The photo defines spatial truth: preserve this Living Room's geometry, camera, windows, openings, depth exactly. Restyle only — transform surfaces, materials, lighting, atmosphere.
+CAMERA LOCK — FROZEN: camera position, focal length, vanishing points, horizon line. Room proportions, spatial depth, and all structural lines are fixed. Output must look like a photograph of the SAME apartment, preserving its architectural identity. DO NOT reinterpret geometry. DO NOT redesign architecture. STRUCTURAL LOCK — FORBIDDEN: windows (positions, frames, unblocked, natural light visible), doors, walls, ceiling height, floor plan, structural columns. CHANGE ONLY: surfaces, materials, furniture, lighting, textiles, colours, atmosphere. ATMOSPHERE BOUNDARY — geometry, openings, and topology override atmosphere. Atmosphere is applied last. Any perspective or geometry change is a failure.
+OPENINGS ANCHOR — Bay windows and openings are photographed facts, not design decisions. Do not resize, narrow, simplify, or standardize any opening. Preserve exact proportions from the uploaded photo.
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+STRUCTURAL NEGATIVE ANCHORS — Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.
+ARCHITECTURAL ANCHORS — LOCKED: glass partition; partition; spatial depth. Preserve these unchanged in the output.
+ATMOSPHERE (Warm Modern): Warm contemporary luxury rooted in emotional comfort, hospitality, softness, and believable urban premium living. — Comforting, refined, welcoming, calm, premium, elegant but livable.. [Boutique hotel / premium urban residence]
+ROOM (Living Room): wide-plank European oak floor, warm sand plaster walls, travertine slab surfaces. LIGHT: Concealed ceiling cove + tungsten-glow table lamps; warm evening tone. ATMOSPHERE STYLE (restyle existing elements): bouclé in oat or camel — warm curved tactile richness; travertine — warm stone surface depth with brass or oak accent; warm linen — oak-toned textural warmth; oversized ceramic vessel on floating oak shelf; floor-length warm linen curtains. REALISM: sofa at residential scale — not model-set proportions; furniture legs visible and grounded on floor. AVOID: no cold grey palette, no chrome hardware, no matching 3-piece suite, Cold minimalism, sterile white interiors.
+TRANSFORMATION AMBITION — Visible architecture stays recognizable: windows, openings, partitions, existing equipment. WOW through: materials, finishes, lighting quality, atmosphere conviction.
+NATURAL ENRICHMENT — Enrich the photographed space with light natural layering. Secondary to architecture — enrich, do not recompose.
+VISIBLE SPACES (maintain atmosphere across entire scene):
+VISIBLE KITCHEN: pale oak cabinetry, thick travertine countertop; oak cabinetry palette echoes dining furniture visible beyond; travertine floor or countertop continues.
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+<<< end v1
+
+
+--- COMPOSER_V2 FULL PROMPT ---
+size=3509 chars
+section breakdown:
+  [ 3509]  SAME APARTMENT PHOTO-EDIT — apply Warm Modern atmosphere. Th
+
+>>> RAW v2:
+SAME APARTMENT PHOTO-EDIT — apply Warm Modern atmosphere. The photo defines spatial truth: preserve this Living Room's geometry, camera, windows, openings, depth exactly. Restyle only — transform surfaces, materials, lighting, atmosphere.
+CAMERA LOCK — FROZEN: camera position, focal length, vanishing points, horizon line. Room proportions, spatial depth, and all structural lines are fixed. Output must look like a photograph of the SAME apartment, preserving its architectural identity. DO NOT reinterpret geometry. DO NOT redesign architecture. STRUCTURAL LOCK — FORBIDDEN: windows (positions, frames, unblocked, natural light visible), doors, walls, ceiling height, floor plan, structural columns. CHANGE ONLY: surfaces, materials, furniture, lighting, textiles, colours, atmosphere. ATMOSPHERE BOUNDARY — geometry, openings, and topology override atmosphere. Atmosphere is applied last. Any perspective or geometry change is a failure.
+OPENINGS ANCHOR — Bay windows and openings are photographed facts, not design decisions. Do not resize, narrow, simplify, or standardize any opening. Preserve exact proportions from the uploaded photo.
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+STRUCTURAL NEGATIVE ANCHORS — Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.
+ARCHITECTURAL ANCHORS — LOCKED: glass partition; partition; spatial depth. Preserve these unchanged in the output.
+ATMOSPHERE (Warm Modern): Warm contemporary luxury rooted in emotional comfort, hospitality, softness, and believable urban premium living. — Comforting, refined, welcoming, calm, premium, elegant but livable.. [Boutique hotel / premium urban residence]
+ROOM (Living Room): wide-plank European oak floor, warm sand plaster walls, travertine slab surfaces. LIGHT: Concealed ceiling cove + tungsten-glow table lamps; warm evening tone. ATMOSPHERE STYLE (restyle existing elements): bouclé in oat or camel — warm curved tactile richness; travertine — warm stone surface depth with brass or oak accent; warm linen — oak-toned textural warmth; oversized ceramic vessel on floating oak shelf; floor-length warm linen curtains. REALISM: sofa at residential scale — not model-set proportions; furniture legs visible and grounded on floor. AVOID: no cold grey palette, no chrome hardware, no matching 3-piece suite, Cold minimalism, sterile white interiors.
+TRANSFORMATION AMBITION — Visible architecture stays recognizable: windows, openings, partitions, existing equipment. WOW through: materials, finishes, lighting quality, atmosphere conviction.
+NATURAL ENRICHMENT — Enrich the photographed space with light natural layering. Secondary to architecture — enrich, do not recompose.
+VISIBLE SPACES (maintain atmosphere across entire scene):
+VISIBLE KITCHEN: pale oak cabinetry, thick travertine countertop; oak cabinetry palette echoes dining furniture visible beyond; travertine floor or countertop continues.
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+<<< end v2
+
+--- DELTA ---
+v1:  3509 chars  →  v2:  3509 chars   (+0 chars; +0.0%)
+
+
+====================================================================================================
+SCENARIO B — V1 Japandi Calm (complex apartment)
+====================================================================================================
+
+--- INPUTS (identical for both composers, except internal routing) ---
+{
+  "style_label": "Japandi Calm \u00b7 Vision 1",
+  "room_type": "Living Room",
+  "room_description": "Living room with a large floor-to-ceiling sliding glass door on the left wall opening to a balcony with vertical louvered shutters visible. Eye-level single-point perspective, medium spatial depth. Black-framed glass partition on the right separating the living zone from a rear room visible through the partition; a window is visible on the rear wall of the back room. Standard ceiling height. Herri\u2026[trunc display]",
+  "user_instruction": "",
+  "iteration": 1,
+  "secondary_visible_spaces": [
+    "kitchen"
+  ],
+  "compact_prompts": false,
+  "structural_identity": "STRUCTURAL IDENTITY \u2014 this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.",
+  "source_continuity": "",
+  "structural_negative_anchors": "STRUCTURAL NEGATIVE ANCHORS \u2014 Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.",
+  "authorized_user_changes": ""
+}
+
+--- COMPOSER_V1 FULL PROMPT ---
+size=3486 chars
+section breakdown:
+  [ 3486]  SAME APARTMENT PHOTO-EDIT — apply Japandi Calm atmosphere. T
+
+>>> RAW v1:
+SAME APARTMENT PHOTO-EDIT — apply Japandi Calm atmosphere. The photo defines spatial truth: preserve this Living Room's geometry, camera, windows, openings, depth exactly. Restyle only — transform surfaces, materials, lighting, atmosphere.
+CAMERA LOCK — FROZEN: camera position, focal length, vanishing points, horizon line. Room proportions, spatial depth, and all structural lines are fixed. Output must look like a photograph of the SAME apartment, preserving its architectural identity. DO NOT reinterpret geometry. DO NOT redesign architecture. STRUCTURAL LOCK — FORBIDDEN: windows (positions, frames, unblocked, natural light visible), doors, walls, ceiling height, floor plan, structural columns. CHANGE ONLY: surfaces, materials, furniture, lighting, textiles, colours, atmosphere. ATMOSPHERE BOUNDARY — geometry, openings, and topology override atmosphere. Atmosphere is applied last. Any perspective or geometry change is a failure.
+OPENINGS ANCHOR — Bay windows and openings are photographed facts, not design decisions. Do not resize, narrow, simplify, or standardize any opening. Preserve exact proportions from the uploaded photo.
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+STRUCTURAL NEGATIVE ANCHORS — Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.
+ARCHITECTURAL ANCHORS — LOCKED: glass partition; partition; spatial depth. Preserve these unchanged in the output.
+ATMOSPHERE (Japandi Calm): Japanese restraint blended with Scandinavian softness and emotional calm. — Still, serene, grounded, quietly refined, breathable, unhurried.. [Quiet luxury boutique hospitality]
+ROOM (Living Room): pale ash or birch floor, wabi-sabi plaster walls in off-white or putty, dark charcoal ceramic accents. LIGHT: Paper lantern pendant + concealed warm floor slot; no harsh downlights. ATMOSPHERE STYLE (restyle existing elements): natural linen in stone or fog tones — unhurried tactile calm; wabi-sabi ceramic or ash — raw surface honesty; natural rush or jute — organic textural warmth; single branch in handmade ceramic vase; one framed Japanese ink artwork. REALISM: sofa low enough to feel grounded — 40–45 cm seat height; empty floor space is deliberate, not absent. AVOID: no cluttered surfaces, no patterned textiles, no warm-orange wood tones, Empty sterile minimalism, sci-fi white spaces.
+TRANSFORMATION AMBITION — Visible architecture stays recognizable: windows, openings, partitions, existing equipment. WOW through: materials, finishes, lighting quality, atmosphere conviction.
+NATURAL ENRICHMENT — Enrich the photographed space with light natural layering. Secondary to architecture — enrich, do not recompose.
+VISIBLE SPACES (maintain atmosphere across entire scene):
+VISIBLE KITCHEN: pale ash cabinetry, honed concrete or raw stone countertop; ash cabinet tone flows into dining furniture; stone counter colour echoes dining table surface.
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+<<< end v1
+
+
+--- COMPOSER_V2 FULL PROMPT ---
+size=3486 chars
+section breakdown:
+  [ 3486]  SAME APARTMENT PHOTO-EDIT — apply Japandi Calm atmosphere. T
+
+>>> RAW v2:
+SAME APARTMENT PHOTO-EDIT — apply Japandi Calm atmosphere. The photo defines spatial truth: preserve this Living Room's geometry, camera, windows, openings, depth exactly. Restyle only — transform surfaces, materials, lighting, atmosphere.
+CAMERA LOCK — FROZEN: camera position, focal length, vanishing points, horizon line. Room proportions, spatial depth, and all structural lines are fixed. Output must look like a photograph of the SAME apartment, preserving its architectural identity. DO NOT reinterpret geometry. DO NOT redesign architecture. STRUCTURAL LOCK — FORBIDDEN: windows (positions, frames, unblocked, natural light visible), doors, walls, ceiling height, floor plan, structural columns. CHANGE ONLY: surfaces, materials, furniture, lighting, textiles, colours, atmosphere. ATMOSPHERE BOUNDARY — geometry, openings, and topology override atmosphere. Atmosphere is applied last. Any perspective or geometry change is a failure.
+OPENINGS ANCHOR — Bay windows and openings are photographed facts, not design decisions. Do not resize, narrow, simplify, or standardize any opening. Preserve exact proportions from the uploaded photo.
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+STRUCTURAL NEGATIVE ANCHORS — Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.
+ARCHITECTURAL ANCHORS — LOCKED: glass partition; partition; spatial depth. Preserve these unchanged in the output.
+ATMOSPHERE (Japandi Calm): Japanese restraint blended with Scandinavian softness and emotional calm. — Still, serene, grounded, quietly refined, breathable, unhurried.. [Quiet luxury boutique hospitality]
+ROOM (Living Room): pale ash or birch floor, wabi-sabi plaster walls in off-white or putty, dark charcoal ceramic accents. LIGHT: Paper lantern pendant + concealed warm floor slot; no harsh downlights. ATMOSPHERE STYLE (restyle existing elements): natural linen in stone or fog tones — unhurried tactile calm; wabi-sabi ceramic or ash — raw surface honesty; natural rush or jute — organic textural warmth; single branch in handmade ceramic vase; one framed Japanese ink artwork. REALISM: sofa low enough to feel grounded — 40–45 cm seat height; empty floor space is deliberate, not absent. AVOID: no cluttered surfaces, no patterned textiles, no warm-orange wood tones, Empty sterile minimalism, sci-fi white spaces.
+TRANSFORMATION AMBITION — Visible architecture stays recognizable: windows, openings, partitions, existing equipment. WOW through: materials, finishes, lighting quality, atmosphere conviction.
+NATURAL ENRICHMENT — Enrich the photographed space with light natural layering. Secondary to architecture — enrich, do not recompose.
+VISIBLE SPACES (maintain atmosphere across entire scene):
+VISIBLE KITCHEN: pale ash cabinetry, honed concrete or raw stone countertop; ash cabinet tone flows into dining furniture; stone counter colour echoes dining table surface.
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+<<< end v2
+
+--- DELTA ---
+v1:  3486 chars  →  v2:  3486 chars   (+0 chars; +0.0%)
+
+
+====================================================================================================
+SCENARIO C — V1 Bali Sanctuary (complex apartment)
+====================================================================================================
+
+--- INPUTS (identical for both composers, except internal routing) ---
+{
+  "style_label": "Bali Sanctuary \u00b7 Vision 1",
+  "room_type": "Living Room",
+  "room_description": "Living room with a large floor-to-ceiling sliding glass door on the left wall opening to a balcony with vertical louvered shutters visible. Eye-level single-point perspective, medium spatial depth. Black-framed glass partition on the right separating the living zone from a rear room visible through the partition; a window is visible on the rear wall of the back room. Standard ceiling height. Herri\u2026[trunc display]",
+  "user_instruction": "",
+  "iteration": 1,
+  "secondary_visible_spaces": [
+    "kitchen"
+  ],
+  "compact_prompts": false,
+  "structural_identity": "STRUCTURAL IDENTITY \u2014 this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.",
+  "source_continuity": "",
+  "structural_negative_anchors": "STRUCTURAL NEGATIVE ANCHORS \u2014 Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.",
+  "authorized_user_changes": ""
+}
+
+--- COMPOSER_V1 FULL PROMPT ---
+size=3371 chars
+section breakdown:
+  [ 3371]  SAME APARTMENT PHOTO-EDIT — apply Bali Sanctuary atmosphere.
+
+>>> RAW v1:
+SAME APARTMENT PHOTO-EDIT — apply Bali Sanctuary atmosphere. The photo defines spatial truth: preserve this Living Room's geometry, camera, windows, openings, depth exactly. Restyle only — transform surfaces, materials, lighting, atmosphere.
+CAMERA LOCK — FROZEN: camera position, focal length, vanishing points, horizon line. Room proportions, spatial depth, and all structural lines are fixed. Output must look like a photograph of the SAME apartment, preserving its architectural identity. DO NOT reinterpret geometry. DO NOT redesign architecture. STRUCTURAL LOCK — FORBIDDEN: windows (positions, frames, unblocked, natural light visible), doors, walls, ceiling height, floor plan, structural columns. CHANGE ONLY: surfaces, materials, furniture, lighting, textiles, colours, atmosphere. ATMOSPHERE BOUNDARY — geometry, openings, and topology override atmosphere. Atmosphere is applied last. Any perspective or geometry change is a failure.
+OPENINGS ANCHOR — Bay windows and openings are photographed facts, not design decisions. Do not resize, narrow, simplify, or standardize any opening. Preserve exact proportions from the uploaded photo.
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+STRUCTURAL NEGATIVE ANCHORS — Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.
+ARCHITECTURAL ANCHORS — LOCKED: glass partition; partition; spatial depth. Preserve these unchanged in the output.
+ATMOSPHERE (Bali Sanctuary): Luxury tropical sanctuary inspired by refined Balinese hospitality. — Sacred, immersive, lush, warm, ceremonially refined, deeply restful.. [Luxury Bali resort villa]
+ROOM (Living Room): volcanic grey stone or polished terrazzo floor, reclaimed teak joinery and ceiling structure, handwoven cotton or linen upholstery. LIGHT: Concealed warm uplights behind stone wall feature + rattan or brass pendant lantern. ATMOSPHERE STYLE (restyle existing elements): teak or tropical hardwood with cotton in indigo or stone — artisan warmth; volcanic stone or carved timber — spiritual surface depth; woven rattan or handwoven textile — artisan floor-level warmth; single large stone or clay vessel with tropical foliage; woven wall hanging in natural undyed textile. REALISM: sofa low — 40–45 cm — Balinese floor-culture scale; stone floor with correct texture — not hyper-polished CGI. AVOID: no bamboo furniture, no bright tropical colour, no tourist ornament collection, Tiki bar aesthetics, beach resort kitsch.
+TRANSFORMATION AMBITION — Visible architecture stays recognizable: windows, openings, partitions, existing equipment. WOW through: materials, finishes, lighting quality, atmosphere conviction.
+NATURAL ENRICHMENT — Enrich the photographed space with light natural layering. Secondary to architecture — enrich, do not recompose.
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+<<< end v1
+
+
+--- COMPOSER_V2 FULL PROMPT ---
+size=3371 chars
+section breakdown:
+  [ 3371]  SAME APARTMENT PHOTO-EDIT — apply Bali Sanctuary atmosphere.
+
+>>> RAW v2:
+SAME APARTMENT PHOTO-EDIT — apply Bali Sanctuary atmosphere. The photo defines spatial truth: preserve this Living Room's geometry, camera, windows, openings, depth exactly. Restyle only — transform surfaces, materials, lighting, atmosphere.
+CAMERA LOCK — FROZEN: camera position, focal length, vanishing points, horizon line. Room proportions, spatial depth, and all structural lines are fixed. Output must look like a photograph of the SAME apartment, preserving its architectural identity. DO NOT reinterpret geometry. DO NOT redesign architecture. STRUCTURAL LOCK — FORBIDDEN: windows (positions, frames, unblocked, natural light visible), doors, walls, ceiling height, floor plan, structural columns. CHANGE ONLY: surfaces, materials, furniture, lighting, textiles, colours, atmosphere. ATMOSPHERE BOUNDARY — geometry, openings, and topology override atmosphere. Atmosphere is applied last. Any perspective or geometry change is a failure.
+OPENINGS ANCHOR — Bay windows and openings are photographed facts, not design decisions. Do not resize, narrow, simplify, or standardize any opening. Preserve exact proportions from the uploaded photo.
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+STRUCTURAL NEGATIVE ANCHORS — Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.
+ARCHITECTURAL ANCHORS — LOCKED: glass partition; partition; spatial depth. Preserve these unchanged in the output.
+ATMOSPHERE (Bali Sanctuary): Luxury tropical sanctuary inspired by refined Balinese hospitality. — Sacred, immersive, lush, warm, ceremonially refined, deeply restful.. [Luxury Bali resort villa]
+ROOM (Living Room): volcanic grey stone or polished terrazzo floor, reclaimed teak joinery and ceiling structure, handwoven cotton or linen upholstery. LIGHT: Concealed warm uplights behind stone wall feature + rattan or brass pendant lantern. ATMOSPHERE STYLE (restyle existing elements): teak or tropical hardwood with cotton in indigo or stone — artisan warmth; volcanic stone or carved timber — spiritual surface depth; woven rattan or handwoven textile — artisan floor-level warmth; single large stone or clay vessel with tropical foliage; woven wall hanging in natural undyed textile. REALISM: sofa low — 40–45 cm — Balinese floor-culture scale; stone floor with correct texture — not hyper-polished CGI. AVOID: no bamboo furniture, no bright tropical colour, no tourist ornament collection, Tiki bar aesthetics, beach resort kitsch.
+TRANSFORMATION AMBITION — Visible architecture stays recognizable: windows, openings, partitions, existing equipment. WOW through: materials, finishes, lighting quality, atmosphere conviction.
+NATURAL ENRICHMENT — Enrich the photographed space with light natural layering. Secondary to architecture — enrich, do not recompose.
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+<<< end v2
+
+--- DELTA ---
+v1:  3371 chars  →  v2:  3371 chars   (+0 chars; +0.0%)
+
+
+====================================================================================================
+SCENARIO D — V2 refinement 'make it warmer' (complex apartment)
+====================================================================================================
+
+--- INPUTS (identical for both composers, except internal routing) ---
+{
+  "style_label": "Warm Modern \u00b7 Vision 2",
+  "room_type": "Living Room",
+  "room_description": "Living room with a large floor-to-ceiling sliding glass door on the left wall opening to a balcony with vertical louvered shutters visible. Eye-level single-point perspective, medium spatial depth. Black-framed glass partition on the right separating the living zone from a rear room visible through the partition; a window is visible on the rear wall of the back room. Standard ceiling height. Herri\u2026[trunc display]",
+  "user_instruction": "make it warmer",
+  "iteration": 2,
+  "secondary_visible_spaces": [
+    "kitchen"
+  ],
+  "compact_prompts": false,
+  "structural_identity": "STRUCTURAL IDENTITY \u2014 this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.",
+  "source_continuity": "",
+  "structural_negative_anchors": "STRUCTURAL NEGATIVE ANCHORS \u2014 Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.",
+  "authorized_user_changes": ""
+}
+  history (truncated display): [
+  {
+    "role": "ai",
+    "content": "Your space is ready. Generating your first Warm Modern vision now."
+  },
+  {
+    "role": "ai",
+    "content": "Here is your first Warm Modern vision \u2014 warmer materials, layered lighting, hospitality presence. What would you like to refine?"
+  }
+]…
+
+
+--- COMPOSER_V1 FULL PROMPT ---
+size=3391 chars
+section breakdown:
+  [ 3391]  SAME APARTMENT CONTINUATION — REFINE this Living Room — Warm
+
+>>> RAW v1:
+SAME APARTMENT CONTINUATION — REFINE this Living Room — Warm Modern. Incremental evolution only: evolve materials, lighting, colour and textiles; do not reimagine or replace the design. Direction: make it warmer.
+SAME APARTMENT — ATMOSPHERE SWITCH: apply this atmosphere to THIS exact apartment. DO NOT generate a new apartment in this style. FROZEN: camera, focal length, vanishing points, proportions, walls, windows, doors, ceiling — locked. TOPOLOGY LOCKED: zone count, spatial openness, multi-zone visibility, depth relationships — non-negotiable. Do not collapse multi-zone layouts. Do not flatten spatial depth. CHANGE ONLY: materials, surfaces, lighting, colours, textiles, styling. Simplification of topology or geometry = failure. ROOM LOCK: preserve TV wall or fireplace position, sofa zone, all window orientations, open-floor-to-furnished ratio. ARCHITECTURAL ANCHORS — LOCKED: glass partition; partition; spatial depth. Preserve these unchanged in the output. ATMOSPHERE BOUNDARY — geometry and openings override atmosphere. Functional zone purposes are non-negotiable. Topology > camera > atmosphere.
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+STRUCTURAL NEGATIVE ANCHORS — Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.
+SOURCE SPACE: Living room with a large floor-to-ceiling sliding glass door on the left wall opening to a balcony with vertical louvered shutters visible. Eye-level single-point perspective, medium spatial depth. Black-framed glass partition on the right separating the living zone from a rear room visible through the partition; a window is visible on the rear wall of the back room. Standard ceiling height. Herringbone wood floor throughout. Open kitchen visible on the right beyond the partition.
+ATMOSPHERE (Warm Modern): Warm contemporary luxury rooted in emotional comfort, hospitality, softness, and believable urban premium living. — Comforting, refined, welcoming, calm, premium, elegant but livable.. [Boutique hotel / premium urban residence]
+ROOM (Living Room): wide-plank European oak floor, warm sand plaster walls, travertine slab surfaces. LIGHT: Concealed ceiling cove + tungsten-glow table lamps; warm evening tone. ATMOSPHERE STYLE (restyle existing elements): bouclé in oat or camel — warm curved tactile richness; travertine — warm stone surface depth with brass or oak accent; warm linen — oak-toned textural warmth; oversized ceramic vessel on floating oak shelf; floor-length warm linen curtains. REALISM: sofa at residential scale — not model-set proportions; furniture legs visible and grounded on floor. AVOID: no cold grey palette, no chrome hardware, no matching 3-piece suite, Cold minimalism, sterile white interiors.
+Layered lighting, complete furnishing composition, emotionally warm atmosphere.
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+<<< end v1
+
+
+--- COMPOSER_V2 FULL PROMPT ---
+size=2754 chars
+section breakdown:
+  [  212]  SAME APARTMENT CONTINUATION — REFINE this Living Room — Warm
+  [  805]  Continue evolving the current vision of the same apartment —
+  [  330]  STRUCTURAL IDENTITY — this apartment already contains these
+  [ 1235]  STYLE TRANSFORMATION — re-surface the photographed architect
+  [  132]  NOT a CGI render. DSLR real estate photo. Real materials. Fu
+  [   30]  USER DIRECTION: make it warmer
+
+>>> RAW v2:
+SAME APARTMENT CONTINUATION — REFINE this Living Room — Warm Modern. Incremental evolution only: evolve materials, lighting, colour and textiles; do not reimagine or replace the design. Direction: make it warmer.
+
+Continue evolving the current vision of the same apartment — preserve every architectural fact from the original photograph. SAME APARTMENT PHOTO-EDIT — apply the chosen atmosphere to THIS exact photographed apartment, not a new apartment. FROZEN: camera, perspective, room proportions, ceiling height, and the floor plan. STRUCTURAL — every photographed opening (windows, sliding doors, balcony access, glass partitions, archways, half-walls, and any opening visible through a partition into an adjacent or rear zone), multi-zone visibility, open-plan continuity, and spatial depth all stay exactly as photographed; none may be narrowed, enclosed, walled off, or converted into a wall surface. CHANGE ONLY: surfaces, materials, furniture footprint styling, lighting, textiles, colours, decor, atmosphere.
+
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+
+STYLE TRANSFORMATION — re-surface the photographed architecture and restyle its existing furniture footprint. The DNA below is material / lighting / decor language, not architectural instructions.
+ATMOSPHERE (Warm Modern): Warm contemporary luxury rooted in emotional comfort, hospitality, softness, and believable urban premium living. — Comforting, refined, welcoming, calm, premium, elegant but livable.. [Boutique hotel / premium urban residence]
+ROOM (Living Room): wide-plank European oak floor, warm sand plaster walls, travertine slab surfaces. LIGHT: Concealed ceiling cove + tungsten-glow table lamps; warm evening tone. ATMOSPHERE STYLE (restyle existing elements): bouclé in oat or camel — warm curved tactile richness; travertine — warm stone surface depth with brass or oak accent; warm linen — oak-toned textural warmth; oversized ceramic vessel on floating oak shelf; floor-length warm linen curtains. REALISM: sofa at residential scale — not model-set proportions; furniture legs visible and grounded on floor. AVOID: no cold grey palette, no chrome hardware, no matching 3-piece suite, Cold minimalism, sterile white interiors.
+AMBITION — premium hospitality-grade restyling. Decorate this photo; do not recompose it.
+
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+
+USER DIRECTION: make it warmer
+<<< end v2
+
+--- DELTA ---
+v1:  3391 chars  →  v2:  2754 chars   (-637 chars; -18.8%)
+
+
+====================================================================================================
+SCENARIO E — V2 atmosphere switch Soft Luxury → Japandi (complex)
+====================================================================================================
+
+--- INPUTS (identical for both composers, except internal routing) ---
+{
+  "style_label": "Japandi Calm \u00b7 Vision 2",
+  "room_type": "Living Room",
+  "room_description": "Living room with a large floor-to-ceiling sliding glass door on the left wall opening to a balcony with vertical louvered shutters visible. Eye-level single-point perspective, medium spatial depth. Black-framed glass partition on the right separating the living zone from a rear room visible through the partition; a window is visible on the rear wall of the back room. Standard ceiling height. Herri\u2026[trunc display]",
+  "user_instruction": "switch to Japandi Calm",
+  "iteration": 2,
+  "secondary_visible_spaces": [
+    "kitchen"
+  ],
+  "compact_prompts": false,
+  "structural_identity": "STRUCTURAL IDENTITY \u2014 this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.",
+  "source_continuity": "",
+  "structural_negative_anchors": "STRUCTURAL NEGATIVE ANCHORS \u2014 Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.",
+  "authorized_user_changes": "AUTHORIZED USER CHANGES \u2014 Visibly apply the user's explicit request: \"switch to Japandi Calm\". It overrides atmosphere/furniture/decor/room-function defaults and must be clearly present. Keep openings, bay window, facade and perspective fixed unless the user explicitly changed them."
+}
+  history (truncated display): [
+  {
+    "role": "ai",
+    "content": "Your space is ready. Generating your first Soft Luxury vision now."
+  },
+  {
+    "role": "ai",
+    "content": "Here is your first Soft Luxury vision \u2014 warmer materials, layered lighting, hospitality presence. What would you like to refine?"
+  }
+]…
+
+
+--- COMPOSER_V1 FULL PROMPT ---
+size=3444 chars
+section breakdown:
+  [ 3444]  SAME APARTMENT CONTINUATION — REFINE this Living Room — Japa
+
+>>> RAW v1:
+SAME APARTMENT CONTINUATION — REFINE this Living Room — Japandi Calm. Incremental evolution only: evolve materials, lighting, colour and textiles; do not reimagine or replace the design. Direction: switch to Japandi Calm.
+SAME APARTMENT — ATMOSPHERE SWITCH: apply this atmosphere to THIS exact apartment. DO NOT generate a new apartment in this style. FROZEN: camera, focal length, vanishing points, proportions, walls, windows, doors, ceiling — locked. TOPOLOGY LOCKED: zone count, spatial openness, multi-zone visibility, depth relationships — non-negotiable. Do not collapse multi-zone layouts. Do not flatten spatial depth. CHANGE ONLY: materials, surfaces, lighting, colours, textiles, styling. Simplification of topology or geometry = failure. ROOM LOCK: preserve TV wall or fireplace position, sofa zone, all window orientations, open-floor-to-furnished ratio. ARCHITECTURAL ANCHORS — LOCKED: glass partition; partition; spatial depth. Preserve these unchanged in the output. ATMOSPHERE BOUNDARY — geometry and openings override atmosphere. Functional zone purposes are non-negotiable. Topology > camera > atmosphere.
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+STRUCTURAL NEGATIVE ANCHORS — Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.
+AUTHORIZED USER CHANGES — Visibly apply the user's explicit request: "switch to Japandi Calm". It overrides atmosphere/furniture/decor/room-function defaults and must be clearly present. Keep openings, bay window, facade and perspective fixed unless the user explicitly changed them.
+SOURCE SPACE: Living room with a large floor-to-ceiling sliding glass door on the left wall opening to a balcony with vertical louvered shutters visible. Eye-level single-point perspective, medium spatial depth. Black-framed glass partition on the right separating the living zone from a rear room visible through the partition; a window is visible on the rear wall of the back room. Standard ceiling height. Herringbone wood floor throughout. Open kitchen visible on the right beyond the partition.
+ATMOSPHERE (Japandi Calm): Japanese restraint blended with Scandinavian softness and emotional calm. — Still, serene, grounded, quietly refined, breathable, unhurried.. [Quiet luxury boutique hospitality]
+ROOM (Living Room): pale ash or birch floor, wabi-sabi plaster walls in off-white or putty, dark charcoal ceramic accents. LIGHT: Paper lantern pendant + concealed warm floor slot; no harsh downlights. ATMOSPHERE STYLE (restyle existing elements): natural linen in stone or fog tones — unhurried tactile calm; wabi-sabi ceramic or ash — raw surface honesty; natural rush or jute — organic textural warmth; single branch in handmade ceramic vase; one framed Japanese ink artwork. REALISM: sofa low enough to feel grounded — 40–45 cm seat height; empty floor space is deliberate, not absent. AVOID: no cluttered surfaces, no patterned textiles, no warm-orange wood tones, Empty sterile minimalism, sci-fi white spaces.
+<<< end v1
+
+
+--- COMPOSER_V2 FULL PROMPT ---
+size=3134 chars
+section breakdown:
+  [  177]  ATMOSPHERE SWITCH — same apartment, replacing the previous S
+  [  805]  Continue evolving the current vision of the same apartment —
+  [  330]  STRUCTURAL IDENTITY — this apartment already contains these
+  [ 1358]  STYLE TRANSFORMATION — atmosphere SWITCH on the same photogr
+  [  132]  NOT a CGI render. DSLR real estate photo. Real materials. Fu
+  [  322]  USER DIRECTION: switch to Japandi Calm AUTHORIZED USER CHANG
+
+>>> RAW v2:
+ATMOSPHERE SWITCH — same apartment, replacing the previous Soft Luxury styling of this Living Room with Japandi Calm. Fresh atmospheric identity; same photographed architecture.
+
+Continue evolving the current vision of the same apartment — preserve every architectural fact from the original photograph. SAME APARTMENT PHOTO-EDIT — apply the chosen atmosphere to THIS exact photographed apartment, not a new apartment. FROZEN: camera, perspective, room proportions, ceiling height, and the floor plan. STRUCTURAL — every photographed opening (windows, sliding doors, balcony access, glass partitions, archways, half-walls, and any opening visible through a partition into an adjacent or rear zone), multi-zone visibility, open-plan continuity, and spatial depth all stay exactly as photographed; none may be narrowed, enclosed, walled off, or converted into a wall surface. CHANGE ONLY: surfaces, materials, furniture footprint styling, lighting, textiles, colours, decor, atmosphere.
+
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+
+STYLE TRANSFORMATION — atmosphere SWITCH on the same photographed apartment. Fully replace the previous vision's styling identity (furniture silhouette, decor density, material palette, lighting language) with the new atmosphere's identity from the DNA below. Only the photographed architecture and spatial relationships stay exactly as captured.
+ATMOSPHERE (Japandi Calm): Japanese restraint blended with Scandinavian softness and emotional calm. — Still, serene, grounded, quietly refined, breathable, unhurried.. [Quiet luxury boutique hospitality]
+ROOM (Living Room): pale ash or birch floor, wabi-sabi plaster walls in off-white or putty, dark charcoal ceramic accents. LIGHT: Paper lantern pendant + concealed warm floor slot; no harsh downlights. ATMOSPHERE STYLE (restyle existing elements): natural linen in stone or fog tones — unhurried tactile calm; wabi-sabi ceramic or ash — raw surface honesty; natural rush or jute — organic textural warmth; single branch in handmade ceramic vase; one framed Japanese ink artwork. REALISM: sofa low enough to feel grounded — 40–45 cm seat height; empty floor space is deliberate, not absent. AVOID: no cluttered surfaces, no patterned textiles, no warm-orange wood tones, Empty sterile minimalism, sci-fi white spaces.
+AMBITION — premium hospitality-grade restyling. Decorate this photo; do not recompose it.
+
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+
+USER DIRECTION: switch to Japandi Calm
+AUTHORIZED USER CHANGES — Visibly apply the user's explicit request: "switch to Japandi Calm". It overrides atmosphere/furniture/decor/room-function defaults and must be clearly present. Keep openings, bay window, facade and perspective fixed unless the user explicitly changed them.
+<<< end v2
+
+--- DELTA ---
+v1:  3444 chars  →  v2:  3134 chars   (-310 chars; -9.0%)
+
+
+====================================================================================================
+SCENARIO F (supplement) — V1 Japandi Calm SIMPLE apartment
+====================================================================================================
+
+--- INPUTS (identical for both composers, except internal routing) ---
+{
+  "style_label": "Japandi Calm \u00b7 Vision 1",
+  "room_type": "Living Room",
+  "room_description": "Living room with a single large window on the back wall. Eye-level single-point perspective, medium spatial depth. Standard ceiling height. Oak hardwood floor.",
+  "user_instruction": "",
+  "iteration": 1,
+  "secondary_visible_spaces": [],
+  "compact_prompts": false,
+  "structural_identity": "STRUCTURAL IDENTITY \u2014 this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: spatial depth defining the spatial volume. These are existing structural truths, not design choices.",
+  "source_continuity": "",
+  "structural_negative_anchors": "STRUCTURAL NEGATIVE ANCHORS \u2014 Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.",
+  "authorized_user_changes": ""
+}
+
+--- COMPOSER_V1 FULL PROMPT ---
+size=3145 chars
+section breakdown:
+  [ 3145]  SAME APARTMENT PHOTO-EDIT — apply Japandi Calm atmosphere. T
+
+>>> RAW v1:
+SAME APARTMENT PHOTO-EDIT — apply Japandi Calm atmosphere. The photo defines spatial truth: preserve this Living Room's geometry, camera, windows, openings, depth exactly. Restyle only — transform surfaces, materials, lighting, atmosphere.
+CAMERA LOCK — FROZEN: camera position, focal length, vanishing points, horizon line. Room proportions, spatial depth, and all structural lines are fixed. Output must look like a photograph of the SAME apartment, preserving its architectural identity. DO NOT reinterpret geometry. DO NOT redesign architecture. STRUCTURAL LOCK — FORBIDDEN: windows (positions, frames, unblocked, natural light visible), doors, walls, ceiling height, floor plan, structural columns. CHANGE ONLY: surfaces, materials, furniture, lighting, textiles, colours, atmosphere. ATMOSPHERE BOUNDARY — geometry, openings, and topology override atmosphere. Atmosphere is applied last. Any perspective or geometry change is a failure.
+OPENINGS ANCHOR — Bay windows and openings are photographed facts, not design decisions. Do not resize, narrow, simplify, or standardize any opening. Preserve exact proportions from the uploaded photo.
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: spatial depth defining the spatial volume. These are existing structural truths, not design choices.
+STRUCTURAL NEGATIVE ANCHORS — Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.
+ARCHITECTURAL ANCHORS — LOCKED: spatial depth. Preserve these unchanged in the output.
+ATMOSPHERE (Japandi Calm): Japanese restraint blended with Scandinavian softness and emotional calm. — Still, serene, grounded, quietly refined, breathable, unhurried.. [Quiet luxury boutique hospitality]
+ROOM (Living Room): pale ash or birch floor, wabi-sabi plaster walls in off-white or putty, dark charcoal ceramic accents. LIGHT: Paper lantern pendant + concealed warm floor slot; no harsh downlights. ATMOSPHERE STYLE (restyle existing elements): natural linen in stone or fog tones — unhurried tactile calm; wabi-sabi ceramic or ash — raw surface honesty; natural rush or jute — organic textural warmth; single branch in handmade ceramic vase; one framed Japanese ink artwork. REALISM: sofa low enough to feel grounded — 40–45 cm seat height; empty floor space is deliberate, not absent. AVOID: no cluttered surfaces, no patterned textiles, no warm-orange wood tones, Empty sterile minimalism, sci-fi white spaces.
+TRANSFORMATION AMBITION — Visible architecture stays recognizable: windows, openings, partitions, existing equipment. WOW through: materials, finishes, lighting quality, atmosphere conviction.
+NATURAL ENRICHMENT — Enrich the photographed space with light natural layering. Secondary to architecture — enrich, do not recompose.
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+<<< end v1
+
+
+--- COMPOSER_V2 FULL PROMPT ---
+size=3145 chars
+section breakdown:
+  [ 3145]  SAME APARTMENT PHOTO-EDIT — apply Japandi Calm atmosphere. T
+
+>>> RAW v2:
+SAME APARTMENT PHOTO-EDIT — apply Japandi Calm atmosphere. The photo defines spatial truth: preserve this Living Room's geometry, camera, windows, openings, depth exactly. Restyle only — transform surfaces, materials, lighting, atmosphere.
+CAMERA LOCK — FROZEN: camera position, focal length, vanishing points, horizon line. Room proportions, spatial depth, and all structural lines are fixed. Output must look like a photograph of the SAME apartment, preserving its architectural identity. DO NOT reinterpret geometry. DO NOT redesign architecture. STRUCTURAL LOCK — FORBIDDEN: windows (positions, frames, unblocked, natural light visible), doors, walls, ceiling height, floor plan, structural columns. CHANGE ONLY: surfaces, materials, furniture, lighting, textiles, colours, atmosphere. ATMOSPHERE BOUNDARY — geometry, openings, and topology override atmosphere. Atmosphere is applied last. Any perspective or geometry change is a failure.
+OPENINGS ANCHOR — Bay windows and openings are photographed facts, not design decisions. Do not resize, narrow, simplify, or standardize any opening. Preserve exact proportions from the uploaded photo.
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: spatial depth defining the spatial volume. These are existing structural truths, not design choices.
+STRUCTURAL NEGATIVE ANCHORS — Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.
+ARCHITECTURAL ANCHORS — LOCKED: spatial depth. Preserve these unchanged in the output.
+ATMOSPHERE (Japandi Calm): Japanese restraint blended with Scandinavian softness and emotional calm. — Still, serene, grounded, quietly refined, breathable, unhurried.. [Quiet luxury boutique hospitality]
+ROOM (Living Room): pale ash or birch floor, wabi-sabi plaster walls in off-white or putty, dark charcoal ceramic accents. LIGHT: Paper lantern pendant + concealed warm floor slot; no harsh downlights. ATMOSPHERE STYLE (restyle existing elements): natural linen in stone or fog tones — unhurried tactile calm; wabi-sabi ceramic or ash — raw surface honesty; natural rush or jute — organic textural warmth; single branch in handmade ceramic vase; one framed Japanese ink artwork. REALISM: sofa low enough to feel grounded — 40–45 cm seat height; empty floor space is deliberate, not absent. AVOID: no cluttered surfaces, no patterned textiles, no warm-orange wood tones, Empty sterile minimalism, sci-fi white spaces.
+TRANSFORMATION AMBITION — Visible architecture stays recognizable: windows, openings, partitions, existing equipment. WOW through: materials, finishes, lighting quality, atmosphere conviction.
+NATURAL ENRICHMENT — Enrich the photographed space with light natural layering. Secondary to architecture — enrich, do not recompose.
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+<<< end v2
+
+--- DELTA ---
+v1:  3145 chars  →  v2:  3145 chars   (+0 chars; +0.0%)

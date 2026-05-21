@@ -1,0 +1,96 @@
+==============================================================================
+STRUCTURAL DRIFT REPORT
+==============================================================================
+Rows with at least one score: 20 / 20
+
+OVERALL PRESERVATION SCORE: █████████████████████░░░░░░░░░   69.2%
+VERDICT: SIGNIFICANT drift — Option 1 mandatory, consider GPU upgrade later
+
+------------------------------------------------------------------------------
+PER FEATURE
+------------------------------------------------------------------------------
+  F1: Slide door wall            ████████████████████████████░░   95.0%  (2=18, 1=2, 0=0, n=20)
+  F2: Slide door width           ██████████████████░░░░░░░░░░░░   60.0%  (2=9, 1=6, 0=5, n=20)
+  F3: Glass partition            ██████████████████████████████  100.0%  (2=20, 1=0, 0=0, n=20)
+  F4: Visible kitchen            ████████████░░░░░░░░░░░░░░░░░░   40.0%  (2=5, 1=6, 0=9, n=20)
+  F5: Rear window                █████████████████████░░░░░░░░░   70.0%  (2=12, 1=4, 0=4, n=20)
+  F6: Ceiling diagonal           ███████████████░░░░░░░░░░░░░░░   50.0%  (2=5, 1=10, 0=5, n=20)
+  F7: Floor herringbone          ██████████████████░░░░░░░░░░░░   60.0%  (2=12, 1=0, 0=8, n=20)
+  F8: Perspective                ██████████████████████████░░░░   85.0%  (2=16, 1=2, 0=2, n=20)
+  F9: Spatial depth              ███████████████████░░░░░░░░░░░   62.5%  (2=10, 1=5, 0=5, n=20)
+
+------------------------------------------------------------------------------
+PER ATMOSPHERE (composite)
+------------------------------------------------------------------------------
+  Japandi Calm           ██████████████████░░░░░░░░░░░░   61.1%  (n=18)
+  Zen Retreat            ███████████████████░░░░░░░░░░░   63.9%  (n=18)
+  Nature Retreat         ███████████████████░░░░░░░░░░░   63.9%  (n=18)
+  Desert Luxe            ███████████████████░░░░░░░░░░░   63.9%  (n=18)
+  Dark Contemporary      ████████████████████░░░░░░░░░░   66.7%  (n=18)
+  Nordic Warmth          ██████████████████████░░░░░░░░   72.2%  (n=18)
+  Bali Sanctuary         ██████████████████████░░░░░░░░   72.2%  (n=18)
+  Warm Modern            ██████████████████████░░░░░░░░   75.0%  (n=18)
+  Tropical Escape        ██████████████████████░░░░░░░░   75.0%  (n=18)
+  Soft Luxury            ███████████████████████░░░░░░░   77.8%  (n=18)
+
+------------------------------------------------------------------------------
+SYSTEMATIC DRIFT (both runs of an atmosphere failed the same feature)
+------------------------------------------------------------------------------
+  Warm Modern             →  F6: Ceiling diagonal
+  Japandi Calm            →  F4: Visible kitchen
+  Japandi Calm            →  F7: Floor herringbone
+  Desert Luxe             →  F4: Visible kitchen
+  ↑ These are PROMPT-LEVEL or DNA-LEVEL issues, not stochastic.
+
+------------------------------------------------------------------------------
+STOCHASTIC DRIFT (one run preserved, the other did not)
+------------------------------------------------------------------------------
+  Warm Modern             →  F5: Rear window
+  Warm Modern             →  F7: Floor herringbone
+  Warm Modern             →  F9: Spatial depth
+  Japandi Calm            →  F2: Slide door width
+  Japandi Calm            →  F5: Rear window
+  Japandi Calm            →  F6: Ceiling diagonal
+  Japandi Calm            →  F9: Spatial depth
+  Soft Luxury             →  F2: Slide door width
+  Soft Luxury             →  F5: Rear window
+  Soft Luxury             →  F6: Ceiling diagonal
+  Soft Luxury             →  F9: Spatial depth
+  Zen Retreat             →  F4: Visible kitchen
+  Zen Retreat             →  F7: Floor herringbone
+  Zen Retreat             →  F8: Perspective
+  Nordic Warmth           →  F1: Slide door wall
+  Nordic Warmth           →  F2: Slide door width
+  Nordic Warmth           →  F5: Rear window
+  Nordic Warmth           →  F9: Spatial depth
+  Dark Contemporary       →  F1: Slide door wall
+  Dark Contemporary       →  F2: Slide door width
+  Dark Contemporary       →  F5: Rear window
+  Dark Contemporary       →  F7: Floor herringbone
+  Dark Contemporary       →  F9: Spatial depth
+  Nature Retreat          →  F4: Visible kitchen
+  Nature Retreat          →  F6: Ceiling diagonal
+  Nature Retreat          →  F7: Floor herringbone
+  Nature Retreat          →  F8: Perspective
+  Desert Luxe             →  F2: Slide door width
+  Desert Luxe             →  F6: Ceiling diagonal
+  Desert Luxe             →  F7: Floor herringbone
+  Desert Luxe             →  F8: Perspective
+  Desert Luxe             →  F9: Spatial depth
+  Bali Sanctuary          →  F5: Rear window
+  Bali Sanctuary          →  F7: Floor herringbone
+  Bali Sanctuary          →  F8: Perspective
+  Bali Sanctuary          →  F9: Spatial depth
+  Tropical Escape         →  F4: Visible kitchen
+  Tropical Escape         →  F6: Ceiling diagonal
+  Tropical Escape         →  F9: Spatial depth
+  ↑ Likely gpt-image-1 sampling variance — Option 1 (edge composite) helps these.
+
+------------------------------------------------------------------------------
+FREE-FORM NOTES
+------------------------------------------------------------------------------
+> Use this section to note anything that's interesting but not captured by the 9 features (e.g., "DNA furniture replaces sofa with a daybed", "all Zen runs invent a skylight", "Soft Luxury always introduces gold chrome", etc.)
+
+- 
+- 
+-

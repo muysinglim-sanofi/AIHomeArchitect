@@ -1,0 +1,112 @@
+====================================================================================================
+WARM MODERN V2 (pure atmosphere switch from Tropical Bali V1, complex apartment)
+PRE-5.4a (composer_v2 5-section REBOOT_FRESH) vs POST-5.4a (composer.py Path D delegation)
+====================================================================================================
+
+PRE-5.4a  total size:  2877 chars
+POST-5.4a total size:  2877 chars
+DELTA            : +0 chars (+0.0%)
+
+--- PRE-5.4a section breakdown ---
+  [  178]  ATMOSPHERE SWITCH — same apartment, replacing the previous Tropical Bali styling of this L
+  [  805]  Continue evolving the current vision of the same apartment — preserve every architectural
+  [  330]  STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce
+  [ 1385]  STYLE TRANSFORMATION — atmosphere SWITCH on the same photographed apartment. Fully replace
+  [  132]  NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings
+  [   37]  USER DIRECTION: switch to Warm Modern
+
+--- POST-5.4a section breakdown ---
+  [  178]  ATMOSPHERE SWITCH — same apartment, replacing the previous Tropical Bali styling of this L
+  [  805]  Continue evolving the current vision of the same apartment — preserve every architectural
+  [  330]  STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce
+  [ 1385]  STYLE TRANSFORMATION — atmosphere SWITCH on the same photographed apartment. Fully replace
+  [  132]  NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings
+  [   37]  USER DIRECTION: switch to Warm Modern
+
+
+====================================================================================================
+RAW PRE-5.4a PROMPT (composer_v2 5-section + atmosphere-switch header + STYLE_PREFIX_ATMOSPHERE_SWITCH)
+====================================================================================================
+ATMOSPHERE SWITCH — same apartment, replacing the previous Tropical Bali styling of this Living Room with Warm Modern. Fresh atmospheric identity; same photographed architecture.
+
+Continue evolving the current vision of the same apartment — preserve every architectural fact from the original photograph. SAME APARTMENT PHOTO-EDIT — apply the chosen atmosphere to THIS exact photographed apartment, not a new apartment. FROZEN: camera, perspective, room proportions, ceiling height, and the floor plan. STRUCTURAL — every photographed opening (windows, sliding doors, balcony access, glass partitions, archways, half-walls, and any opening visible through a partition into an adjacent or rear zone), multi-zone visibility, open-plan continuity, and spatial depth all stay exactly as photographed; none may be narrowed, enclosed, walled off, or converted into a wall surface. CHANGE ONLY: surfaces, materials, furniture footprint styling, lighting, textiles, colours, decor, atmosphere.
+
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+
+STYLE TRANSFORMATION — atmosphere SWITCH on the same photographed apartment. Fully replace the previous vision's styling identity (furniture silhouette, decor density, material palette, lighting language) with the new atmosphere's identity from the DNA below. Only the photographed architecture and spatial relationships stay exactly as captured.
+ATMOSPHERE (Warm Modern): Warm contemporary luxury rooted in emotional comfort, hospitality, softness, and believable urban premium living. — Comforting, refined, welcoming, calm, premium, elegant but livable.. [Boutique hotel / premium urban residence]
+ROOM (Living Room): wide-plank European oak floor, warm sand plaster walls, travertine slab surfaces. LIGHT: Concealed ceiling cove + tungsten-glow table lamps; warm evening tone. ATMOSPHERE STYLE (restyle existing elements): bouclé in oat or camel — warm curved tactile richness; travertine — warm stone surface depth with brass or oak accent; warm linen — oak-toned textural warmth; oversized ceramic vessel on floating oak shelf; floor-length warm linen curtains. REALISM: sofa at residential scale — not model-set proportions; furniture legs visible and grounded on floor. AVOID: no cold grey palette, no chrome hardware, no matching 3-piece suite, Cold minimalism, sterile white interiors.
+AMBITION — premium hospitality-grade restyling. Decorate this photo; do not recompose it.
+
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+
+USER DIRECTION: switch to Warm Modern
+
+
+====================================================================================================
+RAW POST-5.4a PROMPT (composer.py Path D — full V1 emission)
+====================================================================================================
+ATMOSPHERE SWITCH — same apartment, replacing the previous Tropical Bali styling of this Living Room with Warm Modern. Fresh atmospheric identity; same photographed architecture.
+
+Continue evolving the current vision of the same apartment — preserve every architectural fact from the original photograph. SAME APARTMENT PHOTO-EDIT — apply the chosen atmosphere to THIS exact photographed apartment, not a new apartment. FROZEN: camera, perspective, room proportions, ceiling height, and the floor plan. STRUCTURAL — every photographed opening (windows, sliding doors, balcony access, glass partitions, archways, half-walls, and any opening visible through a partition into an adjacent or rear zone), multi-zone visibility, open-plan continuity, and spatial depth all stay exactly as photographed; none may be narrowed, enclosed, walled off, or converted into a wall surface. CHANGE ONLY: surfaces, materials, furniture footprint styling, lighting, textiles, colours, decor, atmosphere.
+
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+
+STYLE TRANSFORMATION — atmosphere SWITCH on the same photographed apartment. Fully replace the previous vision's styling identity (furniture silhouette, decor density, material palette, lighting language) with the new atmosphere's identity from the DNA below. Only the photographed architecture and spatial relationships stay exactly as captured.
+ATMOSPHERE (Warm Modern): Warm contemporary luxury rooted in emotional comfort, hospitality, softness, and believable urban premium living. — Comforting, refined, welcoming, calm, premium, elegant but livable.. [Boutique hotel / premium urban residence]
+ROOM (Living Room): wide-plank European oak floor, warm sand plaster walls, travertine slab surfaces. LIGHT: Concealed ceiling cove + tungsten-glow table lamps; warm evening tone. ATMOSPHERE STYLE (restyle existing elements): bouclé in oat or camel — warm curved tactile richness; travertine — warm stone surface depth with brass or oak accent; warm linen — oak-toned textural warmth; oversized ceramic vessel on floating oak shelf; floor-length warm linen curtains. REALISM: sofa at residential scale — not model-set proportions; furniture legs visible and grounded on floor. AVOID: no cold grey palette, no chrome hardware, no matching 3-piece suite, Cold minimalism, sterile white interiors.
+AMBITION — premium hospitality-grade restyling. Decorate this photo; do not recompose it.
+
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+
+USER DIRECTION: switch to Warm Modern
+
+
+====================================================================================================
+UNIFIED DIFF (PRE → POST)
+====================================================================================================
+(identical)
+
+
+====================================================================================================
+CONCEPTUAL DELTA (what the user actually pays for in image quality)
+====================================================================================================
+
+• ATMOSPHERE SWITCH header (179 chars)
+    PRE has it — explicit Tropical-Bali→Warm-Modern framing. POST has nothing.
+
+• CORE preamble 'Continue evolving the current vision'
+    PRE has V2+ continuity preamble. POST has direct V1 task framing.
+
+• STYLE_PREFIX_ATMOSPHERE_SWITCH (290 chars)
+    PRE: 'Fully replace the previous vision's styling identity (furniture silhouette, decor density, material palette, lighting language) with the new atmosphere's identity'. POST: no STYLE prefix. This is the main atmospheric authority signal.
+
+• Full wow_directive (382 chars)
+    PRE has short 89-char AMBITION line. POST has full wow_directive incl. 'Visible architecture stays recognizable: windows, openings, partitions, existing equipment'.
+
+• NATURAL ENRICHMENT (217 chars)
+    PRE: absent. POST: present — light decor authority.
+
+• OPENINGS ANCHOR (201 chars)
+    PRE: absorbed as one clause in CORE. POST: own named P1 block with 'Do not resize, narrow, simplify, or standardize any opening'.
+
+• STRUCTURAL NEGATIVE ANCHORS (340 chars)
+    PRE: absorbed as one clause in CORE. POST: own named P1 block with 'Do not insert walls between them' explicit phrasing.
+
+• ARCHITECTURAL ANCHORS — LOCKED: (95 chars)
+    PRE: deduped away by _anchors_fully_in_si on complex apartment. POST: present — anchor reinforcement repetition.
+
+• VISIBLE SPACES (kitchen continuity, 241 chars)
+    PRE: absent. POST: present — cross-zone atmospheric continuity.
+
+• ATMOSPHERE BOUNDARY hierarchy assertion (~150 chars)
+    PRE: deleted. POST: present — 'geometry, openings, and topology override atmosphere'.
+
+• USER DIRECTION: switch to Warm Modern (38 chars)
+    PRE: present (meta-text emitted as design direction). POST: '' sanitized — not emitted.
+
+
+SUMMARY — TRADE-OFF DIRECTION
+PRE-5.4a path: LESS preservation authority + MORE atmospheric / style authority
+POST-5.4a path: MORE preservation authority + LESS atmospheric / style authority
+Visual evidence (Warm Modern V2 screenshots): PRE produced richer atmosphere on this photo.

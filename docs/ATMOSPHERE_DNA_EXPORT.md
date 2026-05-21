@@ -1,0 +1,3659 @@
+# Atmosphere DNA — Full Registry Export
+
+All 10 atmospheres × 13 room types, extracted directly from the in-memory registry after importing `prompt_engine.atmosphere_dna`.
+
+**Atmospheres registered**: 10 — `bali_sanctuary`, `dark_contemporary`, `desert_luxe`, `japandi_calm`, `nature_retreat`, `nordic_warmth`, `soft_luxury`, `tropical_escape`, `warm_modern`, `zen_retreat`
+
+**Room adaptations registered**: 130
+
+---
+
+## Atmosphere: `bali_sanctuary`
+
+### Core DNA
+- **atmosphere_id**: `bali_sanctuary`
+- **philosophy**: Luxury tropical sanctuary inspired by refined Balinese hospitality.
+- **emotional_intent**: Sacred, immersive, lush, warm, ceremonially refined, deeply restful.
+- **architectural_language**: Open-pavilion volumes with alang-alang or timber ceilings, volcanic stone, tropical timber, and indoor-outdoor dissolving boundaries.
+- **lighting_behavior**: Warm concealed uplights behind stone features, pendant lanterns in brass or rattan, candlelight.
+- **luxury_level**: Luxury Bali resort villa
+- **atmosphere_keywords**: balinese, volcanic stone, teak, open pavilion, tropical sacred
+- **material_palette** (5):
+-   volcanic grey stone
+-   reclaimed teak or ironwood
+-   alang-alang thatch or timber plank ceiling
+-   handwoven textiles
+-   tropical hardwood
+- **forbidden_elements** (5):
+-   Tiki bar aesthetics
+-   beach resort kitsch
+-   bamboo overuse
+-   fake tropical props
+-   tourist souvenir styling
+
+### Room adaptations (13)
+
+#### Room: `living_room`
+- **furniture_language** (3):
+-   teak or tropical hardwood with cotton in indigo or stone — artisan warmth
+-   volcanic stone or carved timber — spiritual surface depth
+-   woven rattan or handwoven textile — artisan floor-level warmth
+- **material_palette** (3):
+-   volcanic grey stone or polished terrazzo floor
+-   reclaimed teak joinery and ceiling structure
+-   handwoven cotton or linen upholstery
+- **lighting_behavior**: Concealed warm uplights behind stone wall feature + rattan or brass pendant lantern.
+- **decor_language** (2):
+-   single large stone or clay vessel with tropical foliage
+-   woven wall hanging in natural undyed textile
+- **realism_constraints** (2):
+-   sofa low — 40–45 cm — Balinese floor-culture scale
+-   stone floor with correct texture — not hyper-polished CGI
+- **room_specific_constraints** (2):
+-   open side to garden or pool — pavilion character
+-   maximum 2 decorative objects plus one plant
+- **visible_transition_logic**: volcanic stone floor and teak ceiling continue into adjacent pavilion; stone palette echoes through visible pool area
+- **negative_rules** (4):
+-   no bamboo furniture
+-   no bright tropical colour
+-   no tourist ornament collection
+-   no cold modern surfaces
+
+#### Room: `master_bedroom`
+- **furniture_language** (3):
+-   teak with sheer cotton canopy — spiritual surface warmth
+-   carved teak or stone — artisan tactile craftsmanship
+-   handwoven textile in natural undyed or indigo — floor-level warmth
+- **material_palette** (3):
+-   volcanic stone or polished terrazzo floor
+-   reclaimed teak or timber ceiling structure
+-   white or indigo sheer cotton canopy drapes
+- **lighting_behavior**: Concealed warm uplights at ceiling perimeter + single brass bedside pendant lantern.
+- **decor_language** (2):
+-   layered white and natural linen bedding under sheer canopy
+-   single frangipani or tropical leaf on stone bedside slab
+- **realism_constraints** (2):
+-   four-poster at correct height — 45 cm to mattress
+-   canopy drapes at correct floor-clearance and fullness
+- **room_specific_constraints** (2):
+-   four-poster bed as room's defining element
+-   single offering-style decor on bedside — not accessory cluster
+- **visible_transition_logic**: stone floor and teak ceiling echo throughout; sheer drapes echo pool cabana visible beyond
+- **negative_rules** (4):
+-   no modern platform bed
+-   no coloured bedding pattern
+-   no chrome fixtures
+-   no standard Western bedroom layout
+
+#### Room: `kitchen`
+- **furniture_language** (3):
+-   teak or dark timber cabinetry — shaker or simple panel
+-   volcanic stone or terracotta countertop
+-   open teak shelf with handmade ceramic display
+- **material_palette** (3):
+-   dark teak or tropical timber cabinetry
+-   volcanic stone or terracotta countertop
+-   hand-thrown ceramic or clay backsplash tiles
+- **lighting_behavior**: Warm pendant in brass or rattan over island + concealed warm under-cabinet strip.
+- **decor_language** (2):
+-   open teak shelf with 4–5 handmade ceramics in earth or charcoal tones
+-   single tropical leaf in ceramic on counter
+- **realism_constraints** (2):
+-   cabinet doors at correct residential height
+-   stone counter at correct 90 cm height
+- **room_specific_constraints** (2):
+-   open shelf mandatory — no upper cabinets to ceiling
+-   ceramics in earth tones — no white or bright
+- **visible_transition_logic**: dark teak cabinet tone flows into dining furniture; volcanic stone echoes living area floor material
+- **negative_rules** (4):
+-   no white cabinetry
+-   no stainless steel appliances exposed
+-   no patterned Western tile
+-   no chrome hardware
+
+#### Room: `bathroom`
+- **furniture_language** (3):
+-   open-air or semi-open wet room in volcanic stone
+-   freestanding stone or terracotta tub
+-   carved teak vanity with stone basin
+- **material_palette** (3):
+-   volcanic grey stone floor and walls — continuous wet room
+-   carved teak vanity
+-   dark bronze or aged brass fixtures
+- **lighting_behavior**: Single brass lantern pendant + concealed warm uplight behind stone wall; hammam-adjacent warmth.
+- **decor_language** (2):
+-   fresh frangipani or tropical flower on stone beside basin
+-   folded white linen towels on teak peg
+- **realism_constraints** (2):
+-   stone wet room correctly seamless — no grout lines in open shower zone
+-   stone tub at correct floor-standing weight
+- **room_specific_constraints** (2):
+-   open or semi-open shower — no full enclosure in pavilion bathroom
+-   all fixtures in aged brass — single finish
+- **visible_transition_logic**: volcanic stone continues from bedroom floor; garden or tropical foliage visible from open bathroom side
+- **negative_rules** (4):
+-   no white ceramic tiles
+-   no chrome fixtures
+-   no glass-box shower enclosure
+-   no Western bathroom vanity unit
+
+#### Room: `home_office`
+- **furniture_language** (3):
+-   reclaimed teak desk with simple profile
+-   carved timber or cane chair with cotton cushion
+-   floating teak shelf above desk
+- **material_palette** (3):
+-   volcanic stone or polished terrazzo floor
+-   teak ceiling and joinery
+-   cotton or linen upholstery
+- **lighting_behavior**: Single brass or rattan task lamp on desk + warm ambient concealed cove; no cold task light.
+- **decor_language** (2):
+-   small carved stone as paperweight
+-   single tropical plant in ceramic on desk corner
+- **realism_constraints** (2):
+-   desk at correct 72–75 cm working height
+-   shelf at correct structural depth
+- **room_specific_constraints** (2):
+-   cable management — no visible wires
+-   single plant only — not a collection
+- **visible_transition_logic**: teak and stone echo adjacent hallway and living area; warm material palette continuous
+- **negative_rules** (4):
+-   no modern office furniture
+-   no cold LED task light
+-   no ergonomic rubber chair
+-   no technology display
+
+#### Room: `dining_room`
+- **furniture_language** (3):
+-   large reclaimed teak dining table
+-   carved timber chairs with cotton seat cushions
+-   carved teak or stone buffet sideboard
+- **material_palette** (3):
+-   volcanic stone or terrazzo floor
+-   teak ceiling structure
+-   cotton or linen chair cushions in white or indigo
+- **lighting_behavior**: Single large rattan or brass pendant over table; warm focused glow for ceremonial dining.
+- **decor_language** (2):
+-   low centrepiece of tropical flowers and stone in dark ceramic
+-   carved stone or teak candle holders flanking centrepiece
+- **realism_constraints** (2):
+-   pendant at correct height — 70–75 cm above table
+-   chairs at correct seat height
+- **room_specific_constraints** (2):
+-   table in single reclaimed teak — not mixed materials
+-   centrepiece in dark ceramic — not florist style
+- **visible_transition_logic**: teak and stone echo living pavilion; outdoor tropical planting visible beyond open wall
+- **negative_rules** (4):
+-   no glass or cold marble table
+-   no chandelier
+-   no patterned upholstery
+-   no Western formal dining look
+
+#### Room: `entrance_hall`
+- **furniture_language** (3):
+-   carved stone or teak console slab
+-   large dark carved mirror in teak or stone frame
+-   single ceramic or stone vessel with tropical leaf
+- **material_palette** (3):
+-   volcanic stone floor
+-   teak ceiling detail
+-   dark bronze or aged brass hardware
+- **lighting_behavior**: Concealed warm uplight behind stone wall feature + single brass lantern pendant; sacred arrival tone.
+- **decor_language** (2):
+-   single large tropical leaf or frangipani offering in ceramic
+-   carved stone panel or niche at entry wall
+- **realism_constraints** (2):
+-   console at correct 80–85 cm height
+-   stone floor with correct volcanic texture
+- **room_specific_constraints** (2):
+-   single offering-style object on console
+-   carved stone or teak wall feature at entry — identity element
+- **visible_transition_logic**: volcanic stone floor flows into living pavilion; teak ceiling detail echoes throughout
+- **negative_rules** (4):
+-   no Western console table style
+-   no modern mirror frame
+-   no coat rack
+-   no cluttered accessories
+
+#### Room: `facade`
+- **furniture_language** (3):
+-   volcanic stone wall and gate
+-   carved timber or stone entrance portal
+-   tropical planting — heliconias and palms flanking entrance
+- **material_palette** (3):
+-   volcanic grey stone facade or boundary wall
+-   reclaimed teak or ironwood door and window frames
+-   tropical planting as architectural element
+- **lighting_behavior**: Concealed warm uplights on stone wall + single brass lantern at carved gate; sacred arrival.
+- **decor_language** (2):
+-   carved stone panel or offering niche at entrance
+-   tropical planting as facade softening element
+- **realism_constraints** (2):
+-   stone facade texture correctly rough and volcanic — not smooth CGI
+-   timber frames with correct depth and shadow reveal
+- **room_specific_constraints** (2):
+-   volcanic stone as primary facade material
+-   carved entrance feature — even if minimal
+- **visible_transition_logic**: volcanic stone boundary continues to interior stone floor; teak doors echo interior joinery
+- **negative_rules** (4):
+-   no smooth white render
+-   no UPVC frames
+-   no bamboo decoration
+-   no kitschy carved motifs
+
+#### Room: `garden`
+- **furniture_language** (3):
+-   carved stone bench or platform
+-   tropical planting — frangipani, heliconia, bamboo grass
+-   stone water feature or lotus pond
+- **material_palette** (3):
+-   volcanic stone path
+-   tropical planting as primary material
+-   stone or terracotta planters
+- **lighting_behavior**: Warm concealed uplights on tropical planting + single brass lantern on stone plinth.
+- **decor_language** (2):
+-   lotus pond or shallow stone water basin as garden focal element
+-   carved stone temple lantern as accent
+- **realism_constraints** (2):
+-   water feature at correct ground level — not elevated
+-   planting at correct tropical scale — lush but not overgrown
+- **room_specific_constraints** (2):
+-   water feature as garden focal element
+-   tropical planting lush but architecturally resolved
+- **visible_transition_logic**: stone path continues to terrace; volcanic stone boundary visible at garden edge
+- **negative_rules** (4):
+-   no lawn
+-   no formal clipped hedging
+-   no European garden furniture
+-   no non-tropical planting
+
+#### Room: `pool_area`
+- **furniture_language** (3):
+-   reclaimed teak sun platforms with thick cotton cushions
+-   teak or palm thatch shade pavilion
+-   stone or carved timber side table
+- **material_palette** (3):
+-   volcanic stone pool deck
+-   teak or tropical timber shade structure
+-   cotton cushion in white or indigo
+- **lighting_behavior**: Warm underwater lighting with greenish-warm tint + brass uplights at stone planting beds.
+- **decor_language** (2):
+-   tropical foliage at pool edges — heliconia, banana leaf
+-   carved stone or teak offering tray at water edge
+- **realism_constraints** (2):
+-   teak platforms at correct height beside pool
+-   tropical planting at correct scale — not sparse
+- **room_specific_constraints** (2):
+-   palm thatch or teak shade pavilion — not canvas parasol
+-   tropical edge planting mandatory
+- **visible_transition_logic**: volcanic stone deck continues from terrace; open living pavilion visible at pool edge
+- **negative_rules** (4):
+-   no bright parasols
+-   no plastic loungers
+-   no sparse minimal pool surround
+-   no resort-blue water overemphasis
+
+#### Room: `terrace`
+- **furniture_language** (3):
+-   low teak daybed with sheer drape and thick cotton cushions
+-   carved stone or teak low table
+-   large terracotta or stone planter with tropical foliage
+- **material_palette** (3):
+-   volcanic stone or large-format terracotta paving
+-   cotton or linen outdoor cushions in white or indigo
+-   teak or timber overhead structure
+- **lighting_behavior**: Warm concealed teak soffit strip + brass lanterns at terrace columns; sacred evening ambience.
+- **decor_language** (2):
+-   offering tray with frangipani flowers at terrace edge
+-   carved stone or timber column at terrace entry
+- **realism_constraints** (2):
+-   daybed at correct low height — 35–40 cm
+-   paving at correct level with correct joints
+- **room_specific_constraints** (2):
+-   daybed as primary furniture — not dining set
+-   tropical foliage planting as defined edge — not sparse
+- **visible_transition_logic**: volcanic stone paving continues to pool deck; teak ceiling extends from indoor living room
+- **negative_rules** (4):
+-   no rattan garden chairs
+-   no bright coloured cushions
+-   no string lights
+-   no modern angular steel furniture
+
+#### Room: `balcony`
+- **furniture_language** (3):
+-   single teak or carved wood seat with cotton cushion
+-   small carved stone side table
+-   single tropical planter — anthurium or bird of paradise
+- **material_palette** (3):
+-   volcanic stone or teak composite balcony floor
+-   carved timber or stone balustrade
+-   white cotton cushion
+- **lighting_behavior**: Single brass wall lantern; warm intimate Balinese-evening tone.
+- **decor_language** (2):
+-   single tropical plant in terracotta or stone pot
+-   white cotton cushion only — no pattern
+- **realism_constraints** (2):
+-   seat at correct height — 40–45 cm
+-   balustrade at safety height with Balinese character
+- **room_specific_constraints** (2):
+-   single seating only — no table-and-chairs set
+-   single tropical plant as focal element
+- **visible_transition_logic**: stone floor echoes interior volcanic floor; warm teak interior and tropical foliage visible through opening
+- **negative_rules** (4):
+-   no rattan (too generic tropical)
+-   no coloured cushions
+-   no suburban balcony chair set
+-   no multiple plant pots
+
+#### Room: `driveway`
+- **furniture_language** (3):
+-   carved volcanic stone gate pillars
+-   compacted stone or gravel driveway
+-   tropical planting flanking drive — heliconias and palms
+- **material_palette** (3):
+-   volcanic grey stone or compacted gravel driveway
+-   carved volcanic stone gate pillars and boundary wall
+-   brass lanterns
+- **lighting_behavior**: Warm brass lanterns on stone pillars + concealed warm uplights on tropical planting; sacred arrival.
+- **decor_language** (2):
+-   tropical planting flanking drive — not clipped hedging
+-   carved stone motif on gate pillar face
+- **realism_constraints** (2):
+-   gravel at correct depth — compacted, not floating
+-   gate pillars at correct height proportional to gate
+- **room_specific_constraints** (2):
+-   volcanic stone gate pillars — identity element
+-   tropical planting along drive edge — not formal hedging
+- **visible_transition_logic**: volcanic stone continues to entrance threshold; tropical planting echoes garden and pool surround
+- **negative_rules** (4):
+-   no block paving
+-   no formal clipped hedging
+-   no modern steel gate
+-   no cold white render boundary
+
+---
+
+## Atmosphere: `dark_contemporary`
+
+### Core DNA
+- **atmosphere_id**: `dark_contemporary`
+- **philosophy**: Architectural sophistication through depth, contrast, material richness, and restraint.
+- **emotional_intent**: Dramatic, sophisticated, powerful, sensory, moody but refined, architecturally confident.
+- **architectural_language**: Deep tonal volumes with high-contrast material surfaces, concealed warm light, and gallery-level spatial control.
+- **lighting_behavior**: Concealed precision lighting — warm glow against dark surfaces; darkness as design element.
+- **luxury_level**: Contemporary penthouse luxury
+- **atmosphere_keywords**: dark luxury, charcoal plaster, smoked oak, bronze, precision light
+- **material_palette** (5):
+-   dark charcoal plaster
+-   black or dark grey marble
+-   smoked oak or wenge
+-   brushed bronze or gunmetal
+-   concrete
+- **forbidden_elements** (5):
+-   Nightclub atmosphere
+-   cyberpunk lighting
+-   black void interiors
+-   aggressive contrast
+-   horror-dark rooms
+
+### Room adaptations (13)
+
+#### Room: `living_room`
+- **furniture_language** (3):
+-   dark charcoal bouclé or leather — deep low tactile richness
+-   dark marble or stone — sculptural surface depth
+-   dark velvet — high-contrast atmospheric depth
+- **material_palette** (3):
+-   dark charcoal plaster walls
+-   smoked oak or dark stone floor
+-   dark marble or bronze accent surfaces
+- **lighting_behavior**: Concealed warm ceiling cove + single sculptural bronze floor lamp; room lit by glow, not flood.
+- **decor_language** (2):
+-   large-scale abstract artwork in dark or muted tones
+-   single sculptural ceramic vessel in dark or metallic finish
+- **realism_constraints** (2):
+-   sofa sized correctly — not modelling-scale oversized
+-   floor in correct proportion — wood grain or stone texture visible
+- **room_specific_constraints** (2):
+-   artwork as single focal wall — not gallery cluster
+-   balanced dark-to-warm lighting ratio — not pure darkness
+- **visible_transition_logic**: charcoal plaster and smoked oak floor continue into adjacent rooms; bronze accents echo through visible dining area
+- **negative_rules** (4):
+-   no all-black room
+-   no neon or coloured accent light
+-   no chrome or silver hardware
+-   no grey rather than charcoal — must be warm dark
+
+#### Room: `master_bedroom`
+- **furniture_language** (3):
+-   dark velvet or leather — low tactile surface depth
+-   smoked oak or dark stone — floating surface drama
+-   dark bronze — metallic mirror depth
+- **material_palette** (3):
+-   dark charcoal plaster walls
+-   smoked oak or dark stone floor
+-   dark velvet or leather upholstery
+- **lighting_behavior**: Concealed warm slot above headboard + bedside table lamps with dark shade and warm bulb.
+- **decor_language** (2):
+-   dark tonal layered bedding — charcoal, slate, deep taupe
+-   single artwork in warm-dark tones above headboard
+- **realism_constraints** (2):
+-   platform bed at correct height — 40–45 cm
+-   bedding layers visible and weighted, not flat
+- **room_specific_constraints** (2):
+-   dark tonal palette throughout — no light contrast piece breaking mood
+-   no decorative ceiling feature — ceiling plain dark
+- **visible_transition_logic**: dark plaster and smoked oak flow into ensuite; tonal dark palette maintains continuity through visible dressing area
+- **negative_rules** (4):
+-   no light or white bedding
+-   no chrome hardware
+-   no mirrored furniture
+-   no cold grey tone
+
+#### Room: `kitchen`
+- **furniture_language** (3):
+-   dark charcoal or black matte cabinetry — flat-front
+-   dark marble or black stone countertop and island
+-   integrated appliances behind dark panel fronts
+- **material_palette** (3):
+-   dark matte cabinetry in charcoal or black
+-   dark Nero Marquina or black stone countertop
+-   brushed bronze or gunmetal hardware
+- **lighting_behavior**: Concealed warm under-cabinet strip + single bronze pendant over island; dramatic task lighting.
+- **decor_language** (2):
+-   single dark ceramic vessel on island — empty
+-   open bronze shelf with 3 dark-toned ceramics only
+- **realism_constraints** (2):
+-   island at correct 90 cm working height
+-   cabinet panels at correct residential height
+- **room_specific_constraints** (2):
+-   single dark stone for counter and backsplash — no tile
+-   bronze hardware throughout — no mixing with other finishes
+- **visible_transition_logic**: dark cabinetry and stone echo into dining area; bronze pendant palette continues over dining table
+- **negative_rules** (4):
+-   no white or cream cabinetry
+-   no chrome handles
+-   no warm wood visible
+-   no under-lit glass shelving
+
+#### Room: `bathroom`
+- **furniture_language** (3):
+-   floating dark stone or concrete vanity top with recessed basin
+-   dark stone or concrete freestanding tub
+-   frameless glass shower with dark stone surround
+- **material_palette** (3):
+-   book-matched dark marble or black stone floor and walls
+-   brushed bronze or gunmetal fixtures
+-   dark timber or concrete vanity
+- **lighting_behavior**: Concealed warm perimeter slot at ceiling + single warm backlit mirror; near-dark ambience.
+- **decor_language** (2):
+-   single dark ceramic or stone vessel — empty
+-   folded dark linen towel on bronze wall bar
+- **realism_constraints** (2):
+-   vanity slab at correct 80–85 cm height
+-   stone walls with correct veining and joint lines
+- **room_specific_constraints** (2):
+-   all fixtures in brushed bronze or gunmetal — single finish only
+-   no light countertop surfaces — dark throughout
+- **visible_transition_logic**: dark stone floor continues from dressing area; bronze fixtures echo through door hardware
+- **negative_rules** (4):
+-   no white tiles
+-   no chrome
+-   no light stone
+-   no over-lit mirror wall
+
+#### Room: `home_office`
+- **furniture_language** (3):
+-   large dark stone or lacquer desk — floating or on dark base
+-   high-back chair in dark leather
+-   floor-to-ceiling dark shelving with edited display
+- **material_palette** (3):
+-   smoked oak or dark stone floor
+-   dark charcoal plaster walls
+-   brushed bronze desk accessories
+- **lighting_behavior**: Concealed warm bookshelf backlighting + single adjustable bronze task lamp on desk.
+- **decor_language** (2):
+-   curated books with neutral or dark spines
+-   single dark ceramic or stone desk object
+- **realism_constraints** (2):
+-   desk at correct 72–75 cm working height
+-   shelving with correct structural depth — 30 cm minimum
+- **room_specific_constraints** (2):
+-   cable management complete — no visible wires
+-   shelving with breathing space — not overloaded
+- **visible_transition_logic**: dark floor and plaster echo hallway and living room; bronze accessories match hardware throughout
+- **negative_rules** (4):
+-   no light wood desk
+-   no white walls
+-   no cold LED task light
+-   no RGB accent lighting
+
+#### Room: `dining_room`
+- **furniture_language** (3):
+-   dark marble or stone dining table on sculptural bronze base
+-   upholstered chairs in dark velvet or leather
+-   dark timber or bronze credenza
+- **material_palette** (3):
+-   smoked oak or dark stone floor
+-   dark charcoal plaster walls
+-   dark velvet or leather upholstery
+- **lighting_behavior**: Single large sculptural pendant in bronze or dark metal over table; warm focused glow.
+- **decor_language** (2):
+-   single sculptural dark ceramic centrepiece
+-   pair of dark candle columns flanking table
+- **realism_constraints** (2):
+-   pendant at correct height — 70–80 cm above table
+-   chairs at correct seat height
+- **room_specific_constraints** (2):
+-   all chair upholstery matching — dark tonal palette
+-   no light contrast table surface
+- **visible_transition_logic**: dark plaster and smoked oak echo living room; bronze pendant palette continues through to kitchen
+- **negative_rules** (4):
+-   no light table surface
+-   no crystal chandelier
+-   no patterned upholstery
+-   no bright centrepiece
+
+#### Room: `entrance_hall`
+- **furniture_language** (3):
+-   dark stone or concrete console table — floating or slab-based
+-   large dark bronze-framed mirror
+-   single sculptural vessel in dark ceramic or stone
+- **material_palette** (3):
+-   large-format dark stone floor
+-   dark charcoal plaster walls
+-   brushed bronze or gunmetal hardware
+- **lighting_behavior**: Single narrow ceiling slot over console + wall cove at ceiling; arrival through precision warm beam.
+- **decor_language** (2):
+-   single sculptural dark vessel — empty
+-   no artwork — dark plaster wall as composition
+- **realism_constraints** (2):
+-   console at correct 80–85 cm height
+-   mirror height 150 cm+ for architectural proportion
+- **room_specific_constraints** (2):
+-   single object on console — enforced discipline
+-   no coats or storage visible at entry
+- **visible_transition_logic**: dark stone floor and charcoal plaster flow unbroken into living room; bronze hardware echoes throughout
+- **negative_rules** (4):
+-   no warm oak console
+-   no decorative objects cluster
+-   no coat rack
+-   no warm-toned entry
+
+#### Room: `facade`
+- **furniture_language** (3):
+-   dark render or black concrete facade
+-   steel or concrete cantilevered canopy at entrance
+-   pivot door in dark steel or timber
+- **material_palette** (3):
+-   dark charcoal render or black concrete finish
+-   dark steel window frames
+-   dark bronze or gunmetal door hardware
+- **lighting_behavior**: Concealed ground uplights washing dark facade + single warm entrance flood; dramatic night presence.
+- **decor_language** (2):
+-   facade as pure dark sculptural mass — no decoration
+-   single specimen tree in black crushed stone forecourt
+- **realism_constraints** (2):
+-   render texture visible — not CGI-smooth black
+-   window proportions architectural — not suburban
+- **room_specific_constraints** (2):
+-   single facade material — dark render or concrete only
+-   no visible entrance porch — canopy only
+- **visible_transition_logic**: dark render continues to boundary wall; dark stone threshold echoes interior floor
+- **negative_rules** (4):
+-   no warm sand render
+-   no timber cladding
+-   no white or light facade
+-   no suburban window proportions
+
+#### Room: `garden`
+- **furniture_language** (3):
+-   single dark steel or concrete garden bench
+-   architectural specimen tree — black bamboo or olive
+-   dark crushed stone or gravel ground plane
+- **material_palette** (3):
+-   dark crushed stone or black gravel ground plane
+-   dark steel garden bench or plinth
+-   deep green or dark foliage planting only
+- **lighting_behavior**: Single dramatic uplight on specimen tree + ground-level warm strips; garden as lit sculpture.
+- **decor_language** (2):
+-   single architectural specimen as sole focal element
+-   dark ground plane as canvas for specimen
+- **realism_constraints** (2):
+-   ground plane at correct grade level
+-   specimen tree at correct planted scale
+- **room_specific_constraints** (2):
+-   dark ground surface only — no lawn or pale gravel
+-   single species specimen — not a planting mix
+- **visible_transition_logic**: dark stone continues to terrace; dark facade visible at garden boundary
+- **negative_rules** (4):
+-   no lawn
+-   no light gravel
+-   no mixed planting
+-   no colourful planting
+
+#### Room: `pool_area`
+- **furniture_language** (3):
+-   dark stone or concrete sun loungers or platforms
+-   minimal steel or concrete cantilevered shade
+-   single sculptural planter at pool edge
+- **material_palette** (3):
+-   dark honed stone or concrete pool deck
+-   dark pool liner — black or deep charcoal
+-   brushed steel or dark concrete pool coping
+- **lighting_behavior**: Warm underwater lighting reflected against dark liner + concealed deck strip at coping level.
+- **decor_language** (2):
+-   pool as dark mirror at night — primary visual
+-   single specimen architectural tree in dark crushed stone
+- **realism_constraints** (2):
+-   dark pool liner creates mirror effect — not just dark
+-   lounger platforms at correct rest height
+- **room_specific_constraints** (2):
+-   dark pool liner — mandatory
+-   no white or cream sun loungers
+- **visible_transition_logic**: dark stone deck continues to terrace paving; dark facade visible as dramatic backdrop
+- **negative_rules** (4):
+-   no light stone deck
+-   no white loungers
+-   no bright parasols
+-   no resort-blue water tone
+
+#### Room: `terrace`
+- **furniture_language** (3):
+-   deep outdoor sofa in dark charcoal outdoor fabric
+-   dark concrete or stone low table
+-   minimal steel or concrete pergola
+- **material_palette** (3):
+-   dark honed stone or brushed concrete paving
+-   dark charcoal outdoor upholstery
+-   brushed steel or dark concrete structure
+- **lighting_behavior**: Concealed warm strips under pergola beam + low bronze floor lanterns; dramatic evening tone.
+- **decor_language** (2):
+-   single large dark ceramic planter with sculptural plant
+-   dark steel fire pit as evening focal element
+- **realism_constraints** (2):
+-   outdoor sofa at correct scale for terrace
+-   paving at correct level with correct joint lines
+- **room_specific_constraints** (2):
+-   shade structure in dark material — steel or concrete, not timber
+-   single seating zone — no outdoor dining set
+- **visible_transition_logic**: dark paving continues to pool deck; dark interior visible through glass doors as continuation
+- **negative_rules** (4):
+-   no rattan
+-   no warm timber pergola
+-   no coloured cushions
+-   no string lights
+
+#### Room: `balcony`
+- **furniture_language** (3):
+-   two dark steel or concrete armchairs
+-   small dark concrete side table
+-   single sculptural dark planter
+- **material_palette** (3):
+-   dark honed stone or brushed concrete balcony floor
+-   dark steel or glass balustrade
+-   dark outdoor upholstery
+- **lighting_behavior**: Single recessed warm floor light + small bronze wall sconce; dramatic evening tone.
+- **decor_language** (2):
+-   single dark ceramic pot with architectural plant — black pine or sculptural succulent
+-   no cushion — or single dark cover only
+- **realism_constraints** (2):
+-   chairs at correct scale for balcony
+-   balustrade at safety height
+- **room_specific_constraints** (2):
+-   dark material throughout — no warm timber accent
+-   single plant — not a collection
+- **visible_transition_logic**: dark floor continues from interior; dark interior and warm glow visible through glass
+- **negative_rules** (4):
+-   no warm rattan
+-   no coloured cushions
+-   no decorative lanterns
+-   no suburban balcony chair set
+
+#### Room: `driveway`
+- **furniture_language** (3):
+-   dark concrete or steel gate
+-   dark stone or concrete driveway with minimal edging
+-   single specimen tree in dark crushed stone forecourt
+- **material_palette** (3):
+-   dark honed stone or brushed concrete driveway
+-   dark steel or concrete gate pillars
+-   dark crushed stone or black gravel infill
+- **lighting_behavior**: Single ground uplight on specimen tree + concealed warm strip at gate reveal; dramatic arrival.
+- **decor_language** (2):
+-   single dark crushed stone forecourt — no planting borders
+-   architectural gate as only arrival element
+- **realism_constraints** (2):
+-   driveway at correct width — 3.5–4 m for penthouse scale
+-   gate pillar proportioned correctly for gate width
+- **room_specific_constraints** (2):
+-   single dark material for driveway — no mixing
+-   gate in dark steel only — no timber mix
+- **visible_transition_logic**: dark stone driveway continues to entrance threshold; dark facade visible as dramatic backdrop from gate
+- **negative_rules** (4):
+-   no pale gravel
+-   no warm render boundary
+-   no ornate gate
+-   no warm lanterns — cool precision only
+
+---
+
+## Atmosphere: `desert_luxe`
+
+### Core DNA
+- **atmosphere_id**: `desert_luxe`
+- **philosophy**: Middle Eastern contemporary luxury inspired by desert architecture and sculptural calm.
+- **emotional_intent**: Sculptural, warm, monumental, serene, sun-bleached, timelessly opulent.
+- **architectural_language**: Monolithic forms in sand and terracotta, deep shadow reveals, and tactile plaster surfaces referencing desert vernacular architecture.
+- **lighting_behavior**: Warm low-angled light — concealed slots mimicking desert sun raking, hammered metal lanterns.
+- **luxury_level**: Dubai penthouse / Aman desert resort
+- **atmosphere_keywords**: tadelakt, sandstone, desert monolith, hammered brass, sculptural warmth
+- **material_palette** (5):
+-   sand-toned tadelakt or micro-cement plaster
+-   warm terracotta or sandstone
+-   walnut or cedar timber
+-   hammered brass or copper
+-   raw cotton or camel leather
+- **forbidden_elements** (5):
+-   Theme park Morocco styling
+-   excessive ornamentation
+-   oversaturated orange tones
+-   arabesque pattern overuse
+-   fake gold
+
+### Room adaptations (13)
+
+#### Room: `living_room`
+- **furniture_language** (3):
+-   raw cotton or camel leather — tactile desert warmth
+-   solid sandstone or terracotta — sun-drenched surface warmth
+-   carved wood — artisan surface richness
+- **material_palette** (3):
+-   polished tadelakt floor in sand or warm ivory
+-   tadelakt plaster walls in terracotta or warm sand
+-   walnut or cedar timber accents
+- **lighting_behavior**: Single hammered brass pendant + concealed warm floor slot; low-angled warm glow.
+- **decor_language** (2):
+-   single large dark ceramic vessel — empty
+-   woven camel or natural textile throw on sofa
+- **realism_constraints** (2):
+-   sofa low — 40–45 cm — correct desert floor culture scale
+-   plaster texture visible — not flat paint
+- **room_specific_constraints** (2):
+-   no pattern on walls — tadelakt is the texture
+-   maximum 2 decorative objects in room
+- **visible_transition_logic**: tadelakt floor and plaster walls continue into adjacent rooms; warm sand palette unbroken through visible spaces
+- **negative_rules** (4):
+-   no arabesque tile pattern
+-   no cold marble
+-   no bright orange
+-   no maximalist Moroccan styling
+
+#### Room: `master_bedroom`
+- **furniture_language** (3):
+-   warm timber or sandstone — low platform surface warmth
+-   tadelakt or stone slab — tactile warmth at night level
+-   hammered brass — warm metallic mirror richness
+- **material_palette** (3):
+-   polished tadelakt floor
+-   tadelakt plaster walls in warm sand or terracotta
+-   raw cotton or camel linen bedding
+- **lighting_behavior**: Concealed warm slot above headboard wall + single hammered brass wall sconce at bedside.
+- **decor_language** (2):
+-   layered raw cotton and natural linen bedding in sand tones
+-   single carved wooden object on bedside slab
+- **realism_constraints** (2):
+-   platform bed at correct low height — 35–40 cm
+-   tadelakt walls with correct reflective polish — not flat
+- **room_specific_constraints** (2):
+-   monochrome sand-toned palette for all bedding
+-   no artwork — wall left as plaster composition
+- **visible_transition_logic**: tadelakt floor and warm plaster flow into ensuite; sand-toned palette continuous
+- **negative_rules** (4):
+-   no patterned bedding
+-   no chrome hardware
+-   no cold-toned palette
+-   no ornate headboard
+
+#### Room: `kitchen`
+- **furniture_language** (3):
+-   tadelakt-fronted cabinetry in warm sand tone
+-   thick sandstone or terracotta slab countertop
+-   open cedar or walnut shelf with simple clay vessels
+- **material_palette** (3):
+-   tadelakt cabinet fronts in sand or terracotta
+-   sandstone or warm stone countertop
+-   hammered brass hardware
+- **lighting_behavior**: Concealed warm under-cabinet strip + single hammered brass pendant over island.
+- **decor_language** (2):
+-   three matching clay or terracotta vessels on open shelf
+-   single carved wooden board on counter
+- **realism_constraints** (2):
+-   countertop at correct 90 cm height
+-   tadelakt surface with correct polished texture
+- **room_specific_constraints** (2):
+-   hammered brass hardware throughout — no mixing finishes
+-   countertop in single stone — no tile
+- **visible_transition_logic**: warm tadelakt and sandstone echo into dining area; hammered brass hardware palette visible through opening
+- **negative_rules** (4):
+-   no white cabinetry
+-   no chrome hardware
+-   no cold stone countertop
+-   no patterned tile backsplash
+
+#### Room: `bathroom`
+- **furniture_language** (3):
+-   full tadelakt wet room — walls and floor continuous
+-   freestanding stone soaking tub — sandstone or terracotta composite
+-   single hammered brass basin on stone slab
+- **material_palette** (3):
+-   tadelakt walls and floor in warm sand or terracotta
+-   sandstone or stone slab vanity
+-   hammered brass fixtures throughout
+- **lighting_behavior**: Single concealed warm slot at ceiling perimeter; room lit by raking warm glow — hammam-adjacent.
+- **decor_language** (2):
+-   single carved wooden stool beside tub
+-   folded raw cotton towels on cedar wall peg
+- **realism_constraints** (2):
+-   tadelakt floor and walls correctly seamless — no grout lines
+-   stone tub at correct weight and floor-standing scale
+- **room_specific_constraints** (2):
+-   tadelakt throughout — no mixed surface
+-   all fixtures hammered brass — single finish
+- **visible_transition_logic**: tadelakt continues from bedroom floor without threshold; warm sand palette continuous
+- **negative_rules** (4):
+-   no white tiles
+-   no chrome fixtures
+-   no cold stone
+-   no Western-bathroom accessories
+
+#### Room: `home_office`
+- **furniture_language** (3):
+-   solid sandstone slab desk on warm timber trestle
+-   upholstered chair in raw cotton or camel leather
+-   floating cedar or walnut shelf
+- **material_palette** (3):
+-   polished tadelakt floor
+-   tadelakt walls in warm sand
+-   cedar or walnut desk and shelf
+- **lighting_behavior**: Single warm hammered brass desk lamp + concealed warm cove; no cold task light.
+- **decor_language** (2):
+-   single clay vessel as pen holder
+-   one smooth river stone as paperweight — nothing more
+- **realism_constraints** (2):
+-   desk at correct 72–75 cm working height
+-   shelf with maximum 5 items — restraint enforced
+- **room_specific_constraints** (2):
+-   zero cable visibility
+-   no monitor stand clutter — single flush screen only
+- **visible_transition_logic**: tadelakt floor and warm plaster flow into adjacent rooms; warm material palette continuous
+- **negative_rules** (4):
+-   no cold white LED
+-   no conventional office chair
+-   no exposed cable tangle
+-   no tech accessory clutter
+
+#### Room: `dining_room`
+- **furniture_language** (3):
+-   large sandstone or warm timber dining table — solid monolithic slab
+-   upholstered chairs in raw cotton or camel leather
+-   carved timber or tadelakt sideboard
+- **material_palette** (3):
+-   polished tadelakt floor
+-   tadelakt walls in warm sand
+-   raw cotton or leather upholstery
+- **lighting_behavior**: Single hammered brass pendant hung low over table; warm focused glow — dining as ceremony.
+- **decor_language** (2):
+-   single carved stone or ceramic centrepiece — empty vessel
+-   two hammered brass candleholders flanking centrepiece
+- **realism_constraints** (2):
+-   pendant at correct height — 70–80 cm above table
+-   chairs at correct seat height for table
+- **room_specific_constraints** (2):
+-   monolithic table — single slab material, not mixed
+-   centrepiece in single element — not arrangement
+- **visible_transition_logic**: tadelakt floor and warm walls echo living room; hammered brass continues through to kitchen fixtures
+- **negative_rules** (4):
+-   no cold marble table
+-   no patterned chair upholstery
+-   no maximalist table setting
+-   no chandelier
+
+#### Room: `entrance_hall`
+- **furniture_language** (3):
+-   carved stone or tadelakt console slab — wall-mounted
+-   large hammered brass mirror
+-   single large dark ceramic vessel
+- **material_palette** (3):
+-   polished tadelakt floor
+-   tadelakt plaster walls in warm sand
+-   hammered brass accents
+- **lighting_behavior**: Single concealed warm ceiling slot over console; arrival through raking warm beam.
+- **decor_language** (2):
+-   single large dark ceramic — empty, sculptural
+-   no artwork — warm plaster wall as composition
+- **realism_constraints** (2):
+-   console at correct 80–85 cm height
+-   mirror height 150 cm+ for proportion
+- **room_specific_constraints** (2):
+-   single sculptural object on console — nothing else
+-   no coat hooks, no storage visible
+- **visible_transition_logic**: tadelakt floor and warm plaster flow into living room; hammered brass hardware echoes throughout
+- **negative_rules** (4):
+-   no cold stone or tile floor
+-   no ornate Moroccan mirror
+-   no accessory cluster
+-   no coat rack
+
+#### Room: `facade`
+- **furniture_language** (3):
+-   monolithic smooth tadelakt or sand render facade
+-   deep-set window reveals casting shadow lines
+-   heavy solid timber pivot door
+- **material_palette** (3):
+-   smooth tadelakt or sand micro-cement render
+-   warm sandstone base or threshold detail
+-   hammered brass or copper door hardware
+- **lighting_behavior**: Concealed warm ground uplights washing facade + single hammered brass lantern at entrance.
+- **decor_language** (2):
+-   facade as sculptural monolith — no decoration
+-   single specimen agave or olive in white gravel forecourt
+- **realism_constraints** (2):
+-   render texture smooth but not CGI-perfect — slight material variation
+-   deep window reveals at correct shadow-casting depth
+- **room_specific_constraints** (2):
+-   single facade material — tadelakt render only
+-   no decorative elements on facade — mass is the design
+- **visible_transition_logic**: warm render continues to boundary wall and gate pillars; sandstone threshold echoes interior floor
+- **negative_rules** (4):
+-   no cold grey render
+-   no Moorish arch decoration
+-   no mixed materials on facade
+-   no warm orange over-saturation
+
+#### Room: `garden`
+- **furniture_language** (3):
+-   single carved stone bench
+-   white gravel or crushed stone ground plane
+-   single specimen agave or olive tree
+- **material_palette** (3):
+-   white crushed stone or pale gravel ground plane
+-   warm sandstone path
+-   carved stone bench and planters
+- **lighting_behavior**: Single warm ground uplight on specimen plant + concealed path strip; desert garden at dusk.
+- **decor_language** (2):
+-   single architectural agave or euphorbia as focal element
+-   raked white gravel as contemplative ground plane
+- **realism_constraints** (2):
+-   gravel at correct depth — loose but not floating
+-   plant at correct scale for garden
+- **room_specific_constraints** (2):
+-   desert plant palette only — no lush tropical planting
+-   maximum 2 plant species
+- **visible_transition_logic**: white gravel and sandstone path continue to terrace; warm rendered facade visible at garden edge
+- **negative_rules** (4):
+-   no lush tropical planting
+-   no lawn
+-   no mixed stone types
+-   no decorative ornaments
+
+#### Room: `pool_area`
+- **furniture_language** (3):
+-   carved stone or timber sun platforms — not loungers
+-   canvas shade sail on heavy timber post
+-   stone or tadelakt low side table
+- **material_palette** (3):
+-   large-format sandstone pool deck
+-   warm stone pool coping
+-   warm canvas shade material
+- **lighting_behavior**: Warm underwater lighting with slight warm tint + hammered brass uplights at coping; dusk desert tone.
+- **decor_language** (2):
+-   single large agave or specimen cactus in stone planter at pool end
+-   deck as pure stone plane — no furniture clutter
+- **realism_constraints** (2):
+-   pool deck at correct level — continuous with surrounding grade
+-   platform at correct height for repose — not standard lounger
+- **room_specific_constraints** (2):
+-   platform-style repose — not resort-style lounger parade
+-   warm-toned pool liner — not blue
+- **visible_transition_logic**: sandstone deck continues to terrace; tadelakt facade visible as monolithic backdrop
+- **negative_rules** (4):
+-   no bright blue pool
+-   no resort-style lounger row
+-   no bright parasols
+-   no cold stone deck
+
+#### Room: `terrace`
+- **furniture_language** (3):
+-   low platform bench in carved timber or sandstone
+-   carved stone or tadelakt low table
+-   canvas shade sail or timber pergola with fabric drape
+- **material_palette** (3):
+-   large-format sandstone or terracotta paving
+-   warm cotton outdoor cushions in sand or camel
+-   cedar or timber overhead structure
+- **lighting_behavior**: Hammered brass floor lanterns + warm concealed strip under pergola beam; desert evening warmth.
+- **decor_language** (2):
+-   single large ceramic planter with agave or desert plant
+-   woven cotton cushion pile in sand tones
+- **realism_constraints** (2):
+-   paving at correct level with correct joint lines
+-   shade structure at correct clearance height
+- **room_specific_constraints** (2):
+-   cushion palette in sand, camel, warm ivory only
+-   single large planting focal element — not a garden
+- **visible_transition_logic**: sandstone paving continues to pool deck; warm tadelakt facade visible through pergola structure
+- **negative_rules** (4):
+-   no rattan furniture
+-   no bright cushion colours
+-   no coloured lanterns
+-   no string lights
+
+#### Room: `balcony`
+- **furniture_language** (3):
+-   single carved timber or stone platform seat
+-   small sandstone side table
+-   single large ceramic or terracotta planter with agave
+- **material_palette** (3):
+-   sandstone or tadelakt balcony floor
+-   warm render or tadelakt balustrade
+-   warm cotton cushion
+- **lighting_behavior**: Single hammered brass wall lantern; warm intimate desert-evening tone.
+- **decor_language** (2):
+-   large agave or desert plant in terracotta planter
+-   woven cotton cushion in sand or camel
+- **realism_constraints** (2):
+-   seat at correct height — 40 cm
+-   balustrade in render or solid — no glass or metal rail
+- **room_specific_constraints** (2):
+-   single seating element only
+-   single desert plant — not multiple pots
+- **visible_transition_logic**: sandstone floor echoes interior tadelakt; warm glow of interior visible through glass
+- **negative_rules** (4):
+-   no rattan
+-   no plastic
+-   no coloured cushions
+-   no multiple plant pots
+
+#### Room: `driveway`
+- **furniture_language** (3):
+-   smooth tadelakt or sand render gate pillars
+-   compacted sand or warm gravel driveway
+-   single specimen agave or palm at forecourt
+- **material_palette** (3):
+-   warm compacted sand or beige gravel driveway
+-   smooth tadelakt render gate pillars
+-   hammered brass lanterns
+- **lighting_behavior**: Hammered brass lanterns on gate pillars + concealed warm ground uplight on specimen; warm desert arrival.
+- **decor_language** (2):
+-   single agave or desert palm at forecourt as focal element
+-   clean gravel forecourt — no clutter
+- **realism_constraints** (2):
+-   gravel at correct depth — not floating stones
+-   gate pillars at correct proportional height
+- **room_specific_constraints** (2):
+-   warm gravel or sand surface only — no pavement
+-   gate pillars in same tadelakt render as facade
+- **visible_transition_logic**: warm gravel continues to entrance threshold; monolithic tadelakt facade visible from gate
+- **negative_rules** (4):
+-   no cold grey paving
+-   no ornate gate
+-   no hedging borders
+-   no cold white rendered boundary
+
+---
+
+## Atmosphere: `japandi_calm`
+
+### Core DNA
+- **atmosphere_id**: `japandi_calm`
+- **philosophy**: Japanese restraint blended with Scandinavian softness and emotional calm.
+- **emotional_intent**: Still, serene, grounded, quietly refined, breathable, unhurried.
+- **architectural_language**: Low-profile horizontal forms, natural material honesty, and deliberate negative space in clean residential volumes.
+- **lighting_behavior**: Soft diffused ambient — paper lanterns, concealed warm slots; no bright downlights.
+- **luxury_level**: Quiet luxury boutique hospitality
+- **atmosphere_keywords**: japandi, wabi-sabi, negative space, natural honesty, quiet luxury
+- **material_palette** (5):
+-   pale ash or birch
+-   wabi-sabi plaster
+-   dark charcoal ceramic
+-   natural linen
+-   honed dark stone
+- **forbidden_elements** (5):
+-   Empty sterile minimalism
+-   sci-fi white spaces
+-   excessive decor
+-   fake zen clichés
+-   bamboo overuse
+
+### Room adaptations (13)
+
+#### Room: `living_room`
+- **furniture_language** (3):
+-   natural linen in stone or fog tones — unhurried tactile calm
+-   wabi-sabi ceramic or ash — raw surface honesty
+-   natural rush or jute — organic textural warmth
+- **material_palette** (3):
+-   pale ash or birch floor
+-   wabi-sabi plaster walls in off-white or putty
+-   dark charcoal ceramic accents
+- **lighting_behavior**: Paper lantern pendant + concealed warm floor slot; no harsh downlights.
+- **decor_language** (2):
+-   single branch in handmade ceramic vase
+-   one framed Japanese ink artwork
+- **realism_constraints** (2):
+-   sofa low enough to feel grounded — 40–45 cm seat height
+-   empty floor space is deliberate, not absent
+- **room_specific_constraints** (2):
+-   maximum 3 decorative objects in room
+-   solid neutral rug or no rug — no pattern
+- **visible_transition_logic**: pale ash floor and plaster walls extend into adjacent rooms; ceramic palette echoes through visible kitchen
+- **negative_rules** (4):
+-   no cluttered surfaces
+-   no patterned textiles
+-   no warm-orange wood tones
+-   no cold grey minimalism
+
+#### Room: `master_bedroom`
+- **furniture_language** (3):
+-   pale ash timber — warm horizontal tactile calm
+-   ash or natural timber — minimal wall-mounted surface restraint
+-   raw wood or unfinished timber — wabi-sabi surface quality
+- **material_palette** (3):
+-   pale ash or birch floor
+-   wabi-sabi plaster walls
+-   natural linen bedding in stone or fog tones
+- **lighting_behavior**: Single paper lantern pendant off-centre + narrow concealed cove above headboard wall.
+- **decor_language** (2):
+-   folded linen throw at bed foot
+-   single ikebana branch in ceramic on bedside shelf
+- **realism_constraints** (2):
+-   platform bed at correct low height — 35–40 cm
+-   bedding folded with natural weight, not starched flat
+- **room_specific_constraints** (2):
+-   no TV in bedroom
+-   single artwork or none — wall left deliberately spare
+- **visible_transition_logic**: ash floor and plaster walls flow into visible ensuite; linen tones echo in towel display
+- **negative_rules** (4):
+-   no upholstered headboard
+-   no patterned bedding
+-   no chrome bedside lamps
+-   no hotel turndown aesthetic
+
+#### Room: `kitchen`
+- **furniture_language** (3):
+-   flat-front pale ash cabinetry, handleless or recessed grip
+-   honed concrete or raw stone countertop
+-   open lower shelf with minimal ceramic display
+- **material_palette** (3):
+-   pale ash cabinetry
+-   honed concrete or raw stone countertop
+-   wabi-sabi plaster backsplash
+- **lighting_behavior**: Warm concealed under-cabinet strip only; no ceiling pendant in kitchen zone.
+- **decor_language** (2):
+-   three matching ceramic canisters on open shelf
+-   single clay or cast iron pot on counter
+- **realism_constraints** (2):
+-   cabinet doors at residential height — not commercial scale
+-   countertop empty except for 1–2 intentional objects
+- **room_specific_constraints** (2):
+-   no upper cabinets to ceiling — open shelf break preferred
+-   all appliances hidden or flush-integrated
+- **visible_transition_logic**: ash cabinet tone flows into dining furniture; stone counter colour echoes dining table surface
+- **negative_rules** (4):
+-   no warm oak tone
+-   no exposed stainless appliances
+-   no cluttered open shelving
+-   no patterned tile backsplash
+
+#### Room: `bathroom`
+- **furniture_language** (3):
+-   wall-hung ash vanity, handleless
+-   deep soaking tub in raw concrete or stone composite
+-   frameless glass shower partition
+- **material_palette** (3):
+-   honed natural stone floor
+-   wabi-sabi plaster walls
+-   matte black or graphite fixtures
+- **lighting_behavior**: Concealed warm slot above vanity mirror; diffused side sources only — no ceiling downlights.
+- **decor_language** (2):
+-   single ceramic soap dish
+-   folded natural linen towels on wall peg
+- **realism_constraints** (2):
+-   vanity at correct height — 80–85 cm
+-   stone floor with correct grout joint width
+- **room_specific_constraints** (2):
+-   matte black fixtures throughout — no finish mixing
+-   countertop with soap and single plant only
+- **visible_transition_logic**: stone floor and plaster walls continue into dressing area; matte black fixtures echo door hardware
+- **negative_rules** (4):
+-   no glossy white tiles
+-   no chrome fixtures
+-   no mirrored vanity cabinet
+-   no over-accessorised countertop
+
+#### Room: `home_office`
+- **furniture_language** (3):
+-   wall-mounted ash floating desk — no legs
+-   minimal upright chair in ash with linen seat pad
+-   single floating ash shelf above desk
+- **material_palette** (3):
+-   pale ash floor
+-   wabi-sabi plaster walls
+-   matte black desk accessories
+- **lighting_behavior**: Single adjustable matte black task arm lamp on desk; warm ambient cove only.
+- **decor_language** (2):
+-   single ceramic pen pot
+-   one small moss ball or air plant in ceramic
+- **realism_constraints** (2):
+-   floating desk correctly wall-anchored — no visible cantilever sag
+-   chair at correct desk height
+- **room_specific_constraints** (2):
+-   zero cable visibility — all routed inside wall
+-   shelf with maximum 5 items total
+- **visible_transition_logic**: ash desk and plaster walls flow into adjacent hallway; matte black accents echo door hardware
+- **negative_rules** (4):
+-   no standard desk with legs
+-   no ergonomic chair styling
+-   no monitor stand clutter
+-   no pin board or sticky notes
+
+#### Room: `dining_room`
+- **furniture_language** (3):
+-   low rectangular ash dining table
+-   simple benches or low-back ash chairs
+-   wall-mounted ash credenza
+- **material_palette** (3):
+-   pale ash floor
+-   wabi-sabi plaster walls
+-   natural linen chair upholstery or bare ash seat
+- **lighting_behavior**: Single washi paper pendant hung low over table; warm diffused glow, no direct spot.
+- **decor_language** (2):
+-   single ceramic bowl centrepiece
+-   one ikebana branch on credenza
+- **realism_constraints** (2):
+-   pendant at correct dining height — 70–75 cm above table
+-   bench seat at correct height for table
+- **room_specific_constraints** (2):
+-   table for 4–6 only — not oversized
+-   credenza top with single object only
+- **visible_transition_logic**: ash floor and plaster continue from living room; ceramic palette echoes kitchen visible beyond
+- **negative_rules** (4):
+-   no upholstered chair backs
+-   no tablecloth
+-   no multi-pendant cluster
+-   no displayed sideboard objects
+
+#### Room: `entrance_hall`
+- **furniture_language** (3):
+-   wall-mounted ash shelf at 90 cm — no legs
+-   single hand-thrown ceramic bowl on shelf
+-   simple ash-framed mirror
+- **material_palette** (3):
+-   large-format honed stone floor
+-   wabi-sabi plaster walls
+-   matte black or ash door hardware
+- **lighting_behavior**: Narrow warm slot above mirror; arrival through focused warm beam — no ceiling light.
+- **decor_language** (2):
+-   single dried botanical in ceramic
+-   wall left deliberately empty — no artwork
+- **realism_constraints** (2):
+-   shelf wall-anchored with no visible brackets
+-   mirror sized to match shelf width
+- **room_specific_constraints** (2):
+-   single object on shelf — discipline enforced
+-   no coat hooks or visible storage
+- **visible_transition_logic**: stone floor and plaster flow directly into living room; ash palette echoes throughout
+- **negative_rules** (4):
+-   no console with legs
+-   no coat rack
+-   no cluttered entry objects
+-   no warm oak tone
+
+#### Room: `facade`
+- **furniture_language** (3):
+-   timber-clad facade in shou sugi ban or pale ash boards
+-   recessed entrance with stone threshold
+-   simple matte steel or timber gate
+- **material_palette** (3):
+-   charred timber or pale ash board cladding
+-   raw concrete or stone plinth base
+-   matte black steel window frames
+- **lighting_behavior**: Concealed ground uplights washing cladding vertically + single warm entrance lantern.
+- **decor_language** (2):
+-   clean horizontal board rhythm
+-   single specimen tree in gravel forecourt
+- **realism_constraints** (2):
+-   timber board joints at correct weathered scale
+-   window reveals deep enough to cast shadow line
+- **room_specific_constraints** (2):
+-   maximum two materials on facade — no mixing
+-   entrance door recessed into facade plane
+- **visible_transition_logic**: charred timber tone flows to boundary fence; stone threshold echoes interior floor material
+- **negative_rules** (4):
+-   no warm sand render
+-   no decorative ironwork
+-   no warm brick
+-   no suburban window proportions
+
+#### Room: `garden`
+- **furniture_language** (3):
+-   single low ash bench
+-   large specimen Japanese maple or birch tree
+-   raked gravel or moss ground zone
+- **material_palette** (3):
+-   dark slate stepping stone path
+-   moss or raked gravel ground plane
+-   raw concrete or stone planter
+- **lighting_behavior**: Low warm uplights on specimen tree + single stone lantern on plinth; no path strip lighting.
+- **decor_language** (2):
+-   raked gravel as design element
+-   carefully pruned shrub or topiary mass
+- **realism_constraints** (2):
+-   stepping stones at correct 50–60 cm pace
+-   ground plane at correct grade level
+- **room_specific_constraints** (2):
+-   maximum 3 plant species
+-   no lawn — gravel, moss, or stone ground only
+- **visible_transition_logic**: stone stepping path connects to terrace; ash bench echoes interior joinery palette
+- **negative_rules** (4):
+-   no lawn grass
+-   no mixed planting chaos
+-   no garden furniture set
+-   no decorative lantern overuse
+
+#### Room: `pool_area`
+- **furniture_language** (3):
+-   low teak or ash platform daybed
+-   simple concrete or stone side plinth
+-   minimal canvas shade sail
+- **material_palette** (3):
+-   honed concrete or dark stone pool deck
+-   flush dark-grout stone coping
+-   natural canvas shade
+- **lighting_behavior**: Subdued warm underwater lighting + low ground uplights at deck perimeter only.
+- **decor_language** (2):
+-   single specimen tree at pool edge
+-   raked gravel or moss ground plane beyond deck
+- **realism_constraints** (2):
+-   pool coping flush with deck — no raised lip
+-   daybed at correct low height
+- **room_specific_constraints** (2):
+-   dark pool liner preferred — slate or charcoal tone
+-   maximum 2 daybeds — no furniture overcrowding
+- **visible_transition_logic**: dark stone deck continues to terrace; charred timber facade visible as backdrop
+- **negative_rules** (4):
+-   no travertine (too warm)
+-   no bright parasols
+-   no sun lounger parade
+-   no colourful pool water
+
+#### Room: `terrace`
+- **furniture_language** (3):
+-   low teak or ash platform bench with flat cushion
+-   simple stone or concrete low table
+-   single large ceramic planter
+- **material_palette** (3):
+-   honed concrete or natural stone paving
+-   matte charcoal planter
+-   natural linen outdoor cushion
+- **lighting_behavior**: Low warm ground uplights on planting + single warm lantern on plinth; minimal overhead.
+- **decor_language** (2):
+-   single specimen tree — maple or birch
+-   raked gravel or moss ground plane
+- **realism_constraints** (2):
+-   bench at correct low height — 35–40 cm seat
+-   planting sparse and intentional
+- **room_specific_constraints** (2):
+-   single furniture grouping only — seating zone only
+-   raked gravel or ground plane clearly defined
+- **visible_transition_logic**: stone paving continues from interior ash floor; furniture palette echoes interior joinery visible through glass
+- **negative_rules** (4):
+-   no rattan outdoor furniture
+-   no string lights
+-   no potted herb collection
+-   no coloured cushions
+
+#### Room: `balcony`
+- **furniture_language** (3):
+-   low single-seat platform chair in ash
+-   small raw concrete side table
+-   single ceramic pot with bonsai or bamboo grass
+- **material_palette** (3):
+-   honed stone or timber-composite balcony floor
+-   matte charcoal balustrade
+-   natural linen cushion
+- **lighting_behavior**: Single small warm lantern on floor or wall; no overhead electric fixture.
+- **decor_language** (2):
+-   single intentional plant in ceramic pot
+-   folded natural linen on chair
+- **realism_constraints** (2):
+-   chair low — 38–42 cm seat height
+-   balustrade at correct safety height
+- **room_specific_constraints** (2):
+-   single seating piece only — no set
+-   no storage visible on balcony
+- **visible_transition_logic**: balcony floor echoes interior ash or stone floor; warm interior plaster visible through glass doors
+- **negative_rules** (4):
+-   no rattan
+-   no coloured cushions
+-   no herb garden
+-   no folding or plastic furniture
+
+#### Room: `driveway`
+- **furniture_language** (3):
+-   raked gravel forecourt with single specimen tree
+-   flat dark stone entrance path
+-   simple matte black gate
+- **material_palette** (3):
+-   dark slate or honed stone driveway surface
+-   raw concrete gate pillars
+-   raked gravel infill
+- **lighting_behavior**: Low warm ground uplights on specimen tree + single lantern at gate post; no overhead lights.
+- **decor_language** (2):
+-   single Japanese maple or birch at forecourt edge
+-   raked gravel pattern visible from gate
+- **realism_constraints** (2):
+-   gravel at correct loose depth — not compacted solid
+-   tree at correct planted scale for forecourt
+- **room_specific_constraints** (2):
+-   single tree, one boundary element — no cluttered planting
+-   gate in single material — no mixing
+- **visible_transition_logic**: dark stone path continues to entrance threshold; charred timber facade visible from gate
+- **negative_rules** (4):
+-   no warm sand render boundary
+-   no ornate gate
+-   no manicured hedging rows
+-   no lantern overuse
+
+---
+
+## Atmosphere: `nature_retreat`
+
+### Core DNA
+- **atmosphere_id**: `nature_retreat`
+- **philosophy**: Biophilic calm integrated with architectural realism and earthy luxury.
+- **emotional_intent**: Grounded, alive, restorative, earthy, connected to nature, quietly luxurious.
+- **architectural_language**: Organic materiality — raw stone, reclaimed timber, living plant integration — in architecturally resolved proportions.
+- **lighting_behavior**: Warm diffused natural-adjacent light — concealed warm slots, timber-shaded pendants, candlelight.
+- **luxury_level**: Luxury eco retreat
+- **atmosphere_keywords**: biophilic, reclaimed oak, rammed earth, living plant, earthy luxury
+- **material_palette** (5):
+-   reclaimed oak or elm timber
+-   rough-cut stone or slate
+-   rammed earth or clay plaster
+-   jute and natural linen
+-   living moss or plant wall
+- **forbidden_elements** (5):
+-   Fake jungle overload
+-   plant spam
+-   tropical theme park aesthetics
+-   synthetic or artificial materials
+-   sterile minimalism
+
+### Room adaptations (13)
+
+#### Room: `living_room`
+- **furniture_language** (3):
+-   undyed natural linen — deep biophilic tactile warmth
+-   rough-cut stone or slate — raw surface honesty
+-   woven rattan or jute — organic textural depth
+- **material_palette** (3):
+-   wide-plank reclaimed oak floor
+-   rammed earth or clay plaster walls
+-   rough-cut stone accent wall
+- **lighting_behavior**: Warm concealed cove above stone wall + timber-shaded floor lamp; warm organic tone.
+- **decor_language** (2):
+-   single large ceramic vessel with dried botanicals
+-   hanging woven wall textile — natural undyed
+- **realism_constraints** (2):
+-   sofa at residential scale — not modelling scale
+-   stone wall texture visible — not flat CGI
+- **room_specific_constraints** (2):
+-   single statement stone or timber wall — not all four walls
+-   planting: maximum 2 large statement plants
+- **visible_transition_logic**: reclaimed oak floor and clay plaster continue into adjacent rooms; stone and plant accents echo through visible dining area
+- **negative_rules** (4):
+-   no plastic or synthetic pot
+-   no plant collection overload
+-   no polished surfaces
+-   no cold grey palette
+
+#### Room: `master_bedroom`
+- **furniture_language** (3):
+-   reclaimed oak timber — natural linen surface warmth
+-   stone slab with hand-turned ceramic — organic warmth at night level
+-   jute or wool textile — natural floor-level warmth
+- **material_palette** (3):
+-   reclaimed oak or elm floor
+-   clay plaster walls in warm earth tone
+-   undyed natural linen bedding
+- **lighting_behavior**: Concealed warm cove above headboard + hand-turned ceramic table lamps with warm glow.
+- **decor_language** (2):
+-   layered undyed linen and jute bedding
+-   single dried botanical or branch in ceramic beside bed
+- **realism_constraints** (2):
+-   bed at correct height — 45 cm to mattress
+-   bedding layered with natural folds and weight
+- **room_specific_constraints** (2):
+-   no technology visible in bedroom
+-   no wall art — clay plaster wall as composition
+- **visible_transition_logic**: oak floor and clay plaster flow into ensuite; natural linen palette echoes bathroom textiles
+- **negative_rules** (4):
+-   no synthetic bedding
+-   no chrome or brass fixtures
+-   no patterned bedding
+-   no hotel-generic set
+
+#### Room: `kitchen`
+- **furniture_language** (3):
+-   reclaimed oak or elm cabinetry — shaker or flat-front
+-   rough honed stone or slate countertop
+-   open timber shelf with handmade ceramic display
+- **material_palette** (3):
+-   reclaimed oak cabinetry
+-   honed slate or rough stone countertop
+-   clay plaster or natural stone backsplash
+- **lighting_behavior**: Warm pendant in woven natural shade over island + under-cabinet warm strip.
+- **decor_language** (2):
+-   open shelf with 4–5 handmade ceramics in earth tones
+-   single cast iron pot on counter
+- **realism_constraints** (2):
+-   cabinet doors at correct residential height
+-   countertop at correct 60 cm depth
+- **room_specific_constraints** (2):
+-   open shelf with ceramics — earthy tones only
+-   no stainless steel exposed appliances
+- **visible_transition_logic**: reclaimed oak cabinet tone flows into dining furniture; stone counter palette echoes dining table
+- **negative_rules** (4):
+-   no polished stone countertop
+-   no white cabinetry
+-   no stainless steel appliances visible
+-   no tile with pattern
+
+#### Room: `bathroom`
+- **furniture_language** (3):
+-   floating reclaimed timber vanity with stone basin
+-   freestanding stone soaking tub — rough-cut or honed basalt
+-   open wet room with pebble or slate floor
+- **material_palette** (3):
+-   rough slate or basalt stone floor and walls
+-   reclaimed timber vanity
+-   brushed nickel or aged brass fixtures
+- **lighting_behavior**: Concealed warm slot above vanity + warm wall-mounted candle lanterns flanking tub.
+- **decor_language** (2):
+-   single smooth river stone beside basin
+-   folded undyed linen towels on timber peg
+- **realism_constraints** (2):
+-   stone floor with correct grout joint depth
+-   timber vanity with correct weathered texture
+- **room_specific_constraints** (2):
+-   single stone throughout — no tile mixing
+-   fixtures in aged brass or brushed nickel — no chrome
+- **visible_transition_logic**: stone floor and timber palette continue into dressing area; natural material austerity throughout
+- **negative_rules** (4):
+-   no white ceramic tiles
+-   no chrome fixtures
+-   no glass and chrome shower screen
+-   no over-styled countertop
+
+#### Room: `home_office`
+- **furniture_language** (3):
+-   reclaimed timber desk with raw edge
+-   upholstered chair in undyed natural linen
+-   open timber shelves with books and plants
+- **material_palette** (3):
+-   reclaimed oak floor
+-   clay plaster walls
+-   natural linen upholstery
+- **lighting_behavior**: Single woven natural shade desk lamp + warm ambient from concealed cove; warm organic light.
+- **decor_language** (2):
+-   small trailing plant on shelf or desk corner
+-   single natural stone as paperweight
+- **realism_constraints** (2):
+-   desk at correct 72–75 cm working height
+-   shelves at correct structural depth
+- **room_specific_constraints** (2):
+-   minimal cable visibility
+-   shelves with mix of books and natural objects — not sterile
+- **visible_transition_logic**: reclaimed oak floor and clay plaster echo into hallway; natural material palette continuous
+- **negative_rules** (4):
+-   no cold white LED light
+-   no synthetic materials
+-   no ergonomic rubber chair
+-   no tech-showroom desk
+
+#### Room: `dining_room`
+- **furniture_language** (3):
+-   large reclaimed oak or elm dining table with trestle base
+-   upholstered chairs in undyed linen or rough fabric
+-   reclaimed timber sideboard
+- **material_palette** (3):
+-   reclaimed oak floor
+-   clay plaster walls
+-   undyed linen or rough natural upholstery
+- **lighting_behavior**: Woven natural shade pendant or aged brass pendant low over table; warm organic glow.
+- **decor_language** (2):
+-   low centrepiece of fresh or dried botanicals in earthy ceramics
+-   single candle cluster in hand-thrown ceramic holders
+- **realism_constraints** (2):
+-   pendant at correct height — 70–75 cm above table
+-   chairs at correct seat height
+- **room_specific_constraints** (2):
+-   table in single species reclaimed timber — no mixed materials
+-   centrepiece in earth tones — no florist-styled flowers
+- **visible_transition_logic**: reclaimed oak floor and clay plaster echo living room; earthy ceramic palette visible from kitchen
+- **negative_rules** (4):
+-   no polished marble table
+-   no matching shiny chair set
+-   no chandelier
+-   no florist centerpiece
+
+#### Room: `entrance_hall`
+- **furniture_language** (3):
+-   reclaimed timber console on rough iron legs
+-   round mirror in reclaimed wood or aged iron frame
+-   single large terracotta pot with trailing plant
+- **material_palette** (3):
+-   rough stone or reclaimed timber floor
+-   clay plaster walls
+-   aged iron or brass hardware
+- **lighting_behavior**: Single woven pendant + warm wall sconce; warm organic arrival tone.
+- **decor_language** (2):
+-   single large-leaf plant in terracotta at entry
+-   dried botanicals in ceramic vessel on console
+- **realism_constraints** (2):
+-   console at correct 80–85 cm height
+-   plant at correct scale for hall — not too small
+- **room_specific_constraints** (2):
+-   plant as primary entry feature — not accessories
+-   no cluttered entry — single console and single plant
+- **visible_transition_logic**: stone floor and clay plaster flow into living room; reclaimed timber console echoes joinery palette
+- **negative_rules** (4):
+-   no chrome or silver hardware
+-   no polished surfaces
+-   no cluttered accessory collection
+-   no cold tile floor
+
+#### Room: `facade`
+- **furniture_language** (3):
+-   rough stone or rammed earth facade
+-   reclaimed timber window frames and entrance door
+-   native or naturalistic planting at base
+- **material_palette** (3):
+-   rough stone cladding or rammed earth facade
+-   reclaimed oak or elm timber window frames
+-   aged brass or iron door hardware
+- **lighting_behavior**: Concealed warm ground uplights on stone facade + single aged brass lantern at entrance.
+- **decor_language** (2):
+-   native climbing plant on facade — wisteria or jasmine
+-   naturalistic planting at facade base
+- **realism_constraints** (2):
+-   stone texture correctly rough — not CGI smooth
+-   timber frames with correct weathered depth
+- **room_specific_constraints** (2):
+-   two materials maximum — stone and timber
+-   planting at base — not climbing over entire facade
+- **visible_transition_logic**: rough stone continues to boundary wall; reclaimed timber frames echo interior joinery palette
+- **negative_rules** (4):
+-   no smooth render
+-   no UPVC frames
+-   no modern steel facade
+-   no formal clipped planting at facade
+
+#### Room: `garden`
+- **furniture_language** (3):
+-   reclaimed timber garden bench
+-   naturalistic planting with native species
+-   large stone specimen as garden focal element
+- **material_palette** (3):
+-   natural stone path
+-   native or naturalistic planting palette
+-   rough stone or rammed earth boundary
+- **lighting_behavior**: Low warm uplights on specimen plants + warm path strips; organic naturalistic lighting.
+- **decor_language** (2):
+-   single large boulder or rock as design element
+-   naturalistic wildflower or native planting at borders
+- **realism_constraints** (2):
+-   stone path at correct level with correct edge
+-   plants at correct naturalistic scale
+- **room_specific_constraints** (2):
+-   naturalistic planting — not formal clipped
+-   single rough stone as focal sculpture element
+- **visible_transition_logic**: stone path continues to terrace deck; reclaimed timber and clay facade visible at garden edge
+- **negative_rules** (4):
+-   no formal clipped hedging
+-   no colourful ornamental planting
+-   no garden ornaments
+-   no plastic accessories
+
+#### Room: `pool_area`
+- **furniture_language** (3):
+-   reclaimed timber sun loungers with natural canvas cushions
+-   canvas or timber shade sail on rough post
+-   large terracotta or stone planter at pool end
+- **material_palette** (3):
+-   rough stone or reclaimed timber pool deck
+-   natural canvas or cotton lounger cushions
+-   stone or terracotta pool coping
+- **lighting_behavior**: Warm underwater lighting + warm concealed deck strip at coping; organic evening ambience.
+- **decor_language** (2):
+-   large olive tree or agave in stone planter at pool corner
+-   naturalistic planting at deck edge
+- **realism_constraints** (2):
+-   loungers at correct residential scale
+-   pool coping at correct level above deck
+- **room_specific_constraints** (2):
+-   natural material deck only — no artificial surface
+-   soft earth-tone liner — not bright blue
+- **visible_transition_logic**: rough stone deck continues to terrace; stone facade visible as natural backdrop
+- **negative_rules** (4):
+-   no plastic loungers
+-   no bright parasols
+-   no bright blue pool water emphasis
+-   no over-planted resort-style surround
+
+#### Room: `terrace`
+- **furniture_language** (3):
+-   reclaimed timber table and chairs — outdoor grade
+-   thick cotton or linen outdoor cushions in earth tones
+-   natural canvas shade or timber pergola
+- **material_palette** (3):
+-   natural stone or reclaimed timber decking
+-   earth-tone outdoor cushions
+-   natural canvas or timber overhead
+- **lighting_behavior**: Warm concealed pergola strip + single lantern in aged brass or ceramic; organic evening glow.
+- **decor_language** (2):
+-   single large planter with olive or agave
+-   woven rattan or ceramic lantern as table centrepiece
+- **realism_constraints** (2):
+-   outdoor furniture at correct residential scale
+-   decking boards with correct joint and weathering
+- **room_specific_constraints** (2):
+-   dining set permitted — nature retreat culture includes outdoor dining
+-   planting in terracotta or natural ceramic only
+- **visible_transition_logic**: stone or timber deck continues to garden; reclaimed timber interior floor visible through glass
+- **negative_rules** (4):
+-   no plastic outdoor furniture
+-   no synthetic cushion material
+-   no string lights
+-   no modern angular steel furniture
+
+#### Room: `balcony`
+- **furniture_language** (3):
+-   single reclaimed timber chair with thick linen cushion
+-   small stone or timber side table
+-   single large terracotta planter with sculptural plant
+- **material_palette** (3):
+-   reclaimed timber or natural stone balcony floor
+-   aged iron or timber balustrade
+-   earth-tone linen cushion
+- **lighting_behavior**: Single aged brass or ceramic wall lantern; warm organic evening tone.
+- **decor_language** (2):
+-   large terracotta planter as dominant balcony element
+-   single linen throw over chair
+- **realism_constraints** (2):
+-   chair at correct height for side table
+-   balustrade at correct safety height
+- **room_specific_constraints** (2):
+-   single seating piece — no outdoor dining set
+-   one large plant — dominant feature
+- **visible_transition_logic**: timber floor echoes interior reclaimed oak; warm interior and plant visible through glass
+- **negative_rules** (4):
+-   no rattan (too tropical)
+-   no plastic
+-   no suburban balcony chair set
+-   no multiple small plants
+
+#### Room: `driveway`
+- **furniture_language** (3):
+-   rough stone or gravel driveway with naturalistic edge planting
+-   reclaimed timber or aged iron gate
+-   single large specimen tree at forecourt
+- **material_palette** (3):
+-   rough stone or compacted gravel driveway
+-   reclaimed timber or aged iron gate and boundary
+-   naturalistic edge planting
+- **lighting_behavior**: Low warm uplights on specimen tree + single aged brass lantern at entry; organic arrival.
+- **decor_language** (2):
+-   naturalistic edge planting along drive — not clipped hedging
+-   single specimen tree as arrival focal element
+- **realism_constraints** (2):
+-   gravel at correct compacted surface — not floating stones
+-   gate at correct proportional height
+- **room_specific_constraints** (2):
+-   naturalistic edge planting only — not clipped formal
+-   stone or gravel only — no paved surface
+- **visible_transition_logic**: rough stone continues to entrance threshold; stone facade visible from gate
+- **negative_rules** (4):
+-   no formal clipped hedging
+-   no block paving
+-   no ornate gate
+-   no bright warm lanterns — muted organic only
+
+---
+
+## Atmosphere: `nordic_warmth`
+
+### Core DNA
+- **atmosphere_id**: `nordic_warmth`
+- **philosophy**: Scandinavian comfort, warmth, coziness, and emotional softness.
+- **emotional_intent**: Cozy, hygge, warm, intimate, human-scaled, reassuring, softly joyful.
+- **architectural_language**: Human-scaled rooms with pitched or low ceilings, natural birch and pine, layered wool and sheepskin in a white-to-warm-oat palette.
+- **lighting_behavior**: Warm candle-adjacent ambient — floor lamps with amber shades, hanging filament bulbs, no harsh overhead.
+- **luxury_level**: Premium Scandinavian retreat
+- **atmosphere_keywords**: hygge, birch, wool, warm white, candlelight
+- **material_palette** (5):
+-   white-painted birch or pine
+-   natural wool and sheepskin
+-   warm white plaster
+-   pale stone or concrete
+-   amber glass
+- **forbidden_elements** (5):
+-   Cold Ikea minimalism
+-   ultra modern sharpness
+-   excessive black accents
+-   industrial rawness
+-   high-gloss surfaces
+
+### Room adaptations (13)
+
+#### Room: `living_room`
+- **furniture_language** (3):
+-   natural wool in oat or undyed — deep hygge tactile warmth
+-   birch or pine timber — warm natural surface depth
+-   sheepskin — natural undyed tactile softness
+- **material_palette** (3):
+-   wide-plank pine or birch floor
+-   warm white plaster walls
+-   natural wool upholstery in oat or undyed tones
+- **lighting_behavior**: Amber floor lamp behind sofa + hanging filament bulb pendant; candle-warm, no ceiling wash.
+- **decor_language** (2):
+-   cluster of amber or clear glass candle holders on coffee table
+-   woven basket with wool throw at sofa end
+- **realism_constraints** (2):
+-   sofa at normal residential height — 45 cm
+-   candleholders at varied heights — not matching set
+- **room_specific_constraints** (2):
+-   layered rugs permitted — wool flatweave under pile
+-   fireplace or wood stove as focal point if present
+- **visible_transition_logic**: pine floor and warm white plaster continue into kitchen; wool palette echoes through visible bedroom door
+- **negative_rules** (4):
+-   no sleek dark furniture
+-   no chrome accents
+-   no minimalist floating shelves
+-   no cold grey palette
+
+#### Room: `master_bedroom`
+- **furniture_language** (3):
+-   pine or birch timber — warm natural tactile surface
+-   birch timber — amber glass warmth at low level
+-   sheepskin — natural undyed floor-level softness
+- **material_palette** (3):
+-   pine or birch floor
+-   warm white plaster walls
+-   layered natural linen and wool bedding
+- **lighting_behavior**: Amber glass bedside table lamps + concealed warm slot above headboard wall.
+- **decor_language** (2):
+-   layered linen and wool bedding in oat, ecru, and natural undyed
+-   small framed botanical print above nightstand
+- **realism_constraints** (2):
+-   bed frame at correct height — 45 cm to mattress top
+-   bedding layered with visible weight and texture
+- **room_specific_constraints** (2):
+-   sheepskin at one side of bed only — not both sides
+-   window with simple linen curtains, not full drapes
+- **visible_transition_logic**: pine floor and warm white plaster flow into ensuite; linen bedding palette echoes bathroom towels
+- **negative_rules** (4):
+-   no dark headboard
+-   no cold white bedding
+-   no high-gloss surfaces
+-   no patterned wallpaper
+
+#### Room: `kitchen`
+- **furniture_language** (3):
+-   white-painted shaker or flat-front cabinetry
+-   solid birch or butcher-block countertop
+-   open pine shelf with ceramics and glassware
+- **material_palette** (3):
+-   white-painted cabinetry
+-   birch or pine countertop
+-   white subway or handmade tile backsplash
+- **lighting_behavior**: Warm pendant over island or table + under-cabinet strip in warm 2700K; inviting work light.
+- **decor_language** (2):
+-   open pine shelf with 4–6 handmade ceramic pieces
+-   single potted herb on windowsill — one only
+- **realism_constraints** (2):
+-   butcher block countertop at residential 60 cm depth
+-   cabinet doors at standard 220 cm height
+- **room_specific_constraints** (2):
+-   open shelf with ceramics — not clutter
+-   white tile backsplash in handmade format — not industrial
+- **visible_transition_logic**: white cabinetry and pine floor echo into dining area; warm ceramic palette visible from living room
+- **negative_rules** (4):
+-   no dark cabinetry
+-   no stainless steel countertop
+-   no industrial fixtures
+-   no glossy white tile
+
+#### Room: `bathroom`
+- **furniture_language** (3):
+-   white-painted timber vanity with ceramic basin
+-   freestanding cast iron or steel soaking tub in white
+-   simple pine slatted bath mat
+- **material_palette** (3):
+-   white handmade tile floor and walls
+-   white-painted timber vanity
+-   brushed nickel or matte black fixtures
+- **lighting_behavior**: Single pendant in amber glass above tub + warm wall sconce above vanity mirror.
+- **decor_language** (2):
+-   pine slat bath mat
+-   folded linen towels in oat or undyed on wall peg
+- **realism_constraints** (2):
+-   cast iron tub at correct floor-standing weight scale
+-   tile grout lines correct — 3–5 mm, not perfect CGI
+- **room_specific_constraints** (2):
+-   fixtures all in one finish — brushed nickel or matte black, not both
+-   no chrome
+- **visible_transition_logic**: white tile and pine tone continue into dressing area; linen towel palette echoes bedroom bedding
+- **negative_rules** (4):
+-   no cold grey tile
+-   no chrome fixtures
+-   no hospital-white clinical styling
+-   no mirrored vanity cabinet
+
+#### Room: `home_office`
+- **furniture_language** (3):
+-   solid birch or pine desk with turned legs
+-   upholstered chair in natural linen or wool
+-   open pine bookshelf with edited book collection
+- **material_palette** (3):
+-   pine floor
+-   warm white plaster walls
+-   natural linen or wool upholstery
+- **lighting_behavior**: Amber glass desk lamp + warm ambient from floor lamp in corner; no cold task light.
+- **decor_language** (2):
+-   small plant on desk corner — succulent or moss
+-   curated book spines in neutral tones on shelf
+- **realism_constraints** (2):
+-   desk at correct 72–75 cm working height
+-   chair at correct seat height
+- **room_specific_constraints** (2):
+-   cable management — minimal visible cables
+-   bookshelf not overloaded — breathing space between items
+- **visible_transition_logic**: pine floor and white walls echo hallway; warm amber lamp palette matches living room floor lamps
+- **negative_rules** (4):
+-   no cold white LED task light
+-   no dark wood desk
+-   no ergonomic rubber chair
+-   no cable clutter
+
+#### Room: `dining_room`
+- **furniture_language** (3):
+-   solid birch or pine round dining table
+-   upholstered dining chairs in natural linen or wool
+-   painted pine or white sideboard
+- **material_palette** (3):
+-   pine floor
+-   warm white plaster walls
+-   natural linen or wool chair upholstery
+- **lighting_behavior**: Pendant in amber glass or paper shade hung low over table; warm evening ambience.
+- **decor_language** (2):
+-   cluster of candles as centrepiece
+-   simple ceramic or wooden bowl with pine cones or seasonal objects
+- **realism_constraints** (2):
+-   pendant at correct height — 70–75 cm above table
+-   chairs at correct seat height for table
+- **room_specific_constraints** (2):
+-   round or oval table preferred — conversation-friendly
+-   candles as centrepiece — not flowers
+- **visible_transition_logic**: pine floor and white plaster echo kitchen; linen chair upholstery palette continues from living room
+- **negative_rules** (4):
+-   no glass or marble table top
+-   no matching chair-and-table set in dark finish
+-   no chandelier
+-   no maximalist tablescaping
+
+#### Room: `entrance_hall`
+- **furniture_language** (3):
+-   painted pine console or bench with woven basket below
+-   simple round mirror in pine or white frame
+-   single hook rail in white-painted pine
+- **material_palette** (3):
+-   pine or stone floor
+-   warm white plaster walls
+-   white-painted pine joinery
+- **lighting_behavior**: Single amber glass pendant + warm wall sconce; welcoming arrival warmth.
+- **decor_language** (2):
+-   single dried botanical in ceramic vase on console
+-   small framed botanical print above console
+- **realism_constraints** (2):
+-   console at correct 80–85 cm height
+-   mirror at correct eye-level placement
+- **room_specific_constraints** (2):
+-   hook rail for coats — visible but neat
+-   woven basket below console for shoes
+- **visible_transition_logic**: pine floor and white plaster flow into living room; warm palette continuous
+- **negative_rules** (4):
+-   no dark or industrial entry
+-   no cold stone floor
+-   no minimalist ledge-only entry
+-   no cluttered coat pile
+
+#### Room: `facade`
+- **furniture_language** (3):
+-   white-painted timber cladding or white render
+-   painted timber window frames in white or pale grey
+-   simple timber entrance door in white or natural pine
+- **material_palette** (3):
+-   white-painted timber board cladding
+-   pale stone or concrete plinth base
+-   brushed nickel or matte black door hardware
+- **lighting_behavior**: Warm lanterns flanking entrance + concealed warm eave lighting; hygge approach tone.
+- **decor_language** (2):
+-   simple planting at entrance — lavender or ornamental grass in stone pot
+-   single wreath or seasonal botanical at door
+- **realism_constraints** (2):
+-   timber board joints at correct painted weathered scale
+-   window proportions Nordic — tall and vertical or square
+- **room_specific_constraints** (2):
+-   white or near-white as primary facade colour
+-   entrance door clearly readable at facade centre
+- **visible_transition_logic**: white cladding tone echoes interior white walls; pine door frame matches interior timber palette
+- **negative_rules** (4):
+-   no dark timber cladding
+-   no warm sand render
+-   no UPVC frames
+-   no contemporary flat black
+
+#### Room: `garden`
+- **furniture_language** (3):
+-   painted pine garden bench
+-   simple stone or gravel path
+-   naturalistic planting with wildflowers and ornamental grasses
+- **material_palette** (3):
+-   pale stone or gravel path
+-   painted pine garden bench
+-   naturalistic planting in greens and whites
+- **lighting_behavior**: Low warm path lights + amber lantern on table; garden in warm evening glow.
+- **decor_language** (2):
+-   birdbath in simple stone
+-   naturalistic wildflower planting at borders
+- **realism_constraints** (2):
+-   gravel path at correct depth and edge
+-   bench at correct seat height
+- **room_specific_constraints** (2):
+-   naturalistic planting style — not formal clipped
+-   single grass species as ground layer
+- **visible_transition_logic**: stone path continues to terrace; white house facade visible at garden edge
+- **negative_rules** (4):
+-   no formal clipped hedging
+-   no mixed paving materials
+-   no plastic garden accessories
+-   no manicured lawn obsession
+
+#### Room: `pool_area`
+- **furniture_language** (3):
+-   pine or teak sun loungers with natural canvas cushions
+-   simple timber-frame canvas parasol
+-   stone or pine side table
+- **material_palette** (3):
+-   natural timber or honed stone pool deck
+-   natural canvas cushion fabric
+-   white or pale painted pool surround
+- **lighting_behavior**: Warm underwater lighting (soft warm white) + amber lanterns at deck perimeter.
+- **decor_language** (2):
+-   simple arrangement of rounded stones at pool corner
+-   single planted urn with ornamental grass
+- **realism_constraints** (2):
+-   loungers at correct residential scale — not resort-runway
+-   pool coping at correct level above deck
+- **room_specific_constraints** (2):
+-   natural materials only — no plastic furniture
+-   light-coloured pool liner — not dark
+- **visible_transition_logic**: timber deck continues to terrace; white house facade visible as backdrop
+- **negative_rules** (4):
+-   no bright parasols
+-   no plastic loungers
+-   no blue chrome water emphasis
+-   no over-planted surround
+
+#### Room: `terrace`
+- **furniture_language** (3):
+-   painted pine or teak outdoor table and chairs
+-   thick wool or cotton outdoor cushions in oat or undyed
+-   simple canvas or pine pergola
+- **material_palette** (3):
+-   natural stone or painted timber decking
+-   wool or cotton outdoor cushions in warm white or oat
+-   amber glass outdoor lanterns
+- **lighting_behavior**: Amber glass outdoor lanterns on table + warm string lights on pergola beam — hygge outdoor ambience.
+- **decor_language** (2):
+-   amber glass candle holders on table
+-   wool throw draped over chair for cooler evenings
+- **realism_constraints** (2):
+-   outdoor furniture at correct residential scale
+-   string lights on timber beam — not plastic
+- **room_specific_constraints** (2):
+-   dining set permitted on terrace — Nordic outdoor dining culture
+-   fire pit or brazier as optional focal element
+- **visible_transition_logic**: stone or timber deck continues to garden; warm interior light and white walls visible through glass
+- **negative_rules** (4):
+-   no plastic furniture
+-   no cold grey paving
+-   no modern angular furniture
+-   no bright colour cushions
+
+#### Room: `balcony`
+- **furniture_language** (3):
+-   two painted pine folding chairs or simple armchairs
+-   small round birch or pine table
+-   single pot with trailing ivy or lavender
+- **material_palette** (3):
+-   pine or composite timber decking
+-   white or warm grey balustrade
+-   wool outdoor cushions in oat
+- **lighting_behavior**: Single amber glass lantern on table; warm hygge tone — no wall sconce.
+- **decor_language** (2):
+-   amber glass candle holder
+-   simple wool throw folded on chair back
+- **realism_constraints** (2):
+-   chairs at correct height for small table
+-   balustrade at safety height
+- **room_specific_constraints** (2):
+-   simple table-and-chairs only — no lounger
+-   one plant pot — not a collection
+- **visible_transition_logic**: pine decking echoes interior floor; white wall and warm interior light visible through glass
+- **negative_rules** (4):
+-   no rattan
+-   no modern angular design
+-   no plastic
+-   no coloured cushions
+
+#### Room: `driveway`
+- **furniture_language** (3):
+-   simple painted timber gate in white or pale grey
+-   stone or gravel driveway with painted timber edging
+-   lanterns on painted pine or stone pillars
+- **material_palette** (3):
+-   pale gravel or pale stone driveway
+-   white or pale grey painted timber gate
+-   warm amber lanterns at pillars
+- **lighting_behavior**: Warm amber lanterns at gate pillars + low warm path lights along drive edge.
+- **decor_language** (2):
+-   simple clipped lavender or box flanking gate
+-   white-painted timber fence along boundary
+- **realism_constraints** (2):
+-   driveway at correct residential width — 3–3.5 m
+-   gate at correct proportional height
+- **room_specific_constraints** (2):
+-   single driveway material — gravel or pale stone
+-   white or pale painted fence — not dark
+- **visible_transition_logic**: pale gravel continues to house approach; white facade visible from gate approach
+- **negative_rules** (4):
+-   no dark render boundary
+-   no ornate ironwork
+-   no grey block paving
+-   no modern angular gate
+
+---
+
+## Atmosphere: `soft_luxury`
+
+### Core DNA
+- **atmosphere_id**: `soft_luxury`
+- **philosophy**: Refined hospitality luxury emphasizing softness, elegance, tactile richness, and timeless sophistication.
+- **emotional_intent**: Indulgent, serene, tactile, quietly opulent, feminine-refined, sensorially rich.
+- **architectural_language**: Curved forms and soft volumes, layered textured surfaces, and silk-to-stone material transitions in generous proportions.
+- **lighting_behavior**: Warm diffused glow — concealed perimeter coves, silk lampshades, no exposed bulbs.
+- **luxury_level**: Rosewood / Aman / luxury suite
+- **atmosphere_keywords**: soft luxury, bouclé, fluted plaster, ivory, tactile refinement
+- **material_palette** (5):
+-   fluted ivory plaster
+-   bouclé and cashmere textiles
+-   honed marble in cream or blush
+-   brushed champagne metal
+-   raw silk or velvet
+- **forbidden_elements** (5):
+-   Bling luxury
+-   crystal chandelier clichés
+-   fake palace aesthetics
+-   excessive gold
+-   hard-edge minimalism
+
+### Room adaptations (13)
+
+#### Room: `living_room`
+- **furniture_language** (3):
+-   warm bouclé in ivory or blush — plush tactile richness
+-   honed marble or stone — champagne brass accents, premium surface warmth
+-   cashmere or velvet in cream — layered textile softness
+- **material_palette** (3):
+-   fluted ivory plaster walls
+-   honed cream marble floor
+-   brushed champagne metal accents
+- **lighting_behavior**: Concealed perimeter cove + silk shade floor lamps; warm evening tone, no ceiling spotlights.
+- **decor_language** (2):
+-   oversized ceramic vessel with dried pampas or lunaria
+-   layered silk and bouclé cushions in cream and blush
+- **realism_constraints** (2):
+-   sofa sized to room — not oversized for space
+-   marble floor with correct 3–5 mm grout lines
+- **room_specific_constraints** (2):
+-   seating centred on focal element — fireplace or art wall
+-   symmetry in furniture placement — not haphazard
+- **visible_transition_logic**: ivory plaster walls and marble floor flow continuously into dining and hallway; brass accents echo across visible rooms
+- **negative_rules** (4):
+-   no jewel-tone colour pops
+-   no gold leaf or metallic wallpaper
+-   no asymmetric art gallery wall
+-   no visible TV above fireplace
+
+#### Room: `master_bedroom`
+- **furniture_language** (3):
+-   cashmere or bouclé in ivory or champagne — plush tactile luxury
+-   brushed brass — warm champagne metal refinement
+-   velvet or bouclé in champagne — layered softness and warmth
+- **material_palette** (3):
+-   honed marble or travertine floor
+-   fluted ivory plaster walls
+-   raw silk or velvet soft furnishings
+- **lighting_behavior**: Concealed cove above padded headboard wall + brushed brass bedside table lamps with silk shade.
+- **decor_language** (2):
+-   layered cream-to-ivory bedding with velvet throw
+-   single large-scale abstract artwork above headboard
+- **realism_constraints** (2):
+-   headboard at correct height — 120–140 cm above mattress
+-   bench at foot of bed sized to bed width
+- **room_specific_constraints** (2):
+-   single bedding palette — cream, ivory, champagne only
+-   dressing area separated if space allows
+- **visible_transition_logic**: marble floor and ivory plaster continue into ensuite; silk soft furnishing palette echoes dressing room
+- **negative_rules** (4):
+-   no coloured bedding
+-   no mirrored furniture
+-   no pattern on bedding
+-   no LED strip headboard
+
+#### Room: `kitchen`
+- **furniture_language** (3):
+-   fluted ivory lacquer cabinetry with recessed brass pulls
+-   honed Calacatta marble countertop and waterfall island
+-   integrated appliances behind panel fronts
+- **material_palette** (3):
+-   fluted ivory lacquer cabinetry
+-   Calacatta marble countertop
+-   brushed champagne brass hardware
+- **lighting_behavior**: Warm concealed under-cabinet strip + single brass pendant cluster over island centre.
+- **decor_language** (2):
+-   single marble mortar and stone cutting board on counter
+-   open shelf with 3 ceramic pieces — no clutter
+- **realism_constraints** (2):
+-   island at correct working height — 90 cm
+-   cabinet panels flush with appliances — no exposed appliance handles
+- **room_specific_constraints** (2):
+-   countertop in single marble slab — no tile
+-   island in contrasting marble to perimeter counter
+- **visible_transition_logic**: ivory cabinet tone echoes dining room furniture; marble countertop palette flows to dining table surface
+- **negative_rules** (4):
+-   no stainless steel appliances exposed
+-   no dark cabinetry
+-   no industrial fixtures
+-   no open shelf clutter
+
+#### Room: `bathroom`
+- **furniture_language** (3):
+-   floating vanity in fluted ivory lacquer with marble top
+-   freestanding sculptural stone soaking tub
+-   frameless glass shower with marble surround
+- **material_palette** (3):
+-   book-matched Calacatta or blush marble floor and walls
+-   ivory lacquer vanity
+-   brushed champagne brass fixtures
+- **lighting_behavior**: Concealed perimeter cove at ceiling + soft warm backlit mirror; no harsh downlights.
+- **decor_language** (2):
+-   single orchid in white ceramic pot on vanity
+-   folded cashmere hand towels on brass wall bar
+- **realism_constraints** (2):
+-   freestanding tub with floor waste — no bath panel
+-   marble wall slabs correctly veined and matched
+- **room_specific_constraints** (2):
+-   single stone throughout — no mixing marble types
+-   all fixtures in brushed champagne — no chrome
+- **visible_transition_logic**: marble floor and ivory vanity palette continue into dressing room; brass fixtures echo through hallway hardware
+- **negative_rules** (4):
+-   no coloured grout
+-   no chrome fixtures
+-   no patterned tile
+-   no over-accessorised vanity top
+
+#### Room: `home_office`
+- **furniture_language** (3):
+-   large ivory lacquer or leather-wrapped desk
+-   upholstered chair in ivory cashmere or bouclé
+-   floor-to-ceiling bookshelf in ivory lacquer
+- **material_palette** (3):
+-   honed marble or oak parquet floor
+-   ivory plaster or linen-weave wall panelling
+-   brushed brass desk accessories
+- **lighting_behavior**: Brushed brass adjustable desk lamp + concealed bookshelf uplighting; warm amber tone.
+- **decor_language** (2):
+-   curated book collection — spine colour edited to neutrals
+-   single framed artwork or architectural photograph
+- **realism_constraints** (2):
+-   desk at correct 72–75 cm working height
+-   bookshelf books at correct scale — not too sparse or too packed
+- **room_specific_constraints** (2):
+-   cable management complete — no visible wires
+-   single palette for all desk accessories — brass only
+- **visible_transition_logic**: ivory palette and marble floor echo hallway and living room; brass accessories match door hardware throughout
+- **negative_rules** (4):
+-   no cold grey office tone
+-   no exposed cables
+-   no ergonomic rubber chair
+-   no cluttered desk surface
+
+#### Room: `dining_room`
+- **furniture_language** (3):
+-   oval or round marble-top dining table on brass base
+-   upholstered dining chairs in ivory velvet
+-   marble-top sideboard with brass legs
+- **material_palette** (3):
+-   honed marble floor
+-   ivory plaster or linen-textured walls
+-   brushed brass lighting and hardware
+- **lighting_behavior**: Single large sculptural pendant in brushed brass over table, hung low; warm evening dimmed.
+- **decor_language** (2):
+-   low sculptural floral centrepiece in cream ceramic
+-   column candle holders in brass at table corners
+- **realism_constraints** (2):
+-   pendant hung at correct 70–80 cm above table
+-   chair seat height correct for table — 45–47 cm
+- **room_specific_constraints** (2):
+-   table seats maximum 8 — not hotel-banquet scale
+-   chairs identical in fabric and form — no mixing
+- **visible_transition_logic**: marble floor and ivory plaster echo living room; sideboard palette flows into kitchen visible beyond
+- **negative_rules** (4):
+-   no crystal chandelier
+-   no patterned chair upholstery
+-   no dark dining table
+-   no china display cabinet
+
+#### Room: `entrance_hall`
+- **furniture_language** (3):
+-   marble console table with brushed brass legs
+-   full-height arched mirror in brass frame
+-   single statement sculptural vase
+- **material_palette** (3):
+-   book-matched marble or large-format stone floor
+-   ivory fluted plaster walls
+-   brushed brass hardware
+- **lighting_behavior**: Concealed ceiling cove + pair of warm wall sconces flanking mirror; arrival warmth.
+- **decor_language** (2):
+-   single large floral arrangement in sculptural vessel
+-   single oversized framed artwork at end of hall
+- **realism_constraints** (2):
+-   console at correct 80–85 cm height
+-   mirror height 150 cm minimum for proportion
+- **room_specific_constraints** (2):
+-   clear view to focal artwork from entrance door
+-   single console — not paired
+- **visible_transition_logic**: marble floor and plaster walls flow unbroken into living room; brass hardware echoes through all doors
+- **negative_rules** (4):
+-   no coat rack visible
+-   no cluttered side table
+-   no crystal bowl or ornament collection
+-   no cold grey stone floor
+
+#### Room: `facade`
+- **furniture_language** (3):
+-   smooth render or limestone facade in ivory or cream
+-   arched or elegant window profiles
+-   solid oak or brushed brass entrance door
+- **material_palette** (3):
+-   smooth cream or ivory render finish
+-   natural limestone or travertine cladding strip
+-   brushed brass door hardware and lanterns
+- **lighting_behavior**: Warm uplights at facade base + brushed brass lanterns flanking entrance; soft, not dramatic.
+- **decor_language** (2):
+-   clipped box or bay topiary flanking entrance
+-   flush letterbox and hardware in brushed brass
+- **realism_constraints** (2):
+-   window proportions tall — not wide suburban ratios
+-   entrance door at correct centred position
+- **room_specific_constraints** (2):
+-   single facade material — render or stone only, not mixed
+-   entrance canopy or porch if present in classical proportions
+- **visible_transition_logic**: cream render flows into boundary wall finish; limestone threshold continues to driveway material
+- **negative_rules** (4):
+-   no cold grey render
+-   no contemporary flat black framing
+-   no raw concrete
+-   no mixed material busy facade
+
+#### Room: `garden`
+- **furniture_language** (3):
+-   single curved garden bench in stone or painted iron
+-   formal clipped hedging structure
+-   large planted urns flanking axis
+- **material_palette** (3):
+-   honed limestone or gravel path
+-   clipped box or yew hedging
+-   painted iron or stone furniture
+- **lighting_behavior**: Concealed ground uplights on hedging structure + warm path lighting; formal and restrained.
+- **decor_language** (2):
+-   formal garden axis — clear sight line
+-   large planted urns in stone or lead finish
+- **realism_constraints** (2):
+-   hedging at correct maintained height — not CGI-perfect
+-   gravel path at correct depth and boundary edge
+- **room_specific_constraints** (2):
+-   formal symmetry in layout — not naturalistic garden style
+-   single plant palette — box or yew hedging
+- **visible_transition_logic**: garden path continues to terrace; house facade visible as formal backdrop beyond hedging
+- **negative_rules** (4):
+-   no naturalistic planting chaos
+-   no mixed paving materials
+-   no colourful planting
+-   no plastic garden accessories
+
+#### Room: `pool_area`
+- **furniture_language** (3):
+-   wide upholstered sun loungers in ivory outdoor linen
+-   linen canvas parasols on stone base
+-   low marble or stone side tables
+- **material_palette** (3):
+-   large-format honed limestone pool deck
+-   cream stone pool coping
+-   ivory outdoor upholstery
+- **lighting_behavior**: Warm underwater lighting — soft blue-white + warm deck uplights at pool coping.
+- **decor_language** (2):
+-   symmetrical lounger pairs flanking pool
+-   large ceramic planters at pool ends with olive or bay tree
+- **realism_constraints** (2):
+-   loungers at correct residential scale — not resort-runway spacing
+-   pool coping at correct level above deck
+- **room_specific_constraints** (2):
+-   symmetrical layout — not scattered
+-   parasol at correct height — not too low
+- **visible_transition_logic**: limestone deck continues to terrace; cream render of house visible as backdrop
+- **negative_rules** (4):
+-   no bright-coloured cushions
+-   no plastic furniture
+-   no mismatched towel colours
+-   no over-planted pool surround
+
+#### Room: `terrace`
+- **furniture_language** (3):
+-   deep curved outdoor sofa in ivory outdoor bouclé
+-   honed stone or concrete low table
+-   linen drape shade or pergola with fabric
+- **material_palette** (3):
+-   large-format honed limestone paving
+-   ivory outdoor upholstery
+-   brushed brass or stone accent
+- **lighting_behavior**: Warm concealed pergola strip + soft floor lanterns; no functional overhead light.
+- **decor_language** (2):
+-   large ceramic planter with olive or topiary
+-   ivory or champagne outdoor cushion layering
+- **realism_constraints** (2):
+-   outdoor sofa scaled to terrace area — not oversized
+-   shade structure at correct clearance height
+- **room_specific_constraints** (2):
+-   single seating zone — no dining set on terrace
+-   cushion palette ivory or champagne only
+- **visible_transition_logic**: limestone paving echoes interior marble or stone floor visible through glass; ivory upholstery palette echoes interior sofas
+- **negative_rules** (4):
+-   no rattan outdoor furniture
+-   no brightly coloured cushions
+-   no string lights
+-   no plastic or resin furniture
+
+#### Room: `balcony`
+- **furniture_language** (3):
+-   two upholstered armchairs in ivory outdoor fabric
+-   small marble or stone side table
+-   single sculptural planter
+- **material_palette** (3):
+-   honed limestone balcony floor
+-   ivory outdoor upholstery
+-   brushed brass or stone accents
+- **lighting_behavior**: Single brass wall lantern; warm intimate tone — no overhead fixture.
+- **decor_language** (2):
+-   ivory outdoor cushions with subtle texture
+-   single white orchid or sculptural plant in white ceramic
+- **realism_constraints** (2):
+-   chairs sized to balcony — not oversized
+-   balustrade glass or stone — no metal rail
+- **room_specific_constraints** (2):
+-   two chairs with side table — no dining set on balcony
+-   single plant accent only
+- **visible_transition_logic**: limestone balcony floor echoes interior marble; ivory upholstery palette visible through glass doors
+- **negative_rules** (4):
+-   no rattan
+-   no coloured cushions
+-   no outdoor dining set
+-   no decorative lantern overuse
+
+#### Room: `driveway`
+- **furniture_language** (3):
+-   limestone or sandstone driveway with formal edging
+-   rendered gate pillars in cream or ivory
+-   wrought iron or brass estate gate
+- **material_palette** (3):
+-   honed limestone or fine gravel driveway
+-   cream smooth render gate pillars
+-   brushed brass or painted iron gate
+- **lighting_behavior**: Warm brass lanterns on gate pillars + warm path uplights along drive edge.
+- **decor_language** (2):
+-   clipped box topiary spheres flanking gate
+-   formal stone pillar capping in limestone
+- **realism_constraints** (2):
+-   driveway at correct width for vehicle — minimum 3.5 m
+-   gate pillar height proportional to gate width
+- **room_specific_constraints** (2):
+-   single driveway material — no mixing paving types
+-   gate pillars in same render as house facade
+- **visible_transition_logic**: limestone driveway continues to forecourt; cream render facade visible beyond gate
+- **negative_rules** (4):
+-   no grey block paving
+-   no dark render finish
+-   no suburban gate proportions
+-   no ornate baroque ironwork
+
+---
+
+## Atmosphere: `tropical_escape`
+
+### Core DNA
+- **atmosphere_id**: `tropical_escape`
+- **philosophy**: Open-air tropical living with relaxed contemporary luxury.
+- **emotional_intent**: Breezy, alive, relaxed-luxurious, sun-soaked, carefree but refined, vibrant-calm.
+- **architectural_language**: Open-plan volumes dissolving into landscape, tropical timber and whitewash, with a contemporary residential ease.
+- **lighting_behavior**: Warm natural ambient — daytime brightness, warm concealed evening coves, rattan pendant lanterns.
+- **luxury_level**: Contemporary tropical villa
+- **atmosphere_keywords**: tropical villa, whitewash, louvred timber, rattan, open-air luxury
+- **material_palette** (5):
+-   whitewashed or white render walls
+-   tropical hardwood or louvred timber
+-   concrete or stone floor
+-   natural rattan or cane
+-   linen and cotton in white and sage
+- **forbidden_elements** (5):
+-   Beach clichés
+-   fake resort styling
+-   overdecorated tropical kitsch
+-   bamboo overuse
+-   nautical or coastal motifs
+
+### Room adaptations (13)
+
+#### Room: `living_room`
+- **furniture_language** (3):
+-   natural rattan or cane with thick white linen — tactile tropical warmth
+-   concrete or pale stone — cool surface texture depth
+-   louvred timber — warm tropical surface quality
+- **material_palette** (3):
+-   polished concrete or pale stone floor
+-   white render walls
+-   louvred timber panels or shutters
+- **lighting_behavior**: Warm rattan pendant + concealed warm ceiling slot; bright in day, warm in evening.
+- **decor_language** (2):
+-   single large tropical plant — bird of paradise or monstera in concrete pot
+-   woven rattan tray on coffee table
+- **realism_constraints** (2):
+-   sofa at normal residential height — 45 cm
+-   concrete floor with correct texture — not CGI smooth
+- **room_specific_constraints** (2):
+-   open side to terrace or garden — tropical villa character
+-   plant as living room's primary accent — one large specimen
+- **visible_transition_logic**: white walls and concrete floor continue into terrace; rattan furniture palette echoes outdoor seating
+- **negative_rules** (4):
+-   no dark tropical furniture
+-   no nautical motifs
+-   no shell or driftwood decor
+-   no overly lush plant collection
+
+#### Room: `master_bedroom`
+- **furniture_language** (3):
+-   timber or rattan with white linen — tropical tactile warmth
+-   cane or timber — natural surface warmth at low level
+-   louvred timber — warm shutter surface quality
+- **material_palette** (3):
+-   polished concrete or pale stone floor
+-   white render walls
+-   white and sage linen bedding
+- **lighting_behavior**: Concealed warm ceiling slot above headboard + rattan pendant or warm table lamp at bedside.
+- **decor_language** (2):
+-   layered white and sage linen bedding
+-   single tropical leaf in white ceramic vase on bedside
+- **realism_constraints** (2):
+-   bed at correct height — 45 cm
+-   bedding folded with natural linen texture — not stiff
+- **room_specific_constraints** (2):
+-   louvred shutters as primary window treatment — no heavy curtains
+-   single plant or leaf — not a collection
+- **visible_transition_logic**: white walls and concrete floor flow into ensuite; linen palette echoes bathroom towels
+- **negative_rules** (4):
+-   no patterned bedding
+-   no dark furniture
+-   no air-con-box in scene
+-   no cluttered surfaces
+
+#### Room: `kitchen`
+- **furniture_language** (3):
+-   white or whitewash cabinetry — shaker or flat-front
+-   pale concrete or white stone countertop
+-   open timber or rattan shelf with ceramic display
+- **material_palette** (3):
+-   white or whitewash cabinetry
+-   pale concrete or white stone countertop
+-   white or handmade tile backsplash
+- **lighting_behavior**: Warm rattan pendant over island + concealed under-cabinet strip; bright casual kitchen.
+- **decor_language** (2):
+-   open shelf with 4–5 white or earth-tone ceramics
+-   single tropical plant — small in white pot on windowsill
+- **realism_constraints** (2):
+-   cabinetry at correct residential height
+-   countertop at correct 90 cm height
+- **room_specific_constraints** (2):
+-   open shelf mandatory — no upper cabinets to ceiling
+-   white or near-white only for cabinetry
+- **visible_transition_logic**: white cabinetry and concrete floor echo dining area; tropical garden visible through kitchen window
+- **negative_rules** (4):
+-   no dark cabinetry
+-   no stainless steel excess
+-   no busy tile pattern
+-   no chrome hardware
+
+#### Room: `bathroom`
+- **furniture_language** (3):
+-   white render or pale stone wet room
+-   freestanding stone or concrete tub
+-   simple timber or concrete vanity with white basin
+- **material_palette** (3):
+-   pale concrete or white render floor and walls
+-   white or off-white fixtures
+-   timber or concrete vanity
+- **lighting_behavior**: Bright natural daytime light + concealed warm evening slot; clean tropical bathroom.
+- **decor_language** (2):
+-   single tropical flower or leaf beside basin
+-   folded white linen towels on timber peg
+- **realism_constraints** (2):
+-   wet room at correct seamless level — no step to shower
+-   tub at correct scale for room
+- **room_specific_constraints** (2):
+-   white or near-white throughout — light and airy
+-   open or semi-open if villa allows
+- **visible_transition_logic**: white render and concrete continue from bedroom; tropical garden visible if open outdoor bathroom
+- **negative_rules** (4):
+-   no dark stone
+-   no chrome fixtures
+-   no closed cabinet-heavy bathroom
+-   no overly styled vanity top
+
+#### Room: `home_office`
+- **furniture_language** (3):
+-   simple timber or concrete desk
+-   rattan or cane chair with linen seat pad
+-   open timber shelf with books and single plant
+- **material_palette** (3):
+-   pale concrete or stone floor
+-   white render walls
+-   timber desk and natural linen
+- **lighting_behavior**: Single rattan or ceramic desk lamp + bright natural window light; tropical daytime workspace.
+- **decor_language** (2):
+-   small tropical plant on desk corner
+-   single framed artwork — botanical print or landscape
+- **realism_constraints** (2):
+-   desk at correct 72–75 cm working height
+-   chair at correct seat height
+- **room_specific_constraints** (2):
+-   bright and airy — window as primary light source
+-   minimal cable visibility
+- **visible_transition_logic**: white walls and concrete floor echo hallway; garden or tropical foliage visible through window
+- **negative_rules** (4):
+-   no dark office furniture
+-   no cold LED task light
+-   no enclosed enclosed feeling
+-   no cable clutter
+
+#### Room: `dining_room`
+- **furniture_language** (3):
+-   solid timber or concrete dining table
+-   rattan or cane dining chairs with white cushions
+-   open timber or concrete sideboard
+- **material_palette** (3):
+-   polished concrete or pale stone floor
+-   white render walls
+-   rattan or cane chair structure with white upholstery
+- **lighting_behavior**: Single rattan or ceramic pendant low over table; warm casual dining tone.
+- **decor_language** (2):
+-   low centrepiece of tropical flowers in white ceramic
+-   woven rattan table runner or tray
+- **realism_constraints** (2):
+-   pendant at correct height — 70–75 cm above table
+-   chairs at correct height for table
+- **room_specific_constraints** (2):
+-   open side to terrace or garden if space allows
+-   white or natural linen chair upholstery only
+- **visible_transition_logic**: white walls and concrete floor echo living area; tropical garden visible beyond open side
+- **negative_rules** (4):
+-   no dark dining table
+-   no formal chandelier
+-   no patterned upholstery
+-   no enclosed dining room feel
+
+#### Room: `entrance_hall`
+- **furniture_language** (3):
+-   white render console table or simple timber bench
+-   round mirror in rattan or white-painted timber frame
+-   single large tropical plant in concrete pot
+- **material_palette** (3):
+-   pale concrete or stone floor
+-   white render walls
+-   rattan or timber mirror frame
+- **lighting_behavior**: Warm rattan or brass pendant + warm ambient; bright welcoming tropical arrival.
+- **decor_language** (2):
+-   single large-leaf tropical plant as entry accent
+-   woven rattan tray with simple objects on console
+- **realism_constraints** (2):
+-   console at correct 80–85 cm height
+-   plant at correct scale for hall — not too small
+- **room_specific_constraints** (2):
+-   tropical plant as primary entry feature
+-   bright and open — not dark or enclosed
+- **visible_transition_logic**: concrete floor and white walls flow into living area; rattan and timber accents echo through
+- **negative_rules** (4):
+-   no dark entry
+-   no ornate mirror
+-   no cluttered accessory collection
+-   no nautical decor
+
+#### Room: `facade`
+- **furniture_language** (3):
+-   white render or whitewash facade
+-   louvred timber or shuttered windows
+-   simple timber entrance door with louvred screen
+- **material_palette** (3):
+-   white render or whitewash facade finish
+-   natural timber louvres and window frames
+-   pale concrete or stone entrance threshold
+- **lighting_behavior**: Warm concealed facade uplights + simple brass lanterns flanking entrance; welcoming tropical evening.
+- **decor_language** (2):
+-   tropical planting cascading at facade base — not clipped
+-   louvred shutters as architectural facade element
+- **realism_constraints** (2):
+-   white render with slight texture — not perfect CGI smooth
+-   louvres at correct depth and shadow interval
+- **room_specific_constraints** (2):
+-   white as primary facade colour — no mixed dark materials
+-   louvred element visible — facade identity
+- **visible_transition_logic**: white render continues to boundary wall; pale stone threshold echoes interior floor
+- **negative_rules** (4):
+-   no dark facade
+-   no cold grey render
+-   no formal entrance canopy
+-   no mixed dark cladding on white facade
+
+#### Room: `garden`
+- **furniture_language** (3):
+-   simple timber garden bench
+-   tropical planting — palms, heliconias, banana plants
+-   concrete or stone path through planting
+- **material_palette** (3):
+-   pale stone or concrete path
+-   tropical planting palette — greens and whites
+-   simple timber or concrete garden furniture
+- **lighting_behavior**: Warm uplights on tropical planting + warm path strips; lush tropical evening garden.
+- **decor_language** (2):
+-   naturalistic tropical planting as primary design
+-   single specimen palm or tropical tree as focal element
+- **realism_constraints** (2):
+-   path at correct level with edge
+-   tropical plants at correct naturalistic scale — lush but not overgrown
+- **room_specific_constraints** (2):
+-   tropical species only — no European garden plants
+-   planting lush but with clear paths through
+- **visible_transition_logic**: stone path continues to terrace and pool deck; white villa facade visible at garden edge
+- **negative_rules** (4):
+-   no formal clipped hedging
+-   no lawn obsession
+-   no European garden style
+-   no potted herb garden
+
+#### Room: `pool_area`
+- **furniture_language** (3):
+-   wide rattan or teak sun loungers with thick white cushions
+-   canvas or timber shade sail
+-   concrete or stone side tables
+- **material_palette** (3):
+-   large-format pale stone or concrete pool deck
+-   white canvas cushion fabric
+-   pale stone or concrete pool coping
+- **lighting_behavior**: Warm underwater lighting (warm white tint) + concealed warm cove at shade structure edge.
+- **decor_language** (2):
+-   tropical planting at pool edges — heliconia, banana leaf
+-   white canvas cushions on loungers — consistent colour
+- **realism_constraints** (2):
+-   loungers at correct residential scale
+-   pool coping at correct level above deck
+- **room_specific_constraints** (2):
+-   light pool liner — light blue or white
+-   white or natural cushion colour only on loungers
+- **visible_transition_logic**: pale stone deck continues to terrace; white villa facade visible as backdrop
+- **negative_rules** (4):
+-   no dark pool liner
+-   no bright parasols
+-   no plastic loungers
+-   no over-planted dense surround
+
+#### Room: `terrace`
+- **furniture_language** (3):
+-   rattan or cane outdoor sofa with thick white linen cushions
+-   concrete or pale stone low table
+-   timber pergola with louvred roof or shade sail
+- **material_palette** (3):
+-   large-format pale stone or concrete paving
+-   white linen outdoor cushions
+-   timber or louvred overhead structure
+- **lighting_behavior**: Concealed warm strip under pergola beam + warm lanterns in rattan or brass; tropical evening.
+- **decor_language** (2):
+-   large tropical planting — heliconia or bird of paradise in concrete pot
+-   woven rattan tray or object on table
+- **realism_constraints** (2):
+-   outdoor sofa at correct scale for terrace
+-   paving at correct level with correct joints
+- **room_specific_constraints** (2):
+-   outdoor seating facing garden or pool — open orientation
+-   tropical planting as terrace edge feature
+- **visible_transition_logic**: pale stone paving continues to pool deck; interior white walls and rattan furniture visible through open plan
+- **negative_rules** (4):
+-   no dark furniture
+-   no string lights
+-   no bright cushion colours
+-   no resort-clichéd decor
+
+#### Room: `balcony`
+- **furniture_language** (3):
+-   two rattan armchairs with white linen cushions
+-   small concrete or stone side table
+-   single large tropical planter
+- **material_palette** (3):
+-   pale concrete or stone balcony floor
+-   white or off-white balustrade
+-   white linen cushions
+- **lighting_behavior**: Single warm rattan or brass lantern; tropical evening ambience.
+- **decor_language** (2):
+-   white linen cushions
+-   single large tropical plant in white or concrete pot
+- **realism_constraints** (2):
+-   chairs at correct height for table
+-   balustrade at safety height
+- **room_specific_constraints** (2):
+-   two chairs with side table — casual seating zone
+-   single tropical plant as balcony accent
+- **visible_transition_logic**: pale concrete floor echoes interior floor; white walls and tropical garden visible through glass
+- **negative_rules** (4):
+-   no dark furniture
+-   no coloured cushions
+-   no plastic
+-   no suburban balcony chair set
+
+#### Room: `driveway`
+- **furniture_language** (3):
+-   simple white render gate pillars
+-   pale stone or concrete driveway
+-   tropical planting flanking drive — palms and heliconias
+- **material_palette** (3):
+-   pale stone or concrete driveway
+-   white render gate pillars and boundary wall
+-   warm brass or timber lanterns
+- **lighting_behavior**: Warm lanterns on white pillars + low warm uplights on tropical drive-edge planting.
+- **decor_language** (2):
+-   tropical planting flanking full drive length — lush arrival
+-   single specimen palm at forecourt
+- **realism_constraints** (2):
+-   driveway at correct residential width — 3–3.5 m
+-   gate pillars at proportional height
+- **room_specific_constraints** (2):
+-   white or off-white render boundary — matches facade
+-   tropical edge planting — not formal hedging
+- **visible_transition_logic**: pale stone continues to entrance threshold; white villa facade visible from gate
+- **negative_rules** (4):
+-   no dark render boundary
+-   no formal clipped hedging
+-   no ornate gate
+-   no cold grey paving
+
+---
+
+## Atmosphere: `warm_modern`
+
+### Core DNA
+- **atmosphere_id**: `warm_modern`
+- **philosophy**: Warm contemporary luxury rooted in emotional comfort, hospitality, softness, and believable urban premium living.
+- **emotional_intent**: Comforting, refined, welcoming, calm, premium, elegant but livable.
+- **architectural_language**: Organic forms softened by curves, warm-toned natural materials, and layered indirect light in residential-scale spaces.
+- **lighting_behavior**: Warm indirect — concealed coves, tungsten-glow table lamps, no cold or harsh sources.
+- **luxury_level**: Boutique hotel / premium urban residence
+- **atmosphere_keywords**: warm contemporary, boucle, travertine, oak, indirect warmth
+- **material_palette** (5):
+-   European oak
+-   travertine
+-   warm sand plaster
+-   brushed brass
+-   warm linen
+- **forbidden_elements** (5):
+-   Cold minimalism
+-   sterile white interiors
+-   ultra glossy marble overload
+-   fake luxury gold
+-   overdecorated styling
+
+### Room adaptations (13)
+
+#### Room: `living_room`
+- **furniture_language** (3):
+-   bouclé in oat or camel — warm curved tactile richness
+-   travertine — warm stone surface depth with brass or oak accent
+-   warm linen — oak-toned textural warmth
+- **material_palette** (3):
+-   wide-plank European oak floor
+-   warm sand plaster walls
+-   travertine slab surfaces
+- **lighting_behavior**: Concealed ceiling cove + tungsten-glow table lamps; warm evening tone.
+- **decor_language** (2):
+-   oversized ceramic vessel on floating oak shelf
+-   floor-length warm linen curtains
+- **realism_constraints** (2):
+-   sofa at residential scale — not model-set proportions
+-   furniture legs visible and grounded on floor
+- **room_specific_constraints** (2):
+-   seating in conversation grouping, not TV-facing row
+-   single clear focal wall — fireplace or artwork, not both
+- **visible_transition_logic**: oak floor and warm plaster continue into adjacent rooms; brass accents echo through visible kitchen or hallway
+- **negative_rules** (4):
+-   no cold grey palette
+-   no chrome hardware
+-   no matching 3-piece suite
+-   no floating furniture without visible support
+
+#### Room: `master_bedroom`
+- **furniture_language** (3):
+-   warm oat linen — layered tactile warmth
+-   oak timber — floating surface warmth at wall level
+-   oak and warm-toned timber — warm mirror surface quality
+- **material_palette** (3):
+-   European oak floor
+-   warm sand plaster walls
+-   travertine bedside surfaces
+- **lighting_behavior**: Concealed cove above headboard + bedside table lamps with tungsten glow; no overhead downlights.
+- **decor_language** (2):
+-   layered warm linen and boucle bedding
+-   single framed artwork centred above headboard
+- **realism_constraints** (2):
+-   bed at correct height — not floating too high
+-   bedding draped naturally, not hotel-stiff
+- **room_specific_constraints** (2):
+-   nightstands matched in height with bedside lamps
+-   no TV directly facing bed unless wall-mounted flush
+- **visible_transition_logic**: oak floor and warm plaster flow into visible ensuite; linen palette continues in towel accents
+- **negative_rules** (4):
+-   no cold white bedding
+-   no mirrored furniture
+-   no heavy dark drapes
+-   no hotel-generic sets
+
+#### Room: `kitchen`
+- **furniture_language** (3):
+-   flat-front pale oak cabinetry, upper and lower
+-   travertine slab island or countertop
+-   integrated appliances flush with cabinet faces
+- **material_palette** (3):
+-   pale oak cabinetry
+-   thick travertine countertop
+-   warm sand tile or plaster backsplash
+- **lighting_behavior**: Warm under-cabinet strip light + concealed ceiling track with warm-toned spots over worksurfaces.
+- **decor_language** (2):
+-   single oversized ceramic pendant over island
+-   open oak shelf with curated ceramics — 3 items max
+- **realism_constraints** (2):
+-   cabinet doors at correct residential height, not commercial scale
+-   island proportioned for kitchen footprint
+- **room_specific_constraints** (2):
+-   handle-free or brushed brass handles only
+-   no visible appliance clutter on countertop
+- **visible_transition_logic**: oak cabinetry palette echoes dining furniture visible beyond; travertine floor or countertop continues
+- **negative_rules** (4):
+-   no stainless steel excess
+-   no dark granite
+-   no chrome handles
+-   no open shelf clutter
+
+#### Room: `bathroom`
+- **furniture_language** (3):
+-   floating double oak vanity
+-   freestanding stone soaking tub
+-   frameless glass shower screen
+- **material_palette** (3):
+-   travertine floor and wall surfaces
+-   floating oak vanity
+-   brushed brass fixtures
+- **lighting_behavior**: Concealed cove above vanity mirror + warm wall sconce at shower; no cold white strip lights.
+- **decor_language** (2):
+-   slatted oak bath mat
+-   single warm-framed mirror in brass or oak
+- **realism_constraints** (2):
+-   vanity at correct sink height — not floating too high
+-   shower screen properly sealed at tile edge
+- **room_specific_constraints** (2):
+-   single material for floor and walls — no mixing stone types
+-   fittings all in one finish: brushed brass only
+- **visible_transition_logic**: travertine and oak palette continue into visible dressing area; brass fixtures echo through door frames
+- **negative_rules** (4):
+-   no cold white ceramic tiles
+-   no chrome fittings
+-   no plastic accessories
+-   no over-styled countertop
+
+#### Room: `home_office`
+- **furniture_language** (3):
+-   solid oak desk with clean flat profile
+-   linen upholstered chair on warm oak base
+-   floating oak shelves above desk
+- **material_palette** (3):
+-   European oak desk surface
+-   warm sand plaster walls
+-   warm linen upholstery
+- **lighting_behavior**: Brushed brass adjustable task lamp on desk + warm ambient ceiling cove; no cold daylight strip.
+- **decor_language** (2):
+-   single warm ceramic pen holder
+-   trailing plant on corner shelf
+- **realism_constraints** (2):
+-   desk at correct 72–75 cm working height
+-   chair at correct seat height relative to desk
+- **room_specific_constraints** (2):
+-   cable management — no visible cable tangle
+-   shelves with edited display — not overloaded
+- **visible_transition_logic**: oak desk palette echoes hallway or living room flooring; warm plaster walls continuous
+- **negative_rules** (4):
+-   no cold grey office aesthetic
+-   no aggressive ergonomic furniture styling
+-   no cable clutter
+-   no tech-showroom feel
+
+#### Room: `dining_room`
+- **furniture_language** (3):
+-   oval travertine-top table on brass base
+-   upholstered dining chairs in warm linen
+-   oak sideboard with concealed storage
+- **material_palette** (3):
+-   European oak floor
+-   warm plaster walls
+-   travertine or warm stone table top
+- **lighting_behavior**: Single warm brass pendant hung low over table centre; no ambient ceiling wash.
+- **decor_language** (2):
+-   single ceramic centrepiece on table
+-   floor-length warm linen curtains flanking window
+- **realism_constraints** (2):
+-   pendant hung at correct dining height — 70–80 cm above table surface
+-   chairs at correct seat height for table
+- **room_specific_constraints** (2):
+-   table sized for room — not oversized
+-   sideboard against wall, not floating in room
+- **visible_transition_logic**: oak floor and warm plaster echo through to kitchen; linen chairs palette visible from living room
+- **negative_rules** (4):
+-   no cold marble top
+-   no maximalist tablescaping
+-   no mismatched chairs
+-   no chandelier
+
+#### Room: `entrance_hall`
+- **furniture_language** (3):
+-   floating oak console table
+-   large warm-toned round mirror in brass or oak frame
+-   single structured ceramic vessel
+- **material_palette** (3):
+-   large-format travertine or limestone floor
+-   warm plaster walls
+-   brushed brass mirror frame
+- **lighting_behavior**: Concealed ceiling strip + warm wall sconce flanking mirror; welcoming arrival tone.
+- **decor_language** (2):
+-   dried or fresh botanicals in ceramic vessel
+-   single warm-toned artwork above console
+- **realism_constraints** (2):
+-   console at correct height — 80–90 cm
+-   mirror sized proportionally to wall, not too small
+- **room_specific_constraints** (2):
+-   clear circulation path to adjacent rooms
+-   no visual clutter at entry — single focal console
+- **visible_transition_logic**: travertine floor continues to living room; oak console echoes living room furniture palette
+- **negative_rules** (4):
+-   no visible coat hooks from entry
+-   no cluttered surfaces
+-   no cold white tiles
+-   no mirror below console height
+
+#### Room: `facade`
+- **furniture_language** (3):
+-   timber-framed windows with deep reveals
+-   recessed stone entrance threshold
+-   clipped hedging flanking entrance
+- **material_palette** (3):
+-   warm sand cement render or limestone cladding
+-   iroko or oak timber window frames
+-   warm bronze or brass door hardware
+- **lighting_behavior**: Concealed ground uplights washing facade + warm lanterns flanking entrance door.
+- **decor_language** (2):
+-   single material discipline: render + timber + natural stone
+-   warm proportioned window rhythm
+- **realism_constraints** (2):
+-   window proportions match interior room heights
+-   render texture visible — not hyper-smooth CGI
+- **room_specific_constraints** (2):
+-   entrance door clearly legible as focal point
+-   no more than two cladding materials on facade
+- **visible_transition_logic**: warm sand render tone flows to boundary walls; timber window frames echo interior oak palette
+- **negative_rules** (4):
+-   no cold grey render
+-   no UPVC window frames
+-   no suburban builder aesthetic
+-   no excessive cladding mix
+
+#### Room: `garden`
+- **furniture_language** (3):
+-   simple oak table and chairs
+-   stone or terracotta planters
+-   single specimen tree as focal point
+- **material_palette** (3):
+-   natural limestone or sandstone paving
+-   warm-toned terracotta pots
+-   gravel infill between pavers
+- **lighting_behavior**: Warm concealed ground uplights on planting beds + warm path lighting at paving edges.
+- **decor_language** (2):
+-   edited planting palette in warm greens and silvers
+-   clean paving-to-planting edge transition
+- **realism_constraints** (2):
+-   paving at correct ground level — not raised or floating
+-   trees at believable planted scale
+- **room_specific_constraints** (2):
+-   clear circulation path through garden
+-   focal tree or specimen plant defines garden structure
+- **visible_transition_logic**: garden paving continues to terrace deck; warm render of house facade visible as backdrop
+- **negative_rules** (4):
+-   no plastic garden furniture
+-   no mixed paving patterns
+-   no overdesigned water features
+-   no garish colour planting
+
+#### Room: `pool_area`
+- **furniture_language** (3):
+-   teak sun loungers with warm canvas cushions
+-   natural canvas parasol
+-   stone or teak side table
+- **material_palette** (3):
+-   large-format travertine pool deck
+-   warm limestone coping
+-   flush pool edge coping
+- **lighting_behavior**: Warm underwater pool lighting + warm concealed deck uplights at lounger zone.
+- **decor_language** (2):
+-   flush travertine coping at pool edge
+-   single restrained olive tree or hedging at deck perimeter
+- **realism_constraints** (2):
+-   pool coping at correct height above deck
+-   loungers spaced at correct 60–80 cm clearance
+- **room_specific_constraints** (2):
+-   pool coping in single material — no mixing stone types
+-   deck furniture in one zone — not scattered
+- **visible_transition_logic**: travertine deck material continues to terrace or garden; warm facade render visible as backdrop
+- **negative_rules** (4):
+-   no plastic sun loungers
+-   no bright parasols
+-   no busy pool surrounds
+-   no cold blue water overemphasis
+
+#### Room: `terrace`
+- **furniture_language** (3):
+-   rattan or teak sofa set with thick warm cushions
+-   stone or teak coffee table
+-   structured plant in ceramic pot
+- **material_palette** (3):
+-   travertine or large-format stone paving
+-   warm linen outdoor cushions
+-   natural canvas overhead shade
+- **lighting_behavior**: Warm strip under pergola beam + single outdoor ceramic pendant; warm evening ambience.
+- **decor_language** (2):
+-   warm linen cushion covers in oat or camel
+-   trailing or potted olive tree as accent
+- **realism_constraints** (2):
+-   outdoor furniture at correct residential scale
+-   paving stones with correct grout lines
+- **room_specific_constraints** (2):
+-   shade structure — pergola or canvas — defines terrace zone
+-   transition to garden or interior clearly readable
+- **visible_transition_logic**: travertine paving continues to pool deck or garden; interior oak floor visible through sliding doors
+- **negative_rules** (4):
+-   no plastic outdoor furniture
+-   no cold grey tiles
+-   no corporate hotel terrace feel
+-   no string light overuse
+
+#### Room: `balcony`
+- **furniture_language** (3):
+-   compact rattan two-seat sofa
+-   small teak or stone side table
+-   single ceramic pot with structured plant
+- **material_palette** (3):
+-   composite or natural stone balcony floor
+-   warm linen cushion fabric
+-   glass or simple steel balustrade
+- **lighting_behavior**: Single warm wall sconce or pendant; warm evening tone, no strip LEDs.
+- **decor_language** (2):
+-   warm linen throw draped on sofa
+-   compact olive tree or trailing plant
+- **realism_constraints** (2):
+-   furniture scale appropriate for balcony — no oversized pieces
+-   balustrade at correct safety height
+- **room_specific_constraints** (2):
+-   one seating cluster only — no room for two zones
+-   planting in single structured pot, not random scatter
+- **visible_transition_logic**: balcony floor material echoes interior floor; warm interior light visible through glass doors
+- **negative_rules** (4):
+-   no plastic chairs
+-   no artificial grass
+-   no cluttered storage
+-   no random style mix
+
+#### Room: `driveway`
+- **furniture_language** (3):
+-   stone gate pillars in warm render
+-   clipped hedging or topiary flanking drive
+-   simple timber or warm steel gate
+- **material_palette** (3):
+-   natural limestone or sandstone driveway paving
+-   warm sand cement render for gate pillars and boundary
+-   warm bronze lanterns
+- **lighting_behavior**: Warm bronze lanterns flanking entrance + warm path lighting strips along drive edge.
+- **decor_language** (2):
+-   single material consistency: render + stone + warm metal
+-   restrained specimen planting along boundary
+- **realism_constraints** (2):
+-   driveway width at least 3 m for single vehicle passage
+-   gate pillars at correct proportional height
+- **room_specific_constraints** (2):
+-   one consistent paving material for full drive
+-   boundary wall in same render as house facade
+- **visible_transition_logic**: limestone paving echoes facade threshold; warm sand render of boundary walls matches house exterior
+- **negative_rules** (4):
+-   no grey block paving
+-   no cold white rendered walls
+-   no suburban gatehouse aesthetic
+-   no ornate ironwork
+
+---
+
+## Atmosphere: `zen_retreat`
+
+### Core DNA
+- **atmosphere_id**: `zen_retreat`
+- **philosophy**: Meditative architectural silence and visual restraint.
+- **emotional_intent**: Meditative, still, contemplative, restorative, emptied, deeply calm.
+- **architectural_language**: Spatial emptiness as architectural intention, natural material austerity, and light as the primary design element.
+- **lighting_behavior**: Near-darkness punctuated by single warm shafts — skylights, candles, narrow wall slots.
+- **luxury_level**: Private Japanese retreat
+- **atmosphere_keywords**: meditative, wabi plaster, basalt, stillness, architectural silence
+- **material_palette** (5):
+-   grey or white wabi plaster
+-   dark slate or basalt stone
+-   pale unfinished timber
+-   natural rush or tatami
+-   water as surface
+- **forbidden_elements** (5):
+-   Decor clutter
+-   fake spa styling
+-   yoga studio clichés
+-   ultra modern tech minimalism
+-   over-styled emptiness
+
+### Room adaptations (13)
+
+#### Room: `living_room`
+- **furniture_language** (3):
+-   natural unbleached linen — floor-level tactile calm
+-   flat slate or basalt stone — raw surface restraint at low height
+-   neutral rush or jute — organic textural quietude
+- **material_palette** (3):
+-   large-format grey slate floor
+-   grey wabi plaster walls
+-   unfinished pale timber accents
+- **lighting_behavior**: Single narrow skylight beam + one floor-level warm candle or lantern; room near-dark.
+- **decor_language** (2):
+-   one stone or ceramic vessel — empty
+-   single branch or stone arrangement on floor
+- **realism_constraints** (2):
+-   furniture low enough to feel floored — 35–40 cm seats
+-   floor space dominant — furniture minimal
+- **room_specific_constraints** (2):
+-   maximum 2 furniture pieces in room
+-   zero wall decoration — walls bare plaster only
+- **visible_transition_logic**: slate floor and grey plaster continue uninterrupted through adjacent rooms; no material change at thresholds
+- **negative_rules** (4):
+-   no throw pillows or cushion styling
+-   no plants
+-   no wall art
+-   no technology visible
+
+#### Room: `master_bedroom`
+- **furniture_language** (3):
+-   pale unfinished timber — floor-level warmth at ground level
+-   natural clay or paper — soft lantern warmth at wall level
+-   natural linen — folded tactile calm at floor level
+- **material_palette** (3):
+-   grey slate or basalt floor
+-   wabi plaster walls in grey-white
+-   unbleached natural linen bedding
+- **lighting_behavior**: Single warm shoji or paper panel beside sleeping platform; near-darkness elsewhere.
+- **decor_language** (2):
+-   single white or grey stone on floor beside bed
+-   one branch fixed horizontally to wall — not framed
+- **realism_constraints** (2):
+-   sleeping platform at floor or near-floor level — 15–25 cm
+-   bedding folded flat — no pillow mountain
+- **room_specific_constraints** (2):
+-   no bedside table — wall lantern only
+-   no mirror in room
+- **visible_transition_logic**: slate floor and plaster walls flow into ensuite without material transition; pale timber tone echoes doors
+- **negative_rules** (4):
+-   no headboard
+-   no bedside lamp on table
+-   no bedding layers
+-   no artwork framed on wall
+
+#### Room: `kitchen`
+- **furniture_language** (3):
+-   handleless grey lacquer or unfinished timber cabinetry
+-   flat honed slate or grey stone countertop
+-   integrated appliances behind flush panels
+- **material_palette** (3):
+-   grey lacquer or dark timber cabinetry
+-   honed slate or grey basalt countertop
+-   grey wabi plaster walls
+- **lighting_behavior**: Single narrow warm spot on countertop only; no ambient ceiling light — functional minimalism.
+- **decor_language** (2):
+-   one dark ceramic bowl on counter — empty
+-   single cast iron or clay vessel on shelf
+- **realism_constraints** (2):
+-   countertop empty — nothing on surface except one intentional object
+-   cabinet handles absent
+- **room_specific_constraints** (2):
+-   no open shelving display — storage fully concealed
+-   one material for counter and backsplash — no mixing
+- **visible_transition_logic**: grey cabinetry and slate tone echo through visible dining area; dark material palette continues
+- **negative_rules** (4):
+-   no warm wood tones
+-   no decorative objects on countertop
+-   no visible appliances
+-   no lighting over 2700K
+
+#### Room: `bathroom`
+- **furniture_language** (3):
+-   stone or concrete basin on slate slab — no vanity cabinet
+-   deep soaking tub in dark basalt or concrete
+-   open shower in continuous slate
+- **material_palette** (3):
+-   large-format dark slate or basalt floor and walls
+-   raw concrete or dark stone basin
+-   matte black or graphite fixtures
+- **lighting_behavior**: Single narrow ceiling slot of warm light; room otherwise near-dark — candle-adjacent tone.
+- **decor_language** (2):
+-   single river stone beside basin — no other objects
+-   one folded dark linen towel on wall peg
+- **realism_constraints** (2):
+-   basin at correct height — 80–85 cm even without cabinet
+-   shower floor in same stone as room floor — no transition
+- **room_specific_constraints** (2):
+-   no vanity cabinet — basin on stone slab or wall-supported
+-   no mirror — or one small mirror only
+- **visible_transition_logic**: slate floor continues from bedroom without threshold; dark material discipline echoes throughout retreat
+- **negative_rules** (4):
+-   no white tiles
+-   no chrome
+-   no towel ladder styling
+-   no accessory display on basin
+
+#### Room: `home_office`
+- **furniture_language** (3):
+-   single flat dark timber desk on trestle — minimal
+-   upright wooden stool or kneeling chair
+-   single floating shelf above desk — one object only
+- **material_palette** (3):
+-   dark slate or timber floor
+-   grey wabi plaster walls
+-   unfinished dark timber desk
+- **lighting_behavior**: Single narrow task lamp — matte black or clay, warm 2700K; no ambient ceiling light.
+- **decor_language** (2):
+-   single stone or ceramic pen holder
+-   one rock or stone as paperweight — nothing more
+- **realism_constraints** (2):
+-   desk at correct height — 72–75 cm
+-   stool at correct seat height for desk
+- **room_specific_constraints** (2):
+-   no monitor — or single flush monitor only
+-   zero objects on desk except lamp and one tool
+- **visible_transition_logic**: dark timber and plaster flow into adjacent rooms; material austerity continuous
+- **negative_rules** (4):
+-   no conventional office chair
+-   no bookshelves
+-   no cable tangle
+-   no stationery display
+
+#### Room: `dining_room`
+- **furniture_language** (3):
+-   low rectangular dark timber or slate table at 55 cm height
+-   floor cushions in dark natural linen — no chairs
+-   single scroll or stone as centrepiece
+- **material_palette** (3):
+-   dark slate floor
+-   wabi plaster walls
+-   unfinished dark timber table surface
+- **lighting_behavior**: Single narrow warm pendant beam or candle cluster over table only; room otherwise dark.
+- **decor_language** (2):
+-   single stone bowl at table centre — empty
+-   one wall left bare as contemplative surface
+- **realism_constraints** (2):
+-   floor cushions at correct height for 55 cm table
+-   table at correct floor-dining proportion
+- **room_specific_constraints** (2):
+-   floor dining only — no chairs
+-   maximum 6 cushion positions — not a banquet
+- **visible_transition_logic**: dark slate and plaster continue from living area; low table echoes living platform furniture height
+- **negative_rules** (4):
+-   no Western dining table height
+-   no pendant chandelier
+-   no tableware display
+-   no artwork on walls
+
+#### Room: `entrance_hall`
+- **furniture_language** (3):
+-   single dark timber or slate ledge at 80 cm — no console
+-   one empty ceramic or stone vessel on ledge
+-   no mirror — wall left bare
+- **material_palette** (3):
+-   large-format dark slate floor
+-   grey wabi plaster walls
+-   dark timber threshold detail
+- **lighting_behavior**: Single narrow warm ceiling slot above ledge; arrival through beam — remainder in darkness.
+- **decor_language** (2):
+-   one stone or ceramic vessel — empty, deliberate
+-   no other objects or artwork
+- **realism_constraints** (2):
+-   ledge at correct depth — 25–30 cm, not full console
+-   plaster texture visible — hand-applied, not flat paint
+- **room_specific_constraints** (2):
+-   one object only — nothing else
+-   no coat hooks, no mat, no basket
+- **visible_transition_logic**: dark slate floor flows into living area without break; grey plaster walls continuous
+- **negative_rules** (4):
+-   no console table
+-   no mirror
+-   no coat rack
+-   no artwork or prints
+
+#### Room: `facade`
+- **furniture_language** (3):
+-   timber or concrete mono-material facade — no decoration
+-   narrow deep-set window openings
+-   single flush entrance door in dark timber or steel
+- **material_palette** (3):
+-   raw concrete or grey render facade
+-   dark timber or shou sugi ban detail at entrance
+-   dark slate or basalt threshold
+- **lighting_behavior**: Single narrow warm slot at entrance only; facade otherwise unlit — contemplative darkness.
+- **decor_language** (2):
+-   facade as pure mass — no projections or decorations
+-   single specimen tree set away from facade
+- **realism_constraints** (2):
+-   window openings correctly proportioned — narrow and vertical or horizontal slot
+-   concrete texture visible — not perfect CGI smooth
+- **room_specific_constraints** (2):
+-   one material on facade — no mixing
+-   no visible entrance canopy or porch projection
+- **visible_transition_logic**: raw concrete or dark render tone continues to boundary wall; dark slate threshold echoes interior floor
+- **negative_rules** (4):
+-   no warm render
+-   no decorative entrance
+-   no timber cladding mixed with render
+-   no suburban proportions
+
+#### Room: `garden`
+- **furniture_language** (3):
+-   raked stone garden — karesansui dry landscape
+-   single flat stone as contemplative seat
+-   single specimen pine or stone lantern
+- **material_palette** (3):
+-   raked pale gravel ground plane
+-   dark moss or ground cover at edges
+-   single large dark stone specimen
+- **lighting_behavior**: Single warm ground uplight on stone lantern or specimen; garden otherwise in darkness.
+- **decor_language** (2):
+-   raked gravel pattern as primary design
+-   one carefully placed stone — correct weight and position
+- **realism_constraints** (2):
+-   gravel correctly raked — not patternless scatter
+-   stone at correct scale for garden — not too small
+- **room_specific_constraints** (2):
+-   no planted borders — gravel and stone only
+-   maximum 3 design elements: gravel, stone, specimen
+- **visible_transition_logic**: raked gravel echoes terrace ground plane; retreat facade visible at garden edge
+- **negative_rules** (4):
+-   no lawn
+-   no planting borders
+-   no garden furniture
+-   no water feature
+
+#### Room: `pool_area`
+- **furniture_language** (3):
+-   single dark stone or concrete platform for seated repose
+-   pool as mirror surface — no visible water features
+-   single stone lantern at pool edge
+- **material_palette** (3):
+-   dark slate or honed basalt pool deck
+-   dark pool liner — deep black or charcoal
+-   raw concrete or stone pool surround
+- **lighting_behavior**: Near-zero lighting — single candle lantern on stone at pool edge; pool as dark mirror.
+- **decor_language** (2):
+-   pool as still-water mirror — the only decor
+-   single specimen tree in gravel beyond pool edge
+- **realism_constraints** (2):
+-   pool water level near flush with coping — mirror effect
+-   deck without furniture except single stone platform
+- **room_specific_constraints** (2):
+-   no sun loungers — contemplative pool, not resort pool
+-   dark pool liner — not light blue
+- **visible_transition_logic**: dark stone deck continues to terrace paving; retreat facade visible as still backdrop
+- **negative_rules** (4):
+-   no sun loungers
+-   no parasols
+-   no water features
+-   no illuminated pool at night — mirror only
+
+#### Room: `terrace`
+- **furniture_language** (3):
+-   single flat timber or stone platform for sitting — no chairs
+-   low stone tray table
+-   single raked gravel or moss garden zone
+- **material_palette** (3):
+-   dark slate or basalt paving
+-   raked gravel or moss ground plane
+-   unfinished pale timber decking section
+- **lighting_behavior**: Single floor lantern in dark stone or ceramic; no electric overhead — fire or candle tone.
+- **decor_language** (2):
+-   raked gravel as contemplative design surface
+-   single stone specimen in gravel — not planting
+- **realism_constraints** (2):
+-   platform at correct low seating height — 35–40 cm
+-   gravel at correct raked depth — not decorative veneer
+- **room_specific_constraints** (2):
+-   no furniture in Western sense — platform and ground only
+-   open sky visible — no overhead shade
+- **visible_transition_logic**: slate paving continues from interior floor; dark timber framing of doors echoes terrace timber platform
+- **negative_rules** (4):
+-   no garden chairs
+-   no parasol
+-   no planting borders
+-   no lantern cluster
+
+#### Room: `balcony`
+- **furniture_language** (3):
+-   single floor-level timber platform
+-   one dark ceramic pot with single bamboo culm or moss
+-   no furniture beyond platform
+- **material_palette** (3):
+-   dark slate or timber composite balcony floor
+-   raw concrete or dark steel balustrade
+-   natural rush or jute mat
+- **lighting_behavior**: Single small floor lantern only; no wall sconce — near-darkness intended.
+- **decor_language** (2):
+-   single dark ceramic pot with one plant — bamboo or black pine
+-   rush mat on platform
+- **realism_constraints** (2):
+-   platform at correct floor level — not elevated above balcony floor
+-   balustrade at safety height
+- **room_specific_constraints** (2):
+-   single platform only — no seating furniture
+-   one plant specimen — not a collection
+- **visible_transition_logic**: dark floor continues from interior; raw concrete or dark steel balustrade echoes door frame material
+- **negative_rules** (4):
+-   no chairs or lounger
+-   no cushion collection
+-   no potted herb mix
+-   no string lights
+
+#### Room: `driveway`
+- **furniture_language** (3):
+-   raked gravel forecourt — no gate pillars
+-   single dark stone or concrete post at entry
+-   flat dark stone threshold path
+- **material_palette** (3):
+-   raked grey gravel driveway
+-   dark concrete or slate path
+-   single dark stone or basalt boundary
+- **lighting_behavior**: Single ground uplight on entry stone only; approach in near-darkness — intentional.
+- **decor_language** (2):
+-   entry marked by single stone — not a gate
+-   raked gravel from road to threshold
+- **realism_constraints** (2):
+-   gravel correctly raked to edge
+-   stone marker at correct proportional scale
+- **room_specific_constraints** (2):
+-   no gate — open entry, marked by stone
+-   gravel extends to facade — no paved drive
+- **visible_transition_logic**: raked gravel continues to entrance threshold; dark facade visible at drive end
+- **negative_rules** (4):
+-   no paved driveway
+-   no gate
+-   no hedge borders
+-   no warm-toned materials at entry
+
+---

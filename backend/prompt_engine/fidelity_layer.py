@@ -98,6 +98,17 @@ def build_first_vision_task(dna_name: str, room_ctx: str) -> str:
     "reproduce... exactly. Then transform" → "preserve... Restyle only — transform"
     Removes implicit license to recompose; keeps photo as dominant source of truth.
 
+    Wave 5.5.2 (C2.b — task-level DNA boundary embed): the framing now
+    explicitly defines atmosphere as "aesthetic overlay only" and embeds the
+    boundary definition ("Atmosphere = surfaces, materials, lighting, decor
+    — never geometry") to disambiguate the DNA architectural_language fields
+    (e.g. Nordic "Human-scaled rooms", Bali "open-pavilion volumes") that
+    can otherwise conflict with the photographed apartment's actual scale.
+    Task is P1 (never dropped by budget compression) AND first block read
+    by the model, so this framing sets the boundary BEFORE any DNA content
+    is parsed. Char-neutral vs Wave 4.6.1 (-6 chars). Rollback = revert
+    to previous f-string.
+
     Still satisfies all Wave 4.3.3 vocabulary requirements:
       SAME APARTMENT, spatial truth, geometry, camera, windows, openings, depth, transform.
 
@@ -105,8 +116,8 @@ def build_first_vision_task(dna_name: str, room_ctx: str) -> str:
     """
     space = room_ctx if room_ctx else " space"
     return (
-        f"SAME APARTMENT PHOTO-EDIT — apply {dna_name} atmosphere. "
-        f"The photo defines spatial truth: preserve this{space}'s "
-        f"geometry, camera, windows, openings, depth exactly. "
-        f"Restyle only — transform surfaces, materials, lighting, atmosphere."
+        f"SAME APARTMENT PHOTO-EDIT — apply {dna_name} as aesthetic overlay only. "
+        f"The photo defines geometry: preserve this{space}'s camera, windows, "
+        f"openings, depth exactly. "
+        f"Atmosphere = surfaces, materials, lighting, decor — never geometry."
     )

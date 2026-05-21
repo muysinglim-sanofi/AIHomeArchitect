@@ -256,7 +256,7 @@ from .dream_scene_completion import (
     build_dream_micro_layer,
     build_natural_enrichment,
 )
-from .wow_layer import build_first_vision_wow_directive, build_restyling_wow_directive, build_photo_edit_wow_directive
+from .wow_layer import build_first_vision_wow_directive, build_restyling_wow_directive, build_photo_edit_wow_directive, build_atmosphere_dna_boundary
 from .fidelity_layer import build_first_vision_task, build_openings_anchor
 from .refinement_memory import RefinementState, parse_history, build_refinement_block
 from .realism_layer import (
@@ -277,7 +277,7 @@ from .visible_space_logic import build_visible_spaces_block
 # ── Budget system ─────────────────────────────────────────────────────────────
 
 _MODE_BUDGETS: dict[str, int] = {
-    "FIRST_VISION": 3550,  # raised 3350→3550 (Wave 4.4.1): compact realism frees 192 chars for wow_directive
+    "FIRST_VISION": 3850,  # Wave 5.5.3: raised 3550→3850 to make room for the new atmosphere_dna_boundary P1 section (~290 chars). Still under the 4000 hard ceiling. Margins after C3: Nordic +48, Warm +61, Japandi +84, Bali +199, Soft Luxury +198.
     # Wave 4.8.2: raised 2400→3500 / 2500→3600. The 4.8.1a audit proved the
     # (legitimately grown 4.6–4.7) P1 preservation/continuity stack alone
     # (~2528 / ~2601) exceeded the old 2400/2500 caps, silently evicting
@@ -307,6 +307,7 @@ _SECTION_PRIORITY: dict[str, int] = {
     "source_continuity": 1,     # Wave 4.7.3 — visual-source continuity (V2/V3 only)
     "structural_negative_anchors": 1,  # Wave 4.7.4 — no-new-wall topology (V1/V2/V3)
     "authorized_user_changes": 1,      # Wave 4.7.5 — P1.5 local user authority (V2+); never dropped
+    "atmosphere_dna_boundary": 1,      # Wave 5.5.3 — DNA-vs-photo boundary clause; placed after design_intel; never dropped
     # P2 — core design intelligence (dropped only if forced)
     "design_intel": 2,
     # P3 — realism quality floor
@@ -684,6 +685,7 @@ def compose_generation_prompt(
         ("architectural_anchors", fv_anchor_clause),  # P1 — Wave 4.7.1 R1: concrete image anchors (text-derived)
         ("source_space", source),                  # P1 — source="" in FV (Wave 4.6.1)
         ("design_intel", intel_block),
+        ("atmosphere_dna_boundary", build_atmosphere_dna_boundary()),  # P1 — Wave 5.5.3: DNA-vs-photo boundary, positioned AFTER design_intel so "DNA above" reference is correct
         ("interior_completeness", completeness),   # P5 — drops first (Wave 4.4.1: was P4)
         ("scene_completion", completion_block),    # P4 — drops before wow_directive
         ("wow_directive", wow_block),              # P4 — most protected of the P4 group

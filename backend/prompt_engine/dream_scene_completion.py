@@ -149,17 +149,25 @@ def build_dream_addendum(atmosphere_id: str) -> str:
 # became under-decorated (missing TV, minimal accessory layering, sparse hospitality).
 # FIX: light natural enrichment signal that allows secondary decor without recomposing.
 # STRICT RULE: secondary to architecture. Enriches existing space, never recomposes it.
-# No sofa grouping, no furniture arrangement, no composition directives. ~217 chars.
+# No sofa grouping, no furniture arrangement, no composition directives.
+#
+# Wave 5.4b — trimmed 217 → 132 chars. Removed the example list ("plants,
+# floor lamp, cushions, textiles, hospitality accessories, TV if appropriate")
+# because the atmosphere DNA already specifies appropriate decor per
+# atmosphere (e.g. Bali says "single large stone or clay vessel with tropical
+# foliage", Japandi says "single branch in handmade ceramic vase"). Listing
+# generic examples here was either redundant with DNA or pushed the model
+# toward generic hospitality clichés instead of atmosphere-specific decor.
+# KEPT verbatim: the directive frame and the "enrich, do not recompose" rule.
 _NATURAL_ENRICHMENT = (
-    "NATURAL ENRICHMENT — Enrich the photographed space with light natural layering: "
-    "plants, floor lamp, cushions, textiles, hospitality accessories, TV if appropriate. "
-    "Secondary to architecture — enrich, do not recompose."
+    "NATURAL ENRICHMENT — Enrich the photographed space with light natural "
+    "layering. Secondary to architecture — enrich, do not recompose."
 )
 
 
 def build_natural_enrichment() -> str:
     """
-    Wave 4.6.2 — Natural decoration richness. ~217 chars.
+    Wave 4.6.2 — Natural decoration richness. ~132 chars (post Wave 5.4b trim).
     Addresses under-decoration observed after Wave 4.6.1 removed composition authority.
     Allows secondary accessory layering without reintroducing composition directives.
     Used in FIRST_VISION Path D at P4 — drops before P3 realism if budget is tight.

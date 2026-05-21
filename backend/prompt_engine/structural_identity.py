@@ -109,9 +109,25 @@ def extract_from_description(room_description: str) -> ApartmentStructuralIdenti
     low = text.lower()
 
     # Dominant opening — prefer the strongest, most identity-defining opening.
+    # Wave 5.5.10 (2026-05-21) — extended keyword list to recognize door types
+    # (sliding glass doors, balcony/patio doors). Previously only window types
+    # were captured, causing apartments with sliding glass doors to fall through
+    # the keyword loop into the _OPENING regex fallback which often missed them
+    # entirely. Order: most specific keys first so they match preferentially
+    # (e.g., "floor-to-ceiling sliding glass door" wins over "sliding door").
     dominant = ""
-    for key in ("bay window", "panoramic window", "floor-to-ceiling window",
-                "corner window", "glazed wall", "glazed facade", "picture window"):
+    for key in (
+        # Wave 5.5.10 — door variants (specific → generic).
+        "floor-to-ceiling sliding glass door",
+        "sliding glass door",
+        "floor-to-ceiling door",
+        "balcony door",
+        "patio door",
+        "sliding door",
+        # Wave 4.7.2 — window variants (original list, unchanged order).
+        "bay window", "panoramic window", "floor-to-ceiling window",
+        "corner window", "glazed wall", "glazed facade", "picture window",
+    ):
         if key in low:
             qualifier = ""
             for q in ("wide", "large", "tall", "full-height", "dominant", "dominating"):
@@ -214,7 +230,19 @@ _RENDER_ORDER = (
     "kitchen_visibility",
     "anchor_relationships",
 )
-_MAX_CLAUSE_CHARS = 360
+# Wave 5.5.10b (2026-05-21) — raised 360 → 460 so the clause can render 4
+# parser-captured facts simultaneously (dominant_opening + glass_partition +
+# room_depth_type + kitchen_visibility). Before the bump, Wave 5.5.10's new
+# dominant_opening capture (e.g. "large floor-to-ceiling sliding glass door...")
+# was filling the 360-char budget and pushing kitchen_visibility OUT of the
+# rendered clause — a regression on the user's #1 concern (kitchen preservation).
+# anchor_relationships (the 5th fact) still drops at this budget level since
+# it's redundant with the implicit pairing of dominant+partition in adjacent
+# facts. Trade-off: composer.py V1 prompt grows by ~80-100 chars, which may
+# cause visible_spaces (P5) or natural_enrichment (P4) to drop on tight
+# atmospheres. Kitchen is preserved in STRUCTURAL_IDENTITY (P1, never drops)
+# regardless. Rollback = revert to 360.
+_MAX_CLAUSE_CHARS = 460
 
 
 def render_clause(identity: ApartmentStructuralIdentity, mode: str = "V1") -> str:

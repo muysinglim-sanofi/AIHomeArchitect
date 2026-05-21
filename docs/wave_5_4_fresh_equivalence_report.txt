@@ -1,0 +1,153 @@
+WAVE 5.4 AUDIT — Fresh-vision equivalence across V1 / V2 / V3
+Target atmosphere: Japandi Calm
+Composer version active: v2
+
+====================================================================================================
+S1 — V1 fresh Japandi
+====================================================================================================
+strategy        = INCREMENTAL
+prev_atmos_id   = ''
+has_customs     = False
+source_mode     = ORIGINAL (V1 always edits original upload)
+edit_mode       = first_vision
+iteration       = 1
+user_instr      = ''
+source_cont len = 0
+auc len         = 0
+
+--- composer_v2 prompt (3529 chars) ---
+  [ 3529]  SAME APARTMENT PHOTO-EDIT — apply Japandi Calm atmosphere. The photo defines spa
+
+>>> RAW prompt:
+SAME APARTMENT PHOTO-EDIT — apply Japandi Calm atmosphere. The photo defines spatial truth: preserve this Living Room's geometry, camera, windows, openings, depth exactly. Restyle only — transform surfaces, materials, lighting, atmosphere.
+CAMERA LOCK — FROZEN: camera position, focal length, vanishing points, horizon line. Room proportions, spatial depth, and all structural lines are fixed. Output must look like a photograph of the SAME apartment, preserving its architectural identity. DO NOT reinterpret geometry. DO NOT redesign architecture. STRUCTURAL LOCK — FORBIDDEN: windows (positions, frames, unblocked, natural light visible), doors, walls, ceiling height, floor plan, structural columns. CHANGE ONLY: surfaces, materials, furniture, lighting, textiles, colours, atmosphere. ATMOSPHERE BOUNDARY — geometry, openings, and topology override atmosphere. Atmosphere is applied last. Any perspective or geometry change is a failure.
+OPENINGS ANCHOR — Bay windows and openings are photographed facts, not design decisions. Do not resize, narrow, simplify, or standardize any opening. Preserve exact proportions from the uploaded photo.
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+STRUCTURAL NEGATIVE ANCHORS — Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.
+ARCHITECTURAL ANCHORS — LOCKED: glass partition; partition; spatial depth. Preserve these unchanged in the output.
+ATMOSPHERE (Japandi Calm): Japanese restraint blended with Scandinavian softness and emotional calm. — Still, serene, grounded, quietly refined, breathable, unhurried.. [Quiet luxury boutique hospitality]
+ROOM (Living Room): pale ash or birch floor, wabi-sabi plaster walls in off-white or putty, dark charcoal ceramic accents. LIGHT: Paper lantern pendant + concealed warm floor slot; no harsh downlights. ATMOSPHERE STYLE (restyle existing elements): natural linen in stone or fog tones — unhurried tactile calm; wabi-sabi ceramic or ash — raw surface honesty; natural rush or jute — organic textural warmth; single branch in handmade ceramic vase; one framed Japanese ink artwork. REALISM: sofa low enough to feel grounded — 40–45 cm seat height; empty floor space is deliberate, not absent. AVOID: no cluttered surfaces, no patterned textiles, no warm-orange wood tones, Empty sterile minimalism, sci-fi white spaces.
+TRANSFORMATION AMBITION — premium photo-edit of THIS exact apartment, not a new apartment. Apply luxury atmosphere to the photographed space without altering its architecture. Visible architecture stays recognizable: windows, openings, partitions, existing equipment. WOW through: materials, finishes, lighting quality, atmosphere conviction. Decorate this photo — do not recompose.
+NATURAL ENRICHMENT — Enrich the photographed space with light natural layering: plants, floor lamp, cushions, textiles, hospitality accessories, TV if appropriate. Secondary to architecture — enrich, do not recompose.
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+<<< end
+
+====================================================================================================
+S2 — V2 pure switch (Tropical V1 → Japandi V2, no customization)
+====================================================================================================
+strategy        = REBOOT_FRESH
+prev_atmos_id   = 'tropical_bali'
+has_customs     = False
+source_mode     = ORIGINAL (Wave 5.3 override on pure switch)
+edit_mode       = style_refinement
+iteration       = 2
+user_instr      = 'switch to Japandi Calm'
+source_cont len = 0
+auc len         = 0
+
+--- composer_v2 prompt (2852 chars) ---
+  [  179]  ATMOSPHERE SWITCH — same apartment, replacing the previous Tropical Bali styling
+  [  805]  Continue evolving the current vision of the same apartment — preserve every arch
+  [  330]  STRUCTURAL IDENTITY — this apartment already contains these architectural facts;
+  [ 1358]  STYLE TRANSFORMATION — atmosphere SWITCH on the same photographed apartment. Ful
+  [  132]  NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable
+  [   38]  USER DIRECTION: switch to Japandi Calm
+
+>>> RAW prompt:
+ATMOSPHERE SWITCH — same apartment, replacing the previous Tropical Bali styling of this Living Room with Japandi Calm. Fresh atmospheric identity; same photographed architecture.
+
+Continue evolving the current vision of the same apartment — preserve every architectural fact from the original photograph. SAME APARTMENT PHOTO-EDIT — apply the chosen atmosphere to THIS exact photographed apartment, not a new apartment. FROZEN: camera, perspective, room proportions, ceiling height, and the floor plan. STRUCTURAL — every photographed opening (windows, sliding doors, balcony access, glass partitions, archways, half-walls, and any opening visible through a partition into an adjacent or rear zone), multi-zone visibility, open-plan continuity, and spatial depth all stay exactly as photographed; none may be narrowed, enclosed, walled off, or converted into a wall surface. CHANGE ONLY: surfaces, materials, furniture footprint styling, lighting, textiles, colours, decor, atmosphere.
+
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+
+STYLE TRANSFORMATION — atmosphere SWITCH on the same photographed apartment. Fully replace the previous vision's styling identity (furniture silhouette, decor density, material palette, lighting language) with the new atmosphere's identity from the DNA below. Only the photographed architecture and spatial relationships stay exactly as captured.
+ATMOSPHERE (Japandi Calm): Japanese restraint blended with Scandinavian softness and emotional calm. — Still, serene, grounded, quietly refined, breathable, unhurried.. [Quiet luxury boutique hospitality]
+ROOM (Living Room): pale ash or birch floor, wabi-sabi plaster walls in off-white or putty, dark charcoal ceramic accents. LIGHT: Paper lantern pendant + concealed warm floor slot; no harsh downlights. ATMOSPHERE STYLE (restyle existing elements): natural linen in stone or fog tones — unhurried tactile calm; wabi-sabi ceramic or ash — raw surface honesty; natural rush or jute — organic textural warmth; single branch in handmade ceramic vase; one framed Japanese ink artwork. REALISM: sofa low enough to feel grounded — 40–45 cm seat height; empty floor space is deliberate, not absent. AVOID: no cluttered surfaces, no patterned textiles, no warm-orange wood tones, Empty sterile minimalism, sci-fi white spaces.
+AMBITION — premium hospitality-grade restyling. Decorate this photo; do not recompose it.
+
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+
+USER DIRECTION: switch to Japandi Calm
+<<< end
+
+====================================================================================================
+S3 — V3 pure switch (Tropical V1 → Soft Luxury V2 → Japandi V3, no customization)
+====================================================================================================
+strategy        = REBOOT_FRESH
+prev_atmos_id   = 'tropical_bali'
+has_customs     = False
+source_mode     = ORIGINAL (Wave 5.3 override on pure switch)
+edit_mode       = style_refinement
+iteration       = 3
+user_instr      = 'switch to Japandi Calm'
+source_cont len = 0
+auc len         = 0
+
+--- composer_v2 prompt (2852 chars) ---
+  [  179]  ATMOSPHERE SWITCH — same apartment, replacing the previous Tropical Bali styling
+  [  805]  Continue evolving the current vision of the same apartment — preserve every arch
+  [  330]  STRUCTURAL IDENTITY — this apartment already contains these architectural facts;
+  [ 1358]  STYLE TRANSFORMATION — atmosphere SWITCH on the same photographed apartment. Ful
+  [  132]  NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable
+  [   38]  USER DIRECTION: switch to Japandi Calm
+
+>>> RAW prompt:
+ATMOSPHERE SWITCH — same apartment, replacing the previous Tropical Bali styling of this Living Room with Japandi Calm. Fresh atmospheric identity; same photographed architecture.
+
+Continue evolving the current vision of the same apartment — preserve every architectural fact from the original photograph. SAME APARTMENT PHOTO-EDIT — apply the chosen atmosphere to THIS exact photographed apartment, not a new apartment. FROZEN: camera, perspective, room proportions, ceiling height, and the floor plan. STRUCTURAL — every photographed opening (windows, sliding doors, balcony access, glass partitions, archways, half-walls, and any opening visible through a partition into an adjacent or rear zone), multi-zone visibility, open-plan continuity, and spatial depth all stay exactly as photographed; none may be narrowed, enclosed, walled off, or converted into a wall surface. CHANGE ONLY: surfaces, materials, furniture footprint styling, lighting, textiles, colours, decor, atmosphere.
+
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+
+STYLE TRANSFORMATION — atmosphere SWITCH on the same photographed apartment. Fully replace the previous vision's styling identity (furniture silhouette, decor density, material palette, lighting language) with the new atmosphere's identity from the DNA below. Only the photographed architecture and spatial relationships stay exactly as captured.
+ATMOSPHERE (Japandi Calm): Japanese restraint blended with Scandinavian softness and emotional calm. — Still, serene, grounded, quietly refined, breathable, unhurried.. [Quiet luxury boutique hospitality]
+ROOM (Living Room): pale ash or birch floor, wabi-sabi plaster walls in off-white or putty, dark charcoal ceramic accents. LIGHT: Paper lantern pendant + concealed warm floor slot; no harsh downlights. ATMOSPHERE STYLE (restyle existing elements): natural linen in stone or fog tones — unhurried tactile calm; wabi-sabi ceramic or ash — raw surface honesty; natural rush or jute — organic textural warmth; single branch in handmade ceramic vase; one framed Japanese ink artwork. REALISM: sofa low enough to feel grounded — 40–45 cm seat height; empty floor space is deliberate, not absent. AVOID: no cluttered surfaces, no patterned textiles, no warm-orange wood tones, Empty sterile minimalism, sci-fi white spaces.
+AMBITION — premium hospitality-grade restyling. Decorate this photo; do not recompose it.
+
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+
+USER DIRECTION: switch to Japandi Calm
+<<< end
+
+====================================================================================================
+PROMPT EQUIVALENCE MATRIX
+====================================================================================================
+S1 size: 3529
+S2 size: 2852
+S3 size: 2852
+S1 == S2 ?  False
+S2 == S3 ?  True
+S1 == S3 ?  False
+
+====================================================================================================
+CUSTOMIZATION DETECTOR PROBE — classify_transformation + is_customization_transformation
+====================================================================================================
+
+text                                          | TransformationType               | is_cust?
+----------------------------------------------------------------------------------------------------
+'make it warmer'                              | STYLE_REFINEMENT                 | False
+'more cozy'                                   | STYLE_REFINEMENT                 | False
+'softer lighting'                             | STYLE_REFINEMENT                 | False
+'warmer tone'                                 | STYLE_REFINEMENT                 | False
+'switch to Japandi'                           | ATMOSPHERE_SWITCH                | False
+'change to Soft Luxury'                       | UNKNOWN                          | True
+'add a bed to the right'                      | OBJECT_EDIT                      | True
+'place a sofa here'                           | UNKNOWN                          | True
+'move the TV'                                 | UNKNOWN                          | True
+'remove the lamp'                             | OBJECT_EDIT                      | True
+'turn the rear area into a bedroom'           | FUNCTIONAL_REASSIGNMENT          | True
+'knock down the partition'                    | UNKNOWN                          | True
+'redesign the layout'                         | LAYOUT_REINTERPRETATION          | True
+'something completely different'              | UNKNOWN                          | True
+
+====================================================================================================
+HISTORY CUSTOMIZATION DETECTION — detect_history_customizations
+====================================================================================================
+
+case                                               | detect_history_customizations()
+----------------------------------------------------------------------------------------------------
+no user messages — pure switch                     | False
+user said 'make it warmer'                         | False
+user said 'add a bed right'                        | True
+user said 'switch to Japandi'                      | False
+user said 'change atmosphere'                      | False
+user said 'something different'                    | True

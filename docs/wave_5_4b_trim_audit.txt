@@ -1,0 +1,118 @@
+====================================================================================================
+WAVE 5.4b — V1 prompt size decomposition by section, per atmosphere
+====================================================================================================
+
+Section                                  |        Warm Modern |       Japandi Calm |     Bali Sanctuary |   Japandi (simple)
+----------------------------------------------------------------------------------------------------------------------------
+task                                     |                238 |                239 |                241 |                239
+camera+structural+atmosphere_boundary    |                702 |                702 |                702 |                702
+openings_anchor                          |                201 |                201 |                201 |                201
+structural_identity                      |                330 |                330 |                330 |                248
+structural_negative_anchors              |                282 |                282 |                282 |                282
+architectural_anchors                    |                114 |                114 |                114 |                 86
+atmosphere                               |                253 |                204 |                195 |                204
+room                                     |                694 |                716 |                839 |                716
+wow_directive                            |                192 |                192 |                192 |                192
+natural_enrichment                       |                133 |                133 |                133 |                133
+visible_spaces                           |                227 |                230 |                  - |                  -
+design_direction                         |                  - |                  - |                  - |                  -
+compact_realism                          |                132 |                132 |                132 |                132
+----------------------------------------------------------------------------------------------------------------------------
+TOTAL                                    |               3498 |               3475 |               3361 |               3135
+
+====================================================================================================
+DETAILED CONTENT — Warm Modern V1 (the trim audit's reference apartment)
+====================================================================================================
+
+--- [task] (238 chars) ---
+SAME APARTMENT PHOTO-EDIT — apply Warm Modern atmosphere. The photo defines spatial truth: preserve this Living Room's geometry, camera, windows, openings, depth exactly. Restyle only — transform surfaces, materials, lighting, atmosphere.
+
+--- [camera+structural+atmosphere_boundary] (702 chars) ---
+CAMERA LOCK — FROZEN: camera position, focal length, vanishing points, horizon line. Room proportions, spatial depth, and all structural lines are fixed. Output must look like a photograph of the SAME apartment, preserving its architectural identity. DO NOT reinterpret geometry. DO NOT redesign architecture. STRUCTURAL LOCK — FORBIDDEN: windows (positions, frames, unblocked, natural light visible), doors, walls, ceiling height, floor plan, structural columns. CHANGE ONLY: surfaces, materials, furniture, lighting, textiles, colours, atmosphere. ATMOSPHERE BOUNDARY — geometry, openings, and topology override atmosphere. Atmosphere is applied last. Any perspective or geometry change is a failure.
+
+--- [openings_anchor] (201 chars) ---
+OPENINGS ANCHOR — Bay windows and openings are photographed facts, not design decisions. Do not resize, narrow, simplify, or standardize any opening. Preserve exact proportions from the uploaded photo.
+
+--- [structural_identity] (330 chars) ---
+STRUCTURAL IDENTITY — this apartment already contains these architectural facts; reproduce them exactly, do not normalize, narrow, or restyle them: glass partition as a fixed structural divider; spatial depth defining the spatial volume; open kitchen visible on the right. These are existing structural truths, not design choices.
+
+--- [structural_negative_anchors] (282 chars) ---
+STRUCTURAL NEGATIVE ANCHORS — Photographed openings/glass are open space, NOT walls. Do not insert walls between them, compartmentalize the open facade, or close glass continuity. The applied treatment must adapt to the photographed architecture and must not restructure the facade.
+
+--- [architectural_anchors] (114 chars) ---
+ARCHITECTURAL ANCHORS — LOCKED: glass partition; partition; spatial depth. Preserve these unchanged in the output.
+
+--- [atmosphere] (253 chars) ---
+ATMOSPHERE (Warm Modern): Warm contemporary luxury rooted in emotional comfort, hospitality, softness, and believable urban premium living. — Comforting, refined, welcoming, calm, premium, elegant but livable.. [Boutique hotel / premium urban residence]
+
+--- [room] (694 chars) ---
+ROOM (Living Room): wide-plank European oak floor, warm sand plaster walls, travertine slab surfaces. LIGHT: Concealed ceiling cove + tungsten-glow table lamps; warm evening tone. ATMOSPHERE STYLE (restyle existing elements): bouclé in oat or camel — warm curved tactile richness; travertine — warm stone surface depth with brass or oak accent; warm linen — oak-toned textural warmth; oversized ceramic vessel on floating oak shelf; floor-length warm linen curtains. REALISM: sofa at residential scale — not model-set proportions; furniture legs visible and grounded on floor. AVOID: no cold grey palette, no chrome hardware, no matching 3-piece suite, Cold minimalism, sterile white interiors.
+
+--- [wow_directive] (192 chars) ---
+TRANSFORMATION AMBITION — Visible architecture stays recognizable: windows, openings, partitions, existing equipment. WOW through: materials, finishes, lighting quality, atmosphere conviction.
+
+--- [natural_enrichment] (133 chars) ---
+NATURAL ENRICHMENT — Enrich the photographed space with light natural layering. Secondary to architecture — enrich, do not recompose.
+
+--- [visible_spaces] (227 chars) ---
+VISIBLE SPACES (maintain atmosphere across entire scene):
+VISIBLE KITCHEN: pale oak cabinetry, thick travertine countertop; oak cabinetry palette echoes dining furniture visible beyond; travertine floor or countertop continues.
+
+--- [compact_realism] (132 chars) ---
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+
+====================================================================================================
+TRIM CANDIDATE QUANTIFICATION
+====================================================================================================
+
+• C1: shorten wow_directive opening list
+  Target sections : wow_directive
+  Analysis : Keep architecture-recognition clause ('windows, openings, partitions, existing equipment' — load-bearing). Trim the duplicated 'do not recompose' (already in task) and the redundant 'premium photo-edit / not a new apartment' which repeats the task framing. Estimated savings: ~120-180 chars.
+
+• C2: shorten NATURAL ENRICHMENT
+  Target sections : natural_enrichment
+  Analysis : Trim the example list ('plants, floor lamp, cushions, textiles, hospitality accessories, TV if appropriate'). Keep the directive 'enrich, do not recompose'. Estimated savings: ~80-120 chars.
+
+• C3: strip atmosphere bracket tag
+  Target sections : atmosphere
+  Analysis : Remove the trailing '[Boutique hotel / premium urban residence]' marketing tag — purely decorative, no spatial/atmospheric instruction. Estimated savings: ~35-55 chars per V1.
+
+• C4: fix double-period typos in atmosphere DNA
+  Target sections : atmosphere
+  Analysis : Many DNA lines end in 'unhurried..' / 'urban premium living..' (double period). Cosmetic, near-zero savings (~10 chars total) but worth doing if we open the DNA freeze for other reasons.
+
+• C5: dedup 'SAME APARTMENT' phrasing between task + wow_directive
+  Target sections : task,wow_directive
+  Analysis : task says 'SAME APARTMENT PHOTO-EDIT — apply X atmosphere. The photo defines spatial truth...' AND wow_directive says 'premium photo-edit of THIS exact apartment, not a new apartment'. Two voices of the same idea. Drop one of the two redundant 'apartment' framings. Estimated savings: ~80-120 chars.
+
+• C6: drop empty DESIGN DIRECTION line
+  Target sections : design_direction
+  Analysis : V1 has user_instruction=='' so DESIGN DIRECTION is not emitted in the assembled prompt (composer.py filters empty sections). Zero savings — already optimal. CONFIRM.
+
+• C7: shorten ROOM block AVOID list
+  Target sections : room
+  Analysis : Each ROOM block ends with 'AVOID: <room-specific avoid items>, <atmosphere core forbidden items>'. The 5-item room-specific AVOID + 2-item atmosphere-forbidden gives ~7 items. Trimming to 4 most distinctive items could save 50-100 chars per atmosphere. DNA-frozen file though — requires freeze exception.
+
+• C8: simplify ATMOSPHERE STYLE prefix
+  Target sections : room
+  Analysis : Each ROOM block contains 'ATMOSPHERE STYLE (restyle existing elements):' — the parenthetical is redundant since the task already says 'Restyle only'. Save ~30 chars per V1. DNA-frozen — requires freeze exception.
+
+• C9: shorten REALISM constraints
+  Target sections : room
+  Analysis : Each ROOM block ends with REALISM: <2 constraints>. Some are highly specific (e.g. 'sofa low — 40-45 cm — Balinese floor-culture scale'). Keeping them is fine; consider only if other trims aren't enough. Estimated savings: 30-60 chars per atmosphere. DNA-frozen.
+
+====================================================================================================
+EMPTY-SECTION CHECK on V1 (these contribute 0 chars in current state)
+====================================================================================================
+
+  Warm Modern          missing sections: ['design_direction']
+  Japandi Calm         missing sections: ['design_direction']
+  Bali Sanctuary       missing sections: ['visible_spaces', 'design_direction']
+  Japandi (simple)     missing sections: ['visible_spaces', 'design_direction']
+
+VISIBLE_SPACES per atmosphere (this is the kitchen-continuity section, ~241 chars):
+  Warm Modern           PRESENT (227 chars)
+  Japandi Calm          PRESENT (230 chars)
+  Bali Sanctuary        ABSENT
+  Japandi (simple)      ABSENT
+

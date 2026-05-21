@@ -94,7 +94,29 @@ from performance_observer import estimate_payload_bytes, estimate_cost_usd, Pipe
 # --reload supervisor that started while .env still said prod). That silently
 # pinned the runtime to PROD even after .env was switched to mobile_mvp_baseline.
 # override=True guarantees every (re)load applies the current .env value.
+#
+# NOTE: load_dotenv() MUST run BEFORE the COMPOSER_VERSION gate below. The gate
+# reads os.environ at module-import time; if .env is loaded after, the flag
+# never takes effect from .env alone (Wave 5.3 post-mortem fix).
 load_dotenv(override=True)
+
+# ── Wave 5.2 — composer feature-flag dispatch ────────────────────────────────
+# COMPOSER_VERSION env var selects which composer the /generate handler uses.
+#   unset / "v1" (default) → frozen composer.py (rollback baseline; unchanged)
+#   "v2"                   → composer_v2.py (5-section clean architecture)
+# This is the ONLY freeze exception for Wave 5.2 — composer.py itself is NOT
+# modified. Rollback is a single env-var flip.
+_COMPOSER_V2_ACTIVE = (
+    os.environ.get("COMPOSER_VERSION", "v1").lower().strip() == "v2"
+)
+if _COMPOSER_V2_ACTIVE:
+    from prompt_engine.composer_v2 import (  # noqa: F811
+        compose_generation_prompt,
+        resolve_switch_strategy as _v2_resolve_switch_strategy,
+    )
+    logging.getLogger("aih").info(
+        "[ComposerV2] feature flag ACTIVE — using composer_v2 for /generate"
+    )
 
 # ── Feature flags ─────────────────────────────────────────────────────────────
 # ENABLE_STRUCTURAL_MASK: enabled by default in Wave 4.4.0.
@@ -250,6 +272,30 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
     only at V1 (iteration == 1) when the client has no persisted identity
     token. It is NOT per-generation vision analysis; V2/V3/V4 reuse the
     persisted token and never call this.
+
+    Wave 5.5.9 (Phase 2 — Structural Capture Enrichment, 2026-05-21):
+    enriched prompt asks for MORE architectural detail (secondary openings,
+    ceiling characteristics, floor pattern) while explicitly instructing
+    the model to use the EXACT vocabulary the deterministic parser
+    (structural_identity.extract_from_description) looks for. Old prompt
+    captured ~6 parser-relevant fields with mediocre keyword hit-rate. New
+    prompt scaffolds the response with the parser's exact keywords
+    ("floor-to-ceiling window", "bay window", "glass partition",
+    "open-plan", "open kitchen visible on the left/right", layout
+    qualifiers "wide/large/tall/full-height") to maximize parser capture.
+    No parser change, no token format change, V2+ unaffected. Cost: still
+    1 call per session (~$0.001-0.003). Latency: ~1-2s extra at V1 only.
+    Rollback = revert to old short prompt + max_tokens=90.
+
+    Wave 5.5.10c (Vision/Parser Vocab Sync, 2026-05-21): Wave 5.5.10
+    extended the parser to recognize sliding-door variants but forgot to
+    update THIS prompt — mini was still told to pick from window-only
+    terms for "Primary opening", so it raboted sliding glass doors to
+    "floor-to-ceiling window" and gpt-image-1 dutifully rendered windows
+    with mullions. Fix: extend the (1) vocabulary to include door variants
+    in priority order matching the parser, plus an explicit anti-rabotage
+    rule for sliding glass panels. No parser change, V2+ delegation
+    (Wave 5.5.6) unaffected because clause materialization is downstream.
     """
     try:
         b64 = base64.b64encode(image_bytes).decode()
@@ -261,16 +307,36 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
                     {"type": "image_url",
                      "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"}},
                     {"type": "text", "text": (
-                        "List ONLY the fixed architectural facts of this space in one short "
-                        "sentence: dominant window/opening type and which wall it is on, any "
-                        "glass partition, spatial depth (open-plan / diagonal), and whether a "
-                        "kitchen is visible and on which side. Architecture only — NO furniture, "
-                        "NO decor, NO style, NO atmosphere, NO adjectives of quality. "
-                        "Max 35 words."
+                        "Analyze this room photograph for architectural preservation. "
+                        "List the FIXED architectural facts using these EXACT vocabulary "
+                        "terms when applicable (downstream parser depends on them): "
+                        "(1) Primary opening — use one of these EXACT terms when it matches: "
+                        "DOORS — 'floor-to-ceiling sliding glass door', 'sliding glass door', "
+                        "'patio door', 'balcony door'; WINDOWS — 'floor-to-ceiling window', "
+                        "'bay window', 'panoramic window', 'corner window', 'glazed wall', "
+                        "'glazed facade', or 'picture window'. Glass panels that slide on tracks "
+                        "are sliding doors, NOT windows. Add a size qualifier ('wide', 'large', "
+                        "'tall', 'full-height', 'dominant'). State the wall (left/right/back). "
+                        "(2) Secondary openings — if a 'pair' of windows or 'two windows' "
+                        "exist, or 'windows' on left/right, state it explicitly. "
+                        "(3) Glass partition — if present, say 'glass partition' (add "
+                        "'black-framed' or color if visible) + position + what's visible "
+                        "through it. "
+                        "(4) Visible kitchen — if visible, say EXACTLY 'open kitchen visible "
+                        "on the left' OR 'open kitchen visible on the right' (use the side "
+                        "side word verbatim). "
+                        "(5) Spatial depth — use 'open-plan' if the layout is open, OR "
+                        "describe depth otherwise. "
+                        "(6) Ceiling — height impression (low/normal/high), any architectural "
+                        "detail (diagonal slope, beams). "
+                        "(7) Floor — pattern direction (herringbone, plank direction, etc.). "
+                        "Architecture only — NO furniture, NO decor, NO style, NO atmosphere, "
+                        "NO subjective quality adjectives. Use the EXACT vocabulary above for "
+                        "parser compatibility. Max 100 words."
                     )},
                 ],
             }],
-            max_tokens=90,
+            max_tokens=220,
         )
         return (resp.choices[0].message.content or "").strip()
     except Exception as exc:  # non-fatal: identity simply stays absent
@@ -584,6 +650,52 @@ async def generate(
     # architectural truth (injected as text), never conflated with the visual
     # source. Legacy clients (no source_mode/versions) get the V2+ LATEST default.
     _versions = parse_versions(versions)
+
+    # ── Wave 5.3 — atmosphere-switch source-mode override ────────────────────
+    # On a PURE atmosphere switch (V2+, atmosphere differs from history's V1,
+    # AND no user customizations detected in history), override source_mode
+    # to ORIGINAL so the model edits the original uploaded photo — producing
+    # a fresh V1-equivalent in the new atmosphere instead of editing the
+    # previous-vision's pixels (which baked the old atmosphere's furniture
+    # identity into the input). Customized switches keep source_mode=LATEST
+    # so user-approved spatial changes (added bed, moved TV, etc.) survive
+    # the atmosphere switch. Honors an explicit client source_mode — never
+    # overrides if the client already chose one. v2-composer only (the v1
+    # frozen composer has no switch-awareness, so the override would create
+    # a prompt↔image mismatch under v1).
+    _switch_override_applied = False
+    if (
+        _COMPOSER_V2_ACTIVE
+        and iteration > 1
+        and not source_mode.strip()
+    ):
+        try:
+            _history_list_for_switch = json.loads(history) if history else []
+            if not isinstance(_history_list_for_switch, list):
+                _history_list_for_switch = []
+        except (ValueError, TypeError):
+            _history_list_for_switch = []
+        _switch_atmos_id = label_to_atmosphere_id(style_label)
+        _strategy, _prev_id, _has_custom = _v2_resolve_switch_strategy(
+            _history_list_for_switch, _switch_atmos_id, iteration,
+        )
+        if _strategy.value == "REBOOT_FRESH":
+            source_mode = "ORIGINAL"
+            _switch_override_applied = True
+            log.info(
+                "[Wave5.3] pure atmosphere SWITCH detected — "
+                "prev=%s new=%s customizations=False "
+                "→ source_mode overridden to ORIGINAL (fresh V1 on original)",
+                _prev_id, _switch_atmos_id,
+            )
+        elif _strategy.value == "REBOOT_CUSTOMIZED":
+            log.info(
+                "[Wave5.3] customized atmosphere SWITCH detected — "
+                "prev=%s new=%s customizations=True "
+                "→ source_mode kept as LATEST (preserve user changes)",
+                _prev_id, _switch_atmos_id,
+            )
+
     _resolved = resolve_source(
         source_mode=source_mode,
         source_version_id=source_version_id,
@@ -652,13 +764,35 @@ async def generate(
     # analysis for FIRST_VISION (iteration == 1). Wave 4.6.1 already removed
     # SOURCE_SPACE from the FV prompt, so room_description is unused for FV anyway —
     # this skip has zero prompt impact and only removes one GPT-4o-mini call.
-    _skip_vision_fv = (not profile.vision_analysis_fv) and iteration == 1
+    #
+    # Wave 5.5.7c (2026-05-21) — extended skip to ALL iterations on profiles
+    # where `vision_analysis_fv=False` (i.e. mobile_mvp_baseline). Rationale:
+    # vision_analysis's only downstream impact on V2/V3 prompts is via
+    # `detect_anchors(room_description)` which produces a redundant
+    # architectural_anchors clause (already covered by the persistent
+    # STRUCTURAL_IDENTITY token from V1 capture). Empirically: V1 on this
+    # profile already runs without vision_analysis and produces the best
+    # quality (proven by morning's V1 vs V2/V3 comparison). The asymmetry
+    # `iteration == 1` only-skip created prompt drift (+100 chars on V2/V3
+    # from architectural_anchors clause that V1 doesn't have), which was
+    # the root of the post-Wave-5.5.6 V1 vs V2/V3 byte-mismatch the user
+    # observed. Global skip:
+    #   • Makes V1 and V2/V3 prompts truly byte-identical on pure switches
+    #   • Saves 3-8s latency per V2+ generation
+    #   • Saves ~$0.001-0.003 OpenAI cost per V2+ generation
+    #   • Aligns with the "naked baseline" philosophy of the profile
+    # No quality regression expected (V1 evidence). let_ai_decide and
+    # surprise_me features (which use room_description) are V1-only flows
+    # and weren't functional on mobile_mvp_baseline before this change either.
+    # Rollback = revert to `(not profile.vision_analysis_fv) and iteration == 1`.
+    _skip_vision_fv = not profile.vision_analysis_fv
     try:
         if _skip_vision_fv:
             log.info(
-                "  vision analysis SKIPPED for FIRST_VISION "
-                "(profile=%s — Wave 4.7.0 runtime isolation; room_description unused for FV since 4.6.1)",
-                profile.name,
+                "  vision analysis SKIPPED (profile=%s, iteration=%d — Wave "
+                "5.5.7c global skip on mobile_mvp_baseline; room_description "
+                "stays empty for all generations on this profile)",
+                profile.name, iteration,
             )
         else:
             b64_source = base64.b64encode(image_bytes).decode()

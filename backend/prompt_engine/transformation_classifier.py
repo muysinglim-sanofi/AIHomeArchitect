@@ -42,7 +42,24 @@ _ATMOSPHERE_SWITCH_RE = re.compile(
     r"tropical|bali|desert|organic|wabi.sabi|soft\s+luxury|nature|coastal|art\s+deco|eclectic)|"
     r"(zen|japandi|nordique|scandinave|luxe|organique|tropical|balinais|désertique|"
     r"côtier|art\s+déco)\s+(retreat|style|atmosphere|look)?|"
-    r"essaie\s+le?\s+(style|atmosphère|look))\b",
+    r"essaie\s+le?\s+(style|atmosphère|look)|"
+    # Wave 5.5.8 — frontend atmosphere-card trigger pattern. The reveal-screen
+    # tap sends user_instruction='Redesign this space in the {style} style.'
+    # (cf. chat_screen.dart:366 `_exploreDirection`). Pre-Wave-5.5.8 this
+    # pattern was classified as UNKNOWN for 6/10 atmospheres (Nordic, Warm,
+    # Bali, Soft Luxury, Dark Contemporary, Nature Retreat) because their
+    # names weren't in the alternation-6 keyword list. UNKNOWN is then
+    # treated as a customization (is_customization_transformation
+    # conservative policy), which made all subsequent V2/V3 pure switches
+    # misclassify as REBOOT_CUSTOMIZED instead of REBOOT_FRESH → no
+    # Wave-5.5.6 delegation → composer_v2 5-section path used instead of
+    # composer.py Path D → V1≠V2/V3 byte-identity broken. Match structure-
+    # based pattern: "Redesign this/the space/room/place in the/a <X> style"
+    # — handles ANY atmosphere name (1-3 words) inside the `in the/a ... style`
+    # delimiter, so all 10 atmospheres now classify as ATMOSPHERE_SWITCH.
+    # Strict bookends (redesign... + style) prevent false positives like
+    # "Redesign the kitchen with new tiles" (no `in the X style` suffix).
+    r"redesign\s+(?:this|the)\s+(?:space|room|place)\s+in\s+(?:the|a)\s+.+?\s+style)\b",
     re.IGNORECASE,
 )
 
