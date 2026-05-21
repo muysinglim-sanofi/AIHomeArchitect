@@ -286,16 +286,6 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
     No parser change, no token format change, V2+ unaffected. Cost: still
     1 call per session (~$0.001-0.003). Latency: ~1-2s extra at V1 only.
     Rollback = revert to old short prompt + max_tokens=90.
-
-    Wave 5.5.10c (Vision/Parser Vocab Sync, 2026-05-21): Wave 5.5.10
-    extended the parser to recognize sliding-door variants but forgot to
-    update THIS prompt — mini was still told to pick from window-only
-    terms for "Primary opening", so it raboted sliding glass doors to
-    "floor-to-ceiling window" and gpt-image-1 dutifully rendered windows
-    with mullions. Fix: extend the (1) vocabulary to include door variants
-    in priority order matching the parser, plus an explicit anti-rabotage
-    rule for sliding glass panels. No parser change, V2+ delegation
-    (Wave 5.5.6) unaffected because clause materialization is downstream.
     """
     try:
         b64 = base64.b64encode(image_bytes).decode()
@@ -310,13 +300,11 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
                         "Analyze this room photograph for architectural preservation. "
                         "List the FIXED architectural facts using these EXACT vocabulary "
                         "terms when applicable (downstream parser depends on them): "
-                        "(1) Primary opening — use one of these EXACT terms when it matches: "
-                        "DOORS — 'floor-to-ceiling sliding glass door', 'sliding glass door', "
-                        "'patio door', 'balcony door'; WINDOWS — 'floor-to-ceiling window', "
-                        "'bay window', 'panoramic window', 'corner window', 'glazed wall', "
-                        "'glazed facade', or 'picture window'. Glass panels that slide on tracks "
-                        "are sliding doors, NOT windows. Add a size qualifier ('wide', 'large', "
-                        "'tall', 'full-height', 'dominant'). State the wall (left/right/back). "
+                        "(1) Primary opening — use 'floor-to-ceiling window', 'bay window', "
+                        "'panoramic window', 'corner window', 'glazed wall', 'glazed facade', "
+                        "or 'picture window' when it matches. Add a size qualifier "
+                        "('wide', 'large', 'tall', 'full-height', 'dominant'). State the wall "
+                        "(left/right/back). "
                         "(2) Secondary openings — if a 'pair' of windows or 'two windows' "
                         "exist, or 'windows' on left/right, state it explicitly. "
                         "(3) Glass partition — if present, say 'glass partition' (add "

@@ -109,22 +109,8 @@ def extract_from_description(room_description: str) -> ApartmentStructuralIdenti
     low = text.lower()
 
     # Dominant opening — prefer the strongest, most identity-defining opening.
-    # Wave 5.5.10 (2026-05-21) — extended keyword list to recognize door types
-    # (sliding glass doors, balcony/patio doors). Previously only window types
-    # were captured, causing apartments with sliding glass doors to fall through
-    # the keyword loop into the _OPENING regex fallback which often missed them
-    # entirely. Order: most specific keys first so they match preferentially
-    # (e.g., "floor-to-ceiling sliding glass door" wins over "sliding door").
     dominant = ""
     for key in (
-        # Wave 5.5.10 — door variants (specific → generic).
-        "floor-to-ceiling sliding glass door",
-        "sliding glass door",
-        "floor-to-ceiling door",
-        "balcony door",
-        "patio door",
-        "sliding door",
-        # Wave 4.7.2 — window variants (original list, unchanged order).
         "bay window", "panoramic window", "floor-to-ceiling window",
         "corner window", "glazed wall", "glazed facade", "picture window",
     ):
