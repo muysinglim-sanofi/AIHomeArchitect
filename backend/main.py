@@ -272,20 +272,6 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
     only at V1 (iteration == 1) when the client has no persisted identity
     token. It is NOT per-generation vision analysis; V2/V3/V4 reuse the
     persisted token and never call this.
-
-    Wave 5.5.9 (Phase 2 — Structural Capture Enrichment, 2026-05-21):
-    enriched prompt asks for MORE architectural detail (secondary openings,
-    ceiling characteristics, floor pattern) while explicitly instructing
-    the model to use the EXACT vocabulary the deterministic parser
-    (structural_identity.extract_from_description) looks for. Old prompt
-    captured ~6 parser-relevant fields with mediocre keyword hit-rate. New
-    prompt scaffolds the response with the parser's exact keywords
-    ("floor-to-ceiling window", "bay window", "glass partition",
-    "open-plan", "open kitchen visible on the left/right", layout
-    qualifiers "wide/large/tall/full-height") to maximize parser capture.
-    No parser change, no token format change, V2+ unaffected. Cost: still
-    1 call per session (~$0.001-0.003). Latency: ~1-2s extra at V1 only.
-    Rollback = revert to old short prompt + max_tokens=90.
     """
     try:
         b64 = base64.b64encode(image_bytes).decode()
@@ -297,34 +283,16 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
                     {"type": "image_url",
                      "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"}},
                     {"type": "text", "text": (
-                        "Analyze this room photograph for architectural preservation. "
-                        "List the FIXED architectural facts using these EXACT vocabulary "
-                        "terms when applicable (downstream parser depends on them): "
-                        "(1) Primary opening — use 'floor-to-ceiling window', 'bay window', "
-                        "'panoramic window', 'corner window', 'glazed wall', 'glazed facade', "
-                        "or 'picture window' when it matches. Add a size qualifier "
-                        "('wide', 'large', 'tall', 'full-height', 'dominant'). State the wall "
-                        "(left/right/back). "
-                        "(2) Secondary openings — if a 'pair' of windows or 'two windows' "
-                        "exist, or 'windows' on left/right, state it explicitly. "
-                        "(3) Glass partition — if present, say 'glass partition' (add "
-                        "'black-framed' or color if visible) + position + what's visible "
-                        "through it. "
-                        "(4) Visible kitchen — if visible, say EXACTLY 'open kitchen visible "
-                        "on the left' OR 'open kitchen visible on the right' (use the side "
-                        "side word verbatim). "
-                        "(5) Spatial depth — use 'open-plan' if the layout is open, OR "
-                        "describe depth otherwise. "
-                        "(6) Ceiling — height impression (low/normal/high), any architectural "
-                        "detail (diagonal slope, beams). "
-                        "(7) Floor — pattern direction (herringbone, plank direction, etc.). "
-                        "Architecture only — NO furniture, NO decor, NO style, NO atmosphere, "
-                        "NO subjective quality adjectives. Use the EXACT vocabulary above for "
-                        "parser compatibility. Max 100 words."
+                        "List ONLY the fixed architectural facts of this space in one short "
+                        "sentence: dominant window/opening type and which wall it is on, any "
+                        "glass partition, spatial depth (open-plan / diagonal), and whether a "
+                        "kitchen is visible and on which side. Architecture only — NO furniture, "
+                        "NO decor, NO style, NO atmosphere, NO adjectives of quality. "
+                        "Max 35 words."
                     )},
                 ],
             }],
-            max_tokens=220,
+            max_tokens=90,
         )
         return (resp.choices[0].message.content or "").strip()
     except Exception as exc:  # non-fatal: identity simply stays absent
