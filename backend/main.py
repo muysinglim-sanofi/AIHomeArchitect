@@ -839,8 +839,13 @@ async def generate(
     #   2. V1 (iteration == 1), no token:
     #        a. deterministic parse of room_description (free, if any text)
     #        b. else ONE structural capture call (V1-only gate; provider boundary)
-    #   3. V2+ with no token (legacy client): deterministic parse of
-    #      room_description only — never a model call on V2+.
+    #   3. V2+ with no token:
+    #        a. deterministic parse of room_description (free, if any text)
+    #        b. Wave 5.5.12 recovery — capture from image_bytes when client lost
+    #           the persisted token (hot reload, app reopen, session restore,
+    #           navigation reset). image_bytes is the ORIGINAL photo because
+    #           Wave 5.3 forces source_mode=ORIGINAL on REBOOT_FRESH pure
+    #           switches, so the capture is V1-equivalent.
     # Graceful: EMPTY_IDENTITY -> "" clause -> falls back to Wave 4.7.1 behaviour.
     _si_source = "none"
     structural_id_obj: ApartmentStructuralIdentity = EMPTY_IDENTITY
@@ -857,7 +862,32 @@ async def generate(
             _si_source = "vision_capture_v1" if structural_id_obj.is_present else "none"
     else:
         structural_id_obj = extract_from_description(room_description)
-        _si_source = "text_fallback" if structural_id_obj.is_present else "none"
+        if structural_id_obj.is_present:
+            _si_source = "text_fallback"
+        else:
+            # Wave 5.5.12 — recovery from frontend token loss. iteration>1 with
+            # empty structural_identity reaching here means the client lost the
+            # round-trip state (hot reload, app reopen, session restore, etc.).
+            # Without anchors the prompt is architecturally generic and
+            # gpt-image-1 hallucinates walls / loses kitchen / restructures
+            # facade. Recovery: re-run the V1 capture against the source image
+            # bytes (ORIGINAL photo on REBOOT_FRESH per Wave 5.3, so the capture
+            # is V1-equivalent). Cost: +$0.001-0.003 and +1-2s when triggered;
+            # 0 cost on the healthy-token path. Scope: backend-only, uses the
+            # existing _capture_structural_text (Wave 5.5.11 prompt unchanged),
+            # no DNA touch, no composer touch, no budget change.
+            log.info(
+                "[StructuralRecovery] missing structural_identity on "
+                "iteration>1 (iteration=%d, token_chars=0), regenerating "
+                "from source image bytes",
+                iteration,
+            )
+            _cap_text = await _capture_structural_text(image_bytes)
+            structural_id_obj = extract_from_description(_cap_text)
+            _si_source = (
+                "vision_capture_recovery"
+                if structural_id_obj.is_present else "none"
+            )
 
     structural_identity_token = to_token(structural_id_obj)
     log.info(
