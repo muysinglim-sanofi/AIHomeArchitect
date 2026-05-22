@@ -1,0 +1,1830 @@
+18:40:40  DEBUG     Calling on_part_begin with no data
+18:40:40  DEBUG     Calling on_header_field with data[29:48]
+18:40:40  DEBUG     Calling on_header_value with data[50:78]
+18:40:40  DEBUG     Calling on_header_end with no data
+18:40:40  DEBUG     Calling on_headers_finished with no data
+18:40:40  DEBUG     Calling on_part_data with data[82:118]
+18:40:40  DEBUG     Calling on_part_end with no data
+18:40:40  DEBUG     Calling on_part_begin with no data
+18:40:40  DEBUG     Calling on_header_field with data[149:168]
+18:40:40  DEBUG     Calling on_header_value with data[170:195]
+18:40:40  DEBUG     Calling on_header_end with no data
+18:40:40  DEBUG     Calling on_headers_finished with no data
+18:40:40  DEBUG     Calling on_part_data with data[199:320]
+18:40:40  DEBUG     Calling on_part_end with no data
+18:40:40  DEBUG     Calling on_part_begin with no data
+18:40:40  DEBUG     Calling on_header_field with data[351:370]
+18:40:40  DEBUG     Calling on_header_value with data[372:401]
+18:40:40  DEBUG     Calling on_header_end with no data
+18:40:40  DEBUG     Calling on_headers_finished with no data
+18:40:40  DEBUG     Calling on_part_data with data[405:419]
+18:40:40  DEBUG     Calling on_part_end with no data
+18:40:40  DEBUG     Calling on_part_begin with no data
+18:40:40  DEBUG     Calling on_header_field with data[450:469]
+18:40:40  DEBUG     Calling on_header_value with data[471:498]
+18:40:40  DEBUG     Calling on_header_end with no data
+18:40:40  DEBUG     Calling on_headers_finished with no data
+18:40:40  DEBUG     Calling on_part_data with data[502:513]
+18:40:40  DEBUG     Calling on_part_end with no data
+18:40:40  DEBUG     Calling on_part_begin with no data
+18:40:40  DEBUG     Calling on_header_field with data[544:563]
+18:40:40  DEBUG     Calling on_header_value with data[565:592]
+18:40:40  DEBUG     Calling on_header_end with no data
+18:40:40  DEBUG     Calling on_headers_finished with no data
+18:40:40  DEBUG     Calling on_part_data with data[596:597]
+18:40:40  DEBUG     Calling on_part_end with no data
+18:40:40  DEBUG     Calling on_part_begin with no data
+18:40:40  DEBUG     Calling on_header_field with data[628:647]
+18:40:40  DEBUG     Calling on_header_value with data[649:674]
+18:40:40  DEBUG     Calling on_header_end with no data
+18:40:40  DEBUG     Calling on_headers_finished with no data
+18:40:40  DEBUG     Calling on_part_data with data[678:1460]
+18:40:40  DEBUG     Calling on_part_data with data[0:199]
+18:40:40  DEBUG     Calling on_part_end with no data
+18:40:40  DEBUG     Calling on_part_begin with no data
+18:40:40  DEBUG     Calling on_header_field with data[230:249]
+18:40:40  DEBUG     Calling on_header_value with data[251:285]
+18:40:40  DEBUG     Calling on_header_end with no data
+18:40:40  DEBUG     Calling on_headers_finished with no data
+18:40:40  DEBUG     Calling on_part_data with data[289:291]
+18:40:40  DEBUG     Calling on_part_end with no data
+18:40:40  DEBUG     Calling on_end with no data
+18:40:40  INFO      === /chat called === session=370f97b2-ea37-450f-9224-88c3f9d69cc9 iteration=8
+18:40:40  INFO        message: add bedroom in the rear space. Add TV in front of the sofa. and add a coffee table in front of the sofa with a rose on i
+18:40:40  INFO        style: Nature Retreat  room: Living Room
+18:40:40  INFO        meta: none  lang: en->en  conf: 0.00
+18:40:40  INFO        intent: generate  sub_intent: local_edit  confidence: 0.75  reason: Local edit signal
+18:40:40  INFO      [GenerateConfirmation] pending_design_intent=False  confirmation_detected=False  tone_veto_bypassed=False
+18:40:40  INFO        tone: architect_active  emotional: neutral  exploring: True  session_lang: en
+18:40:40  INFO        ai_message: That could work well here. Does the natural quality feel right?
+18:40:40  INFO        suggestions: ['Add a large specimen plant', 'More rammed earth texture', 'Show me a different direction', 'Add more reclaimed 
+timber']
+18:40:40  INFO        should_generate: True
+18:40:40  INFO      [GenerateConfirmation] final_should_generate=True  confirmation_generate=False
+18:40:40  INFO      === /chat SUCCESS ===
+INFO:     127.0.0.1:52230 - "POST /chat HTTP/1.1" 200 OK
+18:40:41  DEBUG     Calling on_part_begin with no data
+18:40:41  DEBUG     Calling on_header_field with data[29:48]
+18:40:41  DEBUG     Calling on_header_value with data[50:78]
+18:40:41  DEBUG     Calling on_header_end with no data
+18:40:41  DEBUG     Calling on_headers_finished with no data
+18:40:41  DEBUG     Calling on_part_data with data[82:118]
+18:40:41  DEBUG     Calling on_part_end with no data
+18:40:41  DEBUG     Calling on_part_begin with no data
+18:40:41  DEBUG     Calling on_header_field with data[149:168]
+18:40:41  DEBUG     Calling on_header_value with data[170:194]
+18:40:41  DEBUG     Calling on_header_end with no data
+18:40:41  DEBUG     Calling on_headers_finished with no data
+18:40:41  DEBUG     Calling on_part_data with data[198:319]
+18:40:41  DEBUG     Calling on_part_end with no data
+18:40:41  DEBUG     Calling on_part_begin with no data
+18:40:41  DEBUG     Calling on_header_field with data[350:369]
+18:40:41  DEBUG     Calling on_header_value with data[371:405]
+18:40:41  DEBUG     Calling on_header_end with no data
+18:40:41  DEBUG     Calling on_headers_finished with no data
+18:40:41  DEBUG     Calling on_part_data with data[409:550]
+18:40:41  DEBUG     Calling on_part_end with no data
+18:40:41  DEBUG     Calling on_part_begin with no data
+18:40:41  DEBUG     Calling on_header_field with data[581:600]
+18:40:41  DEBUG     Calling on_header_value with data[602:631]
+18:40:41  DEBUG     Calling on_header_end with no data
+18:40:41  DEBUG     Calling on_headers_finished with no data
+18:40:41  DEBUG     Calling on_part_data with data[635:661]
+18:40:41  DEBUG     Calling on_part_end with no data
+18:40:41  DEBUG     Calling on_part_begin with no data
+18:40:41  DEBUG     Calling on_header_field with data[692:711]
+18:40:41  DEBUG     Calling on_header_value with data[713:740]
+18:40:41  DEBUG     Calling on_header_end with no data
+18:40:41  DEBUG     Calling on_headers_finished with no data
+18:40:41  DEBUG     Calling on_part_data with data[744:755]
+18:40:41  DEBUG     Calling on_part_end with no data
+18:40:41  DEBUG     Calling on_part_begin with no data
+18:40:41  DEBUG     Calling on_header_field with data[786:805]
+18:40:41  DEBUG     Calling on_header_value with data[807:834]
+18:40:41  DEBUG     Calling on_header_end with no data
+18:40:41  DEBUG     Calling on_headers_finished with no data
+18:40:41  DEBUG     Calling on_part_data with data[838:839]
+18:40:41  DEBUG     Calling on_part_end with no data
+18:40:41  DEBUG     Calling on_part_begin with no data
+18:40:41  DEBUG     Calling on_header_field with data[870:889]
+18:40:41  DEBUG     Calling on_header_value with data[891:916]
+18:40:41  DEBUG     Calling on_header_end with no data
+18:40:41  DEBUG     Calling on_headers_finished with no data
+18:40:41  DEBUG     Calling on_part_data with data[920:1991]
+18:40:41  DEBUG     Calling on_part_end with no data
+18:40:41  DEBUG     Calling on_part_begin with no data
+18:40:41  DEBUG     Calling on_header_field with data[2022:2041]
+18:40:41  DEBUG     Calling on_header_value with data[2043:2079]
+18:40:41  DEBUG     Calling on_header_end with no data
+18:40:41  DEBUG     Calling on_headers_finished with no data
+18:40:41  DEBUG     Calling on_part_data with data[2083:2617]
+18:40:41  DEBUG     Calling on_part_end with no data
+18:40:41  DEBUG     Calling on_part_begin with no data
+18:40:41  DEBUG     Calling on_header_field with data[2648:2667]
+18:40:41  DEBUG     Calling on_header_value with data[2669:2704]
+18:40:41  DEBUG     Calling on_header_end with no data
+18:40:41  DEBUG     Calling on_headers_finished with no data
+18:40:41  DEBUG     Calling on_part_data with data[2708:2740]
+18:40:41  DEBUG     Calling on_part_end with no data
+18:40:41  DEBUG     Calling on_part_begin with no data
+18:40:41  DEBUG     Calling on_header_field with data[2771:2790]
+18:40:41  DEBUG     Calling on_header_value with data[2792:2823]
+18:40:41  DEBUG     Calling on_header_end with no data
+18:40:41  DEBUG     Calling on_headers_finished with no data
+18:40:41  DEBUG     Calling on_part_data with data[2827:2832]
+18:40:41  DEBUG     Calling on_part_end with no data
+18:40:41  DEBUG     Calling on_part_begin with no data
+18:40:41  DEBUG     Calling on_header_field with data[2863:2882]
+18:40:41  DEBUG     Calling on_header_value with data[2884:2918]
+18:40:41  DEBUG     Calling on_header_end with no data
+18:40:41  DEBUG     Calling on_headers_finished with no data
+18:40:41  DEBUG     Calling on_part_data with data[2922:2927]
+18:40:41  DEBUG     Calling on_part_end with no data
+18:40:41  DEBUG     Calling on_end with no data
+18:40:41  DEBUG     [GenerationProfile] active=MOBILE_MVP_BASELINE  quality=medium  input_fidelity=omitted  size_override=auto  max_attempts=1  
+compact_prompts=False  use_mask=False  vision_analysis_fv=False
+18:40:41  INFO      === /generate called ===
+18:40:41  INFO        request_id    : 3da16c3fee5126a271bbe35603a92bf8
+18:40:41  INFO        session_id    : 370f97b2-ea37-450f-9224-88c3f9d69cc9
+18:40:41  INFO        style_label   : Nature Retreat À Vision 8
+18:40:41  INFO        room_type     : Living Room
+18:40:41  INFO        iteration     : 8
+18:40:41  INFO        prompt        : add bedroom in the rear space. Add TV in front of the sofa. and add a coffee table in front of the sofa with a 
+rose on it
+18:40:41  INFO        before_url    : https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/public/generated/370f...
+18:40:41  INFO        original_url  : https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/sign/uploads/f9b13abc...
+18:40:41  INFO      [GenerationProfile] mode=MOBILE_MVP_BASELINE  quality=medium  input_fidelity=None  size=auto  max_attempts=1  compact_prompts=False
+18:40:41  INFO      [Wave5.3] customized atmosphere SWITCH detected ù prev=nordic_warmth new=nature_retreat customizations=True \u2192 source_mode 
+kept as LATEST (preserve user changes)
+18:40:41  INFO      --- fetching source image ---
+18:40:41  INFO        source: type=latest requested='(none)' resolved=LATEST version_id='(n/a)' (iteration=8, original_provided=True, ledger=0)
+18:40:41  DEBUG     connect_tcp.started host='vtxkciupyafukhdsgxgw.supabase.co' port=443 local_address=None timeout=30 socket_options=None
+18:40:42  DEBUG     connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B224157DC0>
+18:40:42  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000002B224141A40> server_hostname='vtxkciupyafukhdsgxgw.supabase.co' 
+timeout=30
+18:40:42  DEBUG     start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B2241542E0>
+18:40:42  DEBUG     send_request_headers.started request=<Request [b'GET']>
+18:40:42  DEBUG     send_request_headers.complete
+18:40:42  DEBUG     send_request_body.started request=<Request [b'GET']>
+18:40:42  DEBUG     send_request_body.complete
+18:40:42  DEBUG     receive_response_headers.started request=<Request [b'GET']>
+18:40:43  DEBUG     receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Thu, 21 May 2026 16:40:42 GMT'), 
+(b'Content-Type', b'image/jpeg'), (b'Content-Length', b'2704898'), (b'Connection', b'keep-alive'), (b'CF-Ray', b'9ff5063ff8542a35-CDG'), 
+(b'CF-Cache-Status', b'HIT'), (b'Accept-Ranges', b'bytes'), (b'Access-Control-Allow-Origin', b'*'), (b'Cache-Control', b'no-cache'), (b'ETag', 
+b'"da66d19e3b11dcaf5e54f9a424e24e26"'), (b'Last-Modified', b'Thu, 21 May 2026 16:37:52 GMT'), (b'Server', b'cloudflare'), (b'sb-gateway-mode', 
+b'direct'), (b'sb-gateway-version', b'1'), (b'sb-project-ref', b'vtxkciupyafukhdsgxgw'), (b'sb-request-id', b'019e4b69-23fe-750f-bad1-cba7e8ca11b0'), 
+(b'x-robots-tag', b'none'), (b'x-smart-cdn', b'true'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), 
+(b'set-cookie', b'__cf_bm=1YbpaP52.MFa1ylO73.KtYcNYTfwSpipLJGzpDGscM0-1779381642.2312422-1.0.1.1-Tkj1Fm33DM.2VaVBnrlti25OhZHbWcx9D0x2ktdTZus4hdISXeN3L8
+gP9qQwfa0oxlHuToHyz4THlRU7oDYOUZNGcNga_APdRJA0eG0sL7CICs_OcJQaioHHouRCzVEZ; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Thu, 
+21 May 2026 17:10:42 GMT'), (b'alt-svc', b'h3=":443"; ma=86400')])
+18:40:43  INFO      HTTP Request: GET 
+https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/public/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_163735_1cae276a.jpg 
+"HTTP/1.1 200 OK"
+18:40:43  DEBUG     receive_response_body.started request=<Request [b'GET']>
+18:40:51  DEBUG     receive_response_body.complete
+18:40:51  DEBUG     response_closed.started
+18:40:51  DEBUG     response_closed.complete
+18:40:51  INFO        HTTP 200
+18:40:51  INFO        size: 2704898 bytes (2641.5 KB)
+18:40:51  INFO      [PERF] stage=image_fetch  duration_ms=10391  size_bytes=2704898
+18:40:51  DEBUG     close.started
+18:40:51  DEBUG     close.complete
+18:40:51  INFO        refinement ù keep:0 add:3 remove:0 directions:0
+18:40:51  INFO      --- GPT-4o-mini vision analysis (detail=high) ---
+18:40:51  INFO        vision analysis SKIPPED (profile=MOBILE_MVP_BASELINE, iteration=8 ù Wave 5.5.7c global skip on mobile_mvp_baseline; 
+room_description stays empty for all generations on this profile)
+18:40:51  INFO      [PERF] stage=vision_analysis  duration_ms=0
+18:40:51  INFO      [StructuralIdentity] present=False  source=none  facts=0  token_chars=0  iteration=8
+18:40:51  INFO        atmosphere_id: nature_retreat
+18:40:51  INFO        intent: generate  sub_intent: local_edit
+18:40:51  INFO      --- transformation: object_edit ---
+18:40:51  INFO        addendum: 0 chars  enriched: 121 chars
+18:40:51  INFO      --- edit mode: local_edit ---
+18:40:51  INFO      [RefinementAccumulation] append_detected=False  replace_detected=False  accumulated_refinement_count=1  
+final_accumulated_request=add bedroom in the rear space. Add TV in front of the sofa. and add a coffee table in front of the sofa with a rose on it
+18:40:51  INFO      [RefinementAuthority] requested_change_detected=True  localized_authority=True  authorized_change_chars=398  detected_zone=the 
+rear zone  structural_permission=False  mode=V2
+18:40:51  INFO      [StructuralIdentity] generation_mode=V2  structural_identity_present=False  structural_identity_source=none  
+structural_identity_chars=0
+18:40:51  INFO      [ComposerV2] edit_mode=local_edit  atmosphere=nature_retreat  room=Living Room  iteration=8  compact=False
+18:40:51  INFO      [ComposerV2] mode=LOCAL_EDIT  size=1404  sections=2
+18:40:51  INFO      --- prompt composed (1404 chars, compact_prompts=False) ---
+18:40:51  INFO      [PERF] stage=prompt_composition  duration_ms=0  chars=1404
+18:40:51  DEBUG       prompt:
+TARGETED IMAGE EDIT ù Living Room in Nature Retreat style.
+MAKE ONLY THESE CHANGES (each must be clearly visible in the output): (1) Add bedroom in the rear space. Add TV in front of the sofa. (2) Add a coffee 
+table in front of the sofa with a rose on it.
+PRESERVE EXACTLY ù do not alter any of the following under any circumstances: the camera angle, viewing height, and perspective; all walls, windows, 
+doors, and ceiling ù their exact positions and character; CRITICAL: all window openings must remain fully unblocked ù no furniture, object, or surface 
+may overlap or cover a window; natural light entering from every window must remain visible; all furniture not explicitly mentioned above ù positions, 
+forms, and materials unchanged; all objects and decorative items not explicitly mentioned above; the lighting direction, warmth, and shadow pattern; 
+the floor material, color, and finish; the overall spatial composition and room layout.
+STYLE CONTEXT: new or changed elements should match the Nature Retreat aesthetic.
+OUTPUT REQUIREMENT: the result must look nearly identical to the input image except for the listed changes. Furniture must not move. The room must not 
+be redesigned. The perspective must not shift. This is surgical editing, not a new generation.
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+18:40:51  DEBUG     STREAM b'IHDR' 16 13
+18:40:51  DEBUG     STREAM b'caBX' 41 29030
+18:40:51  DEBUG     b'caBX' 41 29030 (unknown)
+18:40:51  DEBUG     STREAM b'IDAT' 29083 2675799
+18:40:51  INFO      [VersionState] generation_mode=V2  source_mode_requested=(none)  source_mode_resolved=LATEST  source_version_id=(n/a)  
+source_image_url_type=latest  latest_version_id=(none)  structural_identity_present=False  structural_permission=False  negative_anchors_chars=0  
+prompt_chars=1404  output_size=1536x1024
+18:40:51  DEBUG     STREAM b'IHDR' 16 13
+18:40:51  DEBUG     STREAM b'caBX' 41 29030
+18:40:51  DEBUG     b'caBX' 41 29030 (unknown)
+18:40:51  DEBUG     STREAM b'IDAT' 29083 2675799
+18:40:51  INFO        source image: 1536x1024 mode=RGB size_bytes=2704898 -> output_size=1536x1024
+18:40:51  INFO        structural mask: disabled (profile=MOBILE_MVP_BASELINE use_mask=False ù Wave 4.7.0 runtime isolation)
+18:40:51  INFO      [PERF] payload_estimate  total_bytes=2706912  image_bytes=2704898  mask_bytes=0  prompt_bytes=1414
+18:40:51  INFO      --- calling OpenAI images.edit (gpt-image-1, quality=medium, input_fidelity=omitted, size=1536x1024, mask=no, max_attempts=1) ---
+18:40:51  INFO      [OpenAI Attempt 1/1] starting  (backend-controlled; SDK max_retries=0)
+18:40:51  INFO        input_fidelity: OMITTED from API call (profile=MOBILE_MVP_BASELINE)
+18:40:51  DEBUG     Request options: {'method': 'post', 'url': '/images/edits', 'headers': {'Content-Type': 'multipart/form-data'}, 'files': 
+[('image', SerializationIterator(index=0, iterator=SerializationIterator(index=0, iterator=<_io.BytesIO object at 0x000002B22415EA70>)))], 
+'idempotency_key': 'stainless-python-retry-6e360beb-9928-4204-b157-fc2974bf58c6', 'security': {'bearer_auth': True}, 'content': None, 'json_data': 
+{'prompt': 'TARGETED IMAGE EDIT ù Living Room in Nature Retreat style.\nMAKE ONLY THESE CHANGES (each must be clearly visible in the output): (1) Add 
+bedroom in the rear space. Add TV in front of the sofa. (2) Add a coffee table in front of the sofa with a rose on it.\nPRESERVE EXACTLY ù do not 
+alter any of the following under any circumstances: the camera angle, viewing height, and perspective; all walls, windows, doors, and ceiling ù their 
+exact positions and character; CRITICAL: all window openings must remain fully unblocked ù no furniture, object, or surface may overlap or cover a 
+window; natural light entering from every window must remain visible; all furniture not explicitly mentioned above ù positions, forms, and materials 
+unchanged; all objects and decorative items not explicitly mentioned above; the lighting direction, warmth, and shadow pattern; the floor material, 
+color, and finish; the overall spatial composition and room layout.\nSTYLE CONTEXT: new or changed elements should match the Nature Retreat 
+aesthetic.\nOUTPUT REQUIREMENT: the result must look nearly identical to the input image except for the listed changes. Furniture must not move. The 
+room must not be redesigned. The perspective must not shift. This is surgical editing, not a new generation.\nNOT a CGI render. DSLR real estate 
+photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.', 'model': 'gpt-image-1', 'n': 1, 'quality': 
+'medium', 'size': '1536x1024'}}
+18:40:51  DEBUG     Sending HTTP Request: POST https://api.openai.com/v1/images/edits
+18:40:51  DEBUG     close.started
+18:40:51  DEBUG     close.complete
+18:40:51  DEBUG     connect_tcp.started host='api.openai.com' port=443 local_address=None timeout=5.0 socket_options=None
+18:40:52  DEBUG     connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B2240FDD50>
+18:40:52  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000002B2223C1040> server_hostname='api.openai.com' timeout=5.0
+18:40:52  DEBUG     start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B2240FE830>
+18:40:52  DEBUG     send_request_headers.started request=<Request [b'POST']>
+18:40:52  DEBUG     send_request_headers.complete
+18:40:52  DEBUG     send_request_body.started request=<Request [b'POST']>
+18:40:56  DEBUG     send_request_body.complete
+18:40:56  DEBUG     receive_response_headers.started request=<Request [b'POST']>
+18:41:26  DEBUG     receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Thu, 21 May 2026 16:41:25 GMT'), 
+(b'Content-Type', b'application/json'), (b'Transfer-Encoding', b'chunked'), (b'Connection', b'keep-alive'), (b'CF-Ray', b'9ff5068108543ce3-CDG'), 
+(b'CF-Cache-Status', b'DYNAMIC'), (b'Server', b'cloudflare'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), 
+(b'X-Content-Type-Options', b'nosniff'), (b'access-control-expose-headers', b'X-Request-ID'), (b'access-control-expose-headers', b'CF-Ray'), 
+(b'Access-Control-Expose-Headers', b'CF-Ray'), (b'openai-organization', b'user-g1pxfrxf7kwbd0pxj7ti1oj4'), (b'openai-processing-ms', b'29232'), 
+(b'openai-project', b'proj_UYOJoH8c0W0Vie5FAytrm3w7'), (b'openai-version', b'2020-10-01'), (b'x-request-id', b'req_90fe45358c0b4c17a3cd74a9af7d50ce'), 
+(b'Content-Encoding', b'gzip'), (b'alt-svc', b'h3=":443"; ma=86400')])
+18:41:26  INFO      HTTP Request: POST https://api.openai.com/v1/images/edits "HTTP/1.1 200 OK"
+18:41:26  DEBUG     receive_response_body.started request=<Request [b'POST']>
+18:41:31  DEBUG     receive_response_body.complete
+18:41:31  DEBUG     response_closed.started
+18:41:31  DEBUG     response_closed.complete
+18:41:31  DEBUG     HTTP Response: POST https://api.openai.com/v1/images/edits "200 OK" Headers([('date', 'Thu, 21 May 2026 16:41:25 GMT'), 
+('content-type', 'application/json'), ('transfer-encoding', 'chunked'), ('connection', 'keep-alive'), ('cf-ray', '9ff5068108543ce3-CDG'), 
+('cf-cache-status', 'DYNAMIC'), ('server', 'cloudflare'), ('strict-transport-security', 'max-age=31536000; includeSubDomains; preload'), 
+('x-content-type-options', 'nosniff'), ('access-control-expose-headers', 'X-Request-ID'), ('access-control-expose-headers', 'CF-Ray'), 
+('access-control-expose-headers', 'CF-Ray'), ('openai-organization', 'user-g1pxfrxf7kwbd0pxj7ti1oj4'), ('openai-processing-ms', '29232'), 
+('openai-project', 'proj_UYOJoH8c0W0Vie5FAytrm3w7'), ('openai-version', '2020-10-01'), ('x-request-id', 'req_90fe45358c0b4c17a3cd74a9af7d50ce'), 
+('content-encoding', 'gzip'), ('alt-svc', 'h3=":443"; ma=86400')])
+18:41:31  DEBUG     request_id: req_90fe45358c0b4c17a3cd74a9af7d50ce
+18:41:31  INFO      [OpenAI Attempt 1/1] succeeded in 39.3s
+18:41:31  INFO        generated: 2276495 bytes (2223.1 KB)
+18:41:31  INFO      --- uploading to Supabase (generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164131_5d26d78f.jpg) ---
+18:41:31  DEBUG     close.started
+18:41:31  DEBUG     close.complete
+18:41:31  DEBUG     connect_tcp.started host='vtxkciupyafukhdsgxgw.supabase.co' port=443 local_address=None timeout=20 socket_options=None
+18:41:31  DEBUG     connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x000002B22416B760>
+18:41:31  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000002B22305F740> server_hostname='vtxkciupyafukhdsgxgw.supabase.co' 
+timeout=20
+18:41:32  DEBUG     start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x000002B22416AC20>
+18:41:32  DEBUG     send_connection_init.started request=<Request [b'POST']>
+18:41:32  DEBUG     send_connection_init.complete
+18:41:32  DEBUG     send_request_headers.started request=<Request [b'POST']> stream_id=1
+18:41:32  DEBUG     Adding (b':method', b'POST') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 3 with 7 bits
+18:41:32  DEBUG     Adding (b':authority', b'vtxkciupyafukhdsgxgw.supabase.co') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 1 with 6 bits
+18:41:32  DEBUG     Encoding 24 with 7 bits
+18:41:32  DEBUG     Adding (b':scheme', b'https') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 7 with 7 bits
+18:41:32  DEBUG     Adding (b':path', b'/storage/v1/object/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164131_5d26d78f.jpg') to the header 
+table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 4 with 6 bits
+18:41:32  DEBUG     Encoding 67 with 7 bits
+18:41:32  DEBUG     Adding (b'accept', b'*/*') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 19 with 6 bits
+18:41:32  DEBUG     Encoding 3 with 7 bits
+18:41:32  DEBUG     Adding (b'accept-encoding', b'gzip, deflate, zstd') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 16 with 6 bits
+18:41:32  DEBUG     Encoding 15 with 7 bits
+18:41:32  DEBUG     Adding (b'user-agent', b'python-httpx/0.28.1') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 58 with 6 bits
+18:41:32  DEBUG     Encoding 14 with 7 bits
+18:41:32  DEBUG     Adding (b'x-client-info', b'supabase-py/2.30.0') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 10 with 7 bits
+18:41:32  DEBUG     Encoding 13 with 7 bits
+18:41:32  DEBUG     Adding (b'x-supabase-client-platform', b'Windows') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 19 with 7 bits
+18:41:32  DEBUG     Encoding 6 with 7 bits
+18:41:32  DEBUG     Adding (b'x-supabase-client-platform-version', b'10') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 24 with 7 bits
+18:41:32  DEBUG     Encoding 2 with 7 bits
+18:41:32  DEBUG     Adding (b'x-supabase-client-runtime', b'python') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 18 with 7 bits
+18:41:32  DEBUG     Encoding 5 with 7 bits
+18:41:32  DEBUG     Adding (b'x-supabase-client-runtime-version', b'3.10.5') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 23 with 7 bits
+18:41:32  DEBUG     Encoding 5 with 7 bits
+18:41:32  DEBUG     Adding (b'apikey', b'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0eGtjaXVweWFmdWtoZHNneGd3Iiwicm9sZSI6I
+nNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODUxNjI1MCwiZXhwIjoyMDk0MDkyMjUwfQ.3IDNbF1kzqeSsnMXia9Rs2hSai285vJND9u4Gracfnc') to the header table, sensitive:False, 
+huffman:True
+18:41:32  DEBUG     Encoding 5 with 7 bits
+18:41:32  DEBUG     Encoding 175 with 7 bits
+18:41:32  DEBUG     Adding (b'authorization', b'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0eGtjaXVweWFmdWtoZHNneGd
+3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODUxNjI1MCwiZXhwIjoyMDk0MDkyMjUwfQ.3IDNbF1kzqeSsnMXia9Rs2hSai285vJND9u4Gracfnc') to the header table, 
+sensitive:True, huffman:True
+18:41:32  DEBUG     Encoding 23 with 4 bits
+18:41:32  DEBUG     Encoding 180 with 7 bits
+18:41:32  DEBUG     Adding (b'cache-control', b'3600') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 24 with 6 bits
+18:41:32  DEBUG     Encoding 3 with 7 bits
+18:41:32  DEBUG     Adding (b'x-upsert', b'false') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 6 with 7 bits
+18:41:32  DEBUG     Encoding 4 with 7 bits
+18:41:32  DEBUG     Adding (b'cookie', b'__cf_bm=ZYJXwEy0ZRxJuF6dwXR58Ex.bhIlZz9wkU5wR9MyPUE-1779380883.2907934-1.0.1.1-XumWVYIIQgOPIlxYVQdTtgVs84Tg.6l
+F0vYslNTtkVF45v7BQnSF2LYFiZJHysfa0iHsKdq1wwWAisghSQeL3QNRCq5kRBqBh_q52zJgDVG_AiXJYdSkUYgbyboZIdzb') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 32 with 6 bits
+18:41:32  DEBUG     Encoding 166 with 7 bits
+18:41:32  DEBUG     Adding (b'content-length', b'2276685') to the header table, sensitive:False, huffman:True
+18:41:32  DEBUG     Encoding 28 with 6 bits
+18:41:32  DEBUG     Encoding 5 with 7 bits
+18:41:32  DEBUG     Adding (b'content-type', b'multipart/form-data; boundary=71f4a4e0ee8292b4ac4056304d02f583') to the header table, sensitive:False, 
+huffman:True
+18:41:32  DEBUG     Encoding 31 with 6 bits
+18:41:32  DEBUG     Encoding 44 with 7 bits
+18:41:32  DEBUG     Encoded header block to b'\x83A\x98\xee\x9f=Hkk\xf49m\xeb<\x88\x9b\xcc\xde\x17E\xb5\x8e1\xa0\xab\x90\xff\x87D\xc3a\t=\x83\x98\xacw\
+x0b\x07\x8f\xa1H\x96&-E\xb0i,\x8c2\xe8%}\xd8\xc4\xb1F\xcb\xab4\xd8%Y\xf1\t\xa5\x9ex\x8c\xca\xfc\x8e>B>\xc0\x80\'\x00\xd8\x83\x10\\h,\x86&\xe4\x13\x92:\
+xf4\xab\xf4\xaeoS\x83\xf9c\xe7P\x8f\x9b\xd9\xab\xfaRB\xcb@\xd2_\xa5=\xa12\x7fz\x8e\xaf\xd2g=KN\x94\xd7\xe5\x80.\'\x97\x0f@\x8a\xf2\xb1(1jJ\xc6\xaaS\xff
+\x8dE\xb5\x8e1\xa0\xabW\xe9\x81.\xc8\x17\x07@\x93\xf2\xb2-\xacq\x8d\x05X\x94\x18\xb5%j\xe8\x1ae=\x94\xff\x86\xe4j\xa4?\x84\x7f@\x98\xf2\xb2-\xacq\x8d\x
+05X\x94\x18\xb5%j\xe8\x1ae=\x94\xad\xdc\xb6 \xc7\xab\x82\x08?@\x92\xf2\xb2-\xacq\x8d\x05X\x94\x18\xb5%k-\xa9&\xa4\xbf\x85\xaf\xd2g=_@\x97\xf2\xb2-\xacq
+\x8d\x05X\x94\x18\xb5%k-\xa9&\xa4\xabw-\x881\xea\x85ep\x81v\xff@\x85\x1df\xea__\xff0/\xac\xb3\xc7\x88\x86\xd4l\xb98{\xc8\x1d&\xc8\x8c\x95ml\x97\xb29\x9
+3\xad\x7f\x9coe}r\xfa\xcbY\x19\xd0mF\xcb\xeeO\xcb\xb3\xf3\xa7\x0f\xbf\xdd\xd9\x11\x92\xac\xb4~\x9b#\x99*\xfd\x01q\'\xa0\xff8\xf8/,4\xc9\xc9\'\xfd\xc7\x
+a6\xa2\xe2\x91\x9c\x86\xf0bR\xfa?wds%Zh%_\xb5\xf3\x17\x19IK\xe8\xfd\xdd\x91\x19)\xa2y/dsF\xf23\xaa\xff\x0f:zd\x0e\x8b\xde\r\xfb\xf9?\x8c\x9d\x0f\xebE\x
+fe\xa0\xd1\x7f\xaf\xad\x1d8x\x97b\xec\xe4\xbf\xa6<!\xeb\xef\xb1w"\xad\x1f\x86\x1b\xfbP)\xf7\x0c\xc2y\xbe\xf9t\xdf~\xd6\xb1X2KQ?\x1f\x08\xff5\xbaQ\xd8[\
+x14/\xac\xb3\xc7\x88\x86\xd4l\xb98{\xc8\x1d&\xc8\x8c\x95ml\x97\xb29\x93\xad\x7f\x9coe}r\xfa\xcbY\x19\xd0mF\xcb\xeeO\xcb\xb3\xf3\xa7\x0f\xbf\xdd\xd9\x11
+\x92\xac\xb4~\x9b#\x99*\xfd\x01q\'\xa0\xff8\xf8/,4\xc9\xc9\'\xfd\xc7\xa6\xa2\xe2\x91\x9c\x86\xf0bR\xfa?wds%Zh%_\xb5\xf3\x17\x19IK\xe8\xfd\xdd\x91\x19)\
+xa2y/dsF\xf23\xaa\xff\x0f:zd\x0e\x8b\xde\r\xfb\xf9?\x8c\x9d\x0f\xebE\xfe\xa0\xd1\x7f\xaf\xad\x1d8x\x97b\xec\xe4\xbf\xa6<!\xeb\xef\xb1w"\xad\x1f\x86\x1b
+\xfbP)\xf7\x0c\xc2y\xbe\xf9t\xdf~\xd6\xb1X2KQ?X\x83e\xc0\x03@\x86\xf2\xb5\xb5\xa0\xb6\'\x84\x94t \xbf`\xff\'\x8a"K\x14t\xc1\xfb\xcf/\xe7\x8c\x1e\x81\xf
+b\xb7\xce[p\xb9\'\x8f\xcd\xad\xbd\x83\xca\xf1\xcf\x92\x8f\xdfo\xf8\xeb\xc1\xbf\x1b_\xd1\xeb_\x0c\x0b\x05\xd7_e\xe0<\xf3+\x89\xf0:\xfb-,\x15\xc0\xb8W\n\
+xdf\x96\xd3\xcb\x8f<\x996M\xab^J<\xf3\xe3\xb2M\xe9\x9b\x8a\x1ek|\xcb\xb9F\x10w\xe6\x8a4\xefO^8Zo\xbb\xb7vU\xbb\x08\xb3\xf3\xc2o\xdc\xb8\xfd"Q\x80\xd8\x
+d1\x9aN\xc1\xf1\xe3\x94&D\xd3\xee\xd8\\\xec\xec\xd3\xb6\xf7f\xfa\xed\xbb\xda\xec\xf1vl^\xf2\xcd\x7f\x8e(\xa17\xe6^rn\xeb\xc3\x9c\xd1\xfa\x8c\xff\xb9$\x
+f7\x1f\\\x85\x10\x9dq\xc7\x9b_\xac\xa6\xda\x12j\xc7bX\x94\xf6R\xb4\x83H\xfe\xd4\x8c\xf6\xd5 
+\xec\xf5\x03\xa1\x95\xa1\xb4P\x14\xaf\t\xf1F\xd0\xc8\xd0\x1bq\x905 \x05+o3'
+18:41:32  DEBUG     send_request_headers.complete
+18:41:32  DEBUG     send_request_body.started request=<Request [b'POST']> stream_id=1
+18:41:32  DEBUG     receive_remote_settings.started
+18:41:32  DEBUG     receive_remote_settings.complete return_value=<RemoteSettingsChanged 
+changed_settings:{ChangedSetting(setting=SettingCodes.MAX_CONCURRENT_STREAMS, original_value=None, new_value=100), 
+ChangedSetting(setting=SettingCodes.INITIAL_WINDOW_SIZE, original_value=65535, new_value=65536), ChangedSetting(setting=SettingCodes.MAX_FRAME_SIZE, 
+original_value=16384, new_value=16777215)}>
+18:41:42  DEBUG     send_request_body.complete
+18:41:42  DEBUG     receive_response_headers.started request=<Request [b'POST']> stream_id=1
+18:41:44  DEBUG     Decoding b'?\xe1\x1f\x88a\x96\xdf=\xbfJ\x08*h\x1f\xa5\x04\x018\xa0\\\xb8\xd0n4\xd2\x98\xb4o_\x96\x1du\xd0b\r&=LtA\xea\xfbP\x93\x8e\
+xc4\x150Z\x99V{@\x85$\xabX?_\x8f~Y[\x03\xae\xb8"\xc6\xec\xad\xbe\x05\xaf_\xc5@\x8a$\xab\x10d\x9c\xab!#M\xa8\x86\xbf\xcfL:2^T\x01*v\x87%\x07\xb6Ih\x1d\x
+85@\x8bDkL4\x97\xc0\xfd-I\xe4/\x84\x90\xd6\x14\x89@\x8dDkL4\x97\xc0\xfd-\xdc\xb6 \xc7\xab\x011@\x8aDkWa\xfa\x14\x89Z\xc2\xcb\x90\xee\x9f=Hkk\xf49m\xeb<
+\x88\x9b\xcc\xde?@\x8aDkX^\xd6\x95\tX\xd2\x7f\x9a\x00_+Q\xb85\x81(\x80\xb3\xad\x84\x0b\r\xe18\xb3R=#Di\xa9^#?x\xa0\xa4~V\x1c\xc5\x81\x90\xb6\xcb\x80\x0
+0>\xd45D\xa2\xd9\x0b\xba\xd8\xef\x9e\x91\x9a\xa4}\xa9]\x85\xa0\xe3\x93Z\x83\x9b\xd9\xab@\x85\x1d\tY\x1d\xc9\x90\x9d\x98?\x9b\x8d4\xcf\xf3\xf6\xa5#\x81\
+xe7\x1a\x00?'
+18:41:44  DEBUG     Decoded 4096, consumed 3 bytes
+18:41:44  DEBUG     Resizing header table to 4096 from 4096
+18:41:44  DEBUG     Decoded 8, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b':status', b'200'), consumed 1
+18:41:44  DEBUG     Decoded 33, consumed 1 bytes
+18:41:44  DEBUG     Decoded 22, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b'date', b'Thu, 21 May 2026 16:41:44 GMT'), total consumed 24 bytes, indexed True
+18:41:44  DEBUG     Decoded 31, consumed 1 bytes
+18:41:44  DEBUG     Decoded 22, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b'content-type', b'application/json; charset=utf-8'), total consumed 24 bytes, indexed True
+18:41:44  DEBUG     Decoded 5, consumed 1 bytes
+18:41:44  DEBUG     Decoded 15, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b'cf-ray', b'9ff507762eb7f590-CDG'), total consumed 23 bytes, indexed True
+18:41:44  DEBUG     Decoded 10, consumed 1 bytes
+18:41:44  DEBUG     Decoded 6, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b'cf-cache-status', b'DYNAMIC'), total consumed 19 bytes, indexed True
+18:41:44  DEBUG     Decoded 20, consumed 1 bytes
+18:41:44  DEBUG     Decoded 1, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b'access-control-allow-origin', <memory at 0x000002B222FFB1C0>), total consumed 3 bytes, indexed True
+18:41:44  DEBUG     Decoded 54, consumed 1 bytes
+18:41:44  DEBUG     Decoded 7, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b'server', b'cloudflare'), total consumed 9 bytes, indexed True
+18:41:44  DEBUG     Decoded 11, consumed 1 bytes
+18:41:44  DEBUG     Decoded 4, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b'sb-gateway-mode', b'direct'), total consumed 18 bytes, indexed True
+18:41:44  DEBUG     Decoded 13, consumed 1 bytes
+18:41:44  DEBUG     Decoded 1, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b'sb-gateway-version', <memory at 0x000002B222FF9900>), total consumed 17 bytes, indexed True
+18:41:44  DEBUG     Decoded 10, consumed 1 bytes
+18:41:44  DEBUG     Decoded 16, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b'sb-project-ref', b'vtxkciupyafukhdsgxgw'), total consumed 29 bytes, indexed True
+18:41:44  DEBUG     Decoded 10, consumed 1 bytes
+18:41:44  DEBUG     Decoded 26, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b'sb-request-id', b'019e4b6a-0f20-7510-a826-4d8d4c44f8c3'), total consumed 39 bytes, indexed True
+18:41:44  DEBUG     Decoded 56, consumed 1 bytes
+18:41:44  DEBUG     Decoded 32, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b'strict-transport-security', b'max-age=31536000; includeSubDomains; preload'), total consumed 34 bytes, indexed True
+18:41:44  DEBUG     Decoded 26, consumed 1 bytes
+18:41:44  DEBUG     Decoded 3, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b'content-encoding', b'gzip'), total consumed 5 bytes, indexed True
+18:41:44  DEBUG     Decoded 5, consumed 1 bytes
+18:41:44  DEBUG     Decoded 16, consumed 1 bytes
+18:41:44  DEBUG     Decoded (b'alt-svc', b'h3=":443"; ma=86400'), total consumed 24 bytes, indexed True
+18:41:44  DEBUG     receive_response_headers.complete return_value=(200, [(b'date', b'Thu, 21 May 2026 16:41:44 GMT'), (b'content-type', 
+b'application/json; charset=utf-8'), (b'cf-ray', b'9ff507762eb7f590-CDG'), (b'cf-cache-status', b'DYNAMIC'), (b'access-control-allow-origin', b'*'), 
+(b'server', b'cloudflare'), (b'sb-gateway-mode', b'direct'), (b'sb-gateway-version', b'1'), (b'sb-project-ref', b'vtxkciupyafukhdsgxgw'), 
+(b'sb-request-id', b'019e4b6a-0f20-7510-a826-4d8d4c44f8c3'), (b'strict-transport-security', b'max-age=31536000; includeSubDomains; preload'), 
+(b'content-encoding', b'gzip'), (b'alt-svc', b'h3=":443"; ma=86400')])
+18:41:44  INFO      HTTP Request: POST 
+https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164131_5d26d78f.jpg "HTTP/2 200 OK"
+18:41:44  DEBUG     receive_response_body.started request=<Request [b'POST']> stream_id=1
+18:41:44  DEBUG     receive_response_body.complete
+18:41:44  DEBUG     response_closed.started stream_id=1
+18:41:44  DEBUG     response_closed.complete
+18:41:44  INFO        upload OK  url: 
+https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/public/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164131_5d26d78f.jpg
+18:41:44  INFO      [PERF] stage=supabase_upload  duration_ms=13625  size_bytes=2276495
+18:41:44  INFO        ai_message: Vision 8 ù add bedroom in the rear space. Add TV in front of the sofa. and. Does the natural quality
+18:41:44  INFO        suggestions: ['Try a different material for that', 'Adjust the scale of this element', 'Keep this as my final version', 'Add 
+more reclaimed timber']
+18:41:44  INFO      [VersionState] persisted version_id=v_a8ceaa5f93ea vision_number=8 ledger_size=1
+18:41:44  INFO      [PERF SUMMARY] request_id=3da16c3fee5126a271bbe35603a92bf8  total_ms=63375  fetch_ms=10391  vision_ms=0  prompt_ms=0  mask_ms=0  
+openai_ms=39328 (x1 attempts)  upload_ms=13625  payload_bytes=2706912  prompt_chars=1404  est_cost_usd=0.074  cost_risk=MEDIUM
+18:41:44  INFO      [Generation Cost] mode=MOBILE_MVP_BASELINE  duration=63.4s  quality=medium  input_fidelity=None  size=1536x1024  prompt_chars=1404 
+ compact_prompts=False  request_id=3da16c3fee5126a271bbe35603a92bf8
+18:41:44  INFO      === /generate SUCCESS ===  request_id=3da16c3fee5126a271bbe35603a92bf8
+INFO:     127.0.0.1:52232 - "POST /generate HTTP/1.1" 200 OK
+18:43:44  DEBUG     Calling on_part_begin with no data
+18:43:44  DEBUG     Calling on_header_field with data[29:48]
+18:43:44  DEBUG     Calling on_header_value with data[50:78]
+18:43:44  DEBUG     Calling on_header_end with no data
+18:43:44  DEBUG     Calling on_headers_finished with no data
+18:43:44  DEBUG     Calling on_part_data with data[82:118]
+18:43:44  DEBUG     Calling on_part_end with no data
+18:43:44  DEBUG     Calling on_part_begin with no data
+18:43:44  DEBUG     Calling on_header_field with data[149:168]
+18:43:44  DEBUG     Calling on_header_value with data[170:194]
+18:43:44  DEBUG     Calling on_header_end with no data
+18:43:44  DEBUG     Calling on_headers_finished with no data
+18:43:44  DEBUG     Calling on_part_data with data[198:244]
+18:43:44  DEBUG     Calling on_part_end with no data
+18:43:44  DEBUG     Calling on_part_begin with no data
+18:43:44  DEBUG     Calling on_header_field with data[275:294]
+18:43:44  DEBUG     Calling on_header_value with data[296:330]
+18:43:44  DEBUG     Calling on_header_end with no data
+18:43:44  DEBUG     Calling on_headers_finished with no data
+18:43:44  DEBUG     Calling on_part_data with data[334:475]
+18:43:44  DEBUG     Calling on_part_end with no data
+18:43:44  DEBUG     Calling on_part_begin with no data
+18:43:44  DEBUG     Calling on_header_field with data[506:525]
+18:43:44  DEBUG     Calling on_header_value with data[527:556]
+18:43:44  DEBUG     Calling on_header_end with no data
+18:43:44  DEBUG     Calling on_headers_finished with no data
+18:43:44  DEBUG     Calling on_part_data with data[560:584]
+18:43:44  DEBUG     Calling on_part_end with no data
+18:43:44  DEBUG     Calling on_part_begin with no data
+18:43:44  DEBUG     Calling on_header_field with data[615:634]
+18:43:44  DEBUG     Calling on_header_value with data[636:663]
+18:43:44  DEBUG     Calling on_header_end with no data
+18:43:44  DEBUG     Calling on_headers_finished with no data
+18:43:44  DEBUG     Calling on_part_data with data[667:678]
+18:43:44  DEBUG     Calling on_part_end with no data
+18:43:44  DEBUG     Calling on_part_begin with no data
+18:43:44  DEBUG     Calling on_header_field with data[709:728]
+18:43:44  DEBUG     Calling on_header_value with data[730:757]
+18:43:44  DEBUG     Calling on_header_end with no data
+18:43:44  DEBUG     Calling on_headers_finished with no data
+18:43:44  DEBUG     Calling on_part_data with data[761:762]
+18:43:44  DEBUG     Calling on_part_end with no data
+18:43:44  DEBUG     Calling on_part_begin with no data
+18:43:44  DEBUG     Calling on_header_field with data[793:812]
+18:43:44  DEBUG     Calling on_header_value with data[814:839]
+18:43:44  DEBUG     Calling on_header_end with no data
+18:43:44  DEBUG     Calling on_headers_finished with no data
+18:43:44  DEBUG     Calling on_part_data with data[843:2019]
+18:43:44  DEBUG     Calling on_part_end with no data
+18:43:44  DEBUG     Calling on_part_begin with no data
+18:43:44  DEBUG     Calling on_header_field with data[2050:2069]
+18:43:44  DEBUG     Calling on_header_value with data[2071:2107]
+18:43:44  DEBUG     Calling on_header_end with no data
+18:43:44  DEBUG     Calling on_headers_finished with no data
+18:43:44  DEBUG     Calling on_part_data with data[2111:2645]
+18:43:44  DEBUG     Calling on_part_end with no data
+18:43:44  DEBUG     Calling on_part_begin with no data
+18:43:44  DEBUG     Calling on_header_field with data[2676:2695]
+18:43:44  DEBUG     Calling on_header_value with data[2697:2732]
+18:43:44  DEBUG     Calling on_header_end with no data
+18:43:44  DEBUG     Calling on_headers_finished with no data
+18:43:44  DEBUG     Calling on_part_data with data[2736:2768]
+18:43:44  DEBUG     Calling on_part_end with no data
+18:43:44  DEBUG     Calling on_part_begin with no data
+18:43:44  DEBUG     Calling on_header_field with data[2799:2818]
+18:43:44  DEBUG     Calling on_header_value with data[2820:2851]
+18:43:44  DEBUG     Calling on_header_end with no data
+18:43:44  DEBUG     Calling on_headers_finished with no data
+18:43:44  DEBUG     Calling on_part_data with data[2855:2860]
+18:43:44  DEBUG     Calling on_part_end with no data
+18:43:44  DEBUG     Calling on_part_begin with no data
+18:43:44  DEBUG     Calling on_header_field with data[2891:2910]
+18:43:44  DEBUG     Calling on_header_value with data[2912:2920]
+18:43:44  DEBUG     Calling on_header_value with data[0:26]
+18:43:44  DEBUG     Calling on_header_end with no data
+18:43:44  DEBUG     Calling on_headers_finished with no data
+18:43:44  DEBUG     Calling on_part_data with data[30:35]
+18:43:44  DEBUG     Calling on_part_end with no data
+18:43:44  DEBUG     Calling on_end with no data
+18:43:44  DEBUG     [GenerationProfile] active=MOBILE_MVP_BASELINE  quality=medium  input_fidelity=omitted  size_override=auto  max_attempts=1  
+compact_prompts=False  use_mask=False  vision_analysis_fv=False
+18:43:44  INFO      === /generate called ===
+18:43:44  INFO        request_id    : 6e6d08bfc9db3931a6c893fb1404af26
+18:43:44  INFO        session_id    : 370f97b2-ea37-450f-9224-88c3f9d69cc9
+18:43:44  INFO        style_label   : Japandi Calm À Vision 9
+18:43:44  INFO        room_type     : Living Room
+18:43:44  INFO        iteration     : 9
+18:43:44  INFO        prompt        : Redesign this space in the Japandi Calm style.
+18:43:44  INFO        before_url    : https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/public/generated/370f...
+18:43:44  INFO        original_url  : https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/sign/uploads/f9b13abc...
+18:43:44  INFO      [GenerationProfile] mode=MOBILE_MVP_BASELINE  quality=medium  input_fidelity=None  size=auto  max_attempts=1  compact_prompts=False
+18:43:44  INFO      [Wave5.3] customized atmosphere SWITCH detected ù prev=nordic_warmth new=japandi_calm customizations=True \u2192 source_mode kept 
+as LATEST (preserve user changes)
+18:43:44  INFO      --- fetching source image ---
+18:43:44  INFO        source: type=latest requested='(none)' resolved=LATEST version_id='(n/a)' (iteration=9, original_provided=True, ledger=0)
+18:43:44  DEBUG     connect_tcp.started host='vtxkciupyafukhdsgxgw.supabase.co' port=443 local_address=None timeout=30 socket_options=None
+18:43:44  DEBUG     connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B224157610>
+18:43:44  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000002B22305FAC0> server_hostname='vtxkciupyafukhdsgxgw.supabase.co' 
+timeout=30
+18:43:45  DEBUG     start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B224157460>
+18:43:45  DEBUG     send_request_headers.started request=<Request [b'GET']>
+18:43:45  DEBUG     send_request_headers.complete
+18:43:45  DEBUG     send_request_body.started request=<Request [b'GET']>
+18:43:45  DEBUG     send_request_body.complete
+18:43:45  DEBUG     receive_response_headers.started request=<Request [b'GET']>
+18:43:46  DEBUG     receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Thu, 21 May 2026 16:43:45 GMT'), 
+(b'Content-Type', b'image/jpeg'), (b'Content-Length', b'2276495'), (b'Connection', b'keep-alive'), (b'CF-Ray', b'9ff50ab88e102a74-CDG'), 
+(b'CF-Cache-Status', b'HIT'), (b'Accept-Ranges', b'bytes'), (b'Access-Control-Allow-Origin', b'*'), (b'Cache-Control', b'no-cache'), (b'ETag', 
+b'"388c49524e0aa0708eb27b43657bce0f"'), (b'Last-Modified', b'Thu, 21 May 2026 16:41:44 GMT'), (b'Server', b'cloudflare'), (b'sb-gateway-mode', 
+b'direct'), (b'sb-gateway-version', b'1'), (b'sb-project-ref', b'vtxkciupyafukhdsgxgw'), (b'sb-request-id', b'019e4b6b-ef63-7fc1-9b1a-c543b771ad60'), 
+(b'x-robots-tag', b'none'), (b'x-smart-cdn', b'true'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), 
+(b'set-cookie', b'__cf_bm=GiuApgIT7LTLjuAffyBzZ2X2Td.n8VIhxPSB0ixKLT8-1779381825.367783-1.0.1.1-.WGnlQiQtrHNKiNfwjIAtOBOCnRWFfJY5yubsgr0ePswU2wCHLn1g7r
+MWNfTMGKmJ5ZI1FJ70vRqZGLYvtqChP3_q7iv3SRJw5xPutfFPojJpVWSwtNTzxaawZIedm6Z; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Thu, 
+21 May 2026 17:13:45 GMT'), (b'alt-svc', b'h3=":443"; ma=86400')])
+18:43:46  INFO      HTTP Request: GET 
+https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/public/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164131_5d26d78f.jpg 
+"HTTP/1.1 200 OK"
+18:43:46  DEBUG     receive_response_body.started request=<Request [b'GET']>
+18:43:54  DEBUG     receive_response_body.complete
+18:43:54  DEBUG     response_closed.started
+18:43:54  DEBUG     response_closed.complete
+18:43:54  INFO        HTTP 200
+18:43:54  INFO        size: 2276495 bytes (2223.1 KB)
+18:43:54  INFO      [PERF] stage=image_fetch  duration_ms=10515  size_bytes=2276495
+18:43:54  DEBUG     close.started
+18:43:54  DEBUG     close.complete
+18:43:54  INFO        refinement ù keep:0 add:3 remove:0 directions:0
+18:43:54  INFO      --- GPT-4o-mini vision analysis (detail=high) ---
+18:43:54  INFO        vision analysis SKIPPED (profile=MOBILE_MVP_BASELINE, iteration=9 ù Wave 5.5.7c global skip on mobile_mvp_baseline; 
+room_description stays empty for all generations on this profile)
+18:43:54  INFO      [PERF] stage=vision_analysis  duration_ms=0
+18:43:54  INFO      [StructuralIdentity] present=False  source=none  facts=0  token_chars=0  iteration=9
+18:43:54  INFO        atmosphere_id: japandi_calm
+18:43:54  INFO        intent: mixed  sub_intent: general
+18:43:54  INFO      --- transformation: atmosphere_switch ---
+18:43:54  INFO        addendum: 935 chars  enriched: 982 chars
+18:43:54  INFO      --- edit mode: style_refinement ---
+18:43:54  INFO      [RefinementAccumulation] append_detected=False  replace_detected=False  accumulated_refinement_count=1  
+final_accumulated_request=add bedroom in the rear space. Add TV in front of the sofa. and add a coffee table in front of the sofa with a rose on it
+18:43:54  INFO      [RefinementAuthority] requested_change_detected=True  localized_authority=True  authorized_change_chars=398  detected_zone=the 
+rear zone  structural_permission=False  mode=V2
+18:43:54  INFO      [StructuralIdentity] generation_mode=V2  structural_identity_present=False  structural_identity_source=none  
+structural_identity_chars=0
+18:43:54  INFO      [ComposerV2] edit_mode=style_refinement  atmosphere=japandi_calm  room=Living Room  iteration=9  compact=False
+18:43:54  INFO      [ComposerV2] atmosphere SWITCH detected ù strategy=REBOOT_CUSTOMIZED prev=nordic_warmth new=japandi_calm customizations=True
+18:43:54  INFO      [ComposerV2] mode=style_refinement  size=3946  sections=6  present=['header', 'core_contract', 'style_transformation', 
+'atmosphere_dna_boundary', 'quality_floor', 'user_direction']
+18:43:54  INFO      --- prompt composed (3946 chars, compact_prompts=False) ---
+18:43:54  INFO      [PERF] stage=prompt_composition  duration_ms=0  chars=3946
+18:43:54  DEBUG       prompt:
+ATMOSPHERE SWITCH ù same apartment, replacing the previous Nordic Warmth styling of this Living Room with Japandi Calm. Fresh atmospheric identity; 
+same photographed architecture.
+
+Continue evolving the current vision of the same apartment ù preserve every architectural fact from the original photograph. SAME APARTMENT PHOTO-EDIT 
+ù apply the chosen atmosphere to THIS exact photographed apartment, not a new apartment. FROZEN: camera, perspective, room proportions, ceiling 
+height, and the floor plan. STRUCTURAL ù every photographed opening (windows, sliding doors, balcony access, glass partitions, archways, half-walls, 
+and any opening visible through a partition into an adjacent or rear zone), multi-zone visibility, open-plan continuity, and spatial depth all stay 
+exactly as photographed; none may be narrowed, enclosed, walled off, or converted into a wall surface. CHANGE ONLY: surfaces, materials, furniture 
+footprint styling, lighting, textiles, colours, decor, atmosphere. Atmosphere = these aesthetic dimensions ù NEVER geometry.
+
+STYLE TRANSFORMATION ù atmosphere SWITCH on the same photographed apartment. Fully replace the previous vision's styling identity (furniture 
+silhouette, decor density, material palette, lighting language) with the new atmosphere's identity from the DNA below. Only the photographed 
+architecture and spatial relationships stay exactly as captured.
+ATMOSPHERE (Japandi Calm): Japanese restraint blended with Scandinavian softness and emotional calm. ù Still, serene, grounded, quietly refined, 
+breathable, unhurried.. [Quiet luxury boutique hospitality]
+ROOM (Living Room): pale ash or birch floor, wabi-sabi plaster walls in off-white or putty, dark charcoal ceramic accents. LIGHT: Paper lantern 
+pendant + concealed warm floor slot; no harsh downlights. ATMOSPHERE STYLE (restyle existing elements): natural linen in stone or fog tones ù 
+unhurried tactile calm; wabi-sabi ceramic or ash ù raw surface honesty; natural rush or jute ù organic textural warmth; single branch in handmade 
+ceramic vase; one framed Japanese ink artwork. REALISM: sofa low enough to feel grounded ù 40û45 cm seat height; empty floor space is deliberate, not 
+absent. AVOID: no cluttered surfaces, no patterned textiles, no warm-orange wood tones, Empty sterile minimalism, sci-fi white spaces.
+AMBITION ù premium hospitality-grade restyling. Decorate this photo; do not recompose it. WOW only through materials, lighting, atmosphere ù NOT 
+geometry.
+
+ATMOSPHERE DNA BOUNDARY ù the DNA blocks above describe IDEAL materials, decor, lighting, and mood. They do NOT describe room scale, openings, 
+ceilings, depth, or floor plan. Preserve the photographed apartment's geometry exactly regardless of the atmosphere's typical architectural character.
+
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+
+USER DIRECTION: Redesign this space in the Japandi Calm style.
+ATMOSPHERE SWITCH ù MATERIAL AND MOOD TRANSFORMATION ONLY: The room's spatial layout, furniture arrangement, zoning, and all openings are PRESERVED 
+EXACTLY. Apply the new atmosphere through: material surfaces, lighting temperature, colour palette, texti
+REFINEMENT MEMORY (Vision 9): Add or introduce: add bedroom in the rear space; Add TV in front of the sofa; and add a coffee table in front of the 
+sofa with a rose on it. Primary instruction for this vision: add bedroom in the rear space. Add TV in front of the sofa. and add a coffee table in 
+front of the sofa with a rose on it.
+AUTHORIZED USER CHANGES ù Visibly apply the user's explicit request (the rear zone): "add bedroom in the rear space. Add TV in front of the sofa. and 
+add a coffee table in front of the sofa with a rose on it". It overrides atmosphere/furniture/decor/room-function defaults and must be clearly 
+present. Keep openings, bay window, facade and perspective fixed unless the user explicitly changed them.
+18:43:54  DEBUG     STREAM b'IHDR' 16 13
+18:43:54  DEBUG     STREAM b'caBX' 41 29026
+18:43:54  DEBUG     b'caBX' 41 29026 (unknown)
+18:43:54  DEBUG     STREAM b'IDAT' 29079 2247400
+18:43:54  INFO      [VersionState] generation_mode=V2  source_mode_requested=(none)  source_mode_resolved=LATEST  source_version_id=(n/a)  
+source_image_url_type=latest  latest_version_id=(none)  structural_identity_present=False  structural_permission=False  negative_anchors_chars=0  
+prompt_chars=3946  output_size=1536x1024
+18:43:54  DEBUG     STREAM b'IHDR' 16 13
+18:43:54  DEBUG     STREAM b'caBX' 41 29026
+18:43:54  DEBUG     b'caBX' 41 29026 (unknown)
+18:43:54  DEBUG     STREAM b'IDAT' 29079 2247400
+18:43:54  INFO        source image: 1536x1024 mode=RGB size_bytes=2276495 -> output_size=1536x1024
+18:43:54  INFO        structural mask: disabled (profile=MOBILE_MVP_BASELINE use_mask=False ù Wave 4.7.0 runtime isolation)
+18:43:54  INFO      [PERF] payload_estimate  total_bytes=2281075  image_bytes=2276495  mask_bytes=0  prompt_bytes=3980
+18:43:54  INFO      --- calling OpenAI images.edit (gpt-image-1, quality=medium, input_fidelity=omitted, size=1536x1024, mask=no, max_attempts=1) ---
+18:43:54  INFO      [OpenAI Attempt 1/1] starting  (backend-controlled; SDK max_retries=0)
+18:43:54  INFO        input_fidelity: OMITTED from API call (profile=MOBILE_MVP_BASELINE)
+18:43:54  DEBUG     Request options: {'method': 'post', 'url': '/images/edits', 'headers': {'Content-Type': 'multipart/form-data'}, 'files': 
+[('image', SerializationIterator(index=0, iterator=SerializationIterator(index=0, iterator=<_io.BytesIO object at 0x000002B22413BE20>)))], 
+'idempotency_key': 'stainless-python-retry-fbe5c9fb-ab6c-4954-835f-1870e1021451', 'security': {'bearer_auth': True}, 'content': None, 'json_data': 
+{'prompt': 'ATMOSPHERE SWITCH ù same apartment, replacing the previous Nordic Warmth styling of this Living Room with Japandi Calm. Fresh atmospheric 
+identity; same photographed architecture.\n\nContinue evolving the current vision of the same apartment ù preserve every architectural fact from the 
+original photograph. SAME APARTMENT PHOTO-EDIT ù apply the chosen atmosphere to THIS exact photographed apartment, not a new apartment. FROZEN: 
+camera, perspective, room proportions, ceiling height, and the floor plan. STRUCTURAL ù every photographed opening (windows, sliding doors, balcony 
+access, glass partitions, archways, half-walls, and any opening visible through a partition into an adjacent or rear zone), multi-zone visibility, 
+open-plan continuity, and spatial depth all stay exactly as photographed; none may be narrowed, enclosed, walled off, or converted into a wall 
+surface. CHANGE ONLY: surfaces, materials, furniture footprint styling, lighting, textiles, colours, decor, atmosphere. Atmosphere = these aesthetic 
+dimensions ù NEVER geometry.\n\nSTYLE TRANSFORMATION ù atmosphere SWITCH on the same photographed apartment. Fully replace the previous vision\'s 
+styling identity (furniture silhouette, decor density, material palette, lighting language) with the new atmosphere\'s identity from the DNA below. 
+Only the photographed architecture and spatial relationships stay exactly as captured.\nATMOSPHERE (Japandi Calm): Japanese restraint blended with 
+Scandinavian softness and emotional calm. ù Still, serene, grounded, quietly refined, breathable, unhurried.. [Quiet luxury boutique 
+hospitality]\nROOM (Living Room): pale ash or birch floor, wabi-sabi plaster walls in off-white or putty, dark charcoal ceramic accents. LIGHT: Paper 
+lantern pendant + concealed warm floor slot; no harsh downlights. ATMOSPHERE STYLE (restyle existing elements): natural linen in stone or fog tones ù 
+unhurried tactile calm; wabi-sabi ceramic or ash ù raw surface honesty; natural rush or jute ù organic textural warmth; single branch in handmade 
+ceramic vase; one framed Japanese ink artwork. REALISM: sofa low enough to feel grounded ù 40û45 cm seat height; empty floor space is deliberate, not 
+absent. AVOID: no cluttered surfaces, no patterned textiles, no warm-orange wood tones, Empty sterile minimalism, sci-fi white spaces.\nAMBITION ù 
+premium hospitality-grade restyling. Decorate this photo; do not recompose it. WOW only through materials, lighting, atmosphere ù NOT 
+geometry.\n\nATMOSPHERE DNA BOUNDARY ù the DNA blocks above describe IDEAL materials, decor, lighting, and mood. They do NOT describe room scale, 
+openings, ceilings, depth, or floor plan. Preserve the photographed apartment\'s geometry exactly regardless of the atmosphere\'s typical 
+architectural character.\n\nNOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not 
+camera-staged.\n\nUSER DIRECTION: Redesign this space in the Japandi Calm style.\nATMOSPHERE SWITCH ù MATERIAL AND MOOD TRANSFORMATION ONLY: The 
+room\'s spatial layout, furniture arrangement, zoning, and all openings are PRESERVED EXACTLY. Apply the new atmosphere through: material surfaces, 
+lighting temperature, colour palette, texti\nREFINEMENT MEMORY (Vision 9): Add or introduce: add bedroom in the rear space; Add TV in front of the 
+sofa; and add a coffee table in front of the sofa with a rose on it. Primary instruction for this vision: add bedroom in the rear space. Add TV in 
+front of the sofa. and add a coffee table in front of the sofa with a rose on it.\nAUTHORIZED USER CHANGES ù Visibly apply the user\'s explicit 
+request (the rear zone): "add bedroom in the rear space. Add TV in front of the sofa. and add a coffee table in front of the sofa with a rose on it". 
+It overrides atmosphere/furniture/decor/room-function defaults and must be clearly present. Keep openings, bay window, facade and perspective fixed 
+unless the user explicitly changed them.', 'model': 'gpt-image-1', 'n': 1, 'quality': 'medium', 'size': '1536x1024'}}
+18:43:54  DEBUG     Sending HTTP Request: POST https://api.openai.com/v1/images/edits
+18:43:54  DEBUG     close.started
+18:43:54  DEBUG     close.complete
+18:43:54  DEBUG     connect_tcp.started host='api.openai.com' port=443 local_address=None timeout=5.0 socket_options=None
+18:43:55  DEBUG     connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B224157130>
+18:43:55  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000002B2223C1040> server_hostname='api.openai.com' timeout=5.0
+18:43:55  DEBUG     start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B2241560B0>
+18:43:55  DEBUG     send_request_headers.started request=<Request [b'POST']>
+18:43:55  DEBUG     send_request_headers.complete
+18:43:55  DEBUG     send_request_body.started request=<Request [b'POST']>
+18:44:04  DEBUG     send_request_body.complete
+18:44:04  DEBUG     receive_response_headers.started request=<Request [b'POST']>
+18:44:31  DEBUG     receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Thu, 21 May 2026 16:44:31 GMT'), 
+(b'Content-Type', b'application/json'), (b'Transfer-Encoding', b'chunked'), (b'Connection', b'keep-alive'), (b'CF-Ray', b'9ff50af95ae8d7e7-CDG'), 
+(b'CF-Cache-Status', b'DYNAMIC'), (b'Server', b'cloudflare'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), 
+(b'X-Content-Type-Options', b'nosniff'), (b'access-control-expose-headers', b'X-Request-ID'), (b'access-control-expose-headers', b'CF-Ray'), 
+(b'Access-Control-Expose-Headers', b'CF-Ray'), (b'openai-organization', b'user-g1pxfrxf7kwbd0pxj7ti1oj4'), (b'openai-processing-ms', b'26089'), 
+(b'openai-project', b'proj_UYOJoH8c0W0Vie5FAytrm3w7'), (b'openai-version', b'2020-10-01'), (b'x-request-id', b'req_68e124a62ea04d56948e24abbeec872f'), 
+(b'set-cookie', b'__cf_bm=Y4D3_D7ECR3Zy1O1ki1AXXJYKH2S9qRZsc23qlDFSBo-1779381835.736589-1.0.1.1-gohgTlvIK1tAGTYmXksblz_4_e3vLvExFiOy7110nq7GRXdZncoqFb_
+kopgsGM4lMSvtIRFlwyso4WoLR_caG8w2gnqJmkKGdQqUW4ts9cFtwVkAuouuxZpuJz2jQsJi; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; 
+Expires=Thu, 21 May 2026 17:14:31 GMT'), (b'Content-Encoding', b'gzip'), (b'alt-svc', b'h3=":443"; ma=86400')])
+18:44:31  INFO      HTTP Request: POST https://api.openai.com/v1/images/edits "HTTP/1.1 200 OK"
+18:44:31  DEBUG     receive_response_body.started request=<Request [b'POST']>
+18:44:36  DEBUG     receive_response_body.complete
+18:44:36  DEBUG     response_closed.started
+18:44:36  DEBUG     response_closed.complete
+18:44:36  DEBUG     HTTP Response: POST https://api.openai.com/v1/images/edits "200 OK" Headers([('date', 'Thu, 21 May 2026 16:44:31 GMT'), 
+('content-type', 'application/json'), ('transfer-encoding', 'chunked'), ('connection', 'keep-alive'), ('cf-ray', '9ff50af95ae8d7e7-CDG'), 
+('cf-cache-status', 'DYNAMIC'), ('server', 'cloudflare'), ('strict-transport-security', 'max-age=31536000; includeSubDomains; preload'), 
+('x-content-type-options', 'nosniff'), ('access-control-expose-headers', 'X-Request-ID'), ('access-control-expose-headers', 'CF-Ray'), 
+('access-control-expose-headers', 'CF-Ray'), ('openai-organization', 'user-g1pxfrxf7kwbd0pxj7ti1oj4'), ('openai-processing-ms', '26089'), 
+('openai-project', 'proj_UYOJoH8c0W0Vie5FAytrm3w7'), ('openai-version', '2020-10-01'), ('x-request-id', 'req_68e124a62ea04d56948e24abbeec872f'), 
+('set-cookie', '__cf_bm=Y4D3_D7ECR3Zy1O1ki1AXXJYKH2S9qRZsc23qlDFSBo-1779381835.736589-1.0.1.1-gohgTlvIK1tAGTYmXksblz_4_e3vLvExFiOy7110nq7GRXdZncoqFb_ko
+pgsGM4lMSvtIRFlwyso4WoLR_caG8w2gnqJmkKGdQqUW4ts9cFtwVkAuouuxZpuJz2jQsJi; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com; Expires=Thu, 
+21 May 2026 17:14:31 GMT'), ('content-encoding', 'gzip'), ('alt-svc', 'h3=":443"; ma=86400')])
+18:44:36  DEBUG     request_id: req_68e124a62ea04d56948e24abbeec872f
+18:44:36  INFO      [OpenAI Attempt 1/1] succeeded in 42.0s
+18:44:36  INFO        generated: 2138637 bytes (2088.5 KB)
+18:44:36  INFO      --- uploading to Supabase (generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164436_0d138b55.jpg) ---
+18:44:36  DEBUG     close.started
+18:44:36  DEBUG     close.complete
+18:44:36  DEBUG     connect_tcp.started host='vtxkciupyafukhdsgxgw.supabase.co' port=443 local_address=None timeout=20 socket_options=None
+18:44:37  DEBUG     connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x000002B2241471C0>
+18:44:37  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000002B22305F740> server_hostname='vtxkciupyafukhdsgxgw.supabase.co' 
+timeout=20
+18:44:38  DEBUG     start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x000002B2241450F0>
+18:44:38  DEBUG     send_connection_init.started request=<Request [b'POST']>
+18:44:38  DEBUG     send_connection_init.complete
+18:44:38  DEBUG     send_request_headers.started request=<Request [b'POST']> stream_id=1
+18:44:38  DEBUG     Adding (b':method', b'POST') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 3 with 7 bits
+18:44:38  DEBUG     Adding (b':authority', b'vtxkciupyafukhdsgxgw.supabase.co') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 1 with 6 bits
+18:44:38  DEBUG     Encoding 24 with 7 bits
+18:44:38  DEBUG     Adding (b':scheme', b'https') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 7 with 7 bits
+18:44:38  DEBUG     Adding (b':path', b'/storage/v1/object/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164436_0d138b55.jpg') to the header 
+table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 4 with 6 bits
+18:44:38  DEBUG     Encoding 67 with 7 bits
+18:44:38  DEBUG     Adding (b'accept', b'*/*') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 19 with 6 bits
+18:44:38  DEBUG     Encoding 3 with 7 bits
+18:44:38  DEBUG     Adding (b'accept-encoding', b'gzip, deflate, zstd') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 16 with 6 bits
+18:44:38  DEBUG     Encoding 15 with 7 bits
+18:44:38  DEBUG     Adding (b'user-agent', b'python-httpx/0.28.1') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 58 with 6 bits
+18:44:38  DEBUG     Encoding 14 with 7 bits
+18:44:38  DEBUG     Adding (b'x-client-info', b'supabase-py/2.30.0') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 10 with 7 bits
+18:44:38  DEBUG     Encoding 13 with 7 bits
+18:44:38  DEBUG     Adding (b'x-supabase-client-platform', b'Windows') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 19 with 7 bits
+18:44:38  DEBUG     Encoding 6 with 7 bits
+18:44:38  DEBUG     Adding (b'x-supabase-client-platform-version', b'10') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 24 with 7 bits
+18:44:38  DEBUG     Encoding 2 with 7 bits
+18:44:38  DEBUG     Adding (b'x-supabase-client-runtime', b'python') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 18 with 7 bits
+18:44:38  DEBUG     Encoding 5 with 7 bits
+18:44:38  DEBUG     Adding (b'x-supabase-client-runtime-version', b'3.10.5') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 23 with 7 bits
+18:44:38  DEBUG     Encoding 5 with 7 bits
+18:44:38  DEBUG     Adding (b'apikey', b'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0eGtjaXVweWFmdWtoZHNneGd3Iiwicm9sZSI6I
+nNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODUxNjI1MCwiZXhwIjoyMDk0MDkyMjUwfQ.3IDNbF1kzqeSsnMXia9Rs2hSai285vJND9u4Gracfnc') to the header table, sensitive:False, 
+huffman:True
+18:44:38  DEBUG     Encoding 5 with 7 bits
+18:44:38  DEBUG     Encoding 175 with 7 bits
+18:44:38  DEBUG     Adding (b'authorization', b'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0eGtjaXVweWFmdWtoZHNneGd
+3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODUxNjI1MCwiZXhwIjoyMDk0MDkyMjUwfQ.3IDNbF1kzqeSsnMXia9Rs2hSai285vJND9u4Gracfnc') to the header table, 
+sensitive:True, huffman:True
+18:44:38  DEBUG     Encoding 23 with 4 bits
+18:44:38  DEBUG     Encoding 180 with 7 bits
+18:44:38  DEBUG     Adding (b'cache-control', b'3600') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 24 with 6 bits
+18:44:38  DEBUG     Encoding 3 with 7 bits
+18:44:38  DEBUG     Adding (b'x-upsert', b'false') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 6 with 7 bits
+18:44:38  DEBUG     Encoding 4 with 7 bits
+18:44:38  DEBUG     Adding (b'cookie', b'__cf_bm=ZYJXwEy0ZRxJuF6dwXR58Ex.bhIlZz9wkU5wR9MyPUE-1779380883.2907934-1.0.1.1-XumWVYIIQgOPIlxYVQdTtgVs84Tg.6l
+F0vYslNTtkVF45v7BQnSF2LYFiZJHysfa0iHsKdq1wwWAisghSQeL3QNRCq5kRBqBh_q52zJgDVG_AiXJYdSkUYgbyboZIdzb') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 32 with 6 bits
+18:44:38  DEBUG     Encoding 166 with 7 bits
+18:44:38  DEBUG     Adding (b'content-length', b'2138827') to the header table, sensitive:False, huffman:True
+18:44:38  DEBUG     Encoding 28 with 6 bits
+18:44:38  DEBUG     Encoding 5 with 7 bits
+18:44:38  DEBUG     Adding (b'content-type', b'multipart/form-data; boundary=f63726d8c25df297d17be1cd93ce6463') to the header table, sensitive:False, 
+huffman:True
+18:44:38  DEBUG     Encoding 31 with 6 bits
+18:44:38  DEBUG     Encoding 45 with 7 bits
+18:44:38  DEBUG     Encoded header block to b'\x83A\x98\xee\x9f=Hkk\xf49m\xeb<\x88\x9b\xcc\xde\x17E\xb5\x8e1\xa0\xab\x90\xff\x87D\xc3a\t=\x83\x98\xacw\
+x0b\x07\x8f\xa1H\x96&-E\xb0i,\x8c2\xe8%}\xd8\xc4\xb1F\xcb\xab4\xd8%Y\xf1\t\xa5\x9ex\x8c\xca\xfc\x8e>B>\xc0\x80\'\x00\xd8\x83\x10\\i\xa6\\\x88\x12\x05\x
+97\xa3m\xb5\xfaW7S\x83\xf9c\xe7P\x8f\x9b\xd9\xab\xfaRB\xcb@\xd2_\xa5=\xa12\x7fz\x8e\xaf\xd2g=KN\x94\xd7\xe5\x80.\'\x97\x0f@\x8a\xf2\xb1(1jJ\xc6\xaaS\xf
+f\x8dE\xb5\x8e1\xa0\xabW\xe9\x81.\xc8\x17\x07@\x93\xf2\xb2-\xacq\x8d\x05X\x94\x18\xb5%j\xe8\x1ae=\x94\xff\x86\xe4j\xa4?\x84\x7f@\x98\xf2\xb2-\xacq\x8d\
+x05X\x94\x18\xb5%j\xe8\x1ae=\x94\xad\xdc\xb6 \xc7\xab\x82\x08?@\x92\xf2\xb2-\xacq\x8d\x05X\x94\x18\xb5%k-\xa9&\xa4\xbf\x85\xaf\xd2g=_@\x97\xf2\xb2-\xac
+q\x8d\x05X\x94\x18\xb5%k-\xa9&\xa4\xabw-\x881\xea\x85ep\x81v\xff@\x85\x1df\xea__\xff0/\xac\xb3\xc7\x88\x86\xd4l\xb98{\xc8\x1d&\xc8\x8c\x95ml\x97\xb29\x
+93\xad\x7f\x9coe}r\xfa\xcbY\x19\xd0mF\xcb\xeeO\xcb\xb3\xf3\xa7\x0f\xbf\xdd\xd9\x11\x92\xac\xb4~\x9b#\x99*\xfd\x01q\'\xa0\xff8\xf8/,4\xc9\xc9\'\xfd\xc7\
+xa6\xa2\xe2\x91\x9c\x86\xf0bR\xfa?wds%Zh%_\xb5\xf3\x17\x19IK\xe8\xfd\xdd\x91\x19)\xa2y/dsF\xf23\xaa\xff\x0f:zd\x0e\x8b\xde\r\xfb\xf9?\x8c\x9d\x0f\xebE\
+xfe\xa0\xd1\x7f\xaf\xad\x1d8x\x97b\xec\xe4\xbf\xa6<!\xeb\xef\xb1w"\xad\x1f\x86\x1b\xfbP)\xf7\x0c\xc2y\xbe\xf9t\xdf~\xd6\xb1X2KQ?\x1f\x08\xff5\xbaQ\xd8[
+\x14/\xac\xb3\xc7\x88\x86\xd4l\xb98{\xc8\x1d&\xc8\x8c\x95ml\x97\xb29\x93\xad\x7f\x9coe}r\xfa\xcbY\x19\xd0mF\xcb\xeeO\xcb\xb3\xf3\xa7\x0f\xbf\xdd\xd9\x1
+1\x92\xac\xb4~\x9b#\x99*\xfd\x01q\'\xa0\xff8\xf8/,4\xc9\xc9\'\xfd\xc7\xa6\xa2\xe2\x91\x9c\x86\xf0bR\xfa?wds%Zh%_\xb5\xf3\x17\x19IK\xe8\xfd\xdd\x91\x19)
+\xa2y/dsF\xf23\xaa\xff\x0f:zd\x0e\x8b\xde\r\xfb\xf9?\x8c\x9d\x0f\xebE\xfe\xa0\xd1\x7f\xaf\xad\x1d8x\x97b\xec\xe4\xbf\xa6<!\xeb\xef\xb1w"\xad\x1f\x86\x1
+b\xfbP)\xf7\x0c\xc2y\xbe\xf9t\xdf~\xd6\xb1X2KQ?X\x83e\xc0\x03@\x86\xf2\xb5\xb5\xa0\xb6\'\x84\x94t \xbf`\xff\'\x8a"K\x14t\xc1\xfb\xcf/\xe7\x8c\x1e\x81\x
+fb\xb7\xce[p\xb9\'\x8f\xcd\xad\xbd\x83\xca\xf1\xcf\x92\x8f\xdfo\xf8\xeb\xc1\xbf\x1b_\xd1\xeb_\x0c\x0b\x05\xd7_e\xe0<\xf3+\x89\xf0:\xfb-,\x15\xc0\xb8W\n
+\xdf\x96\xd3\xcb\x8f<\x996M\xab^J<\xf3\xe3\xb2M\xe9\x9b\x8a\x1ek|\xcb\xb9F\x10w\xe6\x8a4\xefO^8Zo\xbb\xb7vU\xbb\x08\xb3\xf3\xc2o\xdc\xb8\xfd"Q\x80\xd8\
+xd1\x9aN\xc1\xf1\xe3\x94&D\xd3\xee\xd8\\\xec\xec\xd3\xb6\xf7f\xfa\xed\xbb\xda\xec\xf1vl^\xf2\xcd\x7f\x8e(\xa17\xe6^rn\xeb\xc3\x9c\xd1\xfa\x8c\xff\xb9$\
+xf7\x1f\\\x85\x10Yy\xe1;_\xad\xa6\xda\x12j\xc7bX\x94\xf6R\xb4\x83H\xfe\xd4\x8c\xf6\xd5 
+\xec\xf5\x04\xae2\xe8\x9c\x91\xe2\t\xb9%\x13\xee\xc8\x17c(I#\xec\x90\xae4\xe3?'
+18:44:38  DEBUG     send_request_headers.complete
+18:44:38  DEBUG     send_request_body.started request=<Request [b'POST']> stream_id=1
+18:44:38  DEBUG     receive_remote_settings.started
+18:44:38  DEBUG     receive_remote_settings.complete return_value=<RemoteSettingsChanged 
+changed_settings:{ChangedSetting(setting=SettingCodes.MAX_CONCURRENT_STREAMS, original_value=None, new_value=100), 
+ChangedSetting(setting=SettingCodes.INITIAL_WINDOW_SIZE, original_value=65535, new_value=65536), ChangedSetting(setting=SettingCodes.MAX_FRAME_SIZE, 
+original_value=16384, new_value=16777215)}>
+18:44:49  DEBUG     send_request_body.complete
+18:44:49  DEBUG     receive_response_headers.started request=<Request [b'POST']> stream_id=1
+18:44:51  DEBUG     Decoding b'?\xe1\x1f\x88a\x96\xdf=\xbfJ\x08*h\x1f\xa5\x04\x018\xa0\\\xb8\xd3W\x1b\x02\x98\xb4o_\x96\x1du\xd0b\r&=LtA\xea\xfbP\x93\x
+8e\xc4\x150Z\x99V{@\x85$\xabX?_\x8f~Y[\x01\x00\x07$\x95\xa7^i\xe5\xaf_\xc5@\x8a$\xab\x10d\x9c\xab!#M\xa8\x86\xbf\xcfL:2^T\x01*v\x87%\x07\xb6Ih\x1d\x85@
+\x8bDkL4\x97\xc0\xfd-I\xe4/\x84\x90\xd6\x14\x89@\x8dDkL4\x97\xc0\xfd-\xdc\xb6 \xc7\xab\x011@\x8aDkWa\xfa\x14\x89Z\xc2\xcb\x90\xee\x9f=Hkk\xf49m\xeb<\x8
+8\x9b\xcc\xde?@\x8aDkX^\xd6\x95\tX\xd2\x7f\x9a\x00_+Q\xb8E\x8a\xf8\x1bY\xd1>\x05\x9fq\xd7\x96u\x91\xc8\xd8\xc8\x16E\x1b\xffx\xa0\xa4~V\x1c\xc5\x81\x90\
+xb6\xcb\x80\x00>\xd45D\xa2\xd9\x0b\xba\xd8\xef\x9e\x91\x9a\xa4}\xa9]\x85\xa0\xe3\x93w\xffp\x8a"K\x14t\xc1\xea}\x13Y\xeb\xf7\xdfT\xefo\x8f}\x18\xb5\xc7Y
+;W\xb7\x07\xee\xda\xbfg\xc9\xab \xa1\xd3\t\xf1p\xde\xe6\xac\x8b\x05\xd7_e\xe0\xbc\xeb\xab\xbc\'\xc4\xdb\xae\xac\x15\xc0\xb8W\n\xce\x8f\xa7M\xf3&F\xb8\x
+e7_\xa36l\xc3\xf9N\x0f9)\xe5{\x9e/\x1eBOk\xdf{{Zg\xef\x92K?u\x8b\x9d\x84\x1b\xfd\xf4e\xf6}^\xf1v\x9f\x98Z\x93j2F\t\xf0~\xe9\xecl\xbf\x9f\xad/\xfb\x8e\x
+f1\x00\xcbD\xc4\x1f\xde\x9f\xb0\xd9=<\xe9^\x8a\xee\xd9\x89\xad\xcd\xc2|4\x96\x8a\xbd\xe8/dc\xf2\x8f:\xac\x9f\xedLiMz\xaa\xa3\xd7\xda\x9b\x87Iw\x19%\x83
+I\xea/\xda\x9b\x8aKl/\xda\x9a\xc6\x99\xe0c\xedK\xe7\xa4f\xaa\x04[X\xe3\x1a\n\xb9\x0f\xf6\xa6\x0f5\x9a\xc2\xa2\r\xf3\xdb\xf4\xa0\x82\xa6\x81\xfaP@\x13\x
+8a\x05\xdb\x81j\xe3`S\x16\x8d\xffZ\x83\x9b\xd9\xab@\x85\x1d\tY\x1d\xc9\x90\x9d\x98?\x9b\x8d4\xcf\xf3\xf6\xa5#\x81\xe7\x1a\x00?'
+18:44:51  DEBUG     Decoded 4096, consumed 3 bytes
+18:44:51  DEBUG     Resizing header table to 4096 from 4096
+18:44:51  DEBUG     Decoded 8, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b':status', b'200'), consumed 1
+18:44:51  DEBUG     Decoded 33, consumed 1 bytes
+18:44:51  DEBUG     Decoded 22, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b'date', b'Thu, 21 May 2026 16:44:50 GMT'), total consumed 24 bytes, indexed True
+18:44:51  DEBUG     Decoded 31, consumed 1 bytes
+18:44:51  DEBUG     Decoded 22, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b'content-type', b'application/json; charset=utf-8'), total consumed 24 bytes, indexed True
+18:44:51  DEBUG     Decoded 5, consumed 1 bytes
+18:44:51  DEBUG     Decoded 15, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b'cf-ray', b'9ff50c006df47848-CDG'), total consumed 23 bytes, indexed True
+18:44:51  DEBUG     Decoded 10, consumed 1 bytes
+18:44:51  DEBUG     Decoded 6, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b'cf-cache-status', b'DYNAMIC'), total consumed 19 bytes, indexed True
+18:44:51  DEBUG     Decoded 20, consumed 1 bytes
+18:44:51  DEBUG     Decoded 1, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b'access-control-allow-origin', <memory at 0x000002B222FFB580>), total consumed 3 bytes, indexed True
+18:44:51  DEBUG     Decoded 54, consumed 1 bytes
+18:44:51  DEBUG     Decoded 7, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b'server', b'cloudflare'), total consumed 9 bytes, indexed True
+18:44:51  DEBUG     Decoded 11, consumed 1 bytes
+18:44:51  DEBUG     Decoded 4, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b'sb-gateway-mode', b'direct'), total consumed 18 bytes, indexed True
+18:44:51  DEBUG     Decoded 13, consumed 1 bytes
+18:44:51  DEBUG     Decoded 1, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b'sb-gateway-version', <memory at 0x000002B222FFAF80>), total consumed 17 bytes, indexed True
+18:44:51  DEBUG     Decoded 10, consumed 1 bytes
+18:44:51  DEBUG     Decoded 16, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b'sb-project-ref', b'vtxkciupyafukhdsgxgw'), total consumed 29 bytes, indexed True
+18:44:51  DEBUG     Decoded 10, consumed 1 bytes
+18:44:51  DEBUG     Decoded 26, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b'sb-request-id', b'019e4b6c-e905-7290-9678-73ad5ac132b9'), total consumed 39 bytes, indexed True
+18:44:51  DEBUG     Decoded 56, consumed 1 bytes
+18:44:51  DEBUG     Decoded 32, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b'strict-transport-security', b'max-age=31536000; includeSubDomains; preload'), total consumed 34 bytes, indexed True
+18:44:51  DEBUG     Decoded 55, consumed 1 bytes
+18:44:51  DEBUG     Decoded 239, consumed 2 bytes
+18:44:51  DEBUG     Decoded (b'set-cookie', b'__cf_bm=yhMgryZzktT5VvMGPbpcqpREZRnZhIOI2ANAoGUT6OI-1779381877.8292577-1.0.1.1-7ajjTgtd4VL.j3rQFXmExImWCY
+Gwx1cz.D8T4NhvIdrZP2Yrca9vMJzoOzGqhY14dRsIb0hEZNqiJXZ4.ZHCc034cG1ZjZArhmYm.lpBrG4S5AoFmelnzMeqsHxsxOrh; HttpOnly; SameSite=None; Secure; Path=/; 
+Domain=supabase.co; Expires=Thu, 21 May 2026 17:14:50 GMT'), total consumed 242 bytes, indexed True
+18:44:51  DEBUG     Decoded 26, consumed 1 bytes
+18:44:51  DEBUG     Decoded 3, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b'content-encoding', b'gzip'), total consumed 5 bytes, indexed True
+18:44:51  DEBUG     Decoded 5, consumed 1 bytes
+18:44:51  DEBUG     Decoded 16, consumed 1 bytes
+18:44:51  DEBUG     Decoded (b'alt-svc', b'h3=":443"; ma=86400'), total consumed 24 bytes, indexed True
+18:44:51  DEBUG     receive_response_headers.complete return_value=(200, [(b'date', b'Thu, 21 May 2026 16:44:50 GMT'), (b'content-type', 
+b'application/json; charset=utf-8'), (b'cf-ray', b'9ff50c006df47848-CDG'), (b'cf-cache-status', b'DYNAMIC'), (b'access-control-allow-origin', b'*'), 
+(b'server', b'cloudflare'), (b'sb-gateway-mode', b'direct'), (b'sb-gateway-version', b'1'), (b'sb-project-ref', b'vtxkciupyafukhdsgxgw'), 
+(b'sb-request-id', b'019e4b6c-e905-7290-9678-73ad5ac132b9'), (b'strict-transport-security', b'max-age=31536000; includeSubDomains; preload'), 
+(b'set-cookie', b'__cf_bm=yhMgryZzktT5VvMGPbpcqpREZRnZhIOI2ANAoGUT6OI-1779381877.8292577-1.0.1.1-7ajjTgtd4VL.j3rQFXmExImWCYGwx1cz.D8T4NhvIdrZP2Yrca9vMJ
+zoOzGqhY14dRsIb0hEZNqiJXZ4.ZHCc034cG1ZjZArhmYm.lpBrG4S5AoFmelnzMeqsHxsxOrh; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Thu, 
+21 May 2026 17:14:50 GMT'), (b'content-encoding', b'gzip'), (b'alt-svc', b'h3=":443"; ma=86400')])
+18:44:51  INFO      HTTP Request: POST 
+https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164436_0d138b55.jpg "HTTP/2 200 OK"
+18:44:51  DEBUG     receive_response_body.started request=<Request [b'POST']> stream_id=1
+18:44:51  DEBUG     receive_response_body.complete
+18:44:51  DEBUG     response_closed.started stream_id=1
+18:44:51  DEBUG     response_closed.complete
+18:44:51  INFO        upload OK  url: 
+https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/public/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164436_0d138b55.jpg
+18:44:51  INFO      [PERF] stage=supabase_upload  duration_ms=14968  size_bytes=2138637
+18:44:51  INFO        ai_message: Vision 9 ù Japandi Calm interpretation applied, same layout. What would you remove or keep?
+18:44:51  INFO        suggestions: ['Keep the spatial openness', 'Soften the atmosphere slightly', 'Keep this as my final version', 'Increase negative 
+space']
+18:44:51  INFO      [VersionState] persisted version_id=v_757a0668da2e vision_number=9 ledger_size=1
+18:44:51  INFO      [PERF SUMMARY] request_id=6e6d08bfc9db3931a6c893fb1404af26  total_ms=67484  fetch_ms=10515  vision_ms=0  prompt_ms=0  mask_ms=0  
+openai_ms=41985 (x1 attempts)  upload_ms=14968  payload_bytes=2281075  prompt_chars=3946  est_cost_usd=0.074  cost_risk=MEDIUM
+18:44:51  INFO      [Generation Cost] mode=MOBILE_MVP_BASELINE  duration=67.5s  quality=medium  input_fidelity=None  size=1536x1024  prompt_chars=3946 
+ compact_prompts=False  request_id=6e6d08bfc9db3931a6c893fb1404af26
+18:44:51  INFO      === /generate SUCCESS ===  request_id=6e6d08bfc9db3931a6c893fb1404af26
+INFO:     127.0.0.1:60861 - "POST /generate HTTP/1.1" 200 OK
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[29:48]
+18:46:45  DEBUG     Calling on_header_value with data[50:78]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[82:118]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[149:168]
+18:46:45  DEBUG     Calling on_header_value with data[170:195]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[199:341]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[372:391]
+18:46:45  DEBUG     Calling on_header_value with data[393:422]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[426:438]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[469:488]
+18:46:45  DEBUG     Calling on_header_value with data[490:517]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[521:532]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[563:582]
+18:46:45  DEBUG     Calling on_header_value with data[584:611]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[615:617]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[648:667]
+18:46:45  DEBUG     Calling on_header_value with data[669:694]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[698:2150]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[2181:2200]
+18:46:45  DEBUG     Calling on_header_value with data[2202:2236]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[2240:2242]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_end with no data
+18:46:45  INFO      === /chat called === session=370f97b2-ea37-450f-9224-88c3f9d69cc9 iteration=10
+18:46:45  INFO        message: break the window in the middle. remove the sofa, put TV on the wall on the left. I want to do a studio, 1 big room only.
+18:46:45  INFO        style: Japandi Calm  room: Living Room
+18:46:45  INFO        meta: none  lang: en->en  conf: 0.00
+18:46:45  INFO        intent: generate  sub_intent: local_edit  confidence: 0.75  reason: Local edit signal
+18:46:45  INFO      [GenerateConfirmation] pending_design_intent=False  confirmation_detected=False  tone_veto_bypassed=False
+18:46:45  INFO        tone: architect_active  emotional: neutral  exploring: False  session_lang: en
+18:46:45  INFO        ai_message: That could work well here. Does the empty space feel intentional, or does it need something?
+18:46:45  INFO        suggestions: ['Remove one element', 'Add wabi-sabi texture', 'Show me a different direction', 'Increase negative space']
+18:46:45  INFO        should_generate: True
+18:46:45  INFO      [GenerateConfirmation] final_should_generate=True  confirmation_generate=False
+18:46:45  INFO      === /chat SUCCESS ===
+INFO:     127.0.0.1:52635 - "POST /chat HTTP/1.1" 200 OK
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[29:48]
+18:46:45  DEBUG     Calling on_header_value with data[50:78]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[82:118]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[149:168]
+18:46:45  DEBUG     Calling on_header_value with data[170:194]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[198:340]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[371:390]
+18:46:45  DEBUG     Calling on_header_value with data[392:426]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[430:571]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[602:621]
+18:46:45  DEBUG     Calling on_header_value with data[623:652]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[656:681]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[712:731]
+18:46:45  DEBUG     Calling on_header_value with data[733:760]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[764:775]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[806:825]
+18:46:45  DEBUG     Calling on_header_value with data[827:854]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[858:860]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[891:910]
+18:46:45  DEBUG     Calling on_header_value with data[912:937]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[941:2512]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[2543:2562]
+18:46:45  DEBUG     Calling on_header_value with data[2564:2600]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[2604:2920]
+18:46:45  DEBUG     Calling on_part_data with data[0:218]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[249:268]
+18:46:45  DEBUG     Calling on_header_value with data[270:305]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[309:341]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[372:391]
+18:46:45  DEBUG     Calling on_header_value with data[393:424]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[428:433]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_part_begin with no data
+18:46:45  DEBUG     Calling on_header_field with data[464:483]
+18:46:45  DEBUG     Calling on_header_value with data[485:519]
+18:46:45  DEBUG     Calling on_header_end with no data
+18:46:45  DEBUG     Calling on_headers_finished with no data
+18:46:45  DEBUG     Calling on_part_data with data[523:528]
+18:46:45  DEBUG     Calling on_part_end with no data
+18:46:45  DEBUG     Calling on_end with no data
+18:46:45  DEBUG     [GenerationProfile] active=MOBILE_MVP_BASELINE  quality=medium  input_fidelity=omitted  size_override=auto  max_attempts=1  
+compact_prompts=False  use_mask=False  vision_analysis_fv=False
+18:46:45  INFO      === /generate called ===
+18:46:45  INFO        request_id    : 53987dd0abfcdcd02885a1f7aa0e1bf7
+18:46:45  INFO        session_id    : 370f97b2-ea37-450f-9224-88c3f9d69cc9
+18:46:45  INFO        style_label   : Japandi Calm À Vision 10
+18:46:45  INFO        room_type     : Living Room
+18:46:45  INFO        iteration     : 10
+18:46:45  INFO        prompt        : break the window in the middle. remove the sofa, put TV on the wall on the left. I want to do a studio, 1 big 
+room only. please design it well
+18:46:45  INFO        before_url    : https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/public/generated/370f...
+18:46:45  INFO        original_url  : https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/sign/uploads/f9b13abc...
+18:46:45  INFO      [GenerationProfile] mode=MOBILE_MVP_BASELINE  quality=medium  input_fidelity=None  size=auto  max_attempts=1  compact_prompts=False
+18:46:45  INFO      [Wave5.3] customized atmosphere SWITCH detected ù prev=nordic_warmth new=japandi_calm customizations=True \u2192 source_mode kept 
+as LATEST (preserve user changes)
+18:46:45  INFO      --- fetching source image ---
+18:46:45  INFO        source: type=latest requested='(none)' resolved=LATEST version_id='(n/a)' (iteration=10, original_provided=True, ledger=0)
+18:46:45  DEBUG     connect_tcp.started host='vtxkciupyafukhdsgxgw.supabase.co' port=443 local_address=None timeout=30 socket_options=None
+18:46:46  DEBUG     connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B224156A70>
+18:46:46  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000002B224142140> server_hostname='vtxkciupyafukhdsgxgw.supabase.co' 
+timeout=30
+18:46:46  DEBUG     start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B224156320>
+18:46:46  DEBUG     send_request_headers.started request=<Request [b'GET']>
+18:46:46  DEBUG     send_request_headers.complete
+18:46:46  DEBUG     send_request_body.started request=<Request [b'GET']>
+18:46:46  DEBUG     send_request_body.complete
+18:46:46  DEBUG     receive_response_headers.started request=<Request [b'GET']>
+18:46:48  DEBUG     receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Thu, 21 May 2026 16:46:48 GMT'), 
+(b'Content-Type', b'image/jpeg'), (b'Content-Length', b'2138637'), (b'Connection', b'keep-alive'), (b'CF-Ray', b'9ff50f267ee18156-CDG'), 
+(b'CF-Cache-Status', b'HIT'), (b'Accept-Ranges', b'bytes'), (b'Access-Control-Allow-Origin', b'*'), (b'Cache-Control', b'no-cache'), (b'ETag', 
+b'"91b2b724a299e1c5c511de2e2b1d588f"'), (b'Last-Modified', b'Thu, 21 May 2026 16:44:51 GMT'), (b'Server', b'cloudflare'), (b'sb-gateway-mode', 
+b'direct'), (b'sb-gateway-version', b'1'), (b'sb-project-ref', b'vtxkciupyafukhdsgxgw'), (b'sb-request-id', b'019e4b6e-b413-7316-91dc-664e22663acf'), 
+(b'x-robots-tag', b'none'), (b'x-smart-cdn', b'true'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), 
+(b'set-cookie', b'__cf_bm=TOFRhmor0IB14DQIoCvsyJzrIEnMiDP_EtwoImNHa9g-1779382006.7987552-1.0.1.1-ENQm6wYDef0eEnrOMLcpN0apvIUEX4o9krojxAETacBGKMj8eBCYWV
+l85iXWCPiTTXDdjuWHxr7HQX4vEs_TYjgKEM9leXrPzuviJ9oWt26rI.Hv0zlqJFIVfFjy4O_j; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Thu, 
+21 May 2026 17:16:48 GMT'), (b'alt-svc', b'h3=":443"; ma=86400')])
+18:46:48  INFO      HTTP Request: GET 
+https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/public/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164436_0d138b55.jpg 
+"HTTP/1.1 200 OK"
+18:46:48  DEBUG     receive_response_body.started request=<Request [b'GET']>
+18:46:54  DEBUG     receive_response_body.complete
+18:46:54  DEBUG     response_closed.started
+18:46:54  DEBUG     response_closed.complete
+18:46:54  INFO        HTTP 200
+18:46:54  INFO        size: 2138637 bytes (2088.5 KB)
+18:46:54  INFO      [PERF] stage=image_fetch  duration_ms=9313  size_bytes=2138637
+18:46:54  DEBUG     close.started
+18:46:54  DEBUG     close.complete
+18:46:54  INFO        refinement ù keep:0 add:1 remove:1 directions:2
+18:46:54  INFO      --- GPT-4o-mini vision analysis (detail=high) ---
+18:46:54  INFO        vision analysis SKIPPED (profile=MOBILE_MVP_BASELINE, iteration=10 ù Wave 5.5.7c global skip on mobile_mvp_baseline; 
+room_description stays empty for all generations on this profile)
+18:46:54  INFO      [PERF] stage=vision_analysis  duration_ms=0
+18:46:54  INFO      [StructuralIdentity] present=False  source=none  facts=0  token_chars=0  iteration=10
+18:46:54  INFO        atmosphere_id: japandi_calm
+18:46:54  INFO        intent: generate  sub_intent: local_edit
+18:46:54  INFO      --- transformation: object_edit ---
+18:46:54  INFO        addendum: 0 chars  enriched: 142 chars
+18:46:54  INFO      --- edit mode: local_edit ---
+18:46:54  INFO      [RefinementAccumulation] append_detected=True  replace_detected=False  accumulated_refinement_count=2  
+final_accumulated_request=add bedroom in the rear space. Add TV in front of the sofa. and add a coffee table in front of the sofa with a rose on it; 
+break the window in the middle. remov...
+18:46:54  INFO      [RefinementAuthority] requested_change_detected=True  localized_authority=True  authorized_change_chars=457  detected_zone=the 
+rear zone  structural_permission=False  mode=V2
+18:46:54  INFO      [StructuralIdentity] generation_mode=V2  structural_identity_present=False  structural_identity_source=none  
+structural_identity_chars=0
+18:46:54  INFO      [ComposerV2] edit_mode=local_edit  atmosphere=japandi_calm  room=Living Room  iteration=10  compact=False
+18:46:54  INFO      [ComposerV2] mode=LOCAL_EDIT  size=1429  sections=2
+18:46:54  INFO      --- prompt composed (1429 chars, compact_prompts=False) ---
+18:46:54  INFO      [PERF] stage=prompt_composition  duration_ms=0  chars=1429
+18:46:54  DEBUG       prompt:
+TARGETED IMAGE EDIT ù Living Room in Japandi Calm style.
+MAKE ONLY THESE CHANGES (each must be clearly visible in the output): (1) Break the window in the middle. remove the sofa. (2) Put TV on the wall on 
+the left. I want to do a studio. (3) 1 big room only. please design it well.
+PRESERVE EXACTLY ù do not alter any of the following under any circumstances: the camera angle, viewing height, and perspective; all walls, windows, 
+doors, and ceiling ù their exact positions and character; CRITICAL: all window openings must remain fully unblocked ù no furniture, object, or surface 
+may overlap or cover a window; natural light entering from every window must remain visible; all furniture not explicitly mentioned above ù positions, 
+forms, and materials unchanged; all objects and decorative items not explicitly mentioned above; the lighting direction, warmth, and shadow pattern; 
+the floor material, color, and finish; the overall spatial composition and room layout.
+STYLE CONTEXT: new or changed elements should match the Japandi Calm aesthetic.
+OUTPUT REQUIREMENT: the result must look nearly identical to the input image except for the listed changes. Furniture must not move. The room must not 
+be redesigned. The perspective must not shift. This is surgical editing, not a new generation.
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+18:46:54  DEBUG     STREAM b'IHDR' 16 13
+18:46:54  DEBUG     STREAM b'caBX' 41 29026
+18:46:54  DEBUG     b'caBX' 41 29026 (unknown)
+18:46:54  DEBUG     STREAM b'IDAT' 29079 2109542
+18:46:54  INFO      [VersionState] generation_mode=V2  source_mode_requested=(none)  source_mode_resolved=LATEST  source_version_id=(n/a)  
+source_image_url_type=latest  latest_version_id=(none)  structural_identity_present=False  structural_permission=False  negative_anchors_chars=0  
+prompt_chars=1429  output_size=1536x1024
+18:46:54  DEBUG     STREAM b'IHDR' 16 13
+18:46:54  DEBUG     STREAM b'caBX' 41 29026
+18:46:54  DEBUG     b'caBX' 41 29026 (unknown)
+18:46:54  DEBUG     STREAM b'IDAT' 29079 2109542
+18:46:54  INFO        source image: 1536x1024 mode=RGB size_bytes=2138637 -> output_size=1536x1024
+18:46:54  INFO        structural mask: disabled (profile=MOBILE_MVP_BASELINE use_mask=False ù Wave 4.7.0 runtime isolation)
+18:46:54  INFO      [PERF] payload_estimate  total_bytes=2140676  image_bytes=2138637  mask_bytes=0  prompt_bytes=1439
+18:46:54  INFO      --- calling OpenAI images.edit (gpt-image-1, quality=medium, input_fidelity=omitted, size=1536x1024, mask=no, max_attempts=1) ---
+18:46:54  INFO      [OpenAI Attempt 1/1] starting  (backend-controlled; SDK max_retries=0)
+18:46:54  INFO        input_fidelity: OMITTED from API call (profile=MOBILE_MVP_BASELINE)
+18:46:54  DEBUG     Request options: {'method': 'post', 'url': '/images/edits', 'headers': {'Content-Type': 'multipart/form-data'}, 'files': 
+[('image', SerializationIterator(index=0, iterator=SerializationIterator(index=0, iterator=<_io.BytesIO object at 0x000002B22413ACA0>)))], 
+'idempotency_key': 'stainless-python-retry-4e576f7e-8b47-4e09-a918-0fff055d46cb', 'security': {'bearer_auth': True}, 'content': None, 'json_data': 
+{'prompt': 'TARGETED IMAGE EDIT ù Living Room in Japandi Calm style.\nMAKE ONLY THESE CHANGES (each must be clearly visible in the output): (1) Break 
+the window in the middle. remove the sofa. (2) Put TV on the wall on the left. I want to do a studio. (3) 1 big room only. please design it 
+well.\nPRESERVE EXACTLY ù do not alter any of the following under any circumstances: the camera angle, viewing height, and perspective; all walls, 
+windows, doors, and ceiling ù their exact positions and character; CRITICAL: all window openings must remain fully unblocked ù no furniture, object, 
+or surface may overlap or cover a window; natural light entering from every window must remain visible; all furniture not explicitly mentioned above ù 
+positions, forms, and materials unchanged; all objects and decorative items not explicitly mentioned above; the lighting direction, warmth, and shadow 
+pattern; the floor material, color, and finish; the overall spatial composition and room layout.\nSTYLE CONTEXT: new or changed elements should match 
+the Japandi Calm aesthetic.\nOUTPUT REQUIREMENT: the result must look nearly identical to the input image except for the listed changes. Furniture 
+must not move. The room must not be redesigned. The perspective must not shift. This is surgical editing, not a new generation.\nNOT a CGI render. 
+DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.', 'model': 'gpt-image-1', 'n': 1, 
+'quality': 'medium', 'size': '1536x1024'}}
+18:46:54  DEBUG     Sending HTTP Request: POST https://api.openai.com/v1/images/edits
+18:46:54  DEBUG     close.started
+18:46:54  DEBUG     close.complete
+18:46:54  DEBUG     connect_tcp.started host='api.openai.com' port=443 local_address=None timeout=5.0 socket_options=None
+18:46:55  DEBUG     connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B2241576D0>
+18:46:55  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000002B2223C1040> server_hostname='api.openai.com' timeout=5.0
+18:46:56  DEBUG     start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B224155960>
+18:46:56  DEBUG     send_request_headers.started request=<Request [b'POST']>
+18:46:56  DEBUG     send_request_headers.complete
+18:46:56  DEBUG     send_request_body.started request=<Request [b'POST']>
+18:47:08  DEBUG     send_request_body.complete
+18:47:08  DEBUG     receive_response_headers.started request=<Request [b'POST']>
+18:47:36  DEBUG     receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Thu, 21 May 2026 16:47:36 GMT'), 
+(b'Content-Type', b'application/json'), (b'Transfer-Encoding', b'chunked'), (b'Connection', b'keep-alive'), (b'CF-Ray', b'9ff50f610f8af015-CDG'), 
+(b'CF-Cache-Status', b'DYNAMIC'), (b'Server', b'cloudflare'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), 
+(b'X-Content-Type-Options', b'nosniff'), (b'access-control-expose-headers', b'X-Request-ID'), (b'access-control-expose-headers', b'CF-Ray'), 
+(b'Access-Control-Expose-Headers', b'CF-Ray'), (b'openai-organization', b'user-g1pxfrxf7kwbd0pxj7ti1oj4'), (b'openai-processing-ms', b'27600'), 
+(b'openai-project', b'proj_UYOJoH8c0W0Vie5FAytrm3w7'), (b'openai-version', b'2020-10-01'), (b'x-request-id', b'req_0d3415d4fe294292aa2d814ede417e09'), 
+(b'Content-Encoding', b'gzip'), (b'alt-svc', b'h3=":443"; ma=86400')])
+18:47:36  INFO      HTTP Request: POST https://api.openai.com/v1/images/edits "HTTP/1.1 200 OK"
+18:47:36  DEBUG     receive_response_body.started request=<Request [b'POST']>
+18:47:42  DEBUG     receive_response_body.complete
+18:47:42  DEBUG     response_closed.started
+18:47:42  DEBUG     response_closed.complete
+18:47:42  DEBUG     HTTP Response: POST https://api.openai.com/v1/images/edits "200 OK" Headers([('date', 'Thu, 21 May 2026 16:47:36 GMT'), 
+('content-type', 'application/json'), ('transfer-encoding', 'chunked'), ('connection', 'keep-alive'), ('cf-ray', '9ff50f610f8af015-CDG'), 
+('cf-cache-status', 'DYNAMIC'), ('server', 'cloudflare'), ('strict-transport-security', 'max-age=31536000; includeSubDomains; preload'), 
+('x-content-type-options', 'nosniff'), ('access-control-expose-headers', 'X-Request-ID'), ('access-control-expose-headers', 'CF-Ray'), 
+('access-control-expose-headers', 'CF-Ray'), ('openai-organization', 'user-g1pxfrxf7kwbd0pxj7ti1oj4'), ('openai-processing-ms', '27600'), 
+('openai-project', 'proj_UYOJoH8c0W0Vie5FAytrm3w7'), ('openai-version', '2020-10-01'), ('x-request-id', 'req_0d3415d4fe294292aa2d814ede417e09'), 
+('content-encoding', 'gzip'), ('alt-svc', 'h3=":443"; ma=86400')])
+18:47:42  DEBUG     request_id: req_0d3415d4fe294292aa2d814ede417e09
+18:47:42  INFO      [OpenAI Attempt 1/1] succeeded in 48.0s
+18:47:42  INFO        generated: 2000440 bytes (1953.6 KB)
+18:47:42  INFO      --- uploading to Supabase (generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164742_60ab8ee9.jpg) ---
+18:47:42  DEBUG     close.started
+18:47:42  DEBUG     close.complete
+18:47:42  DEBUG     connect_tcp.started host='vtxkciupyafukhdsgxgw.supabase.co' port=443 local_address=None timeout=20 socket_options=None
+18:47:43  DEBUG     connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x000002B224169E70>
+18:47:43  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000002B22305F740> server_hostname='vtxkciupyafukhdsgxgw.supabase.co' 
+timeout=20
+18:47:44  DEBUG     start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x000002B2241697B0>
+18:47:44  DEBUG     send_connection_init.started request=<Request [b'POST']>
+18:47:44  DEBUG     send_connection_init.complete
+18:47:44  DEBUG     send_request_headers.started request=<Request [b'POST']> stream_id=1
+18:47:44  DEBUG     Adding (b':method', b'POST') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 3 with 7 bits
+18:47:44  DEBUG     Adding (b':authority', b'vtxkciupyafukhdsgxgw.supabase.co') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 1 with 6 bits
+18:47:44  DEBUG     Encoding 24 with 7 bits
+18:47:44  DEBUG     Adding (b':scheme', b'https') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 7 with 7 bits
+18:47:44  DEBUG     Adding (b':path', b'/storage/v1/object/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164742_60ab8ee9.jpg') to the header 
+table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 4 with 6 bits
+18:47:44  DEBUG     Encoding 67 with 7 bits
+18:47:44  DEBUG     Adding (b'accept', b'*/*') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 19 with 6 bits
+18:47:44  DEBUG     Encoding 3 with 7 bits
+18:47:44  DEBUG     Adding (b'accept-encoding', b'gzip, deflate, zstd') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 16 with 6 bits
+18:47:44  DEBUG     Encoding 15 with 7 bits
+18:47:44  DEBUG     Adding (b'user-agent', b'python-httpx/0.28.1') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 58 with 6 bits
+18:47:44  DEBUG     Encoding 14 with 7 bits
+18:47:44  DEBUG     Adding (b'x-client-info', b'supabase-py/2.30.0') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 10 with 7 bits
+18:47:44  DEBUG     Encoding 13 with 7 bits
+18:47:44  DEBUG     Adding (b'x-supabase-client-platform', b'Windows') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 19 with 7 bits
+18:47:44  DEBUG     Encoding 6 with 7 bits
+18:47:44  DEBUG     Adding (b'x-supabase-client-platform-version', b'10') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 24 with 7 bits
+18:47:44  DEBUG     Encoding 2 with 7 bits
+18:47:44  DEBUG     Adding (b'x-supabase-client-runtime', b'python') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 18 with 7 bits
+18:47:44  DEBUG     Encoding 5 with 7 bits
+18:47:44  DEBUG     Adding (b'x-supabase-client-runtime-version', b'3.10.5') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 23 with 7 bits
+18:47:44  DEBUG     Encoding 5 with 7 bits
+18:47:44  DEBUG     Adding (b'apikey', b'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0eGtjaXVweWFmdWtoZHNneGd3Iiwicm9sZSI6I
+nNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODUxNjI1MCwiZXhwIjoyMDk0MDkyMjUwfQ.3IDNbF1kzqeSsnMXia9Rs2hSai285vJND9u4Gracfnc') to the header table, sensitive:False, 
+huffman:True
+18:47:44  DEBUG     Encoding 5 with 7 bits
+18:47:44  DEBUG     Encoding 175 with 7 bits
+18:47:44  DEBUG     Adding (b'authorization', b'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0eGtjaXVweWFmdWtoZHNneGd
+3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODUxNjI1MCwiZXhwIjoyMDk0MDkyMjUwfQ.3IDNbF1kzqeSsnMXia9Rs2hSai285vJND9u4Gracfnc') to the header table, 
+sensitive:True, huffman:True
+18:47:44  DEBUG     Encoding 23 with 4 bits
+18:47:44  DEBUG     Encoding 180 with 7 bits
+18:47:44  DEBUG     Adding (b'cache-control', b'3600') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 24 with 6 bits
+18:47:44  DEBUG     Encoding 3 with 7 bits
+18:47:44  DEBUG     Adding (b'x-upsert', b'false') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 6 with 7 bits
+18:47:44  DEBUG     Encoding 4 with 7 bits
+18:47:44  DEBUG     Adding (b'cookie', b'__cf_bm=yhMgryZzktT5VvMGPbpcqpREZRnZhIOI2ANAoGUT6OI-1779381877.8292577-1.0.1.1-7ajjTgtd4VL.j3rQFXmExImWCYGwx1c
+z.D8T4NhvIdrZP2Yrca9vMJzoOzGqhY14dRsIb0hEZNqiJXZ4.ZHCc034cG1ZjZArhmYm.lpBrG4S5AoFmelnzMeqsHxsxOrh') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 32 with 6 bits
+18:47:44  DEBUG     Encoding 164 with 7 bits
+18:47:44  DEBUG     Adding (b'content-length', b'2000630') to the header table, sensitive:False, huffman:True
+18:47:44  DEBUG     Encoding 28 with 6 bits
+18:47:44  DEBUG     Encoding 5 with 7 bits
+18:47:44  DEBUG     Adding (b'content-type', b'multipart/form-data; boundary=c712355156552f696436efc6aed326a3') to the header table, sensitive:False, 
+huffman:True
+18:47:44  DEBUG     Encoding 31 with 6 bits
+18:47:44  DEBUG     Encoding 45 with 7 bits
+18:47:44  DEBUG     Encoded header block to b'\x83A\x98\xee\x9f=Hkk\xf49m\xeb<\x88\x9b\xcc\xde\x17E\xb5\x8e1\xa0\xab\x90\xff\x87D\xc3a\t=\x83\x98\xacw\
+x0b\x07\x8f\xa1H\x96&-E\xb0i,\x8c2\xe8%}\xd8\xc4\xb1F\xcb\xab4\xd8%Y\xf1\t\xa5\x9ex\x8c\xca\xfc\x8e>B>\xc0\x80\'\x00\xd8\x83\x10\\i\xd6\x85\x13\x80\x1c
+o\x14\xaf\xaf\xd2\xb9\xbfS\x83\xf9c\xe7P\x8f\x9b\xd9\xab\xfaRB\xcb@\xd2_\xa5=\xa12\x7fz\x8e\xaf\xd2g=KN\x94\xd7\xe5\x80.\'\x97\x0f@\x8a\xf2\xb1(1jJ\xc6
+\xaaS\xff\x8dE\xb5\x8e1\xa0\xabW\xe9\x81.\xc8\x17\x07@\x93\xf2\xb2-\xacq\x8d\x05X\x94\x18\xb5%j\xe8\x1ae=\x94\xff\x86\xe4j\xa4?\x84\x7f@\x98\xf2\xb2-\x
+acq\x8d\x05X\x94\x18\xb5%j\xe8\x1ae=\x94\xad\xdc\xb6 \xc7\xab\x82\x08?@\x92\xf2\xb2-\xacq\x8d\x05X\x94\x18\xb5%k-\xa9&\xa4\xbf\x85\xaf\xd2g=_@\x97\xf2\
+xb2-\xacq\x8d\x05X\x94\x18\xb5%k-\xa9&\xa4\xabw-\x881\xea\x85ep\x81v\xff@\x85\x1df\xea__\xff0/\xac\xb3\xc7\x88\x86\xd4l\xb98{\xc8\x1d&\xc8\x8c\x95ml\x9
+7\xb29\x93\xad\x7f\x9coe}r\xfa\xcbY\x19\xd0mF\xcb\xeeO\xcb\xb3\xf3\xa7\x0f\xbf\xdd\xd9\x11\x92\xac\xb4~\x9b#\x99*\xfd\x01q\'\xa0\xff8\xf8/,4\xc9\xc9\'\
+xfd\xc7\xa6\xa2\xe2\x91\x9c\x86\xf0bR\xfa?wds%Zh%_\xb5\xf3\x17\x19IK\xe8\xfd\xdd\x91\x19)\xa2y/dsF\xf23\xaa\xff\x0f:zd\x0e\x8b\xde\r\xfb\xf9?\x8c\x9d\x
+0f\xebE\xfe\xa0\xd1\x7f\xaf\xad\x1d8x\x97b\xec\xe4\xbf\xa6<!\xeb\xef\xb1w"\xad\x1f\x86\x1b\xfbP)\xf7\x0c\xc2y\xbe\xf9t\xdf~\xd6\xb1X2KQ?\x1f\x08\xff5\x
+baQ\xd8[\x14/\xac\xb3\xc7\x88\x86\xd4l\xb98{\xc8\x1d&\xc8\x8c\x95ml\x97\xb29\x93\xad\x7f\x9coe}r\xfa\xcbY\x19\xd0mF\xcb\xeeO\xcb\xb3\xf3\xa7\x0f\xbf\xd
+d\xd9\x11\x92\xac\xb4~\x9b#\x99*\xfd\x01q\'\xa0\xff8\xf8/,4\xc9\xc9\'\xfd\xc7\xa6\xa2\xe2\x91\x9c\x86\xf0bR\xfa?wds%Zh%_\xb5\xf3\x17\x19IK\xe8\xfd\xdd\
+x91\x19)\xa2y/dsF\xf23\xaa\xff\x0f:zd\x0e\x8b\xde\r\xfb\xf9?\x8c\x9d\x0f\xebE\xfe\xa0\xd1\x7f\xaf\xad\x1d8x\x97b\xec\xe4\xbf\xa6<!\xeb\xef\xb1w"\xad\x1
+f\x86\x1b\xfbP)\xf7\x0c\xc2y\xbe\xf9t\xdf~\xd6\xb1X2KQ?X\x83e\xc0\x03@\x86\xf2\xb5\xb5\xa0\xb6\'\x84\x94t 
+\xbf`\xff%\x8a"K\x14t\xc1\xea}\x13Y\xeb\xf7\xdfT\xefo\x8f}\x18\xb5\xc7Y;W\xb7\x07\xee\xda\xbfg\xc9\xab \xa1\xd3\t\xf1p\xde\xe6\xac\x8b\x05\xd7_e\xe0\xb
+c\xeb\xab\xbc\'\xc4\xdb\xae\xac\x15\xc0\xb8W\n\xce\x8f\xa7M\xf3&F\xb8\xe7_\xa36l\xc3\xf9N\x0f9)\xe5{\x9e/\x1eBOk\xdf{{Zg\xef\x92K?u\x8b\x9d\x84\x1b\xfd
+\xf4e\xf6}^\xf1v\x9f\x98Z\x93j2F\t\xf0~\xe9\xecl\xbf\x9f\xad/\xfb\x8e\xf1\x00\xcbD\xc4\x1f\xde\x9f\xb0\xd9=<\xe9^\x8a\xee\xd9\x89\xad\xcd\xc2|4\x96\x8a
+\xbd\xe8/dc\xf2\x8f:\xac\x9f\\\x85\x10\x00\x07\x19\x07_\xad\xa6\xda\x12j\xc7bX\x94\xf6R\xb4\x83H\xfe\xd4\x8c\xf6\xd5 
+\xec\xf5\x01\x1d\x08\x99m\xb0\xb6\xe3m\x8aW\x1fq\xa6\\,\xa4pe\x91\x9186\x7f'
+18:47:44  DEBUG     send_request_headers.complete
+18:47:44  DEBUG     send_request_body.started request=<Request [b'POST']> stream_id=1
+18:47:44  DEBUG     receive_remote_settings.started
+18:47:44  DEBUG     receive_remote_settings.complete return_value=<RemoteSettingsChanged 
+changed_settings:{ChangedSetting(setting=SettingCodes.MAX_CONCURRENT_STREAMS, original_value=None, new_value=100), 
+ChangedSetting(setting=SettingCodes.INITIAL_WINDOW_SIZE, original_value=65535, new_value=65536), ChangedSetting(setting=SettingCodes.MAX_FRAME_SIZE, 
+original_value=16384, new_value=16777215)}>
+18:47:52  DEBUG     send_request_body.complete
+18:47:52  DEBUG     receive_response_headers.started request=<Request [b'POST']> stream_id=1
+18:47:54  DEBUG     Decoding b'?\xe1\x1f\x88a\x97\xdf=\xbfJ\x08*h\x1f\xa5\x04\x018\xa0\\\xb8\xd3\xb7\x1beLZ7\xff_\x96\x1du\xd0b\r&=LtA\xea\xfbP\x93\x8e
+\xc4\x150Z\x99V{@\x85$\xabX?_\x8f~Y[\x08\x1e#\xf2\xca\t\x02\xc8V\xbd\x7f\x17@\x8a$\xab\x10d\x9c\xab!#M\xa8\x86\xbf\xcfL:2^T\x01*v\x87%\x07\xb6Ih\x1d\x8
+5@\x8bDkL4\x97\xc0\xfd-I\xe4/\x84\x90\xd6\x14\x89@\x8dDkL4\x97\xc0\xfd-\xdc\xb6 \xc7\xab\x011@\x8aDkWa\xfa\x14\x89Z\xc2\xcb\x90\xee\x9f=Hkk\xf49m\xeb<\
+x88\x9b\xcc\xde?@\x8aDkX^\xd6\x95\tX\xd2\x7f\x9a\x00_+Q\xb9*\xd1\xb2\xf9VvF\xa3XanE\xa5\x8d\xe6\xdem\xf6\xdb\x18\x9ex\xa0\xa4~V\x1c\xc5\x81\x90\xb6\xcb
+\x80\x00>\xd45D\xa2\xd9\x0b\xba\xd8\xef\x9e\x91\x9a\xa4}\xa9]\x85\xa0\xe3\x93Z\x83\x9b\xd9\xab@\x85\x1d\tY\x1d\xc9\x90\x9d\x98?\x9b\x8d4\xcf\xf3\xf6\xa
+5#\x81\xe7\x1a\x00?'
+18:47:54  DEBUG     Decoded 4096, consumed 3 bytes
+18:47:54  DEBUG     Resizing header table to 4096 from 4096
+18:47:54  DEBUG     Decoded 8, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b':status', b'200'), consumed 1
+18:47:54  DEBUG     Decoded 33, consumed 1 bytes
+18:47:54  DEBUG     Decoded 23, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b'date', b'Thu, 21 May 2026 16:47:53 GMT'), total consumed 25 bytes, indexed True
+18:47:54  DEBUG     Decoded 31, consumed 1 bytes
+18:47:54  DEBUG     Decoded 22, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b'content-type', b'application/json; charset=utf-8'), total consumed 24 bytes, indexed True
+18:47:54  DEBUG     Decoded 5, consumed 1 bytes
+18:47:54  DEBUG     Decoded 15, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b'cf-ray', b'9ff5108c9ff0d131-CDG'), total consumed 23 bytes, indexed True
+18:47:54  DEBUG     Decoded 10, consumed 1 bytes
+18:47:54  DEBUG     Decoded 6, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b'cf-cache-status', b'DYNAMIC'), total consumed 19 bytes, indexed True
+18:47:54  DEBUG     Decoded 20, consumed 1 bytes
+18:47:54  DEBUG     Decoded 1, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b'access-control-allow-origin', <memory at 0x000002B222FFAE00>), total consumed 3 bytes, indexed True
+18:47:54  DEBUG     Decoded 54, consumed 1 bytes
+18:47:54  DEBUG     Decoded 7, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b'server', b'cloudflare'), total consumed 9 bytes, indexed True
+18:47:54  DEBUG     Decoded 11, consumed 1 bytes
+18:47:54  DEBUG     Decoded 4, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b'sb-gateway-mode', b'direct'), total consumed 18 bytes, indexed True
+18:47:54  DEBUG     Decoded 13, consumed 1 bytes
+18:47:54  DEBUG     Decoded 1, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b'sb-gateway-version', <memory at 0x000002B222FFA2C0>), total consumed 17 bytes, indexed True
+18:47:54  DEBUG     Decoded 10, consumed 1 bytes
+18:47:54  DEBUG     Decoded 16, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b'sb-project-ref', b'vtxkciupyafukhdsgxgw'), total consumed 29 bytes, indexed True
+18:47:54  DEBUG     Decoded 10, consumed 1 bytes
+18:47:54  DEBUG     Decoded 26, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b'sb-request-id', b'019e4b6f-b39e-7d4b-a15d-fb8585955a28'), total consumed 39 bytes, indexed True
+18:47:54  DEBUG     Decoded 56, consumed 1 bytes
+18:47:54  DEBUG     Decoded 32, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b'strict-transport-security', b'max-age=31536000; includeSubDomains; preload'), total consumed 34 bytes, indexed True
+18:47:54  DEBUG     Decoded 26, consumed 1 bytes
+18:47:54  DEBUG     Decoded 3, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b'content-encoding', b'gzip'), total consumed 5 bytes, indexed True
+18:47:54  DEBUG     Decoded 5, consumed 1 bytes
+18:47:54  DEBUG     Decoded 16, consumed 1 bytes
+18:47:54  DEBUG     Decoded (b'alt-svc', b'h3=":443"; ma=86400'), total consumed 24 bytes, indexed True
+18:47:54  DEBUG     receive_response_headers.complete return_value=(200, [(b'date', b'Thu, 21 May 2026 16:47:53 GMT'), (b'content-type', 
+b'application/json; charset=utf-8'), (b'cf-ray', b'9ff5108c9ff0d131-CDG'), (b'cf-cache-status', b'DYNAMIC'), (b'access-control-allow-origin', b'*'), 
+(b'server', b'cloudflare'), (b'sb-gateway-mode', b'direct'), (b'sb-gateway-version', b'1'), (b'sb-project-ref', b'vtxkciupyafukhdsgxgw'), 
+(b'sb-request-id', b'019e4b6f-b39e-7d4b-a15d-fb8585955a28'), (b'strict-transport-security', b'max-age=31536000; includeSubDomains; preload'), 
+(b'content-encoding', b'gzip'), (b'alt-svc', b'h3=":443"; ma=86400')])
+18:47:54  INFO      HTTP Request: POST 
+https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164742_60ab8ee9.jpg "HTTP/2 200 OK"
+18:47:54  DEBUG     receive_response_body.started request=<Request [b'POST']> stream_id=1
+18:47:54  DEBUG     receive_response_body.complete
+18:47:54  DEBUG     response_closed.started stream_id=1
+18:47:54  DEBUG     response_closed.complete
+18:47:54  INFO        upload OK  url: 
+https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/public/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164742_60ab8ee9.jpg
+18:47:54  INFO      [PERF] stage=supabase_upload  duration_ms=11453  size_bytes=2000440
+18:47:54  INFO        ai_message: Vision 10 ù break the window in the middle. remove the sofa, put TV on the. Would you reduce further
+18:47:54  INFO        suggestions: ['Try a different material for that', 'Adjust the scale of this element', 'Keep this as my final version', 
+'Increase negative space']
+18:47:54  INFO      [VersionState] persisted version_id=v_79b9c7e011a8 vision_number=10 ledger_size=1
+18:47:54  INFO      [PERF SUMMARY] request_id=53987dd0abfcdcd02885a1f7aa0e1bf7  total_ms=68750  fetch_ms=9313  vision_ms=0  prompt_ms=0  mask_ms=0  
+openai_ms=47953 (x1 attempts)  upload_ms=11453  payload_bytes=2140676  prompt_chars=1429  est_cost_usd=0.074  cost_risk=MEDIUM
+18:47:54  INFO      [Generation Cost] mode=MOBILE_MVP_BASELINE  duration=68.8s  quality=medium  input_fidelity=None  size=1536x1024  prompt_chars=1429 
+ compact_prompts=False  request_id=53987dd0abfcdcd02885a1f7aa0e1bf7
+18:47:54  INFO      === /generate SUCCESS ===  request_id=53987dd0abfcdcd02885a1f7aa0e1bf7
+INFO:     127.0.0.1:52641 - "POST /generate HTTP/1.1" 200 OK
+18:49:15  DEBUG     Calling on_part_begin with no data
+18:49:15  DEBUG     Calling on_header_field with data[29:48]
+18:49:15  DEBUG     Calling on_header_value with data[50:78]
+18:49:15  DEBUG     Calling on_header_end with no data
+18:49:15  DEBUG     Calling on_headers_finished with no data
+18:49:15  DEBUG     Calling on_part_data with data[82:118]
+18:49:15  DEBUG     Calling on_part_end with no data
+18:49:15  DEBUG     Calling on_part_begin with no data
+18:49:15  DEBUG     Calling on_header_field with data[149:168]
+18:49:15  DEBUG     Calling on_header_value with data[170:194]
+18:49:15  DEBUG     Calling on_header_end with no data
+18:49:15  DEBUG     Calling on_headers_finished with no data
+18:49:15  DEBUG     Calling on_part_data with data[198:247]
+18:49:15  DEBUG     Calling on_part_end with no data
+18:49:15  DEBUG     Calling on_part_begin with no data
+18:49:15  DEBUG     Calling on_header_field with data[278:297]
+18:49:15  DEBUG     Calling on_header_value with data[299:333]
+18:49:15  DEBUG     Calling on_header_end with no data
+18:49:15  DEBUG     Calling on_headers_finished with no data
+18:49:15  DEBUG     Calling on_part_data with data[337:478]
+18:49:15  DEBUG     Calling on_part_end with no data
+18:49:15  DEBUG     Calling on_part_begin with no data
+18:49:15  DEBUG     Calling on_header_field with data[509:528]
+18:49:15  DEBUG     Calling on_header_value with data[530:559]
+18:49:15  DEBUG     Calling on_header_end with no data
+18:49:15  DEBUG     Calling on_headers_finished with no data
+18:49:15  DEBUG     Calling on_part_data with data[563:591]
+18:49:15  DEBUG     Calling on_part_end with no data
+18:49:15  DEBUG     Calling on_part_begin with no data
+18:49:15  DEBUG     Calling on_header_field with data[622:641]
+18:49:15  DEBUG     Calling on_header_value with data[643:670]
+18:49:15  DEBUG     Calling on_header_end with no data
+18:49:15  DEBUG     Calling on_headers_finished with no data
+18:49:15  DEBUG     Calling on_part_data with data[674:685]
+18:49:15  DEBUG     Calling on_part_end with no data
+18:49:15  DEBUG     Calling on_part_begin with no data
+18:49:15  DEBUG     Calling on_header_field with data[716:735]
+18:49:15  DEBUG     Calling on_header_value with data[737:764]
+18:49:15  DEBUG     Calling on_header_end with no data
+18:49:15  DEBUG     Calling on_headers_finished with no data
+18:49:15  DEBUG     Calling on_part_data with data[768:770]
+18:49:15  DEBUG     Calling on_part_end with no data
+18:49:15  DEBUG     Calling on_part_begin with no data
+18:49:15  DEBUG     Calling on_header_field with data[801:820]
+18:49:15  DEBUG     Calling on_header_value with data[822:847]
+18:49:15  DEBUG     Calling on_header_end with no data
+18:49:15  DEBUG     Calling on_headers_finished with no data
+18:49:15  DEBUG     Calling on_part_data with data[851:2527]
+18:49:15  DEBUG     Calling on_part_end with no data
+18:49:15  DEBUG     Calling on_part_begin with no data
+18:49:15  DEBUG     Calling on_header_field with data[2558:2577]
+18:49:15  DEBUG     Calling on_header_value with data[2579:2615]
+18:49:15  DEBUG     Calling on_header_end with no data
+18:49:15  DEBUG     Calling on_headers_finished with no data
+18:49:15  DEBUG     Calling on_part_data with data[2619:2920]
+18:49:15  DEBUG     Calling on_part_data with data[0:233]
+18:49:15  DEBUG     Calling on_part_end with no data
+18:49:15  DEBUG     Calling on_part_begin with no data
+18:49:15  DEBUG     Calling on_header_field with data[264:283]
+18:49:15  DEBUG     Calling on_header_value with data[285:320]
+18:49:15  DEBUG     Calling on_header_end with no data
+18:49:15  DEBUG     Calling on_headers_finished with no data
+18:49:15  DEBUG     Calling on_part_data with data[324:356]
+18:49:15  DEBUG     Calling on_part_end with no data
+18:49:15  DEBUG     Calling on_part_begin with no data
+18:49:15  DEBUG     Calling on_header_field with data[387:406]
+18:49:15  DEBUG     Calling on_header_value with data[408:439]
+18:49:15  DEBUG     Calling on_header_end with no data
+18:49:15  DEBUG     Calling on_headers_finished with no data
+18:49:15  DEBUG     Calling on_part_data with data[443:448]
+18:49:15  DEBUG     Calling on_part_end with no data
+18:49:15  DEBUG     Calling on_part_begin with no data
+18:49:15  DEBUG     Calling on_header_field with data[479:498]
+18:49:15  DEBUG     Calling on_header_value with data[500:534]
+18:49:15  DEBUG     Calling on_header_end with no data
+18:49:15  DEBUG     Calling on_headers_finished with no data
+18:49:15  DEBUG     Calling on_part_data with data[538:543]
+18:49:15  DEBUG     Calling on_part_end with no data
+18:49:15  DEBUG     Calling on_end with no data
+18:49:15  DEBUG     [GenerationProfile] active=MOBILE_MVP_BASELINE  quality=medium  input_fidelity=omitted  size_override=auto  max_attempts=1  
+compact_prompts=False  use_mask=False  vision_analysis_fv=False
+18:49:15  INFO      === /generate called ===
+18:49:15  INFO        request_id    : e006288b18154d8ffc8d8e224e03159c
+18:49:15  INFO        session_id    : 370f97b2-ea37-450f-9224-88c3f9d69cc9
+18:49:15  INFO        style_label   : Tropical Escape À Vision 11
+18:49:15  INFO        room_type     : Living Room
+18:49:15  INFO        iteration     : 11
+18:49:15  INFO        prompt        : Redesign this space in the Tropical Escape style.
+18:49:15  INFO        before_url    : https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/public/generated/370f...
+18:49:15  INFO        original_url  : https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/sign/uploads/f9b13abc...
+18:49:15  INFO      [GenerationProfile] mode=MOBILE_MVP_BASELINE  quality=medium  input_fidelity=None  size=auto  max_attempts=1  compact_prompts=False
+18:49:15  INFO      [Wave5.3] customized atmosphere SWITCH detected ù prev=nordic_warmth new=tropical_escape customizations=True \u2192 source_mode 
+kept as LATEST (preserve user changes)
+18:49:15  INFO      --- fetching source image ---
+18:49:15  INFO        source: type=latest requested='(none)' resolved=LATEST version_id='(n/a)' (iteration=11, original_provided=True, ledger=0)
+18:49:15  DEBUG     connect_tcp.started host='vtxkciupyafukhdsgxgw.supabase.co' port=443 local_address=None timeout=30 socket_options=None
+18:49:16  DEBUG     connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B224146200>
+18:49:16  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000002B224141D40> server_hostname='vtxkciupyafukhdsgxgw.supabase.co' 
+timeout=30
+18:49:17  DEBUG     start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B224146A70>
+18:49:17  DEBUG     send_request_headers.started request=<Request [b'GET']>
+18:49:17  DEBUG     send_request_headers.complete
+18:49:17  DEBUG     send_request_body.started request=<Request [b'GET']>
+18:49:17  DEBUG     send_request_body.complete
+18:49:17  DEBUG     receive_response_headers.started request=<Request [b'GET']>
+18:49:17  DEBUG     receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Thu, 21 May 2026 16:49:17 GMT'), 
+(b'Content-Type', b'image/jpeg'), (b'Content-Length', b'2000440'), (b'Connection', b'keep-alive'), (b'CF-Ray', b'9ff512d0685c025b-CDG'), 
+(b'CF-Cache-Status', b'HIT'), (b'Accept-Ranges', b'bytes'), (b'Access-Control-Allow-Origin', b'*'), (b'Cache-Control', b'no-cache'), (b'ETag', 
+b'"6d7dfff59724168f303b37794647b36b"'), (b'Last-Modified', b'Thu, 21 May 2026 16:47:54 GMT'), (b'Server', b'cloudflare'), (b'sb-gateway-mode', 
+b'direct'), (b'sb-gateway-version', b'1'), (b'sb-project-ref', b'vtxkciupyafukhdsgxgw'), (b'sb-request-id', b'019e4b70-fe4f-7c70-b686-a3740de27fdf'), 
+(b'x-robots-tag', b'none'), (b'x-smart-cdn', b'true'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), 
+(b'set-cookie', b'__cf_bm=YVwJV97nkFjydI8aPmWbOxUofY3nBNOhvflVBCGFh34-1779382156.8712053-1.0.1.1-XVT8PFjNWafwD8ujSvzA7YeJokC0uKr71knsyIoh.6S6eqDRbcEw2r
+nEa3RBiV6Z_lwVj8f_xs5_wCYtRbxhb2kLhfayUCIb4tLzKhjRtjT6.UAb8gB5VhjCx4Yry1dD; HttpOnly; SameSite=None; Secure; Path=/; Domain=supabase.co; Expires=Thu, 
+21 May 2026 17:19:17 GMT'), (b'alt-svc', b'h3=":443"; ma=86400')])
+18:49:17  INFO      HTTP Request: GET 
+https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/public/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_164742_60ab8ee9.jpg 
+"HTTP/1.1 200 OK"
+18:49:17  DEBUG     receive_response_body.started request=<Request [b'GET']>
+18:49:23  DEBUG     receive_response_body.complete
+18:49:23  DEBUG     response_closed.started
+18:49:23  DEBUG     response_closed.complete
+18:49:23  INFO        HTTP 200
+18:49:23  INFO        size: 2000440 bytes (1953.6 KB)
+18:49:23  INFO      [PERF] stage=image_fetch  duration_ms=7500  size_bytes=2000440
+18:49:23  DEBUG     close.started
+18:49:23  DEBUG     close.complete
+18:49:23  INFO        refinement ù keep:0 add:1 remove:1 directions:2
+18:49:23  INFO      --- GPT-4o-mini vision analysis (detail=high) ---
+18:49:23  INFO        vision analysis SKIPPED (profile=MOBILE_MVP_BASELINE, iteration=11 ù Wave 5.5.7c global skip on mobile_mvp_baseline; 
+room_description stays empty for all generations on this profile)
+18:49:23  INFO      [PERF] stage=vision_analysis  duration_ms=16
+18:49:23  INFO      [StructuralIdentity] present=False  source=none  facts=0  token_chars=0  iteration=11
+18:49:23  INFO        atmosphere_id: tropical_escape
+18:49:23  INFO        intent: mixed  sub_intent: general
+18:49:23  INFO      --- transformation: atmosphere_switch ---
+18:49:23  INFO        addendum: 935 chars  enriched: 985 chars
+18:49:23  INFO      --- edit mode: style_refinement ---
+18:49:23  INFO      [RefinementAccumulation] append_detected=True  replace_detected=False  accumulated_refinement_count=2  
+final_accumulated_request=add bedroom in the rear space. Add TV in front of the sofa. and add a coffee table in front of the sofa with a rose on it; 
+break the window in the middle. remov...
+18:49:23  INFO      [RefinementAuthority] requested_change_detected=True  localized_authority=True  authorized_change_chars=457  detected_zone=the 
+rear zone  structural_permission=False  mode=V2
+18:49:23  INFO      [StructuralIdentity] generation_mode=V2  structural_identity_present=False  structural_identity_source=none  
+structural_identity_chars=0
+18:49:23  INFO      [ComposerV2] edit_mode=style_refinement  atmosphere=tropical_escape  room=Living Room  iteration=11  compact=False
+18:49:23  INFO      [ComposerV2] atmosphere SWITCH detected ù strategy=REBOOT_CUSTOMIZED prev=nordic_warmth new=tropical_escape customizations=True
+18:49:23  INFO      [ComposerV2] mode=style_refinement  size=4088  sections=6  present=['header', 'core_contract', 'style_transformation', 
+'atmosphere_dna_boundary', 'quality_floor', 'user_direction']
+18:49:23  INFO      --- prompt composed (4088 chars, compact_prompts=False) ---
+18:49:23  INFO      [PERF] stage=prompt_composition  duration_ms=0  chars=4088
+18:49:23  DEBUG       prompt:
+ATMOSPHERE SWITCH ù same apartment, replacing the previous Nordic Warmth styling of this Living Room with Tropical Escape. Fresh atmospheric identity; 
+same photographed architecture.
+
+Continue evolving the current vision of the same apartment ù preserve every architectural fact from the original photograph. SAME APARTMENT PHOTO-EDIT 
+ù apply the chosen atmosphere to THIS exact photographed apartment, not a new apartment. FROZEN: camera, perspective, room proportions, ceiling 
+height, and the floor plan. STRUCTURAL ù every photographed opening (windows, sliding doors, balcony access, glass partitions, archways, half-walls, 
+and any opening visible through a partition into an adjacent or rear zone), multi-zone visibility, open-plan continuity, and spatial depth all stay 
+exactly as photographed; none may be narrowed, enclosed, walled off, or converted into a wall surface. CHANGE ONLY: surfaces, materials, furniture 
+footprint styling, lighting, textiles, colours, decor, atmosphere. Atmosphere = these aesthetic dimensions ù NEVER geometry.
+
+STYLE TRANSFORMATION ù atmosphere SWITCH on the same photographed apartment. Fully replace the previous vision's styling identity (furniture 
+silhouette, decor density, material palette, lighting language) with the new atmosphere's identity from the DNA below. Only the photographed 
+architecture and spatial relationships stay exactly as captured.
+ATMOSPHERE (Tropical Escape): Open-air tropical living with relaxed contemporary luxury. ù Breezy, alive, relaxed-luxurious, sun-soaked, carefree but 
+refined, vibrant-calm.. [Contemporary tropical villa]
+ROOM (Living Room): polished concrete or pale stone floor, white render walls, louvred timber panels or shutters. LIGHT: Warm rattan pendant + 
+concealed warm ceiling slot; bright in day, warm in evening. ATMOSPHERE STYLE (restyle existing elements): natural rattan or cane with thick white 
+linen ù tactile tropical warmth; concrete or pale stone ù cool surface texture depth; louvred timber ù warm tropical surface quality; single large 
+tropical plant ù bird of paradise or monstera in concrete pot; woven rattan tray on coffee table. REALISM: sofa at normal residential height ù 45 cm; 
+concrete floor with correct texture ù not CGI smooth. AVOID: no dark tropical furniture, no nautical motifs, no shell or driftwood decor, Beach 
+clichÚs, fake resort styling.
+AMBITION ù premium hospitality-grade restyling. Decorate this photo; do not recompose it. WOW only through materials, lighting, atmosphere ù NOT 
+geometry.
+
+ATMOSPHERE DNA BOUNDARY ù the DNA blocks above describe IDEAL materials, decor, lighting, and mood. They do NOT describe room scale, openings, 
+ceilings, depth, or floor plan. Preserve the photographed apartment's geometry exactly regardless of the atmosphere's typical architectural character.
+
+NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and circulation clear; not camera-staged.
+
+USER DIRECTION: Redesign this space in the Tropical Escape style.
+ATMOSPHERE SWITCH ù MATERIAL AND MOOD TRANSFORMATION ONLY: The room's spatial layout, furniture arrangement, zoning, and all openings are PRESERVED 
+EXACTLY. Apply the new atmosphere through: material surfaces, lighting temperature, colour palette, te
+REFINEMENT MEMORY (Vision 11): Add or introduce: put TV on the wall on the left. Reduce or eliminate: remove the sofa. Design direction evolution: 1 
+big room only; please design it well. Primary instruction for this vision: break the window in the middle. remove the sofa, put TV on the wall on the 
+left. I want to do a studio, 1 big room only. please design it well.
+AUTHORIZED USER CHANGES ù Visibly apply the user's explicit request (the rear zone): "add bedroom in the rear space. Add TV in front of the sofa. and 
+add a coffee table in front of the sofa with a rose on it; break the window in the middle. remove the sofa, put TV o". It overrides 
+atmosphere/furniture/decor/room-function defaults and must be clearly present. Keep openings, bay window, facade and perspective fixed unless the user 
+explicitly changed them.
+18:49:23  DEBUG     STREAM b'IHDR' 16 13
+18:49:23  DEBUG     STREAM b'caBX' 41 29030
+18:49:23  DEBUG     b'caBX' 41 29030 (unknown)
+18:49:23  DEBUG     STREAM b'IDAT' 29083 1971341
+18:49:23  INFO      [VersionState] generation_mode=V2  source_mode_requested=(none)  source_mode_resolved=LATEST  source_version_id=(n/a)  
+source_image_url_type=latest  latest_version_id=(none)  structural_identity_present=False  structural_permission=False  negative_anchors_chars=0  
+prompt_chars=4088  output_size=1536x1024
+18:49:23  DEBUG     STREAM b'IHDR' 16 13
+18:49:23  DEBUG     STREAM b'caBX' 41 29030
+18:49:23  DEBUG     b'caBX' 41 29030 (unknown)
+18:49:23  DEBUG     STREAM b'IDAT' 29083 1971341
+18:49:23  INFO        source image: 1536x1024 mode=RGB size_bytes=2000440 -> output_size=1536x1024
+18:49:23  INFO        structural mask: disabled (profile=MOBILE_MVP_BASELINE use_mask=False ù Wave 4.7.0 runtime isolation)
+18:49:23  INFO      [PERF] payload_estimate  total_bytes=2005165  image_bytes=2000440  mask_bytes=0  prompt_bytes=4125
+18:49:23  INFO      --- calling OpenAI images.edit (gpt-image-1, quality=medium, input_fidelity=omitted, size=1536x1024, mask=no, max_attempts=1) ---
+18:49:23  INFO      [OpenAI Attempt 1/1] starting  (backend-controlled; SDK max_retries=0)
+18:49:23  INFO        input_fidelity: OMITTED from API call (profile=MOBILE_MVP_BASELINE)
+18:49:23  DEBUG     Request options: {'method': 'post', 'url': '/images/edits', 'headers': {'Content-Type': 'multipart/form-data'}, 'files': 
+[('image', SerializationIterator(index=0, iterator=SerializationIterator(index=0, iterator=<_io.BytesIO object at 0x000002B22413AC00>)))], 
+'idempotency_key': 'stainless-python-retry-e0e4c07f-de35-4113-b868-e43f7001569b', 'security': {'bearer_auth': True}, 'content': None, 'json_data': 
+{'prompt': 'ATMOSPHERE SWITCH ù same apartment, replacing the previous Nordic Warmth styling of this Living Room with Tropical Escape. Fresh 
+atmospheric identity; same photographed architecture.\n\nContinue evolving the current vision of the same apartment ù preserve every architectural 
+fact from the original photograph. SAME APARTMENT PHOTO-EDIT ù apply the chosen atmosphere to THIS exact photographed apartment, not a new apartment. 
+FROZEN: camera, perspective, room proportions, ceiling height, and the floor plan. STRUCTURAL ù every photographed opening (windows, sliding doors, 
+balcony access, glass partitions, archways, half-walls, and any opening visible through a partition into an adjacent or rear zone), multi-zone 
+visibility, open-plan continuity, and spatial depth all stay exactly as photographed; none may be narrowed, enclosed, walled off, or converted into a 
+wall surface. CHANGE ONLY: surfaces, materials, furniture footprint styling, lighting, textiles, colours, decor, atmosphere. Atmosphere = these 
+aesthetic dimensions ù NEVER geometry.\n\nSTYLE TRANSFORMATION ù atmosphere SWITCH on the same photographed apartment. Fully replace the previous 
+vision\'s styling identity (furniture silhouette, decor density, material palette, lighting language) with the new atmosphere\'s identity from the DNA 
+below. Only the photographed architecture and spatial relationships stay exactly as captured.\nATMOSPHERE (Tropical Escape): Open-air tropical living 
+with relaxed contemporary luxury. ù Breezy, alive, relaxed-luxurious, sun-soaked, carefree but refined, vibrant-calm.. [Contemporary tropical 
+villa]\nROOM (Living Room): polished concrete or pale stone floor, white render walls, louvred timber panels or shutters. LIGHT: Warm rattan pendant + 
+concealed warm ceiling slot; bright in day, warm in evening. ATMOSPHERE STYLE (restyle existing elements): natural rattan or cane with thick white 
+linen ù tactile tropical warmth; concrete or pale stone ù cool surface texture depth; louvred timber ù warm tropical surface quality; single large 
+tropical plant ù bird of paradise or monstera in concrete pot; woven rattan tray on coffee table. REALISM: sofa at normal residential height ù 45 cm; 
+concrete floor with correct texture ù not CGI smooth. AVOID: no dark tropical furniture, no nautical motifs, no shell or driftwood decor, Beach 
+clichÚs, fake resort styling.\nAMBITION ù premium hospitality-grade restyling. Decorate this photo; do not recompose it. WOW only through materials, 
+lighting, atmosphere ù NOT geometry.\n\nATMOSPHERE DNA BOUNDARY ù the DNA blocks above describe IDEAL materials, decor, lighting, and mood. They do 
+NOT describe room scale, openings, ceilings, depth, or floor plan. Preserve the photographed apartment\'s geometry exactly regardless of the 
+atmosphere\'s typical architectural character.\n\nNOT a CGI render. DSLR real estate photo. Real materials. Furniture stays usable; openings and 
+circulation clear; not camera-staged.\n\nUSER DIRECTION: Redesign this space in the Tropical Escape style.\nATMOSPHERE SWITCH ù MATERIAL AND MOOD 
+TRANSFORMATION ONLY: The room\'s spatial layout, furniture arrangement, zoning, and all openings are PRESERVED EXACTLY. Apply the new atmosphere 
+through: material surfaces, lighting temperature, colour palette, te\nREFINEMENT MEMORY (Vision 11): Add or introduce: put TV on the wall on the left. 
+Reduce or eliminate: remove the sofa. Design direction evolution: 1 big room only; please design it well. Primary instruction for this vision: break 
+the window in the middle. remove the sofa, put TV on the wall on the left. I want to do a studio, 1 big room only. please design it well.\nAUTHORIZED 
+USER CHANGES ù Visibly apply the user\'s explicit request (the rear zone): "add bedroom in the rear space. Add TV in front of the sofa. and add a 
+coffee table in front of the sofa with a rose on it; break the window in the middle. remove the sofa, put TV o". It overrides 
+atmosphere/furniture/decor/room-function defaults and must be clearly present. Keep openings, bay window, facade and perspective fixed unless the user 
+explicitly changed them.', 'model': 'gpt-image-1', 'n': 1, 'quality': 'medium', 'size': '1536x1024'}}
+18:49:23  DEBUG     Sending HTTP Request: POST https://api.openai.com/v1/images/edits
+18:49:23  DEBUG     close.started
+18:49:23  DEBUG     close.complete
+18:49:23  DEBUG     connect_tcp.started host='api.openai.com' port=443 local_address=None timeout=5.0 socket_options=None
+18:49:24  DEBUG     connect_tcp.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B21FA36D70>
+18:49:24  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000002B2223C1040> server_hostname='api.openai.com' timeout=5.0
+18:49:25  DEBUG     start_tls.complete return_value=<httpcore._backends.anyio.AnyIOStream object at 0x000002B21FC29D80>
+18:49:25  DEBUG     send_request_headers.started request=<Request [b'POST']>
+18:49:25  DEBUG     send_request_headers.complete
+18:49:25  DEBUG     send_request_body.started request=<Request [b'POST']>
+18:49:29  DEBUG     send_request_body.complete
+18:49:29  DEBUG     receive_response_headers.started request=<Request [b'POST']>
+18:49:58  DEBUG     receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Date', b'Thu, 21 May 2026 16:49:57 GMT'), 
+(b'Content-Type', b'application/json'), (b'Transfer-Encoding', b'chunked'), (b'Connection', b'keep-alive'), (b'CF-Ray', b'9ff51306c8941542-CDG'), 
+(b'CF-Cache-Status', b'DYNAMIC'), (b'Server', b'cloudflare'), (b'Strict-Transport-Security', b'max-age=31536000; includeSubDomains; preload'), 
+(b'X-Content-Type-Options', b'nosniff'), (b'access-control-expose-headers', b'X-Request-ID'), (b'access-control-expose-headers', b'CF-Ray'), 
+(b'Access-Control-Expose-Headers', b'CF-Ray'), (b'openai-organization', b'user-g1pxfrxf7kwbd0pxj7ti1oj4'), (b'openai-processing-ms', b'28076'), 
+(b'openai-project', b'proj_UYOJoH8c0W0Vie5FAytrm3w7'), (b'openai-version', b'2020-10-01'), (b'x-request-id', b'req_58f2529d6c044e2aa4789c3e57976322'), 
+(b'Content-Encoding', b'gzip'), (b'alt-svc', b'h3=":443"; ma=86400')])
+18:49:58  INFO      HTTP Request: POST https://api.openai.com/v1/images/edits "HTTP/1.1 200 OK"
+18:49:58  DEBUG     receive_response_body.started request=<Request [b'POST']>
+18:50:05  DEBUG     receive_response_body.complete
+18:50:05  DEBUG     response_closed.started
+18:50:05  DEBUG     response_closed.complete
+18:50:05  DEBUG     HTTP Response: POST https://api.openai.com/v1/images/edits "200 OK" Headers([('date', 'Thu, 21 May 2026 16:49:57 GMT'), 
+('content-type', 'application/json'), ('transfer-encoding', 'chunked'), ('connection', 'keep-alive'), ('cf-ray', '9ff51306c8941542-CDG'), 
+('cf-cache-status', 'DYNAMIC'), ('server', 'cloudflare'), ('strict-transport-security', 'max-age=31536000; includeSubDomains; preload'), 
+('x-content-type-options', 'nosniff'), ('access-control-expose-headers', 'X-Request-ID'), ('access-control-expose-headers', 'CF-Ray'), 
+('access-control-expose-headers', 'CF-Ray'), ('openai-organization', 'user-g1pxfrxf7kwbd0pxj7ti1oj4'), ('openai-processing-ms', '28076'), 
+('openai-project', 'proj_UYOJoH8c0W0Vie5FAytrm3w7'), ('openai-version', '2020-10-01'), ('x-request-id', 'req_58f2529d6c044e2aa4789c3e57976322'), 
+('content-encoding', 'gzip'), ('alt-svc', 'h3=":443"; ma=86400')])
+18:50:05  DEBUG     request_id: req_58f2529d6c044e2aa4789c3e57976322
+18:50:05  INFO      [OpenAI Attempt 1/1] succeeded in 41.8s
+18:50:05  INFO        generated: 2185600 bytes (2134.4 KB)
+18:50:05  INFO      --- uploading to Supabase (generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_165005_cf9c7388.jpg) ---
+18:50:05  DEBUG     close.started
+18:50:05  DEBUG     close.complete
+18:50:05  DEBUG     connect_tcp.started host='vtxkciupyafukhdsgxgw.supabase.co' port=443 local_address=None timeout=20 socket_options=None
+18:50:05  DEBUG     connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x000002B2230DEF20>
+18:50:05  DEBUG     start_tls.started ssl_context=<ssl.SSLContext object at 0x000002B22305F740> server_hostname='vtxkciupyafukhdsgxgw.supabase.co' 
+timeout=20
+18:50:05  DEBUG     start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x000002B2230DFBE0>
+18:50:05  DEBUG     send_connection_init.started request=<Request [b'POST']>
+18:50:05  DEBUG     send_connection_init.complete
+18:50:05  DEBUG     send_request_headers.started request=<Request [b'POST']> stream_id=1
+18:50:05  DEBUG     Adding (b':method', b'POST') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 3 with 7 bits
+18:50:05  DEBUG     Adding (b':authority', b'vtxkciupyafukhdsgxgw.supabase.co') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 1 with 6 bits
+18:50:05  DEBUG     Encoding 24 with 7 bits
+18:50:05  DEBUG     Adding (b':scheme', b'https') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 7 with 7 bits
+18:50:05  DEBUG     Adding (b':path', b'/storage/v1/object/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_165005_cf9c7388.jpg') to the header 
+table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 4 with 6 bits
+18:50:05  DEBUG     Encoding 67 with 7 bits
+18:50:05  DEBUG     Adding (b'accept', b'*/*') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 19 with 6 bits
+18:50:05  DEBUG     Encoding 3 with 7 bits
+18:50:05  DEBUG     Adding (b'accept-encoding', b'gzip, deflate, zstd') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 16 with 6 bits
+18:50:05  DEBUG     Encoding 15 with 7 bits
+18:50:05  DEBUG     Adding (b'user-agent', b'python-httpx/0.28.1') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 58 with 6 bits
+18:50:05  DEBUG     Encoding 14 with 7 bits
+18:50:05  DEBUG     Adding (b'x-client-info', b'supabase-py/2.30.0') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 10 with 7 bits
+18:50:05  DEBUG     Encoding 13 with 7 bits
+18:50:05  DEBUG     Adding (b'x-supabase-client-platform', b'Windows') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 19 with 7 bits
+18:50:05  DEBUG     Encoding 6 with 7 bits
+18:50:05  DEBUG     Adding (b'x-supabase-client-platform-version', b'10') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 24 with 7 bits
+18:50:05  DEBUG     Encoding 2 with 7 bits
+18:50:05  DEBUG     Adding (b'x-supabase-client-runtime', b'python') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 18 with 7 bits
+18:50:05  DEBUG     Encoding 5 with 7 bits
+18:50:05  DEBUG     Adding (b'x-supabase-client-runtime-version', b'3.10.5') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 23 with 7 bits
+18:50:05  DEBUG     Encoding 5 with 7 bits
+18:50:05  DEBUG     Adding (b'apikey', b'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0eGtjaXVweWFmdWtoZHNneGd3Iiwicm9sZSI6I
+nNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODUxNjI1MCwiZXhwIjoyMDk0MDkyMjUwfQ.3IDNbF1kzqeSsnMXia9Rs2hSai285vJND9u4Gracfnc') to the header table, sensitive:False, 
+huffman:True
+18:50:05  DEBUG     Encoding 5 with 7 bits
+18:50:05  DEBUG     Encoding 175 with 7 bits
+18:50:05  DEBUG     Adding (b'authorization', b'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0eGtjaXVweWFmdWtoZHNneGd
+3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODUxNjI1MCwiZXhwIjoyMDk0MDkyMjUwfQ.3IDNbF1kzqeSsnMXia9Rs2hSai285vJND9u4Gracfnc') to the header table, 
+sensitive:True, huffman:True
+18:50:05  DEBUG     Encoding 23 with 4 bits
+18:50:05  DEBUG     Encoding 180 with 7 bits
+18:50:05  DEBUG     Adding (b'cache-control', b'3600') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 24 with 6 bits
+18:50:05  DEBUG     Encoding 3 with 7 bits
+18:50:05  DEBUG     Adding (b'x-upsert', b'false') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 6 with 7 bits
+18:50:05  DEBUG     Encoding 4 with 7 bits
+18:50:05  DEBUG     Adding (b'cookie', b'__cf_bm=yhMgryZzktT5VvMGPbpcqpREZRnZhIOI2ANAoGUT6OI-1779381877.8292577-1.0.1.1-7ajjTgtd4VL.j3rQFXmExImWCYGwx1c
+z.D8T4NhvIdrZP2Yrca9vMJzoOzGqhY14dRsIb0hEZNqiJXZ4.ZHCc034cG1ZjZArhmYm.lpBrG4S5AoFmelnzMeqsHxsxOrh') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 32 with 6 bits
+18:50:05  DEBUG     Encoding 164 with 7 bits
+18:50:05  DEBUG     Adding (b'content-length', b'2185790') to the header table, sensitive:False, huffman:True
+18:50:05  DEBUG     Encoding 28 with 6 bits
+18:50:05  DEBUG     Encoding 5 with 7 bits
+18:50:05  DEBUG     Adding (b'content-type', b'multipart/form-data; boundary=21a852a9d2e6353259e7a19e8d7271c7') to the header table, sensitive:False, 
+huffman:True
+18:50:05  DEBUG     Encoding 31 with 6 bits
+18:50:05  DEBUG     Encoding 44 with 7 bits
+18:50:05  DEBUG     Encoded header block to b'\x83A\x98\xee\x9f=Hkk\xf49m\xeb<\x88\x9b\xcc\xde\x17E\xb5\x8e1\xa0\xab\x90\xff\x87D\xc3a\t=\x83\x98\xacw\
+x0b\x07\x8f\xa1H\x96&-E\xb0i,\x8c2\xe8%}\xd8\xc4\xb1F\xcb\xab4\xd8%Y\xf1\t\xa5\x9ex\x8c\xca\xfc\x8e>B>\xc0\x80\'\x00\xd8\x83\x10\\l\x00n"J\xf9\x1de\xe7
+\x97\xe9\\\xdfS\x83\xf9c\xe7P\x8f\x9b\xd9\xab\xfaRB\xcb@\xd2_\xa5=\xa12\x7fz\x8e\xaf\xd2g=KN\x94\xd7\xe5\x80.\'\x97\x0f@\x8a\xf2\xb1(1jJ\xc6\xaaS\xff\x
+8dE\xb5\x8e1\xa0\xabW\xe9\x81.\xc8\x17\x07@\x93\xf2\xb2-\xacq\x8d\x05X\x94\x18\xb5%j\xe8\x1ae=\x94\xff\x86\xe4j\xa4?\x84\x7f@\x98\xf2\xb2-\xacq\x8d\x05
+X\x94\x18\xb5%j\xe8\x1ae=\x94\xad\xdc\xb6 \xc7\xab\x82\x08?@\x92\xf2\xb2-\xacq\x8d\x05X\x94\x18\xb5%k-\xa9&\xa4\xbf\x85\xaf\xd2g=_@\x97\xf2\xb2-\xacq\x
+8d\x05X\x94\x18\xb5%k-\xa9&\xa4\xabw-\x881\xea\x85ep\x81v\xff@\x85\x1df\xea__\xff0/\xac\xb3\xc7\x88\x86\xd4l\xb98{\xc8\x1d&\xc8\x8c\x95ml\x97\xb29\x93\
+xad\x7f\x9coe}r\xfa\xcbY\x19\xd0mF\xcb\xeeO\xcb\xb3\xf3\xa7\x0f\xbf\xdd\xd9\x11\x92\xac\xb4~\x9b#\x99*\xfd\x01q\'\xa0\xff8\xf8/,4\xc9\xc9\'\xfd\xc7\xa6
+\xa2\xe2\x91\x9c\x86\xf0bR\xfa?wds%Zh%_\xb5\xf3\x17\x19IK\xe8\xfd\xdd\x91\x19)\xa2y/dsF\xf23\xaa\xff\x0f:zd\x0e\x8b\xde\r\xfb\xf9?\x8c\x9d\x0f\xebE\xfe
+\xa0\xd1\x7f\xaf\xad\x1d8x\x97b\xec\xe4\xbf\xa6<!\xeb\xef\xb1w"\xad\x1f\x86\x1b\xfbP)\xf7\x0c\xc2y\xbe\xf9t\xdf~\xd6\xb1X2KQ?\x1f\x08\xff5\xbaQ\xd8[\x1
+4/\xac\xb3\xc7\x88\x86\xd4l\xb98{\xc8\x1d&\xc8\x8c\x95ml\x97\xb29\x93\xad\x7f\x9coe}r\xfa\xcbY\x19\xd0mF\xcb\xeeO\xcb\xb3\xf3\xa7\x0f\xbf\xdd\xd9\x11\x
+92\xac\xb4~\x9b#\x99*\xfd\x01q\'\xa0\xff8\xf8/,4\xc9\xc9\'\xfd\xc7\xa6\xa2\xe2\x91\x9c\x86\xf0bR\xfa?wds%Zh%_\xb5\xf3\x17\x19IK\xe8\xfd\xdd\x91\x19)\xa
+2y/dsF\xf23\xaa\xff\x0f:zd\x0e\x8b\xde\r\xfb\xf9?\x8c\x9d\x0f\xebE\xfe\xa0\xd1\x7f\xaf\xad\x1d8x\x97b\xec\xe4\xbf\xa6<!\xeb\xef\xb1w"\xad\x1f\x86\x1b\x
+fbP)\xf7\x0c\xc2y\xbe\xf9t\xdf~\xd6\xb1X2KQ?X\x83e\xc0\x03@\x86\xf2\xb5\xb5\xa0\xb6\'\x84\x94t 
+\xbf`\xff%\x8a"K\x14t\xc1\xea}\x13Y\xeb\xf7\xdfT\xefo\x8f}\x18\xb5\xc7Y;W\xb7\x07\xee\xda\xbfg\xc9\xab \xa1\xd3\t\xf1p\xde\xe6\xac\x8b\x05\xd7_e\xe0\xb
+c\xeb\xab\xbc\'\xc4\xdb\xae\xac\x15\xc0\xb8W\n\xce\x8f\xa7M\xf3&F\xb8\xe7_\xa36l\xc3\xf9N\x0f9)\xe5{\x9e/\x1eBOk\xdf{{Zg\xef\x92K?u\x8b\x9d\x84\x1b\xfd
+\xf4e\xf6}^\xf1v\x9f\x98Z\x93j2F\t\xf0~\xe9\xecl\xbf\x9f\xad/\xfb\x8e\xf1\x00\xcbD\xc4\x1f\xde\x9f\xb0\xd9=<\xe9^\x8a\xee\xd9\x89\xad\xcd\xc2|4\x96\x8a
+\xbd\xe8/dc\xf2\x8f:\xac\x9f\\\x85\x10^m\xd7\xc1_\xac\xa6\xda\x12j\xc7bX\x94\xf6R\xb4\x83H\xfe\xd4\x8c\xf6\xd5 
+\xec\xf5\x00\x827\x9b\x10\xdf\x90Eq\x96\xd9\x13o\x95\xd1\x85\xf2\xbd#\xa2t$w'
+18:50:05  DEBUG     send_request_headers.complete
+18:50:05  DEBUG     send_request_body.started request=<Request [b'POST']> stream_id=1
+18:50:06  DEBUG     receive_remote_settings.started
+18:50:06  DEBUG     receive_remote_settings.complete return_value=<RemoteSettingsChanged 
+changed_settings:{ChangedSetting(setting=SettingCodes.MAX_CONCURRENT_STREAMS, original_value=None, new_value=100), 
+ChangedSetting(setting=SettingCodes.INITIAL_WINDOW_SIZE, original_value=65535, new_value=65536), ChangedSetting(setting=SettingCodes.MAX_FRAME_SIZE, 
+original_value=16384, new_value=16777215)}>
+18:50:12  DEBUG     send_request_body.complete
+18:50:12  DEBUG     receive_response_headers.started request=<Request [b'POST']> stream_id=1
+18:50:13  DEBUG     Decoding b'?\xe1\x1f\x88a\x96\xdf=\xbfJ\x08*h\x1f\xa5\x04\x018\xa0\\\xb8\xd8.\x05\x951h\xdf_\x96\x1du\xd0b\r&=LtA\xea\xfbP\x93\x8e\
+xc4\x150Z\x99V{@\x85$\xabX?_\x8f~Y[\x0b@\x10\x86\xe3r\x00n-z\xfe/@\x8a$\xab\x10d\x9c\xab!#M\xa8\x86\xbf\xcfL:2^T\x01*v\x87%\x07\xb6Ih\x1d\x85@\x8bDkL4\
+x97\xc0\xfd-I\xe4/\x84\x90\xd6\x14\x89@\x8dDkL4\x97\xc0\xfd-\xdc\xb6 \xc7\xab\x011@\x8aDkWa\xfa\x14\x89Z\xc2\xcb\x90\xee\x9f=Hkk\xf49m\xeb<\x88\x9b\xcc
+\xde?@\x8aDkX^\xd6\x95\tX\xd2\x7f\x9a\x00_+Q\xba\x15\xa4m\xf0\xac\xe9#\x02\xd1\x867\xd6\x00\xe3v@\x8cal\x92\xffx\xa0\xa4~V\x1c\xc5\x81\x90\xb6\xcb\x80\
+x00>\xd45D\xa2\xd9\x0b\xba\xd8\xef\x9e\x91\x9a\xa4}\xa9]\x85\xa0\xe3\x93Z\x83\x9b\xd9\xab@\x85\x1d\tY\x1d\xc9\x90\x9d\x98?\x9b\x8d4\xcf\xf3\xf6\xa5#\x8
+1\xe7\x1a\x00?'
+18:50:14  DEBUG     Decoded 4096, consumed 3 bytes
+18:50:14  DEBUG     Resizing header table to 4096 from 4096
+18:50:14  DEBUG     Decoded 8, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b':status', b'200'), consumed 1
+18:50:14  DEBUG     Decoded 33, consumed 1 bytes
+18:50:14  DEBUG     Decoded 22, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b'date', b'Thu, 21 May 2026 16:50:13 GMT'), total consumed 24 bytes, indexed True
+18:50:14  DEBUG     Decoded 31, consumed 1 bytes
+18:50:14  DEBUG     Decoded 22, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b'content-type', b'application/json; charset=utf-8'), total consumed 24 bytes, indexed True
+18:50:14  DEBUG     Decoded 5, consumed 1 bytes
+18:50:14  DEBUG     Decoded 15, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b'cf-ray', b'9ff514022a65d0a6-CDG'), total consumed 23 bytes, indexed True
+18:50:14  DEBUG     Decoded 10, consumed 1 bytes
+18:50:14  DEBUG     Decoded 6, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b'cf-cache-status', b'DYNAMIC'), total consumed 19 bytes, indexed True
+18:50:14  DEBUG     Decoded 20, consumed 1 bytes
+18:50:14  DEBUG     Decoded 1, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b'access-control-allow-origin', <memory at 0x000002B224188640>), total consumed 3 bytes, indexed True
+18:50:14  DEBUG     Decoded 54, consumed 1 bytes
+18:50:14  DEBUG     Decoded 7, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b'server', b'cloudflare'), total consumed 9 bytes, indexed True
+18:50:14  DEBUG     Decoded 11, consumed 1 bytes
+18:50:14  DEBUG     Decoded 4, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b'sb-gateway-mode', b'direct'), total consumed 18 bytes, indexed True
+18:50:14  DEBUG     Decoded 13, consumed 1 bytes
+18:50:14  DEBUG     Decoded 1, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b'sb-gateway-version', <memory at 0x000002B224188700>), total consumed 17 bytes, indexed True
+18:50:14  DEBUG     Decoded 10, consumed 1 bytes
+18:50:14  DEBUG     Decoded 16, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b'sb-project-ref', b'vtxkciupyafukhdsgxgw'), total consumed 29 bytes, indexed True
+18:50:14  DEBUG     Decoded 10, consumed 1 bytes
+18:50:14  DEBUG     Decoded 26, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b'sb-request-id', b'019e4b71-d591-7cb0-b1b9-0ab7d1aa15cf'), total consumed 39 bytes, indexed True
+18:50:14  DEBUG     Decoded 56, consumed 1 bytes
+18:50:14  DEBUG     Decoded 32, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b'strict-transport-security', b'max-age=31536000; includeSubDomains; preload'), total consumed 34 bytes, indexed True
+18:50:14  DEBUG     Decoded 26, consumed 1 bytes
+18:50:14  DEBUG     Decoded 3, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b'content-encoding', b'gzip'), total consumed 5 bytes, indexed True
+18:50:14  DEBUG     Decoded 5, consumed 1 bytes
+18:50:14  DEBUG     Decoded 16, consumed 1 bytes
+18:50:14  DEBUG     Decoded (b'alt-svc', b'h3=":443"; ma=86400'), total consumed 24 bytes, indexed True
+18:50:14  DEBUG     receive_response_headers.complete return_value=(200, [(b'date', b'Thu, 21 May 2026 16:50:13 GMT'), (b'content-type', 
+b'application/json; charset=utf-8'), (b'cf-ray', b'9ff514022a65d0a6-CDG'), (b'cf-cache-status', b'DYNAMIC'), (b'access-control-allow-origin', b'*'), 
+(b'server', b'cloudflare'), (b'sb-gateway-mode', b'direct'), (b'sb-gateway-version', b'1'), (b'sb-project-ref', b'vtxkciupyafukhdsgxgw'), 
+(b'sb-request-id', b'019e4b71-d591-7cb0-b1b9-0ab7d1aa15cf'), (b'strict-transport-security', b'max-age=31536000; includeSubDomains; preload'), 
+(b'content-encoding', b'gzip'), (b'alt-svc', b'h3=":443"; ma=86400')])
+18:50:14  INFO      HTTP Request: POST 
+https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_165005_cf9c7388.jpg "HTTP/2 200 OK"
+18:50:14  DEBUG     receive_response_body.started request=<Request [b'POST']> stream_id=1
+18:50:14  DEBUG     receive_response_body.complete
+18:50:14  DEBUG     response_closed.started stream_id=1
+18:50:14  DEBUG     response_closed.complete
+18:50:14  INFO        upload OK  url: 
+https://vtxkciupyafukhdsgxgw.supabase.co/storage/v1/object/public/generated/370f97b2-ea37-450f-9224-88c3f9d69cc9/20260521_165005_cf9c7388.jpg
+18:50:14  INFO      [PERF] stage=supabase_upload  duration_ms=8984  size_bytes=2185600
+18:50:14  INFO        ai_message: Vision 11 ù Tropical Escape interpretation applied, same layout. What would make this feel more conn
+18:50:14  INFO        suggestions: ['Keep the spatial openness', 'Soften the atmosphere slightly', 'Keep this as my final version', 'Open the space 
+visually']
+18:50:14  INFO      [VersionState] persisted version_id=v_dc571aff4110 vision_number=11 ledger_size=1
+18:50:14  INFO      [PERF SUMMARY] request_id=e006288b18154d8ffc8d8e224e03159c  total_ms=58328  fetch_ms=7500  vision_ms=16  prompt_ms=0  mask_ms=0  
+openai_ms=41812 (x1 attempts)  upload_ms=8984  payload_bytes=2005165  prompt_chars=4088  est_cost_usd=0.074  cost_risk=MEDIUM
+18:50:14  INFO      [Generation Cost] mode=MOBILE_MVP_BASELINE  duration=58.3s  quality=medium  input_fidelity=None  size=1536x1024  prompt_chars=4088 
+ compact_prompts=False  request_id=e006288b18154d8ffc8d8e224e03159c
+18:50:14  INFO      === /generate SUCCESS ===  request_id=e006288b18154d8ffc8d8e224e03159c
+INFO:     127.0.0.1:53707 - "POST /generate HTTP/1.1" 200 OK
+INFO:     Shutting down
