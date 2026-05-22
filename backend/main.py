@@ -272,6 +272,26 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
     only at V1 (iteration == 1) when the client has no persisted identity
     token. It is NOT per-generation vision analysis; V2/V3/V4 reuse the
     persisted token and never call this.
+
+    Wave 5.5.11 (Structured V1 Capture Stabilization, 2026-05-22):
+    benchmarks after the frontend round-trip fixes (struct_identity +
+    versions + history) revealed that V2/V3/V4 quality directly tracks
+    V1 capture density. With the legacy short prompt ("Max 35 words",
+    max_tokens=90), the mini stochastically produced facts=3 OR facts=5
+    on the same photo — and a poor V1 capture poisoned the whole session
+    via byte-identity token round-trip. Fix: a numbered 5-bullet
+    checklist scoped to the EXACT 5 dataclass fields (dominant opening,
+    glass partition, spatial depth, kitchen visibility, secondary
+    opening), max_tokens raised 90→150 to give room for coverage.
+    Explicit edge-case nudges: kitchen "even if partially visible at the
+    image edge" — addresses right-edge partial kitchens that the legacy
+    prompt missed. NOT a Wave 5.5.9 revival: no ceiling/floor/decor
+    bullets (those weren't in the StructuralIdentity dataclass anyway).
+    Parser contract unchanged; window-only keyword list still in place
+    (door variants fall through to the _OPENING regex fallback — fact
+    still captured, slightly different format). V2+ pure-switch
+    byte-identity preserved because the token captured at V1 round-trips
+    unchanged. Rollback = revert this docstring + prompt + max_tokens.
     """
     try:
         b64 = base64.b64encode(image_bytes).decode()
@@ -283,16 +303,35 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
                     {"type": "image_url",
                      "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"}},
                     {"type": "text", "text": (
-                        "List ONLY the fixed architectural facts of this space in one short "
-                        "sentence: dominant window/opening type and which wall it is on, any "
-                        "glass partition, spatial depth (open-plan / diagonal), and whether a "
-                        "kitchen is visible and on which side. Architecture only — NO furniture, "
-                        "NO decor, NO style, NO atmosphere, NO adjectives of quality. "
-                        "Max 35 words."
+                        "Analyze this room photograph for architectural identity. "
+                        "State each architectural fact below when present in the "
+                        "photo; skip cleanly if absent. Use the EXACT vocabulary "
+                        "listed (the downstream parser depends on it). "
+                        "(1) Dominant opening — pick the best match: "
+                        "'floor-to-ceiling window', 'bay window', 'panoramic window', "
+                        "'corner window', 'glazed wall', 'glazed facade', "
+                        "'sliding glass door', 'patio door', or 'picture window'. "
+                        "Add a size qualifier ('wide', 'tall', 'full-height', "
+                        "'dominant') and state the wall (left/right/back). "
+                        "(2) Glass partition — if visible, say 'glass partition' "
+                        "with frame colour ('black-framed' etc.) and position. "
+                        "(3) Spatial depth — say 'open-plan' if the layout is open, "
+                        "otherwise describe depth (e.g. 'diagonal depth toward rear "
+                        "space'). "
+                        "(4) Visible kitchen — even if only partially visible at the "
+                        "image edge, say EXACTLY 'open kitchen visible on the left' "
+                        "OR 'open kitchen visible on the right' (use the side word "
+                        "verbatim). "
+                        "(5) Secondary opening — if a 'pair of windows' or "
+                        "additional windows on the same facade are visible, state "
+                        "so. "
+                        "Architecture only — NO furniture, NO decor, NO style, "
+                        "NO atmosphere, NO subjective quality adjectives. Skip any "
+                        "fact that is not present in the photo. Max 60 words."
                     )},
                 ],
             }],
-            max_tokens=90,
+            max_tokens=150,
         )
         return (resp.choices[0].message.content or "").strip()
     except Exception as exc:  # non-fatal: identity simply stays absent
