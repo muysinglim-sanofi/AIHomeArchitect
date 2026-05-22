@@ -15,11 +15,13 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/session_provider.dart';
+import '../../core/services/session_persistence_service.dart';
 import '../../data/mock/mock_projects.dart';
 import '../../data/services/generation_service.dart';
 import '../../data/services/supabase_service.dart';
 import '../../data/models/message_model.dart';
 import '../../data/models/project_model.dart';
+import '../../data/models/session_state.dart';
 import '../../core/widgets/scrim.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_pill.dart';
@@ -115,6 +117,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   // Messages queued while the Supabase session is still being created.
   final List<MessageModel> _pendingMessages = [];
 
+  // Wave 4.10g — local persistence layer for protocol round-trip tokens
+  // and conversational continuity. Hydrated from SharedPreferences on
+  // existing-session restore; written through after every state mutation
+  // that matters (generation success, atmosphere swap, source change).
+  // Lazy-initialised in initState (async); nullable until ready so we can
+  // safely no-op if hydration races with a backend call.
+  SessionPersistenceService? _persistence;
+
   late final AnimationController _entryController;
   late final Animation<double> _fadeAnim;
 
@@ -147,6 +157,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   void initState() {
     super.initState();
     _svc = ref.read(supabaseServiceProvider);
+
+    // Wave 4.10g — kick off async persistence init. Hydration for existing
+    // sessions happens here; new sessions get persistence only once their
+    // real Supabase id exists (handled inside _initNewSession via
+    // _persistSession() after the createSession returns).
+    _initPersistence();
 
     if (widget.projectId == 'new') {
       _letAiDecide = widget.initialAiDecide;
@@ -255,6 +271,93 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     super.dispose();
   }
 
+  // ── Local persistence (Wave 4.10g) ────────────────────────────────────────
+  //
+  // Local snapshot of protocol round-trip tokens + conversational continuity.
+  // Hydrates the in-memory state on existing-session reopen / app restart
+  // so Wave 4.7.2 / 4.7.3 / 5.5.5 / 5.5.6 / 5.5.12 all see a consistent
+  // V2+ environment instead of an empty token forcing backend re-capture.
+
+  /// Initialise SharedPreferences and, for existing sessions, hydrate the
+  /// in-memory state from the persisted snapshot. Non-fatal; failures
+  /// degrade to an empty in-memory state (same behaviour as pre-Wave 4.10g).
+  Future<void> _initPersistence() async {
+    try {
+      _persistence = await SessionPersistenceService.create();
+    } catch (e) {
+      debugPrint('[Persistence] init failed (non-fatal): $e');
+      return;
+    }
+    final svc = _persistence;
+    if (svc == null || !mounted) return;
+    // Only hydrate existing sessions; new sessions persist forward only.
+    if (widget.projectId == 'new') return;
+
+    final snapshot = await svc.load(widget.projectId);
+    if (snapshot == null || !mounted) return;
+
+    // Apply only protocol/continuity tokens. UI state (messages, scroll)
+    // is reconstructed independently from the message stream so we don't
+    // double-source it. iteration_count guard: never go BACKWARDS — if
+    // _loadMessages() already inferred a higher value from the message
+    // stream, trust the inferred value (it is grounded in real images).
+    setState(() {
+      _structuralIdentity = snapshot.structuralIdentity;
+      _versions = snapshot.versions;
+      // generationSourceUrl: prefer snapshot if persisted, else keep whatever
+      // _loadMessages inferred (typically the latest afterUrl in messages).
+      if (snapshot.generationSourceUrl != null &&
+          snapshot.generationSourceUrl!.isNotEmpty) {
+        _generationSourceUrl = snapshot.generationSourceUrl;
+      }
+      if (snapshot.iterationCount > _iterationCount) {
+        _iterationCount = snapshot.iterationCount;
+      }
+      if (snapshot.currentRoomType.isNotEmpty) {
+        _currentRoomType = snapshot.currentRoomType;
+      }
+      if (snapshot.currentStyle.isNotEmpty) {
+        _currentStyle = snapshot.currentStyle;
+      }
+      _letAiDecide = snapshot.letAiDecide;
+      _surpriseMe = snapshot.surpriseMe;
+      if (snapshot.pendingDescription != null) {
+        _pendingDescription = snapshot.pendingDescription;
+      }
+    });
+    debugPrint(
+      '[Persistence] hydrated ${widget.projectId} — '
+      'iter=$_iterationCount, '
+      'identityChars=${_structuralIdentity.length}, '
+      'versionsChars=${_versions.length}, '
+      'sourceUrl=${_generationSourceUrl != null ? "yes" : "no"}',
+    );
+  }
+
+  /// Write-through save of the current in-memory state. Cheap (local) and
+  /// non-fatal. Called after every state mutation that should survive
+  /// restart: generation success, atmosphere swap, source change,
+  /// iteration advance.
+  void _persistSession() {
+    final svc = _persistence;
+    if (svc == null) return;
+    final id = _project.id;
+    if (id.isEmpty || id == 'new') return; // pre-Supabase: not persistable
+    final state = SessionState(
+      structuralIdentity: _structuralIdentity,
+      versions: _versions,
+      generationSourceUrl: _generationSourceUrl,
+      iterationCount: _iterationCount,
+      currentRoomType: _currentRoomType,
+      currentStyle: _currentStyle,
+      letAiDecide: _letAiDecide,
+      surpriseMe: _surpriseMe,
+      pendingDescription: _pendingDescription,
+    );
+    // Fire-and-forget; SharedPreferences.setString is locally fast.
+    unawaited(svc.save(id, state));
+  }
+
   // ── Supabase persistence ──────────────────────────────────────────────────
 
   /// Called once for new sessions. Creates the row in Supabase, persists the
@@ -328,6 +431,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       }
       debugPrint('[DB] _initNewSession() complete — _project.id updated to ${realProject.id}');
 
+      // Wave 4.10g — Supabase id is finalised; capture the initial snapshot
+      // so even a pre-V1 app restart preserves room/style/AI-Decide context.
+      _persistSession();
+
       // Auto-generate Vision 1 once the session and image are confirmed ready.
       debugPrint('[AutoGen] beforeImageUrl resolved — eligible: ${beforeUrl != null && mounted}');
       _triggerAutoGenerate();
@@ -370,6 +477,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
 
   void _exploreDirection(String style) {
     setState(() => _currentStyle = style);
+    _persistSession(); // Wave 4.10g — survive atmosphere swap
     _generate(overridePrompt: 'Redesign this space in the $style style.');
   }
 
@@ -406,6 +514,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
           _generationSourceUrl = lastGeneratedUrl;
         }
       });
+      // Wave 4.10g — capture the inferred state so a future restart skips
+      // re-inferring from the message stream. Handles backfill for sessions
+      // that pre-date the persistence layer.
+      _persistSession();
       _scrollToBottom();
     } catch (e, st) {
       debugPrint('[DB] _loadMessages() ERROR: $e');
@@ -754,6 +866,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
           createdAt: DateTime.now(),
         ));
       });
+      // Wave 4.10g — protocol tokens were just refreshed by the /generate
+      // response. Persist NOW so the next app restart skips re-capture and
+      // the V2+ lineage stays intact.
+      _persistSession();
       _scrollToBottom();
 
       // Reveal-chain observability: which images form this step's pair and
@@ -937,6 +1053,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
               createdAt: DateTime.now(),
             ));
           });
+          // Wave 4.10g — branch source change must survive restart so the
+          // next session reopen continues from the chosen vision.
+          _persistSession();
           _scrollToBottom();
         },
         initialRoomType: _currentRoomType,
@@ -947,6 +1066,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
             _currentRoomType = roomType;
             _currentStyle = style;
           });
+          // Wave 4.10g — room/atmosphere selection survives restart.
+          _persistSession();
         },
       ),
     );
