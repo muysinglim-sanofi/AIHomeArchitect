@@ -49,6 +49,10 @@ class AtmosphereCard extends StatelessWidget {
   // Custom-tile payload (null for normal atmosphere cards).
   final String? _customLabel;
   final String? _customSublabel;
+  // Wave 4.8.7 — true for the `.surprise` variant (AI direction). Same
+  // shell as `.custom`; adds a calm sparkle accent so it reads as a
+  // creative direction (not a settings option).
+  final bool _isSurprise;
 
   const AtmosphereCard({
     super.key,
@@ -58,7 +62,8 @@ class AtmosphereCard extends StatelessWidget {
     this.dark = false,
     this.variant = AtmosphereCardVariant.auto,
   })  : _customLabel = null,
-        _customSublabel = null;
+        _customSublabel = null,
+        _isSurprise = false;
 
   /// Shared "describe your own" tile — same shell language as the atmosphere
   /// cards (no image; calm editorial surface; identical selection cue).
@@ -74,9 +79,30 @@ class AtmosphereCard extends StatelessWidget {
     this.variant = AtmosphereCardVariant.auto,
   })  : atmosphere = null,
         _customLabel = label,
-        _customSublabel = sublabel;
+        _customSublabel = sublabel,
+        _isSurprise = false;
 
-  bool get _isCustom => atmosphere == null;
+  /// Wave 4.8.7 — AI atmosphere direction ("Surprise Me"). Same shell as
+  /// `.custom` (calm ink surface, no image, identical selection cue), with
+  /// a subtle sparkle accent so it reads as one of the creative atmosphere
+  /// directions — never a system toggle. Used as the FIRST card in the
+  /// atmosphere strip; the consumer drives selection via [selected].
+  const AtmosphereCard.surprise({
+    super.key,
+    required String label,
+    String? sublabel,
+    required this.selected,
+    required this.onTap,
+    this.dark = true,
+    this.variant = AtmosphereCardVariant.auto,
+  })  : atmosphere = null,
+        _customLabel = label,
+        _customSublabel = sublabel,
+        _isSurprise = true;
+
+  // `_hasImage` discriminates the photo-led atmosphere cards from the text
+  // tiles (`.custom` describe-your-own + `.surprise` AI direction).
+  bool get _hasImage => atmosphere != null;
 
   bool _isCompact(double h) {
     switch (variant) {
@@ -106,7 +132,7 @@ class AtmosphereCard extends StatelessWidget {
             AtmCardMode.compact => 12.5,
           };
           final showTagline =
-              !compact && !_isCustom && AppAdaptive.cardShowsTagline(h);
+              !compact && _hasImage && AppAdaptive.cardShowsTagline(h);
           final nameMaxLines = AppAdaptive.cardNameMaxLines(h);
           final taglineMaxLines = AppAdaptive.cardTaglineMaxLines(h);
 
@@ -127,7 +153,7 @@ class AtmosphereCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _isCustom ? _customLabel! : atmosphere!.name,
+                      _hasImage ? atmosphere!.name : _customLabel!,
                       maxLines: nameMaxLines,
                       overflow: TextOverflow.ellipsis,
                       style: AppTheme.atmosphereTitle(
@@ -137,13 +163,12 @@ class AtmosphereCard extends StatelessWidget {
                         height: 1.12,
                       ),
                     ),
-                    if (showTagline || (_isCustom && _customSublabel != null)) ...[
+                    if (showTagline ||
+                        (!_hasImage && _customSublabel != null)) ...[
                       const SizedBox(height: 2),
                       Text(
-                        _isCustom
-                            ? _customSublabel!
-                            : atmosphere!.tagline,
-                        maxLines: _isCustom ? 2 : taglineMaxLines,
+                        _hasImage ? atmosphere!.tagline : _customSublabel!,
+                        maxLines: _hasImage ? taglineMaxLines : 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: onSurface.withValues(alpha: 0.78),
@@ -157,11 +182,10 @@ class AtmosphereCard extends StatelessWidget {
               );
 
           // ── Background layer ──────────────────────────────────────────────
-          // Atmosphere card → full-bleed photo + bottom scrim.
-          // Custom tile    → calm solid editorial surface (no image).
-          final Widget background = _isCustom
-              ? const ColoredBox(color: AppColors.textPrimary)
-              : Stack(
+          // Atmosphere card  → full-bleed photo + bottom scrim.
+          // Custom / Surprise → calm solid editorial ink surface (no image).
+          final Widget background = _hasImage
+              ? Stack(
                   fit: StackFit.expand,
                   children: [
                     _AtmosphereHeroImage(atmosphere: atmosphere!),
@@ -171,7 +195,8 @@ class AtmosphereCard extends StatelessWidget {
                       extent: 0.62,
                     ),
                   ],
-                );
+                )
+              : const ColoredBox(color: AppColors.textPrimary);
 
           return AnimatedContainer(
             duration: const Duration(milliseconds: 200),
@@ -197,7 +222,7 @@ class AtmosphereCard extends StatelessWidget {
                 // sole anchor, so the overlaid name is ALWAYS legible (no more
                 // light-grey "floating text"). Image cards only — the custom
                 // tile is already a solid ink surface.
-                if (!_isCustom)
+                if (_hasImage)
                   DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -209,6 +234,20 @@ class AtmosphereCard extends StatelessWidget {
                           AppColors.textPrimary.withValues(alpha: 0.58),
                         ],
                       ),
+                    ),
+                  ),
+                // Wave 4.8.7 — subtle AI accent on the Surprise card
+                // (restrained sparkle, not a glowing orb). Sits on the same
+                // ink surface as the custom tile so the strip reads as one
+                // editorial selection language.
+                if (_isSurprise)
+                  const Positioned(
+                    top: 10,
+                    left: 10,
+                    child: Icon(
+                      Icons.auto_fix_high_outlined,
+                      size: 18,
+                      color: AppColors.surface,
                     ),
                   ),
                 Align(

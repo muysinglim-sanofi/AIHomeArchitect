@@ -28,16 +28,38 @@ class RoomTypeCard extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  /// Wave 4.8.7 — when true, this card renders the "AI Decide" creative
+  /// direction (subtle sparkle, calm ink surface, no curated image). It
+  /// stays inside the SAME shell as a normal RoomTypeCard so the row reads
+  /// as one editorial selection language, not a settings toggle.
+  final bool aiDecide;
+  final String? aiSublabel;
+
   const RoomTypeCard({
     super.key,
     required this.label,
     required this.selected,
     required this.onTap,
-  });
+  })  : aiDecide = false,
+        aiSublabel = null;
+
+  /// Premium AI-direction card — restrained visual treatment, identical
+  /// shell + selected language as a normal room card so it feels like one
+  /// of the cards, not a settings option. Used as the FIRST entry of the
+  /// room row to read as a creative direction.
+  const RoomTypeCard.ai({
+    super.key,
+    required this.label,
+    String? sublabel,
+    required this.selected,
+    required this.onTap,
+  })  : aiDecide = true,
+        aiSublabel = sublabel;
 
   @override
   Widget build(BuildContext context) {
-    final url = RoomTypeImages.urlForLabel(context.l10n, label);
+    final url =
+        aiDecide ? null : RoomTypeImages.urlForLabel(context.l10n, label);
 
     return TapScale(
       onTap: onTap,
@@ -66,63 +88,114 @@ class RoomTypeCard extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // Image, or the calm typographic fallback (never broken).
-                if (url != null)
-                  CachedNetworkImage(
-                    imageUrl: url,
-                    fit: BoxFit.cover,
-                    placeholder: (_, _) => const _RoomFallback(),
-                    errorWidget: (_, _, _) =>
-                        _RoomFallback(label: label, size: labelSize),
-                  )
-                else
-                  _RoomFallback(label: label, size: labelSize),
-
-                // A SINGLE calm legibility scrim (not "gradients everywhere")
-                // — only over the lower band, only where the label sits.
-                if (url != null)
-                  const Align(
-                    alignment: Alignment.bottomCenter,
-                    child: FractionallySizedBox(
-                      heightFactor: 0.62,
-                      widthFactor: 1,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Color(0x00000000),
-                              Color(0x8A0E0E0E),
+                if (aiDecide) ...[
+                  // AI direction — same shell, calm ink surface, subtle
+                  // sparkle accent + editorial label/sublabel. Restrained:
+                  // reads as a creative direction, NOT a settings option.
+                  const ColoredBox(color: AppColors.textPrimary),
+                  Padding(
+                    padding: EdgeInsets.all(compact ? 8 : 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Icon(Icons.auto_awesome_outlined,
+                            size: 18, color: AppColors.surface),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: AppColors.surface,
+                                fontWeight: FontWeight.w600,
+                                fontSize: labelSize,
+                                height: 1.15,
+                                letterSpacing: 0.1,
+                              ),
+                            ),
+                            if (aiSublabel != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                aiSublabel!,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: AppColors.surface
+                                      .withValues(alpha: 0.68),
+                                  fontSize:
+                                      (labelSize - 2).clamp(9.0, 12.0),
+                                  height: 1.2,
+                                ),
+                              ),
                             ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else ...[
+                  // Image, or the calm typographic fallback (never broken).
+                  if (url != null)
+                    CachedNetworkImage(
+                      imageUrl: url,
+                      fit: BoxFit.cover,
+                      placeholder: (_, _) => const _RoomFallback(),
+                      errorWidget: (_, _, _) =>
+                          _RoomFallback(label: label, size: labelSize),
+                    )
+                  else
+                    _RoomFallback(label: label, size: labelSize),
+
+                  // A SINGLE calm legibility scrim (not "gradients everywhere")
+                  // — only over the lower band, only where the label sits.
+                  if (url != null)
+                    const Align(
+                      alignment: Alignment.bottomCenter,
+                      child: FractionallySizedBox(
+                        heightFactor: 0.62,
+                        widthFactor: 1,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Color(0x00000000),
+                                Color(0x8A0E0E0E),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
 
-                // Label — bottom-left, restrained editorial caption.
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                      compact ? 8 : 10, 0, compact ? 8 : 10, compact ? 8 : 10),
-                  child: Align(
-                    alignment: Alignment.bottomLeft,
-                    child: Text(
-                      label,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: url != null
-                            ? AppColors.surface
-                            : AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: labelSize,
-                        height: 1.15,
-                        letterSpacing: 0.1,
+                  // Label — bottom-left, restrained editorial caption.
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(compact ? 8 : 10, 0,
+                        compact ? 8 : 10, compact ? 8 : 10),
+                    child: Align(
+                      alignment: Alignment.bottomLeft,
+                      child: Text(
+                        label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: url != null
+                              ? AppColors.surface
+                              : AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: labelSize,
+                          height: 1.15,
+                          letterSpacing: 0.1,
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
 
                 // Selected — obvious but elegant: a small accent check chip
                 // (no noisy full-card tint), paired with the 2px border.
@@ -200,6 +273,16 @@ class RoomTypeRow extends StatelessWidget {
   final String? selected;
   final ValueChanged<String> onSelected;
 
+  /// Wave 4.8.7 — optional leading AI-direction card. When both
+  /// [onAiDecide] and [aiLabel] are provided the row prepends a calm
+  /// AI card at index 0, visually unified with the other cards (same
+  /// shell / sizing / scroll behaviour). When omitted the row renders
+  /// exactly as before (chat re-upload sheet keeps its behaviour).
+  final bool aiDecideSelected;
+  final String? aiLabel;
+  final String? aiSublabel;
+  final VoidCallback? onAiDecide;
+
   /// Calm, modest footprint — deliberately smaller than the atmosphere
   /// strip so room selection never competes with mood selection.
   static const double rowHeight = 104;
@@ -210,20 +293,38 @@ class RoomTypeRow extends StatelessWidget {
     required this.rooms,
     required this.selected,
     required this.onSelected,
+    this.aiDecideSelected = false,
+    this.aiLabel,
+    this.aiSublabel,
+    this.onAiDecide,
   });
+
+  bool get _hasAi => onAiDecide != null && aiLabel != null;
 
   @override
   Widget build(BuildContext context) {
+    final leading = _hasAi ? 1 : 0;
     return SizedBox(
       height: rowHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         clipBehavior: Clip.none,
         padding: EdgeInsets.zero,
-        itemCount: rooms.length,
+        itemCount: rooms.length + leading,
         separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (context, i) {
-          final r = rooms[i];
+          if (_hasAi && i == 0) {
+            return SizedBox(
+              width: _cardWidth,
+              child: RoomTypeCard.ai(
+                label: aiLabel!,
+                sublabel: aiSublabel,
+                selected: aiDecideSelected,
+                onTap: onAiDecide!,
+              ),
+            );
+          }
+          final r = rooms[i - leading];
           return SizedBox(
             width: _cardWidth,
             child: RoomTypeCard(

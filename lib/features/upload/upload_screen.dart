@@ -8,9 +8,11 @@ import '../../core/l10n/app_localizations.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_pill.dart';
+import '../../core/services/voice_service.dart';
 import '../../shared/widgets/atmosphere_card.dart';
 import '../../shared/widgets/room_type_card.dart';
 import '../../shared/widgets/sticky_action_bar.dart';
+import '../chat/widgets/chat_input_bar.dart' show MicButton;
 
 // ── Wave 4.3 — New Design Session V2 ──────────────────────────────────────────
 // Premium architectural-direction flow. Consumes the Wave 4 spine
@@ -36,6 +38,13 @@ class _UploadScreenState extends State<UploadScreen>
   File? _image;
   String? _selectedRoom;
   String? _selectedStyle;
+  // Wave 4.8.5 — real conversational intent (carried as flags, never fake
+  // strings). AI Decide ⇄ explicit room are mutually exclusive; Surprise Me
+  // ⇄ explicit atmosphere likewise. Description is an optional free-text
+  // architectural direction that flows to the backend prompt verbatim.
+  bool _aiDecideRoom = false;
+  bool _surpriseStyle = false;
+  final _descController = TextEditingController();
   final _picker = ImagePicker();
 
   late final AnimationController _entryController;
@@ -52,6 +61,7 @@ class _UploadScreenState extends State<UploadScreen>
 
   @override
   void dispose() {
+    _descController.dispose();
     _entryController.dispose();
     super.dispose();
   }
@@ -124,21 +134,37 @@ class _UploadScreenState extends State<UploadScreen>
     );
   }
 
-  bool get _canProceed =>
-      _image != null && _selectedRoom != null && _selectedStyle != null;
+  bool get _roomChosen => _selectedRoom != null || _aiDecideRoom;
+  bool get _styleChosen => _selectedStyle != null || _surpriseStyle;
+  bool get _canProceed => _image != null && _roomChosen && _styleChosen;
 
   // Calm, specific hint for the disabled state (premium, never a dead button).
   String get _missingHint {
     if (_image == null) return 'Add a photo of your space to begin';
-    if (_selectedRoom == null) return 'Choose what you\'re transforming';
-    return 'Pick an atmosphere direction';
+    if (!_roomChosen) return 'Choose a room — or let the AI decide';
+    return 'Pick an atmosphere — or let the AI surprise you';
   }
 
   void _start() {
-    context.pushReplacement(
-      '/chat/new?roomType=${Uri.encodeComponent(_selectedRoom!)}&style=${Uri.encodeComponent(_selectedStyle!)}',
-      extra: _image,
-    );
+    // Real semantics only — AI Decide / Surprise Me travel as typed flags,
+    // never as fake "AI Decide"/"Surprise Me" room/style strings. The
+    // optional free-text direction rides as `desc` → backend prompt.
+    final params = <String, String>{};
+    if (_aiDecideRoom) {
+      params['aiDecide'] = '1';
+    } else {
+      params['roomType'] = _selectedRoom!;
+    }
+    if (_surpriseStyle) {
+      params['surprise'] = '1';
+    } else {
+      params['style'] = _selectedStyle!;
+    }
+    final desc = _descController.text.trim();
+    if (desc.isNotEmpty) params['desc'] = desc;
+
+    final uri = Uri(path: '/chat/new', queryParameters: params);
+    context.pushReplacement(uri.toString(), extra: _image);
   }
 
   @override
@@ -186,20 +212,68 @@ class _UploadScreenState extends State<UploadScreen>
                     const SizedBox(height: AppSpacing.xl),
                     _UploadZone(image: _image, onTap: _showImagePicker),
                     const SizedBox(height: AppSpacing.xl),
+                    // Wave 4.8.7 — AI Decide is now the FIRST card in the
+                    // Interior row (`RoomTypeRow.aiDecide…`), not a separate
+                    // settings-style bar. One editorial selection language.
                     _Eyebrow(label: l10n.roomTypeLabel),
                     const SizedBox(height: AppSpacing.md),
                     _RoomScroller(
                       selected: _selectedRoom,
-                      onSelected: (v) => setState(() => _selectedRoom = v),
+                      onSelected: (v) => setState(() {
+                        _selectedRoom = v;
+                        _aiDecideRoom = false;
+                      }),
+                      aiDecideSelected: _aiDecideRoom,
+                      onAiDecide: () => setState(() {
+                        _aiDecideRoom = !_aiDecideRoom;
+                        if (_aiDecideRoom) _selectedRoom = null;
+                      }),
                     ),
                     const SizedBox(height: AppSpacing.xl),
+                    // Wave 4.8.7 — Surprise Me is now the FIRST card in the
+                    // atmosphere strip (`AtmosphereCard.surprise`), a creative
+                    // direction, not a system toggle.
                     _Eyebrow(label: l10n.styleLabel),
                     const SizedBox(height: AppSpacing.md),
                     _AtmosphereScroller(
                       selected: _selectedStyle,
-                      onSelected: (v) => setState(() => _selectedStyle = v),
+                      onSelected: (v) => setState(() {
+                        _selectedStyle = v;
+                        _surpriseStyle = false;
+                      }),
+                      surpriseSelected: _surpriseStyle,
+                      onSurprise: () => setState(() {
+                        _surpriseStyle = !_surpriseStyle;
+                        if (_surpriseStyle) _selectedStyle = null;
+                      }),
+                    ),
+                    const SizedBox(height: AppSpacing.xxl),
+                    // Wave 4.8.7 — description elevation. The architectural
+                    // briefing is one of the most important creative surfaces
+                    // in the app, so it leads with an editorial heading
+                    // (display type), generous breathing, and a calmer hint —
+                    // never a small eyebrow + form-like field.
+                    Text(
+                      'Describe your vision',
+                      style: AppTheme.displayEditorial(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w500,
+                        height: 1.15,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Optional — brief the architect in your own words. '
+                      'You can speak or type.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.textTertiary,
+                            height: 1.4,
+                          ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
+                    _DescriptionField(controller: _descController),
+                    const SizedBox(height: AppSpacing.xl),
                   ],
                 ),
               ),
@@ -241,6 +315,173 @@ class _Eyebrow extends StatelessWidget {
             fontSize: 11,
             color: AppColors.textTertiary,
           ),
+    );
+  }
+}
+
+// Wave 4.8.7: `_AiChoiceBar` (the settings-style toggle row) was removed.
+// AI Decide and Surprise Me are now real cards INSIDE the room / atmosphere
+// selectors (`RoomTypeCard.ai` + `AtmosphereCard.surprise`) — one editorial
+// selection language, no settings-style fragment. Backend semantics
+// (`_aiDecideRoom` / `_surpriseStyle` → `let_ai_decide` / `surprise_me_flag`)
+// are preserved verbatim from Wave 4.8.5.
+
+// Calm free-text architectural direction — premium, not form-like. Multiline,
+// keyboard-safe (lives inside the page SingleChildScrollView). Wave 4.8: real
+// voice dictation via the shared `VoiceService` + the same `MicButton` the
+// chat input bar uses → one voice language across the conversational system.
+class _DescriptionField extends StatefulWidget {
+  final TextEditingController controller;
+  const _DescriptionField({required this.controller});
+
+  @override
+  State<_DescriptionField> createState() => _DescriptionFieldState();
+}
+
+class _DescriptionFieldState extends State<_DescriptionField>
+    with SingleTickerProviderStateMixin {
+  final VoiceService _voice = VoiceService();
+  bool _voiceAvailable = false;
+  bool _isListening = false;
+  String _dictationPrefix = '';
+
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _pulseScale;
+  late final Animation<double> _pulseOpacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    );
+    _pulseScale = Tween<double>(begin: 1.0, end: 1.85)
+        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeOut));
+    _pulseOpacity = Tween<double>(begin: 0.38, end: 0.0)
+        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeOut));
+    _initVoice();
+  }
+
+  Future<void> _initVoice() async {
+    final ok = await _voice.initialize();
+    if (mounted) setState(() => _voiceAvailable = ok);
+  }
+
+  Future<void> _toggleListening() async {
+    if (_isListening) {
+      await _voice.stop();
+    } else {
+      await _startListening();
+    }
+  }
+
+  Future<void> _startListening() async {
+    if (!_voiceAvailable || !mounted) return;
+    // Append, never overwrite — preserve anything the user already typed.
+    final existing = widget.controller.text;
+    final separator = (existing.isEmpty ||
+            existing.endsWith(' ') ||
+            existing.endsWith('\n'))
+        ? ''
+        : ' ';
+    _dictationPrefix = existing + separator;
+
+    setState(() => _isListening = true);
+    _pulseCtrl.repeat();
+    await _voice.start(
+      onPartial: _applyTranscript,
+      onFinal: _applyTranscript,
+      onStop: _handleStop,
+      onError: (_) => _handleStop(),
+    );
+  }
+
+  void _applyTranscript(String words) {
+    if (!mounted) return;
+    final combined = _dictationPrefix + words;
+    widget.controller.text = combined;
+    widget.controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: combined.length),
+    );
+  }
+
+  void _handleStop() {
+    if (!mounted) return;
+    _pulseCtrl.stop();
+    _pulseCtrl.reset();
+    setState(() => _isListening = false);
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    _voice.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final field = TextField(
+      controller: widget.controller,
+      // Wave 4.8.7: more presence for the briefing surface (3-5 lines,
+      // calmer 1.5 leading, slightly larger body) without becoming an
+      // enterprise textarea.
+      minLines: 3,
+      maxLines: 5,
+      textInputAction: TextInputAction.newline,
+      style: Theme.of(context)
+          .textTheme
+          .bodyMedium
+          ?.copyWith(height: 1.5, fontSize: 15),
+      decoration: InputDecoration(
+        hintText: _isListening
+            ? 'Listening…'
+            : 'e.g. “turn the rear space into a bedroom”, “keep the structure '
+                'but modernize everything”, “add a warm tropical resort feeling”',
+        hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: AppColors.textTertiary,
+              height: 1.5,
+              fontSize: 14,
+            ),
+        filled: true,
+        fillColor: AppColors.surfaceVariant,
+        contentPadding: const EdgeInsets.all(16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+          borderSide: BorderSide(color: AppColors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+          borderSide: BorderSide(color: AppColors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+          borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+        ),
+      ),
+    );
+
+    if (!_voiceAvailable) return field;
+
+    // Row aligned to the bottom so the mic sits at the same baseline as the
+    // last line of the multiline field — no layout jumps as lines wrap.
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(child: field),
+        const SizedBox(width: 8),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: MicButton(
+            isListening: _isListening,
+            enabled: true,
+            pulseScale: _pulseScale,
+            pulseOpacity: _pulseOpacity,
+            onTap: _toggleListening,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -320,7 +561,17 @@ class _UploadZone extends StatelessWidget {
 class _RoomScroller extends StatelessWidget {
   final String? selected;
   final ValueChanged<String> onSelected;
-  const _RoomScroller({this.selected, required this.onSelected});
+  // Wave 4.8.7 — AI Decide rides at position 0 of the INTERIOR row so the
+  // creative direction lives inside the same selection language. Exterior
+  // keeps its existing behaviour (no AI prefix).
+  final bool aiDecideSelected;
+  final VoidCallback? onAiDecide;
+  const _RoomScroller({
+    this.selected,
+    required this.onSelected,
+    this.aiDecideSelected = false,
+    this.onAiDecide,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -334,6 +585,11 @@ class _RoomScroller extends StatelessWidget {
           rooms: l10n.interiorRooms,
           selected: selected,
           onSelected: onSelected,
+          aiDecideSelected: aiDecideSelected,
+          aiLabel: onAiDecide != null ? 'AI Decide' : null,
+          aiSublabel:
+              onAiDecide != null ? 'Infer the room from your photo' : null,
+          onAiDecide: onAiDecide,
         ),
         const SizedBox(height: 16),
         _RoomGroupLabel(label: l10n.exteriorSection),
@@ -375,7 +631,17 @@ class _RoomGroupLabel extends StatelessWidget {
 class _AtmosphereScroller extends StatelessWidget {
   final String? selected;
   final ValueChanged<String> onSelected;
-  const _AtmosphereScroller({this.selected, required this.onSelected});
+  // Wave 4.8.7 — Surprise Me rides at position 0 as a real `AtmosphereCard
+  // .surprise` (creative direction, not a system toggle). When [onSurprise]
+  // is null the strip renders exactly as before.
+  final bool surpriseSelected;
+  final VoidCallback? onSurprise;
+  const _AtmosphereScroller({
+    this.selected,
+    required this.onSelected,
+    this.surpriseSelected = false,
+    this.onSurprise,
+  });
 
   // Exact value preserved — route/backend interpret this literal (chat custom
   // path). Do NOT change.
@@ -384,16 +650,30 @@ class _AtmosphereScroller extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final atmospheres = AppLocalizations.atmospheres;
+    final hasSurprise = onSurprise != null;
+    final leading = hasSurprise ? 1 : 0;
     return SizedBox(
       height: 200,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         clipBehavior: Clip.none,
-        itemCount: atmospheres.length + 1,
+        itemCount: atmospheres.length + 1 + leading,
         separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
-          if (index < atmospheres.length) {
-            final a = atmospheres[index];
+          if (hasSurprise && index == 0) {
+            return SizedBox(
+              width: 150,
+              child: AtmosphereCard.surprise(
+                label: 'Surprise Me',
+                sublabel: 'Let the AI choose a fitting atmosphere',
+                selected: surpriseSelected,
+                onTap: onSurprise!,
+              ),
+            );
+          }
+          final atmosphereIndex = index - leading;
+          if (atmosphereIndex < atmospheres.length) {
+            final a = atmospheres[atmosphereIndex];
             return SizedBox(
               width: 150,
               child: AtmosphereCard(
