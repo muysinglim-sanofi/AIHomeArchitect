@@ -42,5 +42,11 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Wave 4.8: native discovery for the on-device SpeechRecognizer
+             (Android 11+ package-visibility rules). Pure native config —
+             RECORD_AUDIO permission is already declared above. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
+        </intent>
     </queries>
 </manifest>
