@@ -69,6 +69,14 @@ class GenerationService {
   /// the backend and returned in success/error responses for reconciliation.
   ///
   /// Throws [GenerationException] when the backend returns a structured error.
+  /// [letAiDecide]: Wave 4.8.5 — sends the real `let_ai_decide` semantic flag
+  /// so the backend infers the primary room type from the image
+  /// (`classify_room`) instead of trusting an explicit/empty `roomType`.
+  /// [surpriseMe]: sends the real `surprise_me_flag` so the backend selects
+  /// the best-fitting atmosphere (`surprise_me`) and overrides `style_label`
+  /// internally. Neither is ever a fake "AI Decide"/"Surprise Me" string —
+  /// the free-text architectural direction flows through [prompt] (→ the
+  /// composer's existing design-direction / refinement path).
   Future<Map<String, dynamic>> generate({
     required String sessionId,
     required String prompt,
@@ -79,6 +87,10 @@ class GenerationService {
     String history = '',
     String originalImageUrl = '',
     String clientRequestId = '',
+    bool letAiDecide = false,
+    bool surpriseMe = false,
+    String structuralIdentity = '',
+    String versions = '',
   }) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
@@ -93,6 +105,10 @@ class GenerationService {
           'history': history,
           'original_image_url': originalImageUrl,
           'client_request_id': clientRequestId,
+          'let_ai_decide': letAiDecide.toString(),
+          'surprise_me_flag': surpriseMe.toString(),
+          'structural_identity': structuralIdentity,
+          'versions': versions,
         }),
       );
       return res.data!;

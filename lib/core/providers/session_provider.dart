@@ -72,6 +72,25 @@ class SessionNotifier extends StateNotifier<List<ProjectModel>> {
     _svc.updateLatestPreview(id, previewUrl); // fire-and-forget
   }
 
+  // Wave 5.3.2 — in-memory propagation of the initial upload URL.
+  //
+  // createSession() writes the session row BEFORE the source image is
+  // uploaded (chat_screen needs the row id to namespace the upload path),
+  // so the row is inserted with before_image_url == null. chat_screen
+  // then uploads and PATCHES the row via _svc.updateBeforeImageUrl().
+  // That DB write was correctly persisting, but the in-memory ProjectModel
+  // inside this notifier kept its initial null beforeImageUrl — so
+  // before_after_screen._sessionOriginalUrl() returned null and the
+  // hold-to-original overlay fell back to the per-step generation source
+  // (which for V2+ is the previous render, not the user's upload).
+  //
+  // This mutator closes that gap. It is in-memory propagation ONLY — the
+  // DB write is already performed by chat_screen via SupabaseService.
+  // Do NOT double-write here.
+  void updateBeforeImageUrl(String id, String url) {
+    _applyToState(id, (p) => p.copyWith(beforeImageUrl: url, lastUpdatedAt: DateTime.now()));
+  }
+
   void addMessageToSession(String sessionId, MessageModel message) {
     _applyToState(sessionId, (p) => p.copyWith(
       messages: [...p.messages, message],

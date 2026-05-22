@@ -77,14 +77,24 @@ final appRouter = GoRouter(
       path: '/chat/:projectId',
       pageBuilder: (context, state) {
         final projectId = state.pathParameters['projectId'] ?? '1';
-        final roomType = state.uri.queryParameters['roomType'];
-        final style = state.uri.queryParameters['style'];
+        final q = state.uri.queryParameters;
+        final roomType = q['roomType'];
+        final style = q['style'];
+        // Wave 4.8.5 — real semantic intent carried as typed flags, never
+        // fake "AI Decide"/"Surprise Me" strings. roomType/style are simply
+        // omitted by the upload screen when their AI counterpart is chosen.
+        final aiDecide = q['aiDecide'] == '1';
+        final surprise = q['surprise'] == '1';
+        final description = q['desc'];
         final sourceImageFile = state.extra as File?;
         return _slideUpPage(
           ChatScreen(
             projectId: projectId,
             initialRoomType: roomType,
             initialStyle: style,
+            initialAiDecide: aiDecide,
+            initialSurprise: surprise,
+            initialDescription: description,
             sourceImageFile: sourceImageFile,
           ),
           state,

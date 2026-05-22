@@ -10,7 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart' show Share;
-import 'package:speech_to_text/speech_to_text.dart';
+import 'widgets/chat_input_bar.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
@@ -45,12 +45,22 @@ class ChatScreen extends ConsumerStatefulWidget {
   final String projectId;
   final String? initialRoomType;
   final String? initialStyle;
+  // Wave 4.8.5 — real conversational-intelligence intent (never fake
+  // strings). When [initialAiDecide] the backend infers the room; when
+  // [initialSurprise] the backend selects the atmosphere; [initialDescription]
+  // is the user's free-text architectural direction → V1 prompt.
+  final bool initialAiDecide;
+  final bool initialSurprise;
+  final String? initialDescription;
   final File? sourceImageFile;
   const ChatScreen({
     super.key,
     required this.projectId,
     this.initialRoomType,
     this.initialStyle,
+    this.initialAiDecide = false,
+    this.initialSurprise = false,
+    this.initialDescription,
     this.sourceImageFile,
   });
 
@@ -82,9 +92,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   late String _currentRoomType;
   late String _currentStyle;
 
+  // Wave 4.8.5 — real semantic intent for the FIRST vision. Sent as flags to
+  // /generate (let_ai_decide / surprise_me_flag); the description becomes the
+  // V1 prompt → composer design-direction. Only meaningful at V1: once the
+  // room is inferred / atmosphere chosen, later refinements steer normally.
+  bool _letAiDecide = false;
+  bool _surpriseMe = false;
+  String? _pendingDescription;
+
   late ProjectModel _project;
   late List<MessageModel> _messages;
   late int _iterationCount;
+
+  // Wave 4.7.2 — persisted architectural identity token (one-time capture at
+  // V1, round-tripped on V2+ so structural_identity_clause stays present).
+  String _structuralIdentity = '';
+  // Wave 4.7.3 — client-persisted version ledger so the backend can resolve
+  // LATEST / SPECIFIC_VERSION without server-side session state.
+  String _versions = '';
 
   late final SupabaseService _svc;
   // Messages queued while the Supabase session is still being created.
@@ -124,8 +149,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     _svc = ref.read(supabaseServiceProvider);
 
     if (widget.projectId == 'new') {
-      final roomType = widget.initialRoomType ?? 'Living Room';
-      final style = widget.initialStyle ?? 'Modern Minimalist';
+      _letAiDecide = widget.initialAiDecide;
+      _surpriseMe = widget.initialSurprise;
+      final desc = widget.initialDescription?.trim();
+      _pendingDescription = (desc != null && desc.isNotEmpty) ? desc : null;
+
+      // Real semantics, never fake strings:
+      //  • AI Decide → no explicit room (backend infers via classify_room).
+      //  • Surprise Me → a neutral, inert display/fallback label ("AI's
+      //    choice"); the operative selection is surprise_me_flag, which the
+      //    backend resolves to a real atmosphere and overrides internally.
+      final roomType = _letAiDecide ? '' : (widget.initialRoomType ?? 'Living Room');
+      final style = _surpriseMe
+          ? "AI's choice"
+          : (widget.initialStyle ?? 'Modern Minimalist');
+
+      final greeting = () {
+        if (_letAiDecide && _surpriseMe) {
+          return 'Your space is ready. I’ll read the architecture, choose a '
+              'fitting direction, and generate your first vision now.';
+        }
+        if (_surpriseMe) {
+          return 'Your space is ready. I’ll choose an atmosphere that suits '
+              'this space and generate your first vision now.';
+        }
+        if (_letAiDecide) {
+          return 'Your space is ready. I’ll read your space and generate your '
+              'first $style vision now.';
+        }
+        return 'Your space is ready. Generating your first $style vision now.';
+      }();
+
       _project = ProjectModel(
         id: 'new',
         title: 'New Design Session',
@@ -142,7 +196,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       _messages = [
         MessageModel(
           id: 'initial',
-          content: 'Your space is ready. Generating your first $style vision now.',
+          content: greeting,
           isAi: true,
           createdAt: DateTime.now(),
         ),
@@ -230,6 +284,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
             bytes: bytes,
           );
           await _svc.updateBeforeImageUrl(realProject.id, beforeUrl);
+          // Wave 5.3.2 — propagate the upload URL into sessionProvider so the
+          // reveal screen's _sessionOriginalUrl() lookup resolves to the real
+          // initial upload (previously it stayed null until next session reload,
+          // causing the hold-to-original overlay to fall back to the per-step
+          // generation source — i.e. the latest render — on V2+ refinements).
+          ref.read(sessionProvider.notifier)
+              .updateBeforeImageUrl(realProject.id, beforeUrl);
           debugPrint('[DB] _initNewSession() source image uploaded — url: $beforeUrl');
         } catch (uploadErr) {
           debugPrint('[DB] _initNewSession() image upload failed (non-fatal): $uploadErr');
@@ -291,7 +352,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     }
     debugPrint('[AutoGen] triggering Vision 1 auto-generation');
     _hasAutoGeneratedInitialVision = true;
-    _generate(overridePrompt: 'Generate the first architectural vision for this space.');
+    // Wave 4.8.5: the user's free-text architectural direction IS the V1
+    // prompt → backend `prompt` → composer design-direction / refinement
+    // authority (e.g. "turn the rear space into a bedroom"). It influences
+    // generation honestly; falls back to the neutral first-vision prompt.
+    _generate(
+      overridePrompt: _pendingDescription ??
+          'Generate the first architectural vision for this space.',
+    );
   }
 
   /// Generates a 32-char hex request ID for idempotency tracking.
@@ -535,6 +603,50 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       contextMessages.map((m) => {'role': m.isAi ? 'ai' : 'user', 'content': m.content}).toList(),
     );
 
+    // Wave 5.5.5 round-trip — for card-tap flows (overridePrompt provided by
+    // _exploreDirection at V2+), the user intent text must persist in _messages
+    // so FUTURE iterations find it during backend's backward atmosphere walk
+    // (_previous_atmosphere_id_from_history). Critical constraints:
+    //   1. Insert AFTER history is built so the CURRENT message doesn't appear
+    //      in the history sent on this request (which would shadow the previous
+    //      atmosphere and break switch detection — prev_id would equal current).
+    //   2. Skip for V1 auto-gen (`_iterationCount == 0`). The V1 auto-gen prompt
+    //      ("Generate the first architectural vision for this space." or any
+    //      _pendingDescription) doesn't match any TransformationType regex →
+    //      classifies as UNKNOWN → backend's `detect_history_customizations`
+    //      treats UNKNOWN as customization (conservative policy) → at V2 the
+    //      strategy becomes REBOOT_CUSTOMIZED instead of REBOOT_FRESH, keeping
+    //      source_mode=LATEST and breaking the pure-switch contract.
+    //      The V1 AI greeting "Your space is ready. Generating your first
+    //      $style vision now." (line 173) already gives the backend regex
+    //      _GREETING_ATMOS_RE everything it needs to identify V1's atmosphere.
+    //   3. Skip when the typed-message flow (_send) already added a matching
+    //      userMsg — `_send` inserts userMsg into _messages BEFORE calling
+    //      `_generate`, so contextMessages already has it.
+    if (overridePrompt != null &&
+        overridePrompt.isNotEmpty &&
+        _iterationCount >= 1) {
+      final lastTypedUser = contextMessages
+          .where((m) => !m.isAi)
+          .lastOrNull;
+      if (lastTypedUser?.content != overridePrompt) {
+        final userMsg = MessageModel(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          content: overridePrompt,
+          isAi: false,
+          createdAt: DateTime.now(),
+        );
+        setState(() {
+          _messages.add(userMsg);
+        });
+        if (_project.id != 'new') {
+          _svc.insertMessage(sessionId: _project.id, role: 'user', content: overridePrompt);
+        } else {
+          _pendingMessages.add(userMsg);
+        }
+      }
+    }
+
     setState(() {
       _isGenerating = true;
       // Content encodes "<iteration>|<style>" so the loading bubble can pick
@@ -574,6 +686,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     });
 
     try {
+      // Wave 4.8.5: the AI-intent flags are only meaningful for the FIRST
+      // vision (room inference / atmosphere selection happen once). Later
+      // refinements steer normally, so they are not re-sent.
+      final isFirstVision = newCount == 1;
       final result = await GenerationService().generate(
         sessionId: _project.id,
         prompt: prompt,
@@ -584,6 +700,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         history: history,
         originalImageUrl: originalUrl ?? '',   // structural anchor — keeps geometry stable
         clientRequestId: clientRequestId,
+        letAiDecide: _letAiDecide && isFirstVision,
+        surpriseMe: _surpriseMe && isFirstVision,
+        // Wave 4.7.2 / 4.7.3 — round-trip the persisted protocol fields so
+        // structural_identity_clause and version ledger survive across V2+.
+        structuralIdentity: _structuralIdentity,
+        versions: _versions,
       );
 
       _longGenerationTimer?.cancel();
@@ -593,12 +715,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       final afterUrl = result['after_image_url'] as String;
       final aiText = result['ai_message'] as String;
       final rawChips = result['suggestions'] as List<dynamic>?;
+      // Wave 4.7.2 / 4.7.3 — capture the backend's persisted protocol fields
+      // for round-trip on the next /generate. Null-safe; preserve prior value
+      // if backend omits / sends empty (older sessions, partial responses).
+      final returnedIdentity = result['structural_identity'] as String?;
+      final returnedVersions = result['versions'] as String?;
 
       setState(() {
         _isGenerating = false;
         _hasGenerated = true;
         _iterationCount = newCount;
         _generationSourceUrl = afterUrl;  // next refinement edits this output
+        if (returnedIdentity != null && returnedIdentity.isNotEmpty) {
+          _structuralIdentity = returnedIdentity;
+        }
+        if (returnedVersions != null && returnedVersions.isNotEmpty) {
+          _versions = returnedVersions;
+        }
         if (rawChips != null && rawChips.isNotEmpty) {
           _dynamicSuggestions = rawChips.cast<String>();
         }
@@ -996,7 +1129,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
               onTap: _send,
               enabled: !_isGenerating && !_isChatting,
             ),
-            _InputBar(
+            ChatInputBar(
               controller: _inputController,
               onSend: _send,
               enabled: !_isGenerating && !_isChatting,
@@ -1756,219 +1889,12 @@ class _SuggestionBar extends StatelessWidget {
   }
 }
 
-class _InputBar extends StatefulWidget {
-  final TextEditingController controller;
-  final ValueChanged<String> onSend;
-  final bool enabled;
-  const _InputBar({required this.controller, required this.onSend, required this.enabled});
-
-  @override
-  State<_InputBar> createState() => _InputBarState();
-}
-
-class _InputBarState extends State<_InputBar> with SingleTickerProviderStateMixin {
-  final _speech = SpeechToText();
-  bool _speechAvailable = false;
-  bool _isListening = false;
-
-  late final AnimationController _pulseCtrl;
-  late final Animation<double> _pulseScale;
-  late final Animation<double> _pulseOpacity;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.controller.addListener(_onTextChanged);
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    );
-    _pulseScale = Tween<double>(begin: 1.0, end: 1.85)
-        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeOut));
-    _pulseOpacity = Tween<double>(begin: 0.38, end: 0.0)
-        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeOut));
-    _initSpeech();
-  }
-
-  void _onTextChanged() => setState(() {});
-
-  Future<void> _initSpeech() async {
-    _speechAvailable = await _speech.initialize(
-      onError: (_) => _stop(),
-      onStatus: (status) {
-        if (status == 'done' || status == 'notListening') _stop();
-      },
-    );
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _toggleListening() async {
-    _isListening ? _stop() : await _startListening();
-  }
-
-  Future<void> _startListening() async {
-    if (!_speechAvailable || !mounted) return;
-    setState(() => _isListening = true);
-    _pulseCtrl.repeat();
-    await _speech.listen(
-      onResult: (result) {
-        if (!mounted) return;
-        widget.controller.text = result.recognizedWords;
-        widget.controller.selection = TextSelection.fromPosition(
-          TextPosition(offset: widget.controller.text.length),
-        );
-      },
-      listenOptions: SpeechListenOptions(partialResults: true, cancelOnError: true),
-    );
-  }
-
-  void _stop() {
-    _speech.stop();
-    _pulseCtrl.stop();
-    _pulseCtrl.reset();
-    if (mounted) setState(() => _isListening = false);
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_onTextChanged);
-    _pulseCtrl.dispose();
-    _speech.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final hasText = widget.controller.text.trim().isNotEmpty;
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.pagePadding,
-        AppSpacing.sm,
-        AppSpacing.pagePadding,
-        AppSpacing.sm + MediaQuery.of(context).padding.bottom,
-      ),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: widget.controller,
-              enabled: widget.enabled,
-              decoration: InputDecoration(
-                hintText: _isListening
-                    ? 'Listening…'
-                    : widget.enabled ? l10n.chatPlaceholder : l10n.chatGeneratingHint,
-                filled: true,
-                fillColor: AppColors.background,
-              ),
-              onSubmitted: widget.enabled ? widget.onSend : null,
-              textInputAction: TextInputAction.send,
-              maxLines: null,
-            ),
-          ),
-          const SizedBox(width: 8),
-          if (_speechAvailable) ...[
-            _MicButton(
-              isListening: _isListening,
-              enabled: widget.enabled,
-              pulseScale: _pulseScale,
-              pulseOpacity: _pulseOpacity,
-              onTap: widget.enabled ? _toggleListening : null,
-            ),
-            const SizedBox(width: 8),
-          ],
-          AnimatedOpacity(
-            opacity: widget.enabled && hasText ? 1.0 : 0.3,
-            duration: const Duration(milliseconds: 200),
-            child: GestureDetector(
-              onTap: widget.enabled && hasText ? () => widget.onSend(widget.controller.text) : null,
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: AppColors.textPrimary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.arrow_upward_rounded, color: AppColors.surface, size: 20),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MicButton extends StatelessWidget {
-  final bool isListening;
-  final bool enabled;
-  final Animation<double> pulseScale;
-  final Animation<double> pulseOpacity;
-  final VoidCallback? onTap;
-  const _MicButton({
-    required this.isListening,
-    required this.enabled,
-    required this.pulseScale,
-    required this.pulseOpacity,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 44,
-        height: 44,
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            if (isListening)
-              AnimatedBuilder(
-                animation: pulseScale,
-                builder: (ctx, child) => Opacity(
-                  opacity: pulseOpacity.value.clamp(0.0, 1.0),
-                  child: Container(
-                    width: 36 * pulseScale.value,
-                    height: 36 * pulseScale.value,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.accent, width: 1.5),
-                    ),
-                  ),
-                ),
-              ),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: isListening
-                    ? AppColors.accent.withValues(alpha: 0.12)
-                    : Colors.transparent,
-                shape: BoxShape.circle,
-              ),
-              child: AnimatedOpacity(
-                opacity: enabled ? (isListening ? 1.0 : 0.55) : 0.2,
-                duration: const Duration(milliseconds: 200),
-                child: Icon(
-                  isListening ? Icons.mic : Icons.mic_none_outlined,
-                  size: 20,
-                  color: isListening ? AppColors.accent : AppColors.textSecondary,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// Wave 4.8: `_InputBar` / `_MicButton` were extracted to
+// `features/chat/widgets/chat_input_bar.dart` (the canonical chat input bar),
+// and now consume the shared `VoiceService` for dictation. Behaviour is
+// preserved verbatim (controller / onSend / enabled contract); the upload
+// description field uses the same `MicButton` + `VoiceService` for one
+// consistent voice language across the conversational system.
 
 // ── Source context strip ──────────────────────────────────────────────────────
 
