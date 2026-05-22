@@ -521,13 +521,13 @@ class _ChatDemoSlideState extends State<_ChatDemoSlide> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _CaptionLine(
-                  text: 'A little warmer. A little calmer.',
+                  text: 'Renew my villa, add a swimming pool, surprise me',
                   isUser: true,
                   visible: _showUser,
                 ),
                 const SizedBox(height: 6),
                 _CaptionLine(
-                  text: 'Same architecture — warmer light, softer materials.',
+                  text: 'Modern architecture — warmer, swimming pool and playground',
                   isUser: false,
                   visible: _showAi,
                 ),
@@ -677,183 +677,240 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
       final atm = kAtmospheres[_selected];
       final screenH = MediaQuery.sizeOf(context).height;
 
-      // Wave 4.10f (#4 — Option C, hybrid balance): a literal ~47% hero is
-      // geometrically impossible alongside the full 140-px strip + the
-      // editorial title without overflow (proven: only ~210 px of vertical
-      // room exists on an 812-pt device after the preserved strip/title/
-      // chrome — which is exactly the old AppAdaptive value). Hybrid: a
-      // MODESTLY compacted strip + tighter LOCAL spacings + a 2-line
-      // subtitle let the hero be the dominant element (~40% intent — it
-      // fills the remaining space, ≈40% of the slide region on SE rising
-      // to ≈40% of the full viewport on Max) with a guaranteed no-overflow
-      // scroll safety-net for sub-SE / huge font scale. app_adaptive.dart
-      // stays untouched (read-only): strip/spacing are capped LOCALLY here.
-      final adaptiveStrip = AppAdaptive.ftueCardStripHeight(screenH);
-      final stripH = adaptiveStrip > 100.0 ? 100.0 : adaptiveStrip;
-      final cardW = AppAdaptive.ftueCardWidth(screenH);
-      final innerSpacing =
-          AppAdaptive.ftueInnerSpacing(screenH).clamp(4.0, 10.0).toDouble();
-      final titleSpacing =
-          AppAdaptive.ftueTitleSpacing(screenH).clamp(6.0, 14.0).toDouble();
+      // Wave 4.10j (FTUE 3 FINAL hero-dominance correction):
+      //   Previous 4.10i still left hero/cards too balanced (304/180 on
+      //   Pixel 6 = 47.5%/28% of PageView). User intent: hero must EMOTIONALLY
+      //   dominate (55-60% of PageView region) and cards must feel like
+      //   secondary preview strip, NOT a featured gallery.
+      //
+      //   Changes vs 4.10i:
+      //     - Strip height: 190/180/155 → 130/120/110 (significant reduction)
+      //       Cards now in AtmCardMode.semi (115-160), still above original
+      //       FTUE compact mode (100) — premium feel preserved via taller
+      //       images (63% ratio) and tagline visible (1 line).
+      //     - Card width: 142/132/120 → 110/100/95 (smaller per the
+      //       "cards SECONDARY" principle; 3-3.5 cards visible like a calm
+      //       horizontal preview strip)
+      //     - Hero ceiling: 0.62 → 0.65 (more room for cinematic dominance
+      //       on tall devices)
+      //     - Title reservation: 88 → 80 (1 tightening; preserves 2-line
+      //       layout for "Infinite architectural\ndirections.")
+      //     - Title spacings: preserved at 20-28 (per user spec — good)
+      //
+      //   Budget on Pixel 6 (~890 screen, ~640 avail):
+      //     - reserved = 8 + 22 + 80 + 22 + 130 + 16 = 278
+      //     - hero raw = 640 - 278 = 362 (vs 304 in 4.10i — +58px, +19%)
+      //     - hero clamped to [168, 0.65*890=579] = 362
+      //     - hero / avail = 56.6% ✓ in 55-60% target
+      //     - hero / strip ratio = 362/130 = 2.78 (was 1.69) — hero
+      //       emotionally dominant, not just numerically larger
+      //
+      //   Cards on Pixel 6 (110 wide × 130 tall, semi mode):
+      //     - Image ratio 63% → image 110 × 82 (vertical 1.34)
+      //     - Name 11px visible, tagline 1 line visible
+      //     - 3.4 cards visible → calm horizontal preview, not gallery
+      //     - Still LARGER than original FTUE (92×100, +60% surface)
+      final viewportW = MediaQuery.sizeOf(context).width;
 
-      // Realistic editorial title reservation: title 2 lines (~72) + sm(8)
-      // + subtitle 2 lines (~52) + bottom breathing(16) + margin.
-      const titleReserve = 150.0;
+      // Strip height — significantly reduced to restore hero dominance.
+      // AtmCardMode.semi (115-160) preserves tagline visibility while letting
+      // hero own the upper half of the screen.
+      final double stripHFinal;
+      if (screenH >= 812) {
+        stripHFinal = 130.0;
+      } else if (screenH >= 700) {
+        stripHFinal = 120.0;
+      } else if (screenH >= 600) {
+        stripHFinal = 110.0;
+      } else {
+        // Very small phone (SE 1st gen / 5s): keep AppAdaptive (90)
+        stripHFinal = AppAdaptive.ftueCardStripHeight(screenH);
+      }
+
+      // Card width — sized so cards feel like calm preview strip, not
+      // featured gallery cards. Aspect ratio with strip height stays
+      // vertical (≈1.2-1.34) so cards still look editorial.
+      //   Pixel 6 (412 viewport, 380 useful): 110 × 130 → ~3.4 cards visible
+      //   iPhone 14 (393): 100 × 120 → ~3.4 cards visible
+      //   Small Android (360): 95 × 110 → ~3.2 cards visible
+      final double cardWFinal;
+      if (viewportW >= 400) {
+        cardWFinal = 110.0;
+      } else if (viewportW >= 370) {
+        cardWFinal = 100.0;
+      } else if (viewportW >= 340) {
+        cardWFinal = 95.0;
+      } else {
+        cardWFinal = AppAdaptive.ftueCardWidth(screenH);
+      }
+
+      // Spacings — order is Hero → Strip → Title (Wave 4.10k layout reorder).
+      // Naming reflects the new sequence: heroToStripSpacing (above strip),
+      // stripToTitleSpacing (above title).
+      final heroToStripSpacing =
+          AppAdaptive.ftueInnerSpacing(screenH).clamp(20.0, 28.0).toDouble();
+      final stripToTitleSpacing =
+          AppAdaptive.ftueTitleSpacing(screenH).clamp(20.0, 28.0).toDouble();
+
+      // Title block reservation: 2-line title (~72) + sm gap (8) + 1-line
+      // subtitle (~22) ≈ 102. Subtitle re-added Wave 4.10l as a calm gray
+      // editorial tagline below the title (per user spec).
+      const titleReserve = 102.0;
       final reserved = AppSpacing.sm +
-          innerSpacing +
-          stripH +
-          titleSpacing +
-          titleReserve;
+          heroToStripSpacing +
+          stripHFinal +
+          stripToTitleSpacing +
+          titleReserve +
+          AppSpacing.md;
       final avail = constraints.maxHeight;
-      // Hero FILLS the remaining space (no fixed % → on normal devices the
-      // column equals avail exactly: no overflow AND no empty gap). The
-      // floor keeps it image-led on small devices; the high ceiling only
-      // guards pathologically tall viewports. If even the floor cannot fit
-      // (sub-SE / large text scale) the SingleChildScrollView below scrolls
-      // — never a hard overflow, never fake clipping.
-      final raw = avail.isFinite ? (avail - reserved) : (screenH * 0.40);
-      // Ceiling ≥ floor even on pathologically short windows (split-screen)
-      // so clamp never asserts; the scroll wrapper handles the rest.
-      final heroCeil = (screenH * 0.52) < 168.0 ? 168.0 : (screenH * 0.52);
+      final raw = avail.isFinite ? (avail - reserved) : (screenH * 0.52);
+      // Wave 4.10k: hero ceiling at 0.70 (cinematic dominance on tall
+      // devices, no measurable visual improvement at 0.80 on standard
+      // phones — raw was already under the lower ceiling). Floor 168.
+      final heroCeil = (screenH * 0.70) < 168.0 ? 168.0 : (screenH * 0.70);
       final heroH = raw.clamp(168.0, heroCeil).toDouble();
 
       return SingleChildScrollView(
         physics: const ClampingScrollPhysics(),
         child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: AppSpacing.sm),
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const SizedBox(height: AppSpacing.sm),
 
-        // ── Editorial hero — full-bleed, name set in the atmosphere type ────
-        ClipRRect(
-          borderRadius: const BorderRadius.vertical(
-            bottom: Radius.circular(AppSpacing.radiusHero),
-          ),
-          child: SizedBox(
-            height: heroH,
-            width: double.infinity,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 500),
-                  child: _SpaceImage(
-                    key: ValueKey(atm.id),
-                    url: atm.ftueHeroImagePath,
-                    networkFallback: atm.fallbackImageUrl,
-                  ),
-                ),
-                const Positioned.fill(
-                  child: AppScrim(
-                    edge: ScrimEdge.bottom,
-                    opacity: 0.6,
-                    extent: 0.55,
-                  ),
-                ),
-                Positioned(
-                  left: 16, right: 16, bottom: 14,
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    child: Column(
-                      key: ValueKey(atm.name),
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          atm.name,
-                          style: AppTheme.atmosphereTitle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.surface,
-                            height: 1.1,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          atm.tagline,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(
-                                color:
-                                    AppColors.surface.withValues(alpha: 0.78),
-                                fontSize: 11,
+            // ── Editorial hero — full-bleed, name set in the atmosphere type ────
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(AppSpacing.radiusHero),
+              ),
+              child: SizedBox(
+                height: heroH,
+                width: double.infinity,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 500),
+                      child: _SpaceImage(
+                        key: ValueKey(atm.id),
+                        url: atm.ftueHeroImagePath,
+                        networkFallback: atm.fallbackImageUrl,
+                      ),
+                    ),
+                    const Positioned.fill(
+                      child: AppScrim(
+                        edge: ScrimEdge.bottom,
+                        opacity: 0.6,
+                        extent: 0.55,
+                      ),
+                    ),
+                    Positioned(
+                      left: 16, right: 16, bottom: 14,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: Column(
+                          key: ValueKey(atm.name),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              atm.name,
+                              style: AppTheme.atmosphereTitle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.surface,
+                                height: 1.1,
                               ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              atm.tagline,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: AppColors.surface
+                                        .withValues(alpha: 0.78),
+                                    fontSize: 11,
+                                  ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Atmosphere strip — shared AtmosphereCard V2 ─────────────────
+            // Wave 4.10k: order restored to Hero → Strip → Title. Cards now
+            // sit directly under the hero as a calm horizontal preview strip;
+            // the editorial title closes the slide at the bottom.
+            SizedBox(height: heroToStripSpacing),
+            SizedBox(
+              height: stripHFinal,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.pagePadding),
+                itemCount: kAtmospheres.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                itemBuilder: (context, i) {
+                  final a = kAtmospheres[i];
+                  return SizedBox(
+                    width: cardWFinal,
+                    child: AtmosphereCard(
+                      atmosphere: a,
+                      selected: _selected == i,
+                      onTap: () => _select(i),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // ── Editorial title + tagline — centered, closes the slide ──────
+            // Wave 4.10k: title at the bottom under the strip.
+            // Wave 4.10l: re-added subtitle ("Every atmosphere is a complete
+            // redesign.") as a calm gray editorial tagline below the title
+            // — smaller font, textSecondary color, classic editorial cadence.
+            SizedBox(height: stripToTitleSpacing),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.pagePadding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: AppTheme.displayEditorial(
+                      fontSize: 32,
+                      fontWeight: FontWeight.w500,
+                      height: 1.12,
+                      letterSpacing: -0.4,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    widget.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                          height: 1.4,
+                        ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
-
-        SizedBox(height: innerSpacing),
-
-        // ── Atmosphere strip — shared AtmosphereCard V2 ─────────────────────
-        SizedBox(
-          height: stripH,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.pagePadding),
-            itemCount: kAtmospheres.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (context, i) {
-              final a = kAtmospheres[i];
-              return SizedBox(
-                width: cardW,
-                child: AtmosphereCard(
-                  atmosphere: a,
-                  selected: _selected == i,
-                  onTap: () => _select(i),
-                ),
-              );
-            },
-          ),
-        ),
-
-        SizedBox(height: titleSpacing),
-
-        // ── Title + subtitle — editorial display token ──────────────────────
-        // No Flexible (invalid inside the scroll view): natural-height
-        // block; the texts are bounded by maxLines + ellipsis. Subtitle
-        // trimmed to 2 lines (Option C) — tighter editorial cadence and
-        // part of the no-overflow budget.
-        Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.pagePadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                widget.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTheme.displayEditorial(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w500,
-                  height: 1.12,
-                  letterSpacing: -0.4,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                widget.subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: AppColors.textSecondary,
-                      height: 1.6,
-                    ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-      ],
+            const SizedBox(height: AppSpacing.md),
+          ],
         ),
       );
     });
