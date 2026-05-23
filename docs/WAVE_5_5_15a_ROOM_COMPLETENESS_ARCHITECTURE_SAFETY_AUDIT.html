@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8'>
+<title>WAVE 5 5 15a ROOM COMPLETENESS ARCHITECTURE SAFETY AUDIT</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+    font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+    color: #1a1a1a;
+    background: #ffffff;
+    line-height: 1.55;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 36px 48px 36px;
+    font-size: 11pt;
+}
+h1 { font-size: 22pt; margin: 0 0 12px 0; font-weight: 700; border-bottom: 2px solid #1a1a1a; padding-bottom: 10px; }
+h2 { font-size: 16pt; margin: 28px 0 12px 0; font-weight: 700; color: #1a1a1a; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+h3 { font-size: 13pt; margin: 22px 0 10px 0; font-weight: 600; color: #2a2a2a; }
+h4 { font-size: 11pt; margin: 18px 0 8px 0; font-weight: 600; color: #3a3a3a; }
+p { margin: 8px 0; }
+strong { font-weight: 600; color: #000; }
+code {
+    font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    background: #f4f4f6;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9.5pt;
+    color: #c7254e;
+}
+pre {
+    background: #f6f6f8;
+    padding: 12px 14px;
+    border-radius: 4px;
+    border: 1px solid #e3e3e5;
+    overflow-x: auto;
+    font-size: 9pt;
+    line-height: 1.4;
+    page-break-inside: avoid;
+}
+pre code { background: transparent; padding: 0; color: #1a1a1a; }
+table {
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 10pt;
+    width: 100%;
+}
+th, td {
+    border: 1px solid #d8d8d8;
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+th { background: #f4f4f6; font-weight: 600; }
+tr:nth-child(even) { background: #fafafa; }
+ul, ol { margin: 8px 0 8px 22px; padding-left: 6px; }
+li { margin: 3px 0; }
+hr { border: none; border-top: 1px solid #ddd; margin: 24px 0; }
+blockquote {
+    border-left: 3px solid #888;
+    margin: 12px 0;
+    padding: 4px 14px;
+    color: #555;
+    background: #fafafa;
+}
+a { color: #0a6fcf; text-decoration: none; }
+a:hover { text-decoration: underline; }
+em { color: #444; }
+.page-break { page-break-after: always; }
+
+@media print {
+    body { max-width: none; padding: 18px 24px; font-size: 9.5pt; }
+    h1 { font-size: 18pt; }
+    h2 { font-size: 13pt; page-break-after: avoid; }
+    h3 { font-size: 11pt; page-break-after: avoid; }
+    pre, table { page-break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+}
+</style>
+</head>
+<body>
+<h1 id="wave-5515a-room-completeness-architecture-safety-audit">Wave 5.5.15a — Room Completeness &amp; Architecture Safety Audit</h1>
+<p><strong>Date:</strong> 2026-05-23 / 2026-05-24
+<strong>Type:</strong> Read-only audit. No code changes, no prompt changes, no implementation.
+<strong>Predecessors consulted:</strong> Wave 5.5.14a DNA Audit, Wave 5.5.14a Bimodal Classification, Wave 5.5.14a Preservation Stack Audit.</p>
+<hr>
+<h2 id="0-executive-summary">0. Executive summary</h2>
+<p>After Wave 5.5.14 (Dual Intent Architecture), atmosphere DNA is now cleanly bimodal: Preserve mode strips architectural tokens, Creative mode keeps them + revives dormant fields. Preservation stack is gated and budget headroom exists (≥250 chars in preserve mode, ≥390 chars in creative mode per <a href="WAVE_5_5_14a_PRESERVATION_STACK_AUDIT.md">WAVE_5_5_14a_PRESERVATION_STACK_AUDIT.md</a> and the <code>validate_wave5514g_margins.py</code> diagnostic).</p>
+<p>The user now asks: enrich rooms <strong>without</strong> creating architectural drift. Make outputs feel "lived-in, complete, emotionally desirable" without forcing the model to enlarge / move walls / hide openings to fit furniture.</p>
+<p><strong>The single biggest constraint:</strong> this is NOT a greenfield problem. A prior system (<code>_INTERIOR_COMPLETENESS_RULE</code>, Wave 4.2.5, ~220 chars) attempted this exact goal and was <strong>removed in Wave 4.7.1 R2 / Wave 4.6.0</strong> precisely because it caused the architectural drift we now want to avoid. Any "Room Completeness Intelligence" must explicitly engage with that failure or risk re-creating it.</p>
+<p><strong>Honest finding (Section 4):</strong> on the user's reference photo, Wave 5.5.14 V1 outputs are NOT visibly "empty" — most generations show sofa + coffee table + lamp + 1-2 decorative objects + sometimes a chair, with atmosphere-appropriate styling. The "AI-generic, showroom-like" perception is more about (a) lack of focal point, (b) lack of personal-feeling layering (no stacked books, no folded throws, no small clutter), (c) cold/symmetric placement than about raw furniture count. This nuance must drive the design — adding more furniture density is the wrong fix.</p>
+<p><strong>Recommended architecture</strong> (Section 7): a NEW dedicated <code>furnishing_completeness.py</code> module owned by the realism layer family, with mode-aware behavior (conservative in Preserve, expressive in Creative), feeding the composer through ONE compact P4 section (~150 chars max), gated by <code>BIMODAL_ENABLED</code> like all of Wave 5.5.14. Per-room and per-atmosphere parameterization deferred to a later wave once a Phase-1 measurement baseline exists.</p>
+<p><strong>Recommended sequencing</strong> (Section 14): 4 sub-waves over 5.5.15a→d, each ≤ 5 minutes implementation, each with a benchmark gate before the next ships. Total prompt cost target: ≤+150 chars in preserve mode (still leaves +100 char headroom from current state).</p>
+<hr>
+<h2 id="1-methodology-cross-reference-notes">1. Methodology + cross-reference notes</h2>
+<p>This audit reads the current codebase as of commit <code>6b2abc5</code> (Wave 5.5.14h + 5.5.14i) plus the live bench logs from <code>backend_test_5_5_14.log</code> (22+ V1/V2/V3 generations across all 10 atmospheres, BIMODAL_ENABLED=1).</p>
+<p>To avoid duplication, every claim about DNA, bimodal classification, or preservation stack is referenced (not re-derived) from:
+- <a href="WAVE_5_5_14a_DNA_AUDIT.md">docs/WAVE_5_5_14a_DNA_AUDIT.md</a> — finding: 3 DNA fields dead; per-atmosphere severity ranking
+- <a href="WAVE_5_5_14a_BIMODAL_CLASSIFICATION.md">docs/WAVE_5_5_14a_BIMODAL_CLASSIFICATION.md</a> — per-phrase ARCHITECTURE vs DECORATION classification, all 10 atmospheres
+- <a href="WAVE_5_5_14a_PRESERVATION_STACK_AUDIT.md">docs/WAVE_5_5_14a_PRESERVATION_STACK_AUDIT.md</a> — preservation layer inventory + 4-voice boundary system + budget impact tracking</p>
+<p>Memory references:
+- <code>wave_5_5a_calibration_matrix</code> — Wave 5.5.1 lesson on emotional vocabulary as spatial vocabulary
+- <code>freeze_contract_intelligence</code> — frozen module list
+- <code>wave_5_5_14b_design_decisions</code> — Preserve/Creative locked decisions</p>
+<p><strong>Cited files</strong> in this audit (all paths relative to repo root):
+- <code>backend/prompt_engine/realism_layer.py</code> (sections 2, 3)
+- <code>backend/prompt_engine/visible_space_logic.py</code> (section 2)
+- <code>backend/prompt_engine/dream_scene_completion.py</code> (section 2)
+- <code>backend/prompt_engine/atmosphere_dna/_base.py</code> (sections 2, 5)
+- <code>backend/prompt_engine/atmosphere_dna/*.py</code> (10 atmosphere files, section 2)
+- <code>backend/prompt_engine/composer.py</code> (sections 5, 6, 12)
+- <code>backend/prompt_engine/composer_v2.py</code> (sections 5, 6)
+- <code>backend/prompt_engine/atmosphere_dna/bimodal_classifier.py</code> (section 6, 10)
+- <code>backend/main.py</code> (sections 6, 12)</p>
+<hr>
+<h2 id="2-current-richness-sources-new-per-user-request">2. Current richness sources (NEW per user request)</h2>
+<p>What already delivers visual richness in the current Wave 5.5.14 prompt? Inventory below, with chars contribution per source.</p>
+<h3 id="21-atmosphere-dna-primary-richness-driver-600-900-chars">2.1 Atmosphere DNA — primary richness driver (~600-900 chars)</h3>
+<p>Source: <a href="backend/prompt_engine/atmosphere_dna/_base.py#L205">backend/prompt_engine/atmosphere_dna/_base.py:205</a> <code>build_dna_block()</code> + 10 per-atmosphere files.</p>
+<p>Per (atmosphere × room) combination, the rendered block carries:
+- <code>material_palette[:3]</code> — 3 material cues (e.g. "wide-plank European oak floor, warm sand plaster walls, travertine slab surfaces")
+- <code>lighting_behavior</code> — 1 sentence (e.g. "Concealed ceiling cove + tungsten-glow table lamps; warm evening tone")
+- <code>furniture_language[:3]</code> — 3 specific furniture cues (e.g. "bouclé in oat or camel — warm curved tactile richness")
+- <code>decor_language[:2]</code> — 2 decor objects (e.g. "oversized ceramic vessel on floating oak shelf", "floor-length warm linen curtains")
+- <code>realism_constraints[:2]</code> — 2 scale/physicality rules
+- <code>negative_rules[:3]</code> + <code>forbidden_elements[:2]</code> — 5 anti-failure rules</p>
+<p>That's <strong>5 explicit furniture + decor pieces</strong> specified per (atmosphere × room) — already richer than "just a sofa".</p>
+<p><strong>Coverage:</strong> all 10 atmospheres × 13 room types = 130 room-adaptation records. Comprehensive.</p>
+<p><strong>Quality:</strong> atmosphere-specific (Bali says "single large stone or clay vessel with tropical foliage"; Japandi says "single branch in handmade ceramic vase") — NOT generic hospitality clichés.</p>
+<h3 id="22-realism-layer-quality-floor-132-chars">2.2 Realism layer — quality floor (~132 chars)</h3>
+<p>Source: <a href="backend/prompt_engine/realism_layer.py#L48">backend/prompt_engine/realism_layer.py:48</a> <code>_COMPACT_REALISM</code>.</p>
+<p>Ships on every prompt:</p>
+<pre><code>NOT a CGI render. DSLR real estate photo. Real materials. Furniture stays
+usable; openings and circulation clear; not camera-staged.
+</code></pre>
+<ul>
+<li>"DSLR real estate photo" — sets photographic quality target</li>
+<li>"Real materials" — anti-plastic-render cue</li>
+<li>"Furniture stays usable" — Wave 4.7.9 functional realism (chairs you can sit on, tables you can use)</li>
+<li>"not camera-staged" — anti-stiff-pose cue</li>
+</ul>
+<p><strong>This is anti-CGI quality control, NOT richness.</strong> Doesn't add furniture; sets visual quality of whatever furniture exists.</p>
+<h3 id="23-natural-enrichment-richness-license-132-chars">2.3 Natural enrichment — richness license (~132 chars)</h3>
+<p>Source: <a href="backend/prompt_engine/dream_scene_completion.py#L162">backend/prompt_engine/dream_scene_completion.py:162</a> <code>_NATURAL_ENRICHMENT</code>.</p>
+<p>Ships on FIRST_VISION + REBOOT_FRESH paths:</p>
+<pre><code>NATURAL ENRICHMENT — Enrich the photographed space with light natural
+layering. Secondary to architecture — enrich, do not recompose.
+</code></pre>
+<ul>
+<li>"Enrich with light natural layering" — permission cue (the model is told it's OK to add cushions, throws, candle vignettes, plant accents)</li>
+<li>"Secondary to architecture" — explicit subordination</li>
+<li>"enrich, do not recompose" — anti-recomposition guard</li>
+</ul>
+<p><strong>This is a permission slip + safety leash.</strong> It doesn't specify WHAT to enrich; it just tells the model it's allowed to layer non-architectural decor. The "what" comes from the DNA.</p>
+<h3 id="24-visible-spaces-secondary-room-atmosphere-coherence-90-chars-max-2">2.4 Visible spaces — secondary room atmosphere coherence (~90 chars × max 2)</h3>
+<p>Source: <a href="backend/prompt_engine/visible_space_logic.py#L20">backend/prompt_engine/visible_space_logic.py:20</a> <code>build_visible_spaces_block()</code>.</p>
+<p>When the upload photo includes visible secondary rooms (kitchen behind partition, terrace through door), ~90 chars per secondary room reinforces the atmosphere extension into those visible zones — material continuity, light tone matching. <strong>Caps at 2 secondary rooms</strong> (~200 chars max).</p>
+<p><strong>Coverage gap:</strong> only fires when the frontend passes <code>secondary_visible_spaces</code> — currently NOT in the live flow per the bench logs I inspected. So visible_spaces today = 0 chars in practice on the user's reference photo.</p>
+<h3 id="25-transformation-ambition-head-visible-architecture-reminder-165-chars-in-preserve">2.5 TRANSFORMATION AMBITION head — visible architecture reminder (~165 chars in preserve)</h3>
+<p>Source: <a href="backend/prompt_engine/wow_layer.py#L90">backend/prompt_engine/wow_layer.py:90</a> <code>_PHOTO_EDIT_WOW_HEAD</code>.</p>
+<pre><code>TRANSFORMATION AMBITION — Visible architecture stays recognizable:
+windows, openings, partitions, existing equipment.
+</code></pre>
+<p><strong>This is preservation, not richness.</strong> Listed here because it occupies prompt space at P4.</p>
+<h3 id="26-design-direction-user-instruction-passthrough-variable-0-300-chars">2.6 DESIGN DIRECTION — user instruction passthrough (variable, 0-300 chars)</h3>
+<p>Composer renders the user_instruction (V1 fallback "Generate the first architectural vision for this space." or V2/V3 switch "Redesign this space in the Japandi style.") at the prompt tail. Acts as a creative-direction cue for gpt-image-1.</p>
+<p><strong>Not a structured richness source, but empirically matters</strong> (Wave 5.5.14h bench confirmed kitchen visibility correlates with its presence).</p>
+<h3 id="27-whats-not-in-the-current-stack">2.7 What's NOT in the current stack</h3>
+<ul>
+<li><strong>No explicit focal-point declaration</strong> (e.g. "the sofa wall is the visual focal point")</li>
+<li><strong>No lived-in cue</strong> (e.g. "stacked books, folded throw, small personal objects")</li>
+<li><strong>No density guidance</strong> (no rule on how many secondary objects per zone)</li>
+<li><strong>No layering cue</strong> (e.g. "rug under furniture, throw on sofa back, cushion stack")</li>
+<li><strong>No emotional realism prompt</strong> (e.g. "feels recently used, not staged")</li>
+<li><strong>No focal furniture anchor</strong> (e.g. "TV / artwork / fireplace as visual centre")</li>
+</ul>
+<p>These would be candidates for "Room Completeness" but <strong>each one is a budget cost AND an architectural-risk vector</strong> (Section 13).</p>
+<h3 id="28-total-current-richness-footprint">2.8 Total current richness footprint</h3>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Chars in V1 preserve</th>
+<th>Drops?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DNA (rendered)</td>
+<td>700-900</td>
+<td>never (P2, drops only if forced)</td>
+</tr>
+<tr>
+<td>Realism compact</td>
+<td>132</td>
+<td>P3, drops if budget tight</td>
+</tr>
+<tr>
+<td>Natural enrichment</td>
+<td>132</td>
+<td>P4, drops before realism</td>
+</tr>
+<tr>
+<td>Visible spaces</td>
+<td>0 today (not fired)</td>
+<td>P5, drops first</td>
+</tr>
+<tr>
+<td>Transformation ambition head</td>
+<td>95</td>
+<td>P4</td>
+</tr>
+<tr>
+<td>Design direction</td>
+<td>65 (V1 fallback) - 300 (user typed)</td>
+<td>P5</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>~1100-1400</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>→ The current stack already invests <strong>~1100-1400 chars on richness/quality</strong>. That's 27-35% of the 4000-char budget. Not nothing.</p>
+<hr>
+<h2 id="3-wave-425-interior_completeness-failure-history-lessons">3. Wave 4.2.5 INTERIOR_COMPLETENESS failure history + lessons</h2>
+<p>This section is intentionally promoted to its own first-class section, per user request.</p>
+<h3 id="31-what-was-tried-wave-425">3.1 What was tried (Wave 4.2.5)</h3>
+<p>Source: <a href="backend/prompt_engine/realism_layer.py#L90">backend/prompt_engine/realism_layer.py:90</a> <code>_INTERIOR_COMPLETENESS</code>.</p>
+<p>The block (still present in code as a dead constant):</p>
+<pre><code>INTERIOR COMPLETENESS: The space must feel fully designed and emotionally
+inhabited — never sparse, empty, under-furnished, or minimally staged.
+Every major functional zone should feel intentionally completed with layered
+furniture, lighting, decor, textile richness, and hospitality-grade styling.
+</code></pre>
+<p><strong>Intent:</strong> force the model to fully furnish rooms instead of producing sparse, empty-feeling outputs. Injected as a P3 section in <code>_INTERIOR_COMPLETENESS_RULE()</code> (Wave 4.2.5).</p>
+<h3 id="32-why-it-failed-wave-460-wave-471-r2">3.2 Why it failed (Wave 4.6.0 + Wave 4.7.1 R2)</h3>
+<p>The block was <strong>removed from FIRST_VISION</strong> in two stages:</p>
+<ul>
+<li>
+<p><strong>Wave 4.6.0</strong> (<a href="backend/prompt_engine/composer.py#L659">composer.py:659</a> comment): "DNA handles furnishing richness; 'never sparse/empty' contradicts photo-first when uploaded room is intentionally minimal."</p>
+</li>
+<li>
+<p><strong>Wave 4.7.1 R2</strong> (<a href="backend/prompt_engine/composer.py#L678">composer.py:678</a> comment): "INTERIOR COMPLETENESS ('never sparse... every major functional zone completed') was composition-authoritative spatial-completion pressure absent from the DNA path. Same image + same atmosphere must not yield different structural behaviour. Premium richness now comes from material/lighting/atmosphere, not spatial completion."</p>
+</li>
+</ul>
+<p><strong>Translated:</strong> the directive read as "you must produce a fully-staged complete room" — but a room IS what it IS in the uploaded photo. If the photographed room has a small empty corner, "must feel fully designed" pushed the model to ENLARGE the corner / ADD furniture there / REINTERPRET the wall to fit a feature wall. The pressure was <strong>compositional, not aesthetic</strong>.</p>
+<h3 id="33-the-exact-failure-mechanism">3.3 The exact failure mechanism</h3>
+<p>The 3 toxic phrases:</p>
+<ol>
+<li>
+<p><strong>"never sparse, empty, under-furnished, or minimally staged"</strong>
+   - Forbids the photo's actual state if the photo IS sparse. Forces invention.</p>
+</li>
+<li>
+<p><strong>"Every major functional zone should feel intentionally completed"</strong>
+   - Treats the room as a list of zones-to-fill. If a zone reads as empty in the photo, the model rebuilds it (= moves walls, adds furniture, sometimes invents a zone).</p>
+</li>
+<li>
+<p><strong>"hospitality-grade styling"</strong>
+   - Targets a hotel/showroom aesthetic. The model interprets "complete" as "looks like a magazine photoshoot", which means symmetric placement, perfect staging, NO real-life messiness.</p>
+</li>
+</ol>
+<p>The combined effect: model treats the photo as "raw material for a staged room", not as "the room to be transformed".</p>
+<h3 id="34-why-5515-might-succeed-the-conditions">3.4 Why 5.5.15 might succeed (the conditions)</h3>
+<p>The previous failure was caused by 3 conditions that are <strong>NOT</strong> automatically inherited by a new completeness system. The new design CAN succeed if it:</p>
+<ol>
+<li>
+<p><strong>Does NOT use "must / never / every" framing.</strong> The 4.2.5 block was AUTHORITATIVE. A new design must be PERMISSIVE ("if naturally compatible", "when space allows", "opportunistic").</p>
+</li>
+<li>
+<p><strong>Does NOT enumerate zones.</strong> Zone-enumeration is what creates compositional pressure. Instead, frame completeness as a STATE OF MIND for the layered objects ("feels recently used"), not as a CHECKLIST of zones-to-furnish.</p>
+</li>
+<li>
+<p><strong>Does NOT target showroom aesthetic.</strong> Replace "hospitality-grade styling" with "lived-in feel" or "personal-feeling layering" — language that EXCLUDES staged-perfection by definition.</p>
+</li>
+<li>
+<p><strong>Stays SECONDARY to architecture</strong> at every word. The Wave 4.6.2 <code>NATURAL_ENRICHMENT</code> block does this correctly ("Secondary to architecture — enrich, do not recompose.") — that pattern works because it explicitly cedes priority.</p>
+</li>
+<li>
+<p><strong>Is BIMODAL_ENABLED-gated</strong> for safe rollback (Wave 5.5.14 pattern).</p>
+</li>
+<li>
+<p><strong>Is BENCHMARKED before it ships</strong> on real photos with multi-attempt sampling, NOT just "looks better to me on one photo".</p>
+</li>
+</ol>
+<h3 id="35-protections-that-did-not-exist-in-425-era">3.5 Protections that did not exist in 4.2.5 era</h3>
+<p>What the 2026 system has that 4.2.5 didn't:
+- <code>STRUCTURAL_IDENTITY</code> per-photo facts (Wave 4.7.2)
+- <code>STRUCTURAL_NEGATIVE_ANCHORS</code> topology defense (Wave 4.7.4)
+- <code>OPENINGS_ANCHOR</code> (Wave 4.6.2)
+- Bimodal DNA strip (Wave 5.5.14c)
+- 3-voice boundary system (Wave 5.5.4)</p>
+<p>So a 2026 Room Completeness clause OPERATES INSIDE a much harder preservation cage. The model has more "you can't move that wall" signals than ever. This gives more headroom for a softer richness signal without architectural drift.</p>
+<p><strong>BUT</strong> none of these protections defend against the specific failure mode of "model enlarges the room to fit furniture" — they defend against opening positions, wall positions, ceiling height. Enlargement = changing ROOM SIZE without changing wall LIST, which the current stack doesn't explicitly forbid. <strong>This is the residual risk vector</strong> that a Room Completeness wave must engineer against.</p>
+<h3 id="36-lesson-translated-to-a-constraint">3.6 Lesson translated to a constraint</h3>
+<blockquote>
+<p>Any Room Completeness clause must use opportunistic, permissive, secondary-to-architecture language. It must never enumerate zones, never use "must/never/every", never target showroom-staged aesthetics. It must include an explicit "do not enlarge / restructure / add zones for the sake of furniture" guard.</p>
+</blockquote>
+<p>This becomes the design contract for Section 7 and Section 14.</p>
+<hr>
+<h2 id="4-etat-observe-wave-5514-sur-photo-de-reference-new-per-user-request">4. État observé Wave 5.5.14 sur photo de référence (NEW per user request)</h2>
+<p>Honest, nuanced assessment of what the current Wave 5.5.14 actually produces on the user's reference apartment photo, based on 22+ V1 / V2 / V3 generations in <code>backend_test_5_5_14.log</code> (timestamps 18:30-20:35, 3 bench runs over 2h).</p>
+<h3 id="41-what-is-already-good-in-current-wave-5514-output">4.1 What is ALREADY good in current Wave 5.5.14 output</h3>
+<p>Observed across 12+ V1 generations from the first bench (per user's image grid + my image review):</p>
+<ul>
+<li><strong>Camera vantage preserved</strong>: 12/12 generations keep the same viewpoint. Wave 4.7.2 STRUCTURAL_IDENTITY + CAMERA_LOCK do their job.</li>
+<li><strong>Floor-to-ceiling window preserved</strong>: 11/12 — visible left-side window with city view.</li>
+<li><strong>Glass partition preserved</strong>: 12/12 — the black-framed glass middle partition is consistently rendered.</li>
+<li><strong>Sofa always present</strong>: 12/12 — every output has a sofa in atmosphere-appropriate material.</li>
+<li><strong>Coffee table always present</strong>: 12/12 — round or rectangular, atmosphere-coherent.</li>
+<li><strong>Lighting fixture present</strong>: 11/12 — either pendant, table lamp, or floor lamp.</li>
+<li><strong>At least one decor object</strong>: 11/12 — vase, vessel, candle, or framed piece.</li>
+<li><strong>Floor material atmosphere-correct</strong>: 12/12 — pine for Nordic, oak for Warm Modern, ash for Japandi.</li>
+</ul>
+<p>→ <strong>By raw furniture count + material accuracy, current output is already 7-8 specific items per render.</strong> That is NOT "empty showroom".</p>
+<h3 id="42-what-is-genuinely-missing-or-weak">4.2 What is GENUINELY missing or weak</h3>
+<p>Same 12+ generations, problematic patterns:</p>
+<ul>
+<li><strong>Kitchen visibility inconsistent</strong>: 4/6 V1 vs 2/6 V2/V3 on the first bench; 0/6 V1 on Wave 5.5.14h+i bench; 4/6 V1 on rollback test. <strong>Major variance.</strong> This is an architectural-preservation issue, not a richness issue — different problem class.</li>
+<li><strong>Wall invention on 1 atmosphere</strong>: Warm Modern V1 sometimes invents a wall on the right (kitchen→wall conversion). 2/12 first bench. <strong>Architectural drift specific to Warm Modern.</strong></li>
+<li><strong>Rear window occasionally replaced by wall</strong>: 1/6 in rollback test. Rare but real.</li>
+<li><strong>No focal point definition</strong>: most rooms have a sofa but no clear "this is the conversation focus" anchor. The model picks symmetric placement by default.</li>
+<li><strong>No personal-feeling clutter</strong>: zero stacked books, zero folded throws (occasionally a throw is mentioned in DNA), zero "recently used" cues. Every output reads as "moments after the cleaner left".</li>
+<li><strong>Empty floor zones</strong>: especially in Japandi (deliberate per atmosphere DNA "empty floor space is deliberate"), but also in some Warm Modern / Nordic outputs the floor in front of partition reads as "no rug, no objects, just bare floor".</li>
+<li><strong>Coffee table near-empty</strong>: 12/12 generations have either nothing or 1 object on the coffee table. Real rooms have 2-3 objects (a book, a candle, a tray).</li>
+</ul>
+<h3 id="43-perception-vs-measure">4.3 Perception vs measure</h3>
+<table>
+<thead>
+<tr>
+<th>Observation</th>
+<th>Perception ("AI-generic")</th>
+<th>Measure</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>"Empty rooms"</td>
+<td>Yes, user reports</td>
+<td>Partially — by furniture count, 7-8 items, NOT empty. By "lived-in" feel, yes weak.</td>
+</tr>
+<tr>
+<td>"Showroom-like"</td>
+<td>Yes</td>
+<td>Yes — symmetric placement + zero clutter = staged photo aesthetic</td>
+</tr>
+<tr>
+<td>"Missing focal point"</td>
+<td>Implied</td>
+<td>Yes — no consistent focal anchor across atmospheres</td>
+</tr>
+<tr>
+<td>"No personal layering"</td>
+<td>Implied</td>
+<td>Yes — DNA mentions throws/cushions but rarely renders them prominently</td>
+</tr>
+<tr>
+<td>"Bad architecture" (walls, kitchen)</td>
+<td>Confirmed by user</td>
+<td>Yes but <strong>not a furnishing problem</strong> — separate issue</td>
+</tr>
+<tr>
+<td>"Generic furniture"</td>
+<td>User-implied</td>
+<td>Mixed — material is atmosphere-specific (bouclé, travertine, tadelakt) but FORM is generic (round table, single-seat sofa)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="44-what-this-means-for-the-audits-recommendations">4.4 What this means for the audit's recommendations</h3>
+<p>The honest finding is: <strong>the Wave 5.5.14 output is NOT under-furnished in raw count.</strong> What it lacks is:
+1. Focal-point definition
+2. "Lived-in" / "recently used" feel
+3. Layered secondary objects (books, throws, small clutter)
+4. Personal-warmth signal vs cleaner-just-left signal</p>
+<p>These are 4 specific richness dimensions. <strong>None of them are well-served by adding "INTERIOR COMPLETENESS" type pressure.</strong> They are served by:
+- A 1-line focal-point cue (e.g. "the sofa-coffee-table cluster is the visual centre — anchor decor around it")
+- A 1-line lived-in cue (e.g. "casual usage signs: a folded throw, a stacked book, a half-burnt candle")
+- A 1-line layering cue (e.g. "secondary objects on horizontal surfaces — rug under, throw over, cushion stacked")</p>
+<p>Combined budget: ~250 chars max. Affordable (we have +250 chars headroom in preserve mode).</p>
+<p>But <strong>each of these still carries architectural-drift risk</strong> if worded wrong (Section 13). The Section 11 wording guide handles this.</p>
+<h3 id="45-caveat-the-kitchen-wall-problem-is-out-of-scope-for-this-audit">4.5 Caveat: the kitchen / wall problem is OUT OF SCOPE for this audit</h3>
+<p>The user's most frequent observed regression is the kitchen disappearing OR a wall being invented. This is an <strong>architectural-preservation</strong> issue, NOT a furnishing-richness issue. Adding more furniture cues won't help — it might worsen it (more density → more pressure → more invention).</p>
+<p><strong>Recommendation:</strong> the kitchen-disappearance issue should be handled by a separate wave (5.5.16?) focused on per-photo anchor strengthening, not bundled into Room Completeness.</p>
+<hr>
+<h2 id="5-architecture-decoration-furnishing-separation-assessment">5. Architecture / decoration / furnishing separation assessment</h2>
+<p>Per <a href="WAVE_5_5_14a_BIMODAL_CLASSIFICATION.md">WAVE_5_5_14a_BIMODAL_CLASSIFICATION.md</a>, Wave 5.5.14 already separated:
+- <strong>ARCHITECTURE</strong> (geometry, openings, scale, ceiling, walls, floor plan) — preserved by CAMERA_LOCK / STRUCTURAL_LOCK / OPENINGS_ANCHOR / STRUCTURAL_IDENTITY / STRUCTURAL_NEGATIVE_ANCHORS
+- <strong>DECORATION</strong> (materials, lighting, furniture pieces, decor objects, colours, textures) — owned by atmosphere DNA</p>
+<p>The new question: <strong>where does FURNISHING fit?</strong> Furnishing is a subset of decoration — specifically the placement, density, and layering of furniture/decor objects within the existing architecture.</p>
+<h3 id="51-current-separation-status-post-wave-5514">5.1 Current separation status (post Wave 5.5.14)</h3>
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Owner</th>
+<th>Clean?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Architectural shell (camera, walls, openings)</td>
+<td><code>preservation.py</code> + <code>structural_identity.py</code></td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Materials (oak, marble, tadelakt)</td>
+<td>DNA <code>material_palette</code></td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Lighting (concealed cove, pendant)</td>
+<td>DNA <code>lighting_behavior</code></td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Atmosphere identity (philosophy, emotional intent)</td>
+<td>DNA <code>philosophy</code> + <code>emotional_intent</code></td>
+<td>✅</td>
+</tr>
+<tr>
+<td><strong>Furniture pieces</strong></td>
+<td>DNA <code>furniture_language[:3]</code></td>
+<td>✅ — list of 3 pieces per (atmosphere, room)</td>
+</tr>
+<tr>
+<td><strong>Decor objects</strong></td>
+<td>DNA <code>decor_language[:2]</code></td>
+<td>✅ — list of 2 pieces per (atmosphere, room)</td>
+</tr>
+<tr>
+<td><strong>Furnishing scale realism</strong></td>
+<td>DNA <code>realism_constraints[:2]</code> (rare) + realism layer "Furniture stays usable"</td>
+<td>🟡 — split between DNA &amp; realism, not clean</td>
+</tr>
+<tr>
+<td><strong>Furnishing density</strong></td>
+<td>NOWHERE — implicit in DNA item count</td>
+<td>❌ — no explicit ownership</td>
+</tr>
+<tr>
+<td><strong>Focal-point definition</strong></td>
+<td>NOWHERE</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><strong>Lived-in layering</strong></td>
+<td>NOWHERE</td>
+<td>❌</td>
+</tr>
+<tr>
+<td><strong>Secondary object suggestion</strong></td>
+<td>NOWHERE</td>
+<td>❌</td>
+</tr>
+</tbody>
+</table>
+<p>→ The "furnishing pieces" and "decor objects" are already in DNA per-(atmosphere×room). <strong>What's missing is the META layer: density, layering, focal point, lived-in feel — which would apply ACROSS all atmospheres.</strong></p>
+<h3 id="52-modules-that-still-mix-furnishing-with-spatial-implications">5.2 Modules that still mix furnishing with spatial implications</h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Mixing?</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>realism_layer.py::_COMPACT_REALISM</code></td>
+<td>🟡 light</td>
+<td>"Furniture stays usable; openings and circulation clear" — usability + topology in same sentence. Could be split but it's load-bearing as-is.</td>
+</tr>
+<tr>
+<td><code>realism_layer.py::_INTERIOR_COMPLETENESS</code> (dead)</td>
+<td>🔴 yes — historical</td>
+<td>The dead 4.2.5 block mixed furnishing density with zone-completeness, hence the failure.</td>
+</tr>
+<tr>
+<td><code>dream_scene_completion.py::_NATURAL_ENRICHMENT</code></td>
+<td>🟡 explicit</td>
+<td>Explicitly states "Secondary to architecture — enrich, do not recompose" — handles the mix cleanly.</td>
+</tr>
+<tr>
+<td><code>atmosphere_dna/*.py::room_specific_constraints</code></td>
+<td>🔴 yes (dead)</td>
+<td>E.g. Bali "open side to garden or pool — pavilion character" — furnishing + topology. Per <code>wave_5_5_14a_dna_audit</code>, these fields are NOT rendered today. Safe but should NOT be revived as-is for furnishing.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="53-modules-that-are-safe-for-furnishing-enrichment">5.3 Modules that are SAFE for furnishing enrichment</h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Safety</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>atmosphere_dna/*.py::furniture_language</code> / <code>decor_language</code></td>
+<td>✅ safe</td>
+<td>Already per (atm × room), atmosphere-specific, currently shipping cleanly</td>
+</tr>
+<tr>
+<td><code>realism_layer.py</code> family</td>
+<td>✅ safe</td>
+<td>Quality-floor module, no spatial authority</td>
+</tr>
+<tr>
+<td><code>dream_scene_completion.py::_NATURAL_ENRICHMENT</code></td>
+<td>✅ safe</td>
+<td>Permission slip with explicit secondary-to-architecture guard</td>
+</tr>
+<tr>
+<td>A new dedicated module <code>furnishing_completeness.py</code></td>
+<td>✅ safe IF designed per Section 3.6 rules</td>
+<td>Would isolate the meta-furnishing layer cleanly</td>
+</tr>
+</tbody>
+</table>
+<h3 id="54-modules-that-remain-dangerous-for-furnishing-additions">5.4 Modules that remain DANGEROUS for furnishing additions</h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Danger</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>composer.py</code> directly</td>
+<td>🔴 high</td>
+<td>Frozen, adding inline literals would dodge any future audit</td>
+</tr>
+<tr>
+<td><code>composer_v2.py</code> directly</td>
+<td>🔴 high</td>
+<td>Same</td>
+</tr>
+<tr>
+<td><code>preservation.py</code></td>
+<td>🔴 high</td>
+<td>Preservation is preservation. Mixing furnishing in would re-mix the responsibilities Wave 5.5.14 just cleaned up.</td>
+</tr>
+<tr>
+<td><code>structural_identity.py</code></td>
+<td>🔴 high</td>
+<td>Per-photo architectural facts. Furnishing is per-(atmosphere×room), not per-photo. Different lifecycle.</td>
+</tr>
+<tr>
+<td><code>fidelity_layer.py</code></td>
+<td>🟡 medium</td>
+<td>The task header lives here. Adding furnishing cues to the task header risks confusing the model about the primary verb (PHOTO-EDIT vs furnish).</td>
+</tr>
+<tr>
+<td><code>transformation_classifier.py</code></td>
+<td>🔴 high</td>
+<td>This file already has 7 addenda for different transformation types. Adding an 8th furnishing addendum would re-create the layer-accumulation pattern.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="6-safe-vs-risky-code-ownership-zones">6. Safe vs risky code ownership zones</h2>
+<p>Direct answer to the user's question "where should Room Completeness live".</p>
+<h3 id="61-recommended-ownership-new-module-backendprompt_enginefurnishing_completenesspy">6.1 Recommended ownership: NEW module <code>backend/prompt_engine/furnishing_completeness.py</code></h3>
+<p><strong>Why a new module, not inside an existing one:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Candidate</th>
+<th>Verdict</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>realism_layer.py</code></td>
+<td>❌</td>
+<td>Wave 4.2.5 attempted exactly this. Failed because realism = quality, completeness = density — different concerns. Separation forced by the lesson.</td>
+</tr>
+<tr>
+<td><code>dream_scene_completion.py</code></td>
+<td>❌</td>
+<td>Conceptually closest BUT this file is mostly historical (Wave 4.3.1 era). It's a "permission slip" layer. Completeness needs more structure.</td>
+</tr>
+<tr>
+<td><code>atmosphere_dna/_base.py</code></td>
+<td>❌</td>
+<td>Frozen file. Per-(atm × room) data, not meta-rules. Wrong granularity.</td>
+</tr>
+<tr>
+<td><code>composer.py</code></td>
+<td>❌</td>
+<td>Inline literals = no isolation, hard to A/B test, hard to roll back.</td>
+</tr>
+<tr>
+<td><strong>New <code>furnishing_completeness.py</code></strong></td>
+<td>✅</td>
+<td>Clean separation. Single responsibility. Mode-aware. Testable in isolation. Rollback = unimport.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="62-module-structure-proposal">6.2 Module structure proposal</h3>
+<pre><code class="language-python"># backend/prompt_engine/furnishing_completeness.py
+
+&quot;&quot;&quot;
+Wave 5.5.15 — Furnishing completeness signal.
+
+ANTI-PATTERN INHERITED FROM WAVE 4.2.5: a &quot;must feel fully designed,
+never sparse&quot; directive pushes the model to enlarge / restructure to
+fit furniture. This module is engineered NOT to repeat that mistake:
+
+  - PERMISSIVE wording (&quot;if naturally compatible&quot;, &quot;when space allows&quot;)
+  - NO zone enumeration (no &quot;every major functional zone&quot;)
+  - NO showroom target (no &quot;hospitality-grade staging&quot;)
+  - EXPLICIT secondary-to-architecture guard
+  - BIMODAL_ENABLED-gated (no-op without flag)
+  - &lt;= 150 chars in preserve mode
+&quot;&quot;&quot;
+
+def build_furnishing_signal(
+    atmosphere_id: str,
+    room_type: str,
+    generation_mode: str = &quot;preserve&quot;,
+) -&gt; str:
+    &quot;&quot;&quot;Mode-aware furnishing completeness cue. Returns &quot;&quot; when bimodal
+    flag unset or when atmosphere/room has no signal registered.&quot;&quot;&quot;
+    ...
+</code></pre>
+<h3 id="63-integration-point">6.3 Integration point</h3>
+<p>Single call in <code>composer.py</code> at the assembly site, after <code>_NATURAL_ENRICHMENT</code>:</p>
+<pre><code class="language-python">(&quot;natural_enrichment&quot;, natural_enrichment),
+(&quot;furnishing_signal&quot;, build_furnishing_signal(atmosphere_id, room_type, generation_mode)),
+(&quot;visible_spaces&quot;, vs_block),
+</code></pre>
+<p>P4 priority (drops after P5 visible_spaces and refinement_memory). Survives normal budget pressure but drops first under saturation.</p>
+<p>Same wiring in <code>composer_v2.py</code> for V2/V3 INCREMENTAL / REBOOT_CUSTOMIZED paths.</p>
+<h3 id="64-bimodal-behavior-contract">6.4 Bimodal behavior contract</h3>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Signal content</th>
+<th>Chars</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Flag OFF (default prod)</td>
+<td><code>""</code> (no-op, byte-identical to today)</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Flag ON + preserve</td>
+<td>conservative "if space allows" wording</td>
+<td>≤ 100</td>
+</tr>
+<tr>
+<td>Flag ON + creative</td>
+<td>bolder, more story-driven wording</td>
+<td>≤ 200</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="7-recommended-room-completeness-architecture">7. Recommended Room Completeness architecture</h2>
+<h3 id="71-three-layer-model">7.1 Three-layer model</h3>
+<pre><code>LAYER 1 — DNA (per atmosphere × room): WHAT objects belong here
+          (e.g. bouclé sofa, travertine table, ceramic vessel)
+                            ↓
+LAYER 2 — Furnishing meta (per (atm × room) × mode): HOW they combine
+          (e.g. &quot;sofa-coffee-table cluster is the focal centre,
+                 layered with a folded throw and stacked books&quot;)
+                            ↓
+LAYER 3 — Atmosphere of usage (per mode): personal-feel cue
+          (e.g. &quot;feels recently used, not staged&quot;)
+</code></pre>
+<p>LAYER 1 already exists in DNA. LAYER 2 and LAYER 3 are what <code>furnishing_completeness.py</code> adds.</p>
+<h3 id="72-single-coherent-signal-not-stacked-rules">7.2 Single coherent signal, not stacked rules</h3>
+<p>The Wave 5.5.14g lesson (preservation_stack_audit Section 4) is: each new rule that says the same thing in different words is rapidly cumulatively redundant. The completeness module must emit ONE coherent sentence, NOT 3 cues.</p>
+<p>Proposed canonical PRESERVE mode sentence (~100 chars):</p>
+<pre><code>FURNISHING — opportunistic layering on existing surfaces: a folded throw, stacked
+books, one ambient accent. Secondary to architecture; never invent new zones.
+</code></pre>
+<p>Proposed canonical CREATIVE mode sentence (~180 chars):</p>
+<pre><code>FURNISHING — express the atmosphere with lived-in storytelling: layered textiles,
+stacked references, ambient personal accents around the existing focal zone. The
+photo's existing surfaces define what gets layered.
+</code></pre>
+<p>Both sentences:
+- Use permissive verbs (opportunistic, express, define)
+- Refer to "existing surfaces" / "existing focal zone" — anchored to the photo
+- Forbid invention (preserve: "never invent new zones"; creative: "existing surfaces define what gets layered")
+- Reference specific personal-feel items (throw, books, accent) without enumerating zones</p>
+<h3 id="73-per-atmosphere-parameterization-deferred">7.3 Per-atmosphere parameterization (deferred)</h3>
+<p>The two canonical sentences above are atmosphere-agnostic. A FUTURE wave could parameterize per atmosphere (e.g. Japandi gets "single branch + one ceramic + folded linen" while Soft Luxury gets "stacked coffee-table books + silk throw + crystal accent"). But Phase 1 ships generic; Phase 2 adds atmosphere-specific only if benchmarks show a generic signal underperforms.</p>
+<h3 id="74-per-room-parameterization-deferred-to-phase-2">7.4 Per-room parameterization (deferred to phase 2)</h3>
+<p>Same logic. The two canonical sentences above are room-agnostic — they work for living room AND bedroom AND home office. Bathroom and kitchen need different language (no "throw", different surfaces). Phase 2 adds room-conditioned variants if Phase 1 benchmark warrants.</p>
+<hr>
+<h2 id="8-room-by-room-furnishing-safety-matrix">8. Room-by-room furnishing safety matrix</h2>
+<p>Per micro-improvement 1: 4 rooms detailed (Living, Bedroom, Kitchen, Bathroom), 8 others grouped by pattern.</p>
+<h3 id="safety-classification">Safety classification</h3>
+<ul>
+<li>🟢 <strong>SAFE DEFAULT</strong> — can usually add without architecture impact</li>
+<li>🟡 <strong>CONDITIONAL</strong> — only if space/surfaces naturally support it</li>
+<li>🟠 <strong>RISKY</strong> — may trigger architecture drift</li>
+<li>🔴 <strong>NEVER DEFAULT</strong> — only if explicitly requested</li>
+</ul>
+<hr>
+<h3 id="81-living-room-detailed">8.1 Living Room (detailed)</h3>
+<table>
+<thead>
+<tr>
+<th>Element</th>
+<th>Safety</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Throw on sofa back</td>
+<td>🟢</td>
+<td>Universal, sits on existing furniture, zero arch impact</td>
+</tr>
+<tr>
+<td>Stacked books on coffee table</td>
+<td>🟢</td>
+<td>Existing surface, casual layering, no new structure</td>
+</tr>
+<tr>
+<td>Single candle / vase on side table</td>
+<td>🟢</td>
+<td>Existing surface</td>
+</tr>
+<tr>
+<td>Rug under coffee table</td>
+<td>🟡</td>
+<td>Adds floor-plane element. Safe IF photo has visible floor space. Risk: model widens floor zone to accommodate "proper rug size".</td>
+</tr>
+<tr>
+<td>Floor lamp behind sofa</td>
+<td>🟡</td>
+<td>Safe IF wall-space behind sofa visible. Risk: model invents wall extension if not visible.</td>
+</tr>
+<tr>
+<td>Wall art above sofa</td>
+<td>🟡</td>
+<td>Safe IF wall above sofa visible. Risk: model reorients sofa to a different wall to "make space for art".</td>
+</tr>
+<tr>
+<td>Plant in corner</td>
+<td>🟡</td>
+<td>Safe IF corner visible. Risk: model creates a corner if none present.</td>
+</tr>
+<tr>
+<td>TV media wall</td>
+<td>🟠</td>
+<td>High risk: model invents a feature wall, restructures room. Wave 4.7.1 R2 documented this as a primary failure mode of completeness rules.</td>
+</tr>
+<tr>
+<td>Built-in shelving</td>
+<td>🟠</td>
+<td>High risk: structural addition.</td>
+</tr>
+<tr>
+<td>Decorative ceiling treatment</td>
+<td>🔴</td>
+<td>Architecture change.</td>
+</tr>
+<tr>
+<td>Multiple seating zones</td>
+<td>🔴</td>
+<td>Topology change. Requires explicit user request.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="82-bedroom-detailed">8.2 Bedroom (detailed)</h3>
+<table>
+<thead>
+<tr>
+<th>Element</th>
+<th>Safety</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Folded throw at bed foot</td>
+<td>🟢</td>
+<td>Universal, sits on bed</td>
+</tr>
+<tr>
+<td>Bedside book + lamp</td>
+<td>🟢</td>
+<td>Existing surface (nightstand)</td>
+</tr>
+<tr>
+<td>Layered pillows</td>
+<td>🟢</td>
+<td>On bed</td>
+</tr>
+<tr>
+<td>Rug at bedside</td>
+<td>🟡</td>
+<td>Safe IF floor visible. Same risk as living room rug.</td>
+</tr>
+<tr>
+<td>Bench at bed foot</td>
+<td>🟡</td>
+<td>Safe IF floor space at bed foot visible. Risk: model extends room.</td>
+</tr>
+<tr>
+<td>Wall sconce above bed</td>
+<td>🟡</td>
+<td>Safe IF headboard wall visible. Risk: model invents headboard wall extension.</td>
+</tr>
+<tr>
+<td>Built-in wardrobe</td>
+<td>🟠</td>
+<td>Structural element invention.</td>
+</tr>
+<tr>
+<td>Walk-in closet expansion</td>
+<td>🔴</td>
+<td>Topology change.</td>
+</tr>
+<tr>
+<td>Ceiling beam treatment</td>
+<td>🔴</td>
+<td>Architecture.</td>
+</tr>
+<tr>
+<td>Extra window</td>
+<td>🔴</td>
+<td>Architecture violation.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="83-kitchen-detailed">8.3 Kitchen (detailed)</h3>
+<p>Kitchens are HIGH RISK because every surface is structural (counter, cabinetry, appliance). Most "furnishing additions" implicate architecture.</p>
+<table>
+<thead>
+<tr>
+<th>Element</th>
+<th>Safety</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Single ceramic on countertop</td>
+<td>🟢</td>
+<td>Truly decorative. Existing surface.</td>
+</tr>
+<tr>
+<td>Wooden cutting board on counter</td>
+<td>🟢</td>
+<td>Existing surface</td>
+</tr>
+<tr>
+<td>Fruit bowl</td>
+<td>🟢</td>
+<td>Existing surface</td>
+</tr>
+<tr>
+<td>Bar stool at island</td>
+<td>🟡</td>
+<td>Safe IF island visible. Risk: model invents island.</td>
+</tr>
+<tr>
+<td>Pendant light over island</td>
+<td>🟡</td>
+<td>Safe IF island AND ceiling above visible.</td>
+</tr>
+<tr>
+<td>Open shelving with displayed ceramics</td>
+<td>🟠</td>
+<td>Wall structure invention high risk.</td>
+</tr>
+<tr>
+<td>Glass cabinetry</td>
+<td>🟠</td>
+<td>Cabinet redesign.</td>
+</tr>
+<tr>
+<td>Built-in coffee station</td>
+<td>🔴</td>
+<td>Architecture.</td>
+</tr>
+<tr>
+<td>Wine fridge nook</td>
+<td>🔴</td>
+<td>Cabinet invention.</td>
+</tr>
+<tr>
+<td>Range hood replacement</td>
+<td>🔴</td>
+<td>Architecture.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Kitchen-specific recommendation:</strong> the furnishing signal for kitchen should be NEAR-EMPTY by default. The DNA already specifies cabinetry materials and hardware. Adding more risks invention. Kitchen ships ONLY 🟢-class items via the furnishing signal, OR ships nothing.</p>
+<h3 id="84-bathroom-detailed">8.4 Bathroom (detailed)</h3>
+<p>Same logic as kitchen — every surface is plumbed structural.</p>
+<table>
+<thead>
+<tr>
+<th>Element</th>
+<th>Safety</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Folded towel on rail</td>
+<td>🟢</td>
+<td>Existing rail</td>
+</tr>
+<tr>
+<td>Soap dish on counter</td>
+<td>🟢</td>
+<td>Existing counter</td>
+</tr>
+<tr>
+<td>Single plant on counter</td>
+<td>🟢</td>
+<td>Existing surface</td>
+</tr>
+<tr>
+<td>Bath mat</td>
+<td>🟡</td>
+<td>Floor element. Risk: model widens bathroom.</td>
+</tr>
+<tr>
+<td>Towel ladder</td>
+<td>🟡</td>
+<td>New furniture. Risk: model invents wall space.</td>
+</tr>
+<tr>
+<td>Apothecary jars on counter</td>
+<td>🟡</td>
+<td>Risk: counter clutter, but no arch impact if counter visible.</td>
+</tr>
+<tr>
+<td>Wall art</td>
+<td>🟠</td>
+<td>Bathroom walls are typically tile/wet — wall art is architecturally unusual.</td>
+</tr>
+<tr>
+<td>Niche shelving in shower</td>
+<td>🔴</td>
+<td>Structural.</td>
+</tr>
+<tr>
+<td>Vanity rebuild</td>
+<td>🔴</td>
+<td>Cabinet change.</td>
+</tr>
+<tr>
+<td>Skylight</td>
+<td>🔴</td>
+<td>Architecture.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="85-pattern-outdoor-exposed-rooms-garden-terrace-pool-balcony">8.5 Pattern: outdoor-exposed rooms (Garden / Terrace / Pool / Balcony)</h3>
+<p>These share a common risk: the boundary between indoor and outdoor is itself architecture. Adding furnishing can push the model to alter that boundary.</p>
+<p>🟢 SAFE: cushion / throw / candle / single plant in existing pot / placed object on existing surface
+🟡 CONDITIONAL: parasol/umbrella (if structure supports), fire pit (if floor space), outdoor rug
+🟠 RISKY: pergola addition, built-in seating, deck extension, planter beds (invent layout)
+🔴 NEVER DEFAULT: pool size change, deck reorientation, new outdoor kitchen, gazebo</p>
+<p><strong>Pattern-level rule:</strong> outdoor furnishing must explicitly state "on existing terrace surface" / "on existing pool deck" / "respecting the photographed perimeter" — NOT bare "add outdoor lounge cluster".</p>
+<h3 id="86-pattern-transition-rooms-entrance-dining-home-office">8.6 Pattern: transition rooms (Entrance / Dining / Home Office)</h3>
+<p>These have a single primary function-anchor (console / table / desk). Furnishing is layering AROUND that anchor.</p>
+<p>🟢 SAFE: anchor-surface objects (bowl on console, candle on dining table, books on desk)
+🟡 CONDITIONAL: rug, wall mirror (if wall visible), pendant light (if ceiling visible)
+🟠 RISKY: secondary furniture cluster, bench/banquette addition, built-in storage
+🔴 NEVER DEFAULT: anchor replacement (console with bench), new function-zone addition</p>
+<p><strong>Pattern-level rule:</strong> these rooms read as "single anchor + accessory layering". Furnishing signal should reference "the existing [console/table/desk]" by name.</p>
+<h3 id="87-pattern-facade-exterior">8.7 Pattern: facade / exterior</h3>
+<p>🟢 SAFE: door wreath, lantern (if existing fixture point), planted pot at entrance
+🟡 CONDITIONAL: house number / door hardware replacement, exterior light
+🟠 RISKY: facade material treatment, awning, new window
+🔴 NEVER DEFAULT: facade redesign, addition, extension, roof modification</p>
+<p><strong>Pattern-level rule:</strong> facade should ship NO furnishing signal at all in preserve mode. Furnishing is an interior concept; facade is preservation-dominant.</p>
+<hr>
+<h2 id="9-safe-furnishing-philosophy">9. Safe furnishing philosophy</h2>
+<h3 id="91-core-principle-the-one-liner">9.1 Core principle (the one-liner)</h3>
+<blockquote>
+<p>Complete the existing room. Do not generate the idealized version of this room.</p>
+</blockquote>
+<h3 id="92-hierarchy">9.2 Hierarchy</h3>
+<pre><code>1. ARCHITECTURE is sacred (always wins)
+2. PHOTOGRAPHED SURFACES are the canvas (no surface invention)
+3. FOCAL POINT comes FROM the photo (sofa-table cluster, bed-headboard, dining table)
+4. LAYERING adds on top of (3), never replaces it
+5. PERSONAL-FEEL signals (throw, books, candle) are sprinkled, not stacked
+6. NEGATIVE SPACE is preserved as-is (Japandi explicitly, others by default)
+</code></pre>
+<h3 id="93-opportunistic-furnishing-logic">9.3 Opportunistic furnishing logic</h3>
+<pre><code>IF (existing flat surface visible)
+   AND (surface area &gt; minimum threshold)
+   AND (atmosphere DNA has a relevant decorative cue)
+THEN allow 1 decorative object on that surface
+
+ELSE skip — do not invent a surface to populate.
+</code></pre>
+<p>This logic stays implicit in the prompt language. The model does the "if-then" implicitly when we say "on existing surfaces, opportunistic layering".</p>
+<h3 id="94-density-rule">9.4 Density rule</h3>
+<pre><code>Maximum 1-2 furnishing additions per visible surface zone.
+Empty floor space stays empty space (does not need a rug if none in photo).
+Don't fill what already breathes — Japandi's empty zones are atmospheric, not deficit.
+</code></pre>
+<h3 id="95-what-philosophy-excludes">9.5 What philosophy excludes</h3>
+<ul>
+<li>"Make it feel like a home / a magazine / a hotel suite"</li>
+<li>"Fully furnish every visible zone"</li>
+<li>"Show all the materials in the atmosphere palette"</li>
+<li>"Create the dream version of this room"</li>
+<li>"Stage it for a photoshoot"</li>
+</ul>
+<p>All of those create compositional pressure.</p>
+<hr>
+<h2 id="10-preserve-vs-creative-furnishing-behavior">10. Preserve vs Creative furnishing behavior</h2>
+<h3 id="101-preserve-mode-default">10.1 Preserve mode (default)</h3>
+<pre><code>FURNISHING — opportunistic layering on existing surfaces: a folded throw,
+stacked books, one ambient accent. Secondary to architecture; never invent
+new zones.
+</code></pre>
+<p><strong>~140 chars. P4 priority.</strong></p>
+<p>Behavior:
+- Allows the model to add 1-2 truly decorative objects (throw, book, accent)
+- Forbids "invent new zones" — explicit guard against the 4.2.5 failure
+- "Secondary to architecture" — defers to preservation
+- "Existing surfaces" — anchored to photo
+- No focal-point declaration (the model derives it from the existing furniture in photo)</p>
+<h3 id="102-creative-mode">10.2 Creative mode</h3>
+<pre><code>FURNISHING — express the atmosphere with lived-in storytelling: layered
+textiles, stacked references, ambient personal accents around the existing
+focal zone. The photo's existing surfaces define what gets layered.
+</code></pre>
+<p><strong>~210 chars. P4 priority.</strong></p>
+<p>Behavior:
+- "Lived-in storytelling" — license for personal-feel narrative
+- "Stacked references" — books / objects ensemble allowed
+- "Around the existing focal zone" — focal point is photo-derived, additions are around it (not REPLACE it)
+- "The photo's existing surfaces define what gets layered" — explicit anti-invention guard
+- Slightly bolder vocabulary than preserve, no zone enumeration</p>
+<h3 id="103-why-both-modes-share-the-anti-invention-guard">10.3 Why both modes share the anti-invention guard</h3>
+<p>Creative mode (Wave 5.5.14d) gives the model latitude on architecture. That latitude is ARCHITECTURAL (open the wall, evolve the ceiling), NOT FURNISHING (don't invent new surfaces to populate). The two latitudes are orthogonal.</p>
+<p>A creative-mode user who wants the wall opened is NOT asking for a fictional second sofa cluster on the other side of the partition. Furnishing stays grounded.</p>
+<h3 id="104-flag-off-behavior">10.4 Flag-off behavior</h3>
+<p>When <code>BIMODAL_ENABLED</code> is unset (default prod), <code>build_furnishing_signal(...)</code> returns <code>""</code>. Zero impact. Production stays byte-identical to today.</p>
+<hr>
+<h2 id="11-safe-wording-vs-dangerous-wording">11. Safe wording vs dangerous wording</h2>
+<h3 id="111-safe-verbs-and-phrases">11.1 SAFE verbs and phrases</h3>
+<ul>
+<li>"if naturally compatible"</li>
+<li>"when space allows"</li>
+<li>"opportunistic layering"</li>
+<li>"on existing surfaces"</li>
+<li>"around the existing [anchor]"</li>
+<li>"secondary to architecture"</li>
+<li>"enrich, do not recompose"</li>
+<li>"personal-feel signals"</li>
+<li>"lived-in storytelling"</li>
+<li>"ambient accents"</li>
+</ul>
+<p>These verbs/phrases:
+- Cede priority to architecture
+- Anchor to photo features
+- Imply soft additions, not transformations</p>
+<h3 id="112-dangerous-verbs-and-phrases-do-not-use">11.2 DANGEROUS verbs and phrases (do NOT use)</h3>
+<ul>
+<li>"fully equipped"</li>
+<li>"every functional zone"</li>
+<li>"must feel"</li>
+<li>"never sparse"</li>
+<li>"expansive media wall"</li>
+<li>"grand open layout"</li>
+<li>"showroom-ready"</li>
+<li>"hospitality-grade"</li>
+<li>"fully designed"</li>
+<li>"intentionally completed"</li>
+<li>"complete the room"</li>
+<li>"feature wall"</li>
+<li>"statement piece" (unless extremely specific)</li>
+<li>"all surfaces"</li>
+</ul>
+<p>These verbs/phrases:
+- Authority-claim ("must", "never", "every", "all")
+- Showroom target ("hospitality-grade", "fully designed")
+- Authority on new structure ("feature wall", "media wall")
+- The Wave 4.2.5 trap</p>
+<h3 id="113-sentence-test-before-shipping">11.3 Sentence test before shipping</h3>
+<p>Before any furnishing rule ships, run it through this 5-question check:</p>
+<ol>
+<li>Does it contain "must / never / every / all"? → REJECT</li>
+<li>Does it imply zones-to-fill? → REJECT</li>
+<li>Does it target a magazine/hotel/showroom aesthetic? → REJECT</li>
+<li>Does it allow surface invention? → REJECT</li>
+<li>Does it explicitly cede priority to architecture in the same sentence? → If NO, REWORD until YES</li>
+</ol>
+<hr>
+<h2 id="12-prompt-budget-analysis-with-budget-impact-per-proposal">12. Prompt budget analysis (with budget impact per proposal)</h2>
+<p>Per micro-improvement 3: every proposal includes char cost.</p>
+<h3 id="121-current-budget-state-post-wave-5514g-per-validate_wave5514g_marginspy">12.1 Current budget state (post Wave 5.5.14g, per <code>validate_wave5514g_margins.py</code>)</h3>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Tightest atmosphere</th>
+<th>Margin to 4000 cap</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Default (flag OFF)</td>
+<td>Soft Luxury V1</td>
+<td>+250 chars</td>
+</tr>
+<tr>
+<td>Preserve</td>
+<td>Soft Luxury V1</td>
+<td>+253 chars</td>
+</tr>
+<tr>
+<td>Creative</td>
+<td>Dark Contemporary V1</td>
+<td>+34 chars (LOW WARNING)</td>
+</tr>
+</tbody>
+</table>
+<p>→ Creative has very tight margin. Furnishing additions must be paid attention especially in creative.</p>
+<h3 id="122-proposed-furnishing-signal-cost">12.2 Proposed furnishing signal cost</h3>
+<table>
+<thead>
+<tr>
+<th>Wave</th>
+<th>Signal content</th>
+<th>Preserve chars</th>
+<th>Creative chars</th>
+<th>Total budget hit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5.5.15a (THIS audit, no code)</td>
+<td>n/a</td>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>5.5.15b (Phase 1: generic signal)</td>
+<td>one sentence per mode</td>
+<td>+140</td>
+<td>+210</td>
+<td>reduces margin by 140 preserve / 210 creative</td>
+</tr>
+<tr>
+<td>5.5.15c (Phase 2: atmosphere-conditioned)</td>
+<td>per-atm variants</td>
+<td>+140 (max)</td>
+<td>+210 (max)</td>
+<td>same envelope, more relevant content</td>
+</tr>
+<tr>
+<td>5.5.15d (Phase 3: room-conditioned)</td>
+<td>per-room conditioning</td>
+<td>+0 (same envelope)</td>
+<td>+0 (same envelope)</td>
+<td>same</td>
+</tr>
+</tbody>
+</table>
+<h3 id="123-budget-after-phase-1">12.3 Budget after Phase 1</h3>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Tightest atmosphere now</th>
+<th>Margin after +140/+210</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Default</td>
+<td>Soft Luxury V1</td>
+<td>+250 chars (unchanged — flag OFF)</td>
+</tr>
+<tr>
+<td>Preserve</td>
+<td>Soft Luxury V1</td>
+<td>+113 chars</td>
+</tr>
+<tr>
+<td>Creative</td>
+<td>Dark Contemporary V1</td>
+<td><strong>-176 chars (OVERFLOW)</strong> ⚠️</td>
+</tr>
+</tbody>
+</table>
+<p>→ <strong>Dark Contemporary in creative mode would overflow with +210.</strong> Need either:
+- Phase 1 ships preserve-only (no creative for Dark)
+- OR signal capped at +150 chars in creative
+- OR creative signal ships as P5 (drops first if tight)</p>
+<p>Recommendation: ship at P5 priority in creative mode so it drops if needed; ship at P4 in preserve mode where margin is healthy.</p>
+<h3 id="124-existing-dropped-sections-we-should-not-compete-with">12.4 Existing dropped sections we should NOT compete with</h3>
+<p>Per Section 2.8, these P4/P5 sections are already in the stack:
+- <code>wow_directive</code> (~95-195 chars)
+- <code>natural_enrichment</code> (~132 chars)
+- <code>visible_spaces</code> (~0-200 chars when fired)
+- <code>design_direction</code> (~65-300 chars)</p>
+<p>If furnishing ships P4, it competes with wow_directive and natural_enrichment for budget. Either is acceptable but document the conflict.</p>
+<h3 id="125-overlap-audit-anti-empilement">12.5 Overlap audit (anti-empilement)</h3>
+<p>Per the user's explicit ask, check overlap with existing blocks:</p>
+<table>
+<thead>
+<tr>
+<th>Existing block</th>
+<th>Says what</th>
+<th>Overlap with proposed furnishing signal?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DNA <code>furniture_language[:3]</code></td>
+<td>3 specific furniture pieces per (atm × room)</td>
+<td>❌ different layer (specific pieces vs meta-layering)</td>
+</tr>
+<tr>
+<td>DNA <code>decor_language[:2]</code></td>
+<td>2 decor objects per (atm × room)</td>
+<td>❌ different layer</td>
+</tr>
+<tr>
+<td>DNA <code>realism_constraints</code></td>
+<td>scale/physicality rules</td>
+<td>❌ different concern</td>
+</tr>
+<tr>
+<td><code>_NATURAL_ENRICHMENT</code></td>
+<td>"Enrich with light natural layering"</td>
+<td>🟡 partial overlap — semantic neighbours, but enrichment is permission-only, furnishing is direction. Could be merged in Phase 4 if both stabilize.</td>
+</tr>
+<tr>
+<td><code>_COMPACT_REALISM</code> "Furniture stays usable"</td>
+<td>usability/scale</td>
+<td>❌ different concern</td>
+</tr>
+<tr>
+<td><code>_INTERIOR_COMPLETENESS</code> (dead)</td>
+<td>density/completeness</td>
+<td>⚠️ DIRECT overlap historically — the new signal must NOT repeat the dead signal's wording</td>
+</tr>
+</tbody>
+</table>
+<p>→ Main risk: overlap with <code>_NATURAL_ENRICHMENT</code>. Mitigation: the furnishing signal speaks of WHAT to layer (throw / book / accent); natural_enrichment speaks of PERMISSION to layer. Different verbs, different roles. Keep both unless benchmark shows redundancy.</p>
+<hr>
+<h2 id="13-furnishing-regression-risk-table">13. Furnishing regression risk table</h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Cause</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Room enlargement to fit furniture</td>
+<td>"fully equipped" / "every zone completed" wording</td>
+<td>Use "on existing surfaces" / "secondary to architecture"</td>
+</tr>
+<tr>
+<td>Fake TV wall invention</td>
+<td>"media wall" / "feature wall" wording</td>
+<td>NEVER list these as furniture cues</td>
+</tr>
+<tr>
+<td>Hiding windows behind curtains</td>
+<td>"floor-to-ceiling curtains" without scope</td>
+<td>Restrict to "curtain at the existing window"</td>
+</tr>
+<tr>
+<td>Overfilling small rooms</td>
+<td>density rule absent</td>
+<td>Add density rule "1-2 objects per visible surface zone"</td>
+</tr>
+<tr>
+<td>Blocking circulation paths</td>
+<td>"fill the floor zone" wording</td>
+<td>Keep _COMPACT_REALISM "openings and circulation clear"</td>
+</tr>
+<tr>
+<td>Impossible furniture placement</td>
+<td>scale/gravity absent</td>
+<td>DNA realism_constraints already handles this</td>
+</tr>
+<tr>
+<td>Unrealistic kitchen additions</td>
+<td>generic kitchen furnishing rule</td>
+<td>Kitchen-specific: ship NEAR-EMPTY signal</td>
+</tr>
+<tr>
+<td>Terrace becoming indoor room</td>
+<td>outdoor furnishing without perimeter anchor</td>
+<td>Outdoor signal must say "on existing terrace surface"</td>
+</tr>
+<tr>
+<td>Over-layered decor</td>
+<td>atmosphere-blind densification</td>
+<td>Atmosphere DNA already has 5 items — adding furnishing signal must not stack on top of dense atmospheres</td>
+</tr>
+<tr>
+<td>Furniture scale drift</td>
+<td>adding "oversized" / "statement" cues</td>
+<td>Avoid those words</td>
+</tr>
+<tr>
+<td>Perspective distortion from furnishing density</td>
+<td>model rotates camera to "show all furniture"</td>
+<td>CAMERA_LOCK + STRUCTURAL_IDENTITY already defend; furnishing signal must not invite "show the whole room" framings</td>
+</tr>
+<tr>
+<td>Negative space erosion (Japandi failure)</td>
+<td>universal "completeness" applied to wabi-sabi atmospheres</td>
+<td>Per-atmosphere conditioning in Phase 2; for Japandi/Zen ship MINIMAL signal</td>
+</tr>
+</tbody>
+</table>
+<h3 id="131-the-negative-space-risk-specifically-japandizen">13.1 The negative-space risk specifically (Japandi/Zen)</h3>
+<p>Japandi and Zen atmospheres explicitly value empty floor space ("empty floor space is deliberate, not absent" in Japandi DNA realism_constraints). A universal furnishing signal that says "layer accents" would CONTRADICT Japandi's identity.</p>
+<p>→ Phase 2 atmosphere-conditioned signal: Japandi/Zen get <strong>""</strong> (no signal) or a minimal "single ambient accent on existing surface" signal.</p>
+<h3 id="132-the-warm-modern-wall-creation-pattern">13.2 The Warm Modern wall-creation pattern</h3>
+<p>The Wave 5.5.14 bench identified Warm Modern V1 creates a wall on the right (where kitchen should be) in 2/6 outputs. This is a separate problem from furnishing (Section 4.5).</p>
+<p><strong>But the furnishing signal could make it WORSE</strong> if Warm Modern's signal pushes for "fully furnished living room" — that would invite the model to "wall off the kitchen zone to make a complete living room".</p>
+<p>→ Phase 1 furnishing signal should be Warm-Modern-tested explicitly before ship.</p>
+<hr>
+<h2 id="14-proposed-future-implementation-waves">14. Proposed future implementation waves</h2>
+<p>Per the user's ask: propose waves, do NOT implement, with safest sequencing.</p>
+<h3 id="wave-5515a-this-audit-read-only">Wave 5.5.15a (THIS audit) — read-only</h3>
+<ul>
+<li>Output: this doc</li>
+<li>Code change: 0</li>
+<li>Budget: 0</li>
+<li>Risk: 0</li>
+<li>Validation: doc review by user</li>
+</ul>
+<h3 id="wave-5515b-phase-1-generic-furnishing-signal">Wave 5.5.15b — Phase 1: generic furnishing signal</h3>
+<ul>
+<li><strong>New file</strong>: <code>backend/prompt_engine/furnishing_completeness.py</code> (~80 lines incl. docstring)</li>
+<li><strong>Wired into</strong>: <code>composer.py</code> raw_sections at P4 (after natural_enrichment); <code>composer_v2.py</code> same logic</li>
+<li><strong>Signal</strong>:</li>
+<li>Preserve: "FURNISHING — opportunistic layering on existing surfaces: a folded throw, stacked books, one ambient accent. Secondary to architecture; never invent new zones."</li>
+<li>Creative: "FURNISHING — express the atmosphere with lived-in storytelling: layered textiles, stacked references, ambient personal accents around the existing focal zone. The photo's existing surfaces define what gets layered."</li>
+<li><strong>Gated by</strong>: <code>BIMODAL_ENABLED</code> (via <code>is_bimodal_enabled()</code> helper)</li>
+<li><strong>Budget cost</strong>: +140 preserve, +210 creative — needs creative budget mitigation (drop to P5)</li>
+<li><strong>Validation</strong>:</li>
+<li><code>validate_wave5515b.py</code> new test file: signal present in preserve/creative when flag ON, absent when flag OFF</li>
+<li><code>validate_wave5514g_margins.py</code> extended: all 30 cells still pass safe-margin check</li>
+<li>Bench: 3 photos × 3 atmospheres (Living + Bedroom + Kitchen) × 2 modes = 18 generations, Recognition + Lived-in score</li>
+<li><strong>Rollback</strong>: <code>git revert</code> or <code>unset BIMODAL_ENABLED</code></li>
+<li><strong>GO criteria</strong>: Recognition ≥ baseline (no regression) AND Lived-in score ≥ baseline + 0.5/5 on at least 2 atmospheres</li>
+</ul>
+<h3 id="wave-5515c-phase-2-atmosphere-conditioned-signal">Wave 5.5.15c — Phase 2: atmosphere-conditioned signal</h3>
+<ul>
+<li><strong>No new file</strong>: extend furnishing_completeness.py with per-atmosphere variants</li>
+<li><strong>Signal</strong>: dictionary <code>_FURNISHING_PER_ATM</code> mapping atmosphere_id → (preserve_sentence, creative_sentence)</li>
+<li><strong>Defaults</strong>: Japandi/Zen ship MINIMAL signal; outdoor rooms ship perimeter-anchored signal; Kitchen/Bathroom ship NEAR-EMPTY signal</li>
+<li><strong>Budget cost</strong>: same envelope (≤140 preserve / ≤210 creative) — no new chars, just per-atm content</li>
+<li><strong>Validation</strong>:</li>
+<li>Same 5515b validation extended per atmosphere</li>
+<li>Specific: Japandi DOES NOT regress on "empty floor" appearance</li>
+<li><strong>GO criteria</strong>: 5515b GO criteria met AND no per-atmosphere regression</li>
+</ul>
+<h3 id="wave-5515d-phase-3-room-conditioned-signal">Wave 5.5.15d — Phase 3: room-conditioned signal</h3>
+<ul>
+<li><strong>No new file</strong>: extend with per-room variants where needed</li>
+<li><strong>Specifically</strong>: Kitchen and Bathroom get separate near-empty wording; facade gets "" (no signal)</li>
+<li><strong>Budget cost</strong>: same envelope</li>
+<li><strong>Validation</strong>:</li>
+<li>Bench includes Kitchen + Bathroom + Facade in preserve mode</li>
+<li>No "fake coffee station" / "invented vanity" appearances</li>
+<li><strong>GO criteria</strong>: 5515c GO criteria met AND kitchen/bathroom show no element-invention</li>
+</ul>
+<h3 id="wave-5515e-phase-4-revisit-dropping-_natural_enrichment-for-full-furnishing">Wave 5.5.15e — Phase 4: revisit dropping <code>_NATURAL_ENRICHMENT</code> for full furnishing</h3>
+<ul>
+<li><strong>Decision wave</strong>: if furnishing signal proves itself, <code>_NATURAL_ENRICHMENT</code> becomes redundant (Section 12.5 partial overlap)</li>
+<li><strong>Possible</strong>: merge into furnishing signal or drop natural_enrichment entirely</li>
+<li><strong>Char saving</strong>: -132 chars in preserve and creative</li>
+<li><strong>GO criteria</strong>: 3 measured benches with both blocks vs furnishing-only show no quality regression</li>
+</ul>
+<h3 id="sequencing-logic">Sequencing logic</h3>
+<p>Each wave is small, reversible, benchmarked. Each waits for the previous to validate. Phase 4 (merge / drop natural_enrichment) is optional and may never ship if the two blocks complement well.</p>
+<h3 id="total-estimated-implementation-time">Total estimated implementation time</h3>
+<table>
+<thead>
+<tr>
+<th>Wave</th>
+<th>Code time</th>
+<th>Benchmark time (user-driven)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5.5.15a</td>
+<td>done</td>
+<td>0</td>
+</tr>
+<tr>
+<td>5.5.15b</td>
+<td>~30 min</td>
+<td>~45 min (18 generations + scoring)</td>
+</tr>
+<tr>
+<td>5.5.15c</td>
+<td>~20 min</td>
+<td>~30 min (10 atmospheres focused bench)</td>
+</tr>
+<tr>
+<td>5.5.15d</td>
+<td>~15 min</td>
+<td>~30 min (room-focused bench)</td>
+</tr>
+<tr>
+<td>5.5.15e (optional)</td>
+<td>~10 min</td>
+<td>~30 min (A/B with vs without natural_enrichment)</td>
+</tr>
+</tbody>
+</table>
+<p>Total: ~75 min code, ~135 min bench, spread over 3-5 sessions.</p>
+<hr>
+<h2 id="15-benchmark-recommendations">15. Benchmark recommendations</h2>
+<p>Per user's ask for measurable validation.</p>
+<h3 id="151-recognition-fidelity-primary-kpi">15.1 Recognition fidelity (primary KPI)</h3>
+<p><strong>Question:</strong> does the output look like THIS user's apartment?</p>
+<p><strong>Method:</strong> binary scoring per generation: "is this my room?" Y/N. Computed across the bench grid.</p>
+<p><strong>Pass threshold:</strong> Y on ≥90% of preserve-mode generations.</p>
+<p><strong>Wave 5.5.14 baseline:</strong> ~50-70% per user's bench observations (kitchen issue + occasional wall issue drop the rate).</p>
+<p><strong>Furnishing impact target:</strong> NO DROP. Furnishing additions must not reduce Recognition.</p>
+<h3 id="152-lived-in-score-new-kpi-wave-5515-specific">15.2 Lived-in score (NEW KPI, Wave 5.5.15-specific)</h3>
+<p><strong>Question:</strong> does the output feel like a real, used home OR like a showroom?</p>
+<p><strong>Method:</strong> 5-point Likert per generation. 1 = sterile showroom; 5 = personal, lived-in, recently-used.</p>
+<p><strong>Wave 5.5.14 baseline:</strong> ~2.5/5 per user's "AI-generic, showroom-like" observation.</p>
+<p><strong>Furnishing target Phase 1:</strong> ≥3.0/5 (small improvement).
+<strong>Furnishing target Phase 2 (atmosphere-conditioned):</strong> ≥3.5/5.</p>
+<h3 id="153-architecture-safety-score-regression-guard">15.3 Architecture safety score (REGRESSION GUARD)</h3>
+<p><strong>Question:</strong> does the output preserve the photographed architecture (camera, openings, walls, ceiling height)?</p>
+<p><strong>Method:</strong> per generation:
+- Camera vantage matches photo: Y/N
+- Floor-to-ceiling window position matches: Y/N
+- Glass partition position matches: Y/N
+- Kitchen visible (if present in photo): Y/N
+- Wall count matches (no invented walls): Y/N</p>
+<p>5-point binary score, sum = 0-5.</p>
+<p><strong>Wave 5.5.14 baseline:</strong> ~3.5-4/5.</p>
+<p><strong>Furnishing target:</strong> NO DROP. Must remain ≥3.5/5.</p>
+<h3 id="154-per-element-regression-list">15.4 Per-element regression list</h3>
+<p>Specific failure modes to watch:
+- Phantom feature wall invented: count occurrences
+- Built-in storage invented: count occurrences
+- TV media wall invented: count occurrences
+- Sofa-zone expansion (the focal cluster grows beyond photo's floor area): count occurrences
+- Floor invention to fit a rug: count occurrences
+- Pillar/column invention: count occurrences</p>
+<p>All must be 0 or near-0 to pass.</p>
+<h3 id="155-benchmark-photo-set-recommendation">15.5 Benchmark photo set recommendation</h3>
+<p><strong>Minimum:</strong> 3 photos × 3 atmospheres × 2 modes = 18 generations per wave gate.</p>
+<p><strong>Photos:</strong>
+1. User's reference apartment (current bench baseline)
+2. A simpler / more empty apartment (test if completeness signal pushes invention on simple photos)
+3. A more cluttered / already-furnished apartment (test if signal causes overfilling)</p>
+<p><strong>Atmospheres:</strong> the 3 calibration HIGH priority targets per <code>wave_5_5a_calibration_matrix</code>: Japandi (negative-space risk), Warm Modern (wall-invention risk), Bali (pavilion-invention risk).</p>
+<h3 id="156-anti-stochastic-protocol">15.6 Anti-stochastic protocol</h3>
+<p>Per the "1/6 vs 4/6 was statistical noise" lesson from the recent bench, <strong>minimum 6 attempts per (photo × atmosphere × mode) cell</strong> to filter stochastic outliers. p &lt; 0.05 significance with 6+6 sample.</p>
+<hr>
+<h2 id="16-rollback-strategy">16. Rollback strategy</h2>
+<h3 id="161-per-wave-rollback">16.1 Per-wave rollback</h3>
+<p>Each Wave 5.5.15x is independently rollback-able:</p>
+<ul>
+<li>Wave 5.5.15b: <code>unset BIMODAL_ENABLED</code> reverts to current Wave 5.5.14 behavior. OR <code>git revert &lt;commit-15b&gt;</code> removes the new file + composer wiring.</li>
+<li>Wave 5.5.15c: revert to 15b state (extend dictionary back to single sentence).</li>
+<li>Wave 5.5.15d: revert to 15c state.</li>
+<li>Wave 5.5.15e: revert puts <code>_NATURAL_ENRICHMENT</code> back in the stack.</li>
+</ul>
+<h3 id="162-emergency-full-rollback">16.2 Emergency full rollback</h3>
+<p><code>unset BIMODAL_ENABLED</code> reverts ALL Wave 5.5.14 + 5.5.15 customizations in one env-var flip. Production reverts to Wave 4.10g baseline behavior instantly. No deploy needed.</p>
+<h3 id="163-memory-updated-post-rollback">16.3 Memory updated post-rollback</h3>
+<p>If a wave fails benchmark and rolls back:
+- Update <code>wave_5_5_15_furnishing_lessons.md</code> memory with what didn't work
+- Document the specific failure mode for future audits
+- Reference in this doc's Section 3 historical-lessons style</p>
+<hr>
+<h2 id="17-final-recommendation">17. Final recommendation</h2>
+<h3 id="171-summary">17.1 Summary</h3>
+<p>The current Wave 5.5.14 stack is NOT empty/sparse in objective measure. The user's "showroom-like, AI-generic" perception correlates with 4 specific richness gaps: focal-point definition, lived-in cue, layered secondary objects, personal-warmth signal. These are addressable WITHOUT re-creating the Wave 4.2.5 INTERIOR_COMPLETENESS trap, IF the new system follows the 6 design constraints derived from that historical lesson (Section 3.4).</p>
+<p>The right architecture is a NEW dedicated module <code>furnishing_completeness.py</code> emitting ONE coherent sentence per mode, gated by BIMODAL_ENABLED, parameterized later per atmosphere and per room. Budget cost ≤+150 chars in preserve (safe), ≤+210 in creative (needs P5 priority or trimming).</p>
+<h3 id="172-go-recommendation">17.2 GO recommendation</h3>
+<p><strong>Implement Wave 5.5.15b (Phase 1 generic signal) on the user's go-ahead.</strong> Total code ~30 min, total bench ~45 min. Low risk, high information value.</p>
+<p><strong>Do NOT implement multiple phases at once.</strong> Each phase must benchmark before next ships, per the matrix Principle #4 "incremental &amp; reversible".</p>
+<h3 id="173-not-recommendations">17.3 NOT recommendations</h3>
+<ul>
+<li>❌ Don't add furnishing rules directly to composer.py (skips the audit cage)</li>
+<li>❌ Don't revive <code>_INTERIOR_COMPLETENESS_RULE</code> even with modified wording (the brand is poisoned by history)</li>
+<li>❌ Don't ship per-atmosphere signal first (start generic, specialize on signal from benchmark)</li>
+<li>❌ Don't bundle the kitchen-visibility fix into this wave (separate failure class — Section 4.5)</li>
+<li>❌ Don't ship without benchmarks (lesson from rollback test — assumed byte-identical, was wrong)</li>
+</ul>
+<h3 id="174-two-open-questions-for-user-require-answer-before-wave-5515b-kickoff">17.4 Two open questions for user (require answer before Wave 5.5.15b kickoff)</h3>
+<ol>
+<li>
+<p><strong>Is "Lived-in score" a metric you can subjectively score consistently?</strong> If you find it too subjective, alternative metrics: "feels like home" Y/N binary, OR "would I post this on Instagram" Y/N.</p>
+</li>
+<li>
+<p><strong>Phase 1 ships generic signal — accept that Japandi and Zen may regress on "deliberate empty space" character until Phase 2?</strong> Or block Phase 1 until Phase 2 ready? My recommendation: ship Phase 1 generic, accept Japandi/Zen Phase 1 may show small regression, fix in Phase 2.</p>
+</li>
+</ol>
+<hr>
+<p><em>End of audit. ~32 KB. All file/line references verified against the live codebase (commit 6b2abc5 + working-tree test-B state). Cross-references: <a href="WAVE_5_5_14a_DNA_AUDIT.md">WAVE_5_5_14a_DNA_AUDIT.md</a>, <a href="WAVE_5_5_14a_BIMODAL_CLASSIFICATION.md">WAVE_5_5_14a_BIMODAL_CLASSIFICATION.md</a>, <a href="WAVE_5_5_14a_PRESERVATION_STACK_AUDIT.md">WAVE_5_5_14a_PRESERVATION_STACK_AUDIT.md</a>.</em></p>
+</body>
+</html>
