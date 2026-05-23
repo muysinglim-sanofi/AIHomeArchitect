@@ -505,10 +505,10 @@ def test_voice_drops_with_flag() -> None:
 
     # Flag ON + creative: voice #1 is REPLACED by the Wave 5.5.14d creative
     # framing (no PHOTO-EDIT task → C2.b tail cannot exist on this path).
-    # Wave 5.5.14i: voices #3 and #4 are ALSO dropped in creative mode now —
-    # they were saying 'Preserve geometry exactly / NOT geometry' which
-    # contradicted the SAME SPACE REIMAGINED + ARCHITECTURAL MEMORY framing
-    # earlier in the prompt, ankylosing creative outputs.
+    # Voices #3 and #4 REMAIN — Wave 5.5.14i which dropped them in creative
+    # mode was REVERTED (2026-05-24) after empirical bench showed V1 preserve
+    # regression. The 14i extension to creative may revisit later with a
+    # cleaner isolation test.
     cr = _build("Tropical Escape", "creative")
     _check(
         "SAME SPACE REIMAGINED" in cr,
@@ -518,14 +518,8 @@ def test_voice_drops_with_flag() -> None:
         "SAME APARTMENT PHOTO-EDIT" not in cr,
         "Flag ON + creative: must NOT keep PHOTO-EDIT framing",
     )
-    _check(
-        _VOICE3_DNA_BOUNDARY not in cr,
-        "Flag ON + creative (Wave 5.5.14i): voice #3 must be DROPPED — contradicts REIMAGINED",
-    )
-    _check(
-        _VOICE4_WOW_TAIL not in cr,
-        "Flag ON + creative (Wave 5.5.14i): voice #4 'NOT geometry' must be DROPPED",
-    )
+    _check(_VOICE3_DNA_BOUNDARY in cr, "Flag ON + creative: voice #3 must remain (14i reverted)")
+    _check(_VOICE4_WOW_TAIL in cr, "Flag ON + creative: voice #4 must remain (14i reverted)")
     print(f"  flag_on_creative_v1     OK  ({len(cr)} chars)")
 
     # V2 path (composer_v2) — same expectations on the propagated voices.
@@ -543,14 +537,8 @@ def test_voice_drops_with_flag() -> None:
         _VOICE4_WOW_TAIL not in p2,
         "Flag ON + preserve: V2 voice #4 must be DROPPED",
     )
-    _check(
-        _VOICE3_DNA_BOUNDARY not in cr2,
-        "Flag ON + creative (Wave 5.5.14i): V2 voice #3 must be DROPPED",
-    )
-    _check(
-        _VOICE4_WOW_TAIL not in cr2,
-        "Flag ON + creative (Wave 5.5.14i): V2 voice #4 must be DROPPED",
-    )
+    _check(_VOICE3_DNA_BOUNDARY in cr2, "Flag ON + creative: V2 voice #3 must remain (14i reverted)")
+    _check(_VOICE4_WOW_TAIL in cr2, "Flag ON + creative: V2 voice #4 must remain (14i reverted)")
     print(f"  flag_on_v2_paths        OK")
 
     # Restore flag-off baseline for any subsequent test.

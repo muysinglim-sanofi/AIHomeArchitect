@@ -705,9 +705,9 @@ def compose_generation_prompt(
     #
     # Default (BIMODAL_ENABLED unset): section emits in full → byte-
     # identical baseline.
-    from .atmosphere_dna.bimodal_classifier import should_drop_boundary_voices
+    from .atmosphere_dna.bimodal_classifier import is_preserve_mode_active
     dna_boundary = (
-        "" if should_drop_boundary_voices(generation_mode)
+        "" if is_preserve_mode_active(generation_mode)
         else build_atmosphere_dna_boundary()
     )
 

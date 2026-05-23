@@ -218,8 +218,8 @@ def _transformation_ambition_for_mode(generation_mode: str) -> str:
 
     Default (BIMODAL_ENABLED unset): full Wave 5.5.4 string → byte-identical
     baseline."""
-    from .atmosphere_dna.bimodal_classifier import should_drop_boundary_voices
-    if should_drop_boundary_voices(generation_mode):
+    from .atmosphere_dna.bimodal_classifier import is_preserve_mode_active
+    if is_preserve_mode_active(generation_mode):
         return _TRANSFORMATION_AMBITION_BASE
     return _TRANSFORMATION_AMBITION
 
@@ -1009,9 +1009,9 @@ def compose_generation_prompt(
     # a non-existent conflict. Creative: section says 'Preserve geometry
     # exactly' which contradicts the SAME SPACE REIMAGINED framing earlier
     # in the V2 5-section prompt → ankylosed creative latitude.
-    from .atmosphere_dna.bimodal_classifier import should_drop_boundary_voices
+    from .atmosphere_dna.bimodal_classifier import is_preserve_mode_active
     dna_boundary = (
-        "" if should_drop_boundary_voices(generation_mode)
+        "" if is_preserve_mode_active(generation_mode)
         else build_atmosphere_dna_boundary()
     )
 

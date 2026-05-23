@@ -132,9 +132,9 @@ def build_photo_edit_wow_directive(generation_mode: str = "preserve") -> str:
     Default (BIMODAL_ENABLED unset): keeps the full Wave 5.5.2 directive →
     byte-identical baseline.
     """
-    from .atmosphere_dna.bimodal_classifier import should_drop_boundary_voices
+    from .atmosphere_dna.bimodal_classifier import is_preserve_mode_active
 
-    if should_drop_boundary_voices(generation_mode):
+    if is_preserve_mode_active(generation_mode):
         return _PHOTO_EDIT_WOW_HEAD
     return _PHOTO_EDIT_WOW
 
