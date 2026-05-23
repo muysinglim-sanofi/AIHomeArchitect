@@ -151,6 +151,18 @@ def inject_creative_revival(
     from . import get_core, get_room_dna
     core = get_core(atmosphere_id)
     room_dna = get_room_dna(atmosphere_id, room_type)
+    # Wave 5.5.14g — atmosphere_keywords injection deliberately SKIPPED.
+    # Reason: per the budget-margin diagnostic (validate_wave5514g_margins.py),
+    # injecting all 3 dormant fields pushed Tropical Escape creative to +47
+    # margin and Desert Luxe creative to +15 — too tight for a real user
+    # description. Keywords are the least-value dormant field (largely
+    # redundant with material_palette concrete terms like "volcanic stone"
+    # or "tadelakt"). Skipping them saves ~85-100 chars per atmosphere and
+    # keeps all creative-mode margins comfortably above the 50-char safety
+    # threshold. The two HIGH-value dormant fields (architectural_language
+    # and room_specific_constraints) are still revived — those are what
+    # give Bali "open-pavilion" character, Tropical "open-plan dissolving
+    # boundaries", and similar architectural latitude language.
     extras: list[str] = []
     if core is not None and core.architectural_language:
         extras.append(
@@ -160,9 +172,6 @@ def inject_creative_revival(
     if room_dna is not None and room_dna.room_specific_constraints:
         constraints = "; ".join(room_dna.room_specific_constraints)
         extras.append("ROOM EXPRESSION: " + constraints + ".")
-    if core is not None and core.atmosphere_keywords:
-        kws = ", ".join(core.atmosphere_keywords)
-        extras.append("ATMOSPHERE KEYWORDS: " + kws + ".")
     if not extras:
         return text
     return text + "\n" + "\n".join(extras)

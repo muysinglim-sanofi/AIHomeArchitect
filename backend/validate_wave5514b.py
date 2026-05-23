@@ -335,9 +335,11 @@ def test_creative_mode_with_flag() -> None:
         "ROOM EXPRESSION" in creative,
         "Flag ON + creative: revived room_specific_constraints must appear",
     )
+    # Wave 5.5.14g — atmosphere_keywords revival deliberately SKIPPED for
+    # budget headroom (see bimodal_classifier.inject_creative_revival).
     _check(
-        "ATMOSPHERE KEYWORDS" in creative,
-        "Flag ON + creative: revived atmosphere_keywords must appear",
+        "ATMOSPHERE KEYWORDS" not in creative,
+        "Flag ON + creative (post-5.5.14g): atmosphere_keywords no longer injected",
     )
     # The DNA itself should still contain Bali's architectural language
     # (the strip is a preserve-only operation).

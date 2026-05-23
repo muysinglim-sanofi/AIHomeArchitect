@@ -278,7 +278,7 @@ from .visible_space_logic import build_visible_spaces_block
 # ── Budget system ─────────────────────────────────────────────────────────────
 
 _MODE_BUDGETS: dict[str, int] = {
-    "FIRST_VISION": 3850,  # Wave 5.5.3: raised 3550→3850 to make room for the new atmosphere_dna_boundary P1 section (~290 chars). Still under the 4000 hard ceiling. Margins after C3: Nordic +48, Warm +61, Japandi +84, Bali +199, Soft Luxury +198.
+    "FIRST_VISION": 4000,  # Wave 5.5.14g (richness reinvestment): raised 3850→4000 (hard ceiling). Rationale: Wave 5.5.14f freed ~445 chars in preserve mode by dropping 3 boundary voices, but Wave 5.5.14d's creative mode ADDS ~250-300 chars (dormant DNA revival + REIMAGINED framing). Measured tightest creative margin: Tropical Escape at +11 above 3850 → unsafe for real-world prompts with descriptions or extra visible spaces. Raising to the matrix hard ceiling 4000 gives creative mode +130-360 margin while letting preserve mode's P4/P5 sections (natural_enrichment, visible_spaces, design_direction) thrive on rich prompts. No new content added — just headroom for existing sections to survive budget. Default (BIMODAL_ENABLED unset) prompts stay well under any cap. Wave 5.5.3 lineage: 3550→3850 to seat C3 boundary; Wave 5.5.14g: 3850→4000 to seat creative revival headroom.
     # Wave 4.8.2: raised 2400→3500 / 2500→3600. The 4.8.1a audit proved the
     # (legitimately grown 4.6–4.7) P1 preservation/continuity stack alone
     # (~2528 / ~2601) exceeded the old 2400/2500 caps, silently evicting
