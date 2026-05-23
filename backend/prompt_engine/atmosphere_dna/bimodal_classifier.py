@@ -74,6 +74,100 @@ def is_bimodal_enabled() -> bool:
     return val in ("1", "true", "yes", "on")
 
 
+def is_preserve_mode_active(mode: str) -> bool:
+    """True iff the bimodal flag is set AND the request is in preserve mode.
+
+    Single source of truth for "should the bimodal Preserve path apply".
+    Used by:
+      - apply_bimodal()                                  → strip DNA tokens
+      - fidelity_layer.build_first_vision_task()         → drop voice #1 tail
+      - wow_layer.build_photo_edit_wow_directive()       → drop voice #4 tail
+      - composer.py / composer_v2.py assembly            → drop voice #3 section
+
+    By centralising the activation logic here, switching the flag off
+    instantly reverts every site to the baseline output — there is exactly
+    ONE gate to flip in an incident.
+    """
+    return is_bimodal_enabled() and mode == "preserve"
+
+
+def is_creative_mode_active(mode: str) -> bool:
+    """True iff the bimodal flag is set AND the request is in creative mode.
+
+    Single source of truth for the Creative composer path (Wave 5.5.14d).
+    Used by:
+      - preservation.build_simplified_fv_contract()      → soft CAMERA, drop STRUCTURAL LOCK
+      - fidelity_layer.build_first_vision_task()         → creative framing variant
+      - fidelity_layer.build_openings_anchor()           → dropped entirely
+      - structural_identity.render_clause()              → soft "may be reinterpreted"
+      - structural_identity.render_negative_anchors()    → dropped entirely
+      - composer assembly                                → inject_creative_revival on DNA
+      - inject_creative_revival()                        → revive dead DNA fields
+
+    SAFETY: when the flag is unset (default production), creative requests
+    fall through to the baseline (full preservation stack), so a
+    misclassified mode value cannot accidentally weaken architectural
+    preservation in prod.
+    """
+    return is_bimodal_enabled() and mode == "creative"
+
+
+def inject_creative_revival(
+    text: str,
+    atmosphere_id: str,
+    room_type: str,
+    mode: str,
+) -> str:
+    """In creative mode (BIMODAL_ENABLED=1 + mode == 'creative'), append the
+    dormant DNA fields that the standard renderer does NOT emit:
+
+      - core.architectural_language  (e.g. Bali "Open-pavilion volumes…")
+      - core.atmosphere_keywords     (identity keywords list)
+      - dna.room_specific_constraints (e.g. "open side to garden")
+
+    These fields exist in every atmosphere DNA but are never read by the
+    `build_dna_block` renderer — they are "dead fields" the bimodal audit
+    surfaced. In Creative mode we revive them as a CREATIVE EXPRESSION
+    appendix block so the model has full architectural latitude for the
+    atmosphere's true character.
+
+    No-op when:
+      - BIMODAL_ENABLED is unset / falsy
+      - mode != 'creative'
+      - text is empty
+      - atmosphere_id is unknown or the DNA isn't registered for the room
+
+    Returned text always begins with `text` exactly as passed in; revival
+    content is appended after a newline so the caller can use the result
+    interchangeably with the original block.
+    """
+    if not is_creative_mode_active(mode):
+        return text
+    if not text:
+        return text
+    # Lazy import to avoid circular deps at module load (bimodal_classifier
+    # lives INSIDE atmosphere_dna; its siblings populate the registry on
+    # import).
+    from . import get_core, get_room_dna
+    core = get_core(atmosphere_id)
+    room_dna = get_room_dna(atmosphere_id, room_type)
+    extras: list[str] = []
+    if core is not None and core.architectural_language:
+        extras.append(
+            "ARCHITECTURAL CHARACTER (creative latitude): "
+            + core.architectural_language
+        )
+    if room_dna is not None and room_dna.room_specific_constraints:
+        constraints = "; ".join(room_dna.room_specific_constraints)
+        extras.append("ROOM EXPRESSION: " + constraints + ".")
+    if core is not None and core.atmosphere_keywords:
+        kws = ", ".join(core.atmosphere_keywords)
+        extras.append("ATMOSPHERE KEYWORDS: " + kws + ".")
+    if not extras:
+        return text
+    return text + "\n" + "\n".join(extras)
+
+
 def apply_bimodal(text: str, atmosphere_id: str, mode: str) -> str:
     """Conditionally apply bimodal strip to a rendered DNA block.
 
@@ -87,9 +181,7 @@ def apply_bimodal(text: str, atmosphere_id: str, mode: str) -> str:
     Applied when:
       - BIMODAL_ENABLED truthy AND mode == "preserve" → strip_architecture_tokens
     """
-    if not is_bimodal_enabled():
-        return text
-    if mode != "preserve":
+    if not is_preserve_mode_active(mode):
         return text
     return strip_architecture_tokens(text, atmosphere_id)
 

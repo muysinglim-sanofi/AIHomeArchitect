@@ -231,7 +231,11 @@ _RENDER_ORDER = (
 _MAX_CLAUSE_CHARS = 460
 
 
-def render_clause(identity: ApartmentStructuralIdentity, mode: str = "V1") -> str:
+def render_clause(
+    identity: ApartmentStructuralIdentity,
+    mode: str = "V1",
+    generation_mode: str = "preserve",
+) -> str:
     """
     Render the persistent identity as a concise P1 declarative-facts clause.
 
@@ -239,17 +243,44 @@ def render_clause(identity: ApartmentStructuralIdentity, mode: str = "V1") -> st
     contains ..." NOT "generate a bay window ..."). For V3 a single clause
     permits change ONLY for the explicitly requested structural edit.
     Returns "" when no identity is present (graceful — zero prompt cost).
+
+    Wave 5.5.14d — `generation_mode` softens the clause in creative mode
+    (BIMODAL_ENABLED=1 + creative). The prefix changes from "reproduce them
+    exactly" → "these are the starting points, may be reinterpreted
+    creatively", and the suffix from "structural truths, not design choices"
+    → "an architectural reference, not a constraint". The facts themselves
+    stay (so the model has architectural memory of the space) but the
+    surrounding language no longer forbids creative evolution.
+
+    Default + preserve paths return the original Wave 4.7.2 string
+    byte-for-byte (the function signature gains a keyword arg with a
+    backward-compatible default).
     """
     if not identity or not identity.is_present:
         return ""
 
+    # Lazy import — structural_identity sits alongside atmosphere_dna; do
+    # not cross-trigger the registry at module load.
+    from .atmosphere_dna.bimodal_classifier import is_creative_mode_active
+    creative = is_creative_mode_active(generation_mode)
+
     facts = [getattr(identity, name) for name in _RENDER_ORDER if getattr(identity, name)]
-    prefix = ("STRUCTURAL IDENTITY — this apartment already contains these "
-              "architectural facts; reproduce them exactly, do not normalize, "
-              "narrow, or restyle them: ")
-    suffix = ". These are existing structural truths, not design choices."
-    if mode == "V3":
-        suffix += " Only the explicitly requested structural change may alter them."
+    if creative:
+        prefix = (
+            "ARCHITECTURAL MEMORY — this space contains these photographed "
+            "architectural facts as creative starting points; they may be "
+            "reinterpreted to express the atmosphere's character: "
+        )
+        suffix = (
+            ". Use them as an architectural reference, not as constraints."
+        )
+    else:
+        prefix = ("STRUCTURAL IDENTITY — this apartment already contains these "
+                  "architectural facts; reproduce them exactly, do not normalize, "
+                  "narrow, or restyle them: ")
+        suffix = ". These are existing structural truths, not design choices."
+        if mode == "V3":
+            suffix += " Only the explicitly requested structural change may alter them."
 
     body = "; ".join(facts)
     clause = prefix + body + suffix
@@ -288,7 +319,10 @@ _NEG_CORE = (
 _NEG_MAX_SECTION = 450  # Task 5 hard ceiling
 
 
-def render_negative_anchors(identity: ApartmentStructuralIdentity) -> str:
+def render_negative_anchors(
+    identity: ApartmentStructuralIdentity,
+    generation_mode: str = "preserve",
+) -> str:
     """
     Wave 4.7.4 — STRUCTURAL NEGATIVE ANCHORS section (P1, V1/V2/V3).
 
@@ -297,8 +331,17 @@ def render_negative_anchors(identity: ApartmentStructuralIdentity) -> str:
     apartment). Architecture-only and leak-guarded; never re-lists individual
     openings (structural_identity owns the positive enumeration), so it adds
     negative topology protection without bloat, redundancy, or contradiction.
+
+    Wave 5.5.14d — In creative mode (BIMODAL_ENABLED=1 + creative), the
+    negative anchors block is dropped entirely. Creative mode explicitly
+    allows the atmosphere to convert glass into walls or vice versa (e.g.
+    Bali "open-pavilion" reinterpretation). Default + preserve paths keep
+    the original Wave 4.7.4 behaviour.
     """
     if not identity or not identity.is_present:
+        return ""
+    from .atmosphere_dna.bimodal_classifier import is_creative_mode_active
+    if is_creative_mode_active(generation_mode):
         return ""
     section = "STRUCTURAL NEGATIVE ANCHORS — " + _NEG_CORE
     if _leaks(section):  # defence in depth (the fixed text is architecture-only)

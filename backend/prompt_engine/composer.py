@@ -272,7 +272,7 @@ from .edit_intent import (
     build_structural_transformation_header,
 )
 from .atmosphere_dna import get_room_dna, build_dna_block, label_to_atmosphere_id
-from .atmosphere_dna.bimodal_classifier import apply_bimodal  # Wave 5.5.14c — no-op unless BIMODAL_ENABLED=1
+from .atmosphere_dna.bimodal_classifier import apply_bimodal, inject_creative_revival  # Wave 5.5.14c/d — no-op unless BIMODAL_ENABLED=1
 from .visible_space_logic import build_visible_spaces_block
 
 # ── Budget system ─────────────────────────────────────────────────────────────
@@ -418,6 +418,12 @@ def _design_intelligence_block(
         # identical to pre-5.5.14c output.
         block = build_dna_block(room_dna)
         block = apply_bimodal(block, atmosphere_id, generation_mode)
+        # Wave 5.5.14d — in creative mode, append the dormant DNA fields
+        # (architectural_language, room_specific_constraints, keywords).
+        # No-op for preserve / default paths.
+        block = inject_creative_revival(
+            block, atmosphere_id, room_type, generation_mode
+        )
         return block, True
     return _style_block(style_dna, style_label), False
 
@@ -616,10 +622,13 @@ def compose_generation_prompt(
     # of build_structural_contract() (Tier 1, ~1550 chars). All required vocabulary
     # preserved; redundant defensive prose removed. Saves ~730 chars per prompt.
     room_ctx = f" {room_type}" if room_type else ""
-    task = build_first_vision_task(dna.name, room_ctx)
+    # Wave 5.5.14f — task suffix (voice #1) trims in preserve mode when
+    # BIMODAL_ENABLED is on. Default + creative paths emit the full string
+    # → byte-identical to pre-5.5.14f.
+    task = build_first_vision_task(dna.name, room_ctx, generation_mode)
 
-    contract = build_simplified_fv_contract(room_type)  # Wave 4.5.0: Tier 1.5
-    openings_anchor = build_openings_anchor()  # Wave 4.6.2: P1 — openings fidelity
+    contract = build_simplified_fv_contract(room_type, generation_mode)  # Wave 4.5.0 / 5.5.14d
+    openings_anchor = build_openings_anchor(generation_mode)  # Wave 4.6.2 / 5.5.14d
     # Wave 4.7.1 R1: concrete image-specific structural anchors for FIRST_VISION.
     # detect_anchors() is deterministic text matching (no ML, no latency, no vision
     # reintroduction) over room_description. Output is descriptive-only,
@@ -654,7 +663,7 @@ def compose_generation_prompt(
         # Wave 4.6.1: build_photo_edit_wow_directive() — "photo edit" framing, no "furniture styling".
         # Wave 4.6.2: natural_enrichment added (P4) — light accessory layering, no composition.
         completion_block = ""
-        wow_block = build_photo_edit_wow_directive()
+        wow_block = build_photo_edit_wow_directive(generation_mode)
         natural_enrichment = build_natural_enrichment()
         completeness = ""  # Wave 4.6.0: DNA handles richness; empty string filtered by budget system
         realism = build_compact_realism_block()
@@ -673,7 +682,7 @@ def compose_generation_prompt(
         # completion. build_interior_completeness_rule stays imported (still used
         # by validator harnesses); only the FIRST_VISION usage is removed.
         completion_block = build_scene_completion(room_type, atmosphere_id)
-        wow_block = build_photo_edit_wow_directive()
+        wow_block = build_photo_edit_wow_directive(generation_mode)
         natural_enrichment = build_natural_enrichment()
         completeness = ""  # Wave 4.7.1 R2: unified with DNA path (was build_interior_completeness_rule())
         realism = build_compact_realism_block()
@@ -684,6 +693,18 @@ def compose_generation_prompt(
 
     direction = f"DESIGN DIRECTION: {user_instruction.strip()[:300]}" if user_instruction.strip() else ""
 
+    # Wave 5.5.14f — voice #3 (atmosphere DNA boundary) is the middle
+    # counter-signal that arbitrates DNA-vs-photo conflict. With the DNA
+    # already stripped of architectural language in preserve mode, the
+    # boundary section becomes defensive prose against a non-existent
+    # threat → drop it. Default + creative paths keep it (byte-identical
+    # to pre-5.5.14f).
+    from .atmosphere_dna.bimodal_classifier import is_preserve_mode_active
+    dna_boundary = (
+        "" if is_preserve_mode_active(generation_mode)
+        else build_atmosphere_dna_boundary()
+    )
+
     raw_sections = [
         ("task", task),
         ("full_contract", contract),
@@ -693,7 +714,7 @@ def compose_generation_prompt(
         ("architectural_anchors", fv_anchor_clause),  # P1 — Wave 4.7.1 R1: concrete image anchors (text-derived)
         ("source_space", source),                  # P1 — source="" in FV (Wave 4.6.1)
         ("design_intel", intel_block),
-        ("atmosphere_dna_boundary", build_atmosphere_dna_boundary()),  # P1 — Wave 5.5.3: DNA-vs-photo boundary, positioned AFTER design_intel so "DNA above" reference is correct
+        ("atmosphere_dna_boundary", dna_boundary),  # P1 — Wave 5.5.3 / dropped by Wave 5.5.14f in preserve mode
         ("interior_completeness", completeness),   # P5 — drops first (Wave 4.4.1: was P4)
         ("scene_completion", completion_block),    # P4 — drops before wow_directive
         ("wow_directive", wow_block),              # P4 — most protected of the P4 group

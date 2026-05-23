@@ -76,17 +76,30 @@ _OPENINGS_ANCHOR = (
 )
 
 
-def build_openings_anchor() -> str:
+def build_openings_anchor(generation_mode: str = "preserve") -> str:
     """
     Wave 4.6.2 — Openings fidelity directive. ~197 chars.
     Targets the residual failure mode: model normalizes bay windows even with
     CAMERA LOCK + STRUCTURAL LOCK. Injected at P1 in FIRST_VISION only.
     Light addition — does not restructure the preservation contract.
+
+    Wave 5.5.14d — In creative mode (BIMODAL_ENABLED=1 + generation_mode==
+    "creative"), the anchor is dropped entirely. Creative explicitly allows
+    the atmosphere to reinterpret openings — keeping the anchor would
+    contradict the mode. Returns "" so the budget assembler filters it out
+    of the prompt. Default + preserve paths keep the full anchor.
     """
+    from .atmosphere_dna.bimodal_classifier import is_creative_mode_active
+    if is_creative_mode_active(generation_mode):
+        return ""
     return _OPENINGS_ANCHOR
 
 
-def build_first_vision_task(dna_name: str, room_ctx: str) -> str:
+def build_first_vision_task(
+    dna_name: str,
+    room_ctx: str,
+    generation_mode: str = "preserve",
+) -> str:
     """
     Photo-edit task framing for FIRST_VISION. ~165-250 chars.
 
@@ -104,20 +117,47 @@ def build_first_vision_task(dna_name: str, room_ctx: str) -> str:
     — never geometry") to disambiguate the DNA architectural_language fields
     (e.g. Nordic "Human-scaled rooms", Bali "open-pavilion volumes") that
     can otherwise conflict with the photographed apartment's actual scale.
-    Task is P1 (never dropped by budget compression) AND first block read
-    by the model, so this framing sets the boundary BEFORE any DNA content
-    is parsed. Char-neutral vs Wave 4.6.1 (-6 chars). Rollback = revert
-    to previous f-string.
+
+    Wave 5.5.14f (Preserve mode only): the boundary-embed tail is dropped
+    because the atmosphere DNA itself has been stripped of architectural
+    language by `bimodal_classifier.apply_bimodal`. The counter-signal exists
+    only to arbitrate a DNA-vs-photo conflict that no longer exists in the
+    preserve path. Net: ~75 chars freed. Creative mode and the default
+    (BIMODAL_ENABLED unset) path are unchanged — byte-identical baseline.
 
     Still satisfies all Wave 4.3.3 vocabulary requirements:
       SAME APARTMENT, spatial truth, geometry, camera, windows, openings, depth, transform.
 
     room_ctx: space-prefixed room string (" living room", " bedroom") or "" if unspecified.
     """
+    from .atmosphere_dna.bimodal_classifier import (
+        is_creative_mode_active,
+        is_preserve_mode_active,
+    )
+
     space = room_ctx if room_ctx else " space"
-    return (
+
+    # Wave 5.5.14d — Creative-mode task framing. Replaces "SAME APARTMENT
+    # PHOTO-EDIT" (a restyling-only verb) with a reimagining frame that
+    # invites architectural latitude while keeping the SAME SPACE anchor
+    # so the model doesn't drift to "a different room".
+    if is_creative_mode_active(generation_mode):
+        return (
+            f"SAME SPACE REIMAGINED — apply {dna_name} as a full "
+            f"architectural concept on this{space}. The photographed room "
+            f"is the starting point; the atmosphere may evolve openings, "
+            f"ceiling treatment, and material structure. Keep the camera "
+            f"vantage so the result reads as a transformation OF this space."
+        )
+
+    head = (
         f"SAME APARTMENT PHOTO-EDIT — apply {dna_name} as aesthetic overlay only. "
         f"The photo defines geometry: preserve this{space}'s camera, windows, "
-        f"openings, depth exactly. "
-        f"Atmosphere = surfaces, materials, lighting, decor — never geometry."
+        f"openings, depth exactly."
+    )
+    if is_preserve_mode_active(generation_mode):
+        return head
+    return (
+        head
+        + " Atmosphere = surfaces, materials, lighting, decor — never geometry."
     )

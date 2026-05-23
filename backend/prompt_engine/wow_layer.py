@@ -87,9 +87,12 @@ def build_restyling_wow_directive() -> str:
 # KEPT verbatim: the architecture-recognition reinforcement + the WOW aim.
 # Net result: section now survives budget on all 10 atmospheres = uniform
 # preservation authority parity.
-_PHOTO_EDIT_WOW = (
+_PHOTO_EDIT_WOW_HEAD = (
     "TRANSFORMATION AMBITION — Visible architecture stays recognizable: "
-    "windows, openings, partitions, existing equipment. "
+    "windows, openings, partitions, existing equipment."
+)
+
+_PHOTO_EDIT_WOW_TAIL = (
     # Wave 5.5.2 (C1.b — wow-scope boundary embed): trimmed "WOW through:
     # materials, finishes, lighting quality, atmosphere conviction." (75 chars)
     # to a shorter scope statement ending with "— NOT geometry" (66 chars).
@@ -100,17 +103,32 @@ _PHOTO_EDIT_WOW = (
     # wow_directive = tail scope-limit). Rollback = revert the trailing
     # "WOW only..." sentence to "WOW through: materials, finishes, lighting
     # quality, atmosphere conviction."
-    "WOW only through materials, lighting, atmosphere — NOT geometry."
+    " WOW only through materials, lighting, atmosphere — NOT geometry."
 )
 
+# Preserved for backward-compatibility: anyone still importing `_PHOTO_EDIT_WOW`
+# (validators, legacy callers) gets the full Wave 5.5.2 string.
+_PHOTO_EDIT_WOW = _PHOTO_EDIT_WOW_HEAD + _PHOTO_EDIT_WOW_TAIL
 
-def build_photo_edit_wow_directive() -> str:
+
+def build_photo_edit_wow_directive(generation_mode: str = "preserve") -> str:
     """
     Wave 4.6.1 — Photo-Edit WOW directive. ~195 chars (post Wave 5.4b trim).
     Photo-edit framing: edit the uploaded photo, apply atmosphere, preserve architecture.
     Replaces build_restyling_wow_directive() in FIRST_VISION Path D (DNA + non-DNA).
     Removes "furniture styling" signal that implied furniture composition authority.
+
+    Wave 5.5.14f (Preserve mode only): the C1.b boundary tail "WOW only
+    through materials, lighting, atmosphere — NOT geometry" is dropped because
+    the atmosphere DNA itself is stripped of architectural language in Preserve
+    mode. The tail counter-signal arbitrates a conflict that no longer exists.
+    Net: ~75 chars freed. Creative mode and BIMODAL_ENABLED-unset path keep
+    the full directive (byte-identical baseline).
     """
+    from .atmosphere_dna.bimodal_classifier import is_preserve_mode_active
+
+    if is_preserve_mode_active(generation_mode):
+        return _PHOTO_EDIT_WOW_HEAD
     return _PHOTO_EDIT_WOW
 
 

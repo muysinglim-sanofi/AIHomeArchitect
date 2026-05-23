@@ -1004,11 +1004,18 @@ async def generate(
         _gen_mode = "V3"
     else:
         _gen_mode = "V2"
-    structural_identity_clause = render_clause(structural_id_obj, _gen_mode)
+    # Wave 5.5.14d — the render_clause + render_negative_anchors helpers now
+    # accept `generation_mode` so creative mode (BIMODAL_ENABLED=1 + creative)
+    # softens the identity clause and drops the negative anchors entirely.
+    structural_identity_clause = render_clause(
+        structural_id_obj, _gen_mode, generation_mode
+    )
     # Wave 4.7.4: negative topology anchors (no-new-wall) — V1/V2/V3, derived
     # ONLY from the persistent identity (architecture-only, leak-guarded). "" when
     # no identity (Task 6 — zero prompt cost on a no-anchor apartment).
-    negative_anchors_clause = render_negative_anchors(structural_id_obj)
+    negative_anchors_clause = render_negative_anchors(
+        structural_id_obj, generation_mode
+    )
 
     # Wave 4.7.3: structural_permission = this generation is allowed to alter
     # architecture (only V3 / explicit structural request). V1/V2 = False.

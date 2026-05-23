@@ -54,7 +54,7 @@ from typing import Optional
 # Read-only imports from frozen / shared modules. Nothing here is modified.
 from .anchor_detector import detect_anchors
 from .atmosphere_dna import build_dna_block, get_core, get_room_dna, label_to_atmosphere_id
-from .atmosphere_dna.bimodal_classifier import apply_bimodal  # Wave 5.5.14c — no-op unless BIMODAL_ENABLED=1
+from .atmosphere_dna.bimodal_classifier import apply_bimodal, inject_creative_revival  # Wave 5.5.14c/d — no-op unless BIMODAL_ENABLED=1
 from .edit_intent import (
     EditMode,
     build_local_edit_prompt,
@@ -80,7 +80,11 @@ log = logging.getLogger("aih")
 # structural_negative_anchors. Single coherent voice — no defensive repetition,
 # no forbidden-list spam. ~580 chars.
 
-_CORE_CONTRACT_V1 = (
+# Wave 5.5.14f — Core contract split into base + voice-#1 tail so preserve
+# mode can drop the tail while creative + default paths keep the full string.
+# The full _CORE_CONTRACT_V1 is preserved at module level for the validators
+# that import it directly.
+_CORE_CONTRACT_V1_BASE = (
     "SAME APARTMENT PHOTO-EDIT — apply the chosen atmosphere to THIS exact "
     "photographed apartment, not a new apartment. "
     "FROZEN: camera, perspective, room proportions, ceiling height, "
@@ -92,15 +96,64 @@ _CORE_CONTRACT_V1 = (
     "stay exactly as photographed; none may be narrowed, enclosed, walled "
     "off, or converted into a wall surface. "
     "CHANGE ONLY: surfaces, materials, furniture footprint styling, "
-    "lighting, textiles, colours, decor, atmosphere. "
-    # Wave 5.5.4 (C2.b parallel) — head boundary clause propagated from
-    # composer.py task into composer_v2's CORE. Same proven phrasing as
-    # `build_first_vision_task`'s "Atmosphere = surfaces, materials,
-    # lighting, decor — never geometry" trailing definition. Ensures V2/V3
-    # pure switches (which route through composer_v2 5-section, not
-    # composer.py Path D) ALSO benefit from the head boundary voice.
-    "Atmosphere = these aesthetic dimensions — NEVER geometry."
+    "lighting, textiles, colours, decor, atmosphere."
 )
+
+# Wave 5.5.4 (C2.b parallel) — head boundary clause propagated from
+# composer.py task into composer_v2's CORE. Same proven phrasing as
+# `build_first_vision_task`'s "Atmosphere = surfaces, materials,
+# lighting, decor — never geometry" trailing definition. Ensures V2/V3
+# pure switches (which route through composer_v2 5-section, not
+# composer.py Path D) ALSO benefit from the head boundary voice.
+# Wave 5.5.14f — dropped in preserve mode (DNA strip removes the conflict
+# this voice exists to arbitrate).
+_CORE_CONTRACT_V1_VOICE_TAIL = (
+    " Atmosphere = these aesthetic dimensions — NEVER geometry."
+)
+
+_CORE_CONTRACT_V1 = _CORE_CONTRACT_V1_BASE + _CORE_CONTRACT_V1_VOICE_TAIL
+
+
+# Wave 5.5.14d — Creative CORE for V2/V3 paths. Mirrors preservation.py's
+# _SAME_APARTMENT_CREATIVE but tuned to composer_v2's 5-section structure
+# (no leading "PHOTO-EDIT" framing — the SAME SPACE REIMAGINED verb is the
+# whole framing). Trades the "FROZEN" / "STRUCTURAL — none may be narrowed,
+# enclosed, walled off" rigidity for "vantage preferred" + "spatial
+# recognizability" — full architectural latitude with anti-random-room
+# anchoring (camera + multi-zone legibility).
+_CORE_CONTRACT_CREATIVE = (
+    "SAME SPACE REIMAGINED — apply the chosen atmosphere as a full "
+    "architectural concept on this photographed space, not a different "
+    "room. CAMERA VANTAGE preferred — keep the same viewpoint and "
+    "approximate focal feel so the result reads as a transformation OF "
+    "this space. SPATIAL RECOGNIZABILITY — multi-zone presence and the "
+    "dominant opening's relationship to the room should remain legible "
+    "even when their exact form is reinterpreted. The atmosphere may "
+    "evolve openings, ceiling treatment, partition language, and material "
+    "structure to express its architectural character fully."
+)
+
+
+def _core_contract_v1_for_mode(generation_mode: str) -> str:
+    """Wave 5.5.14d — three-way selection on the V2/V3 CORE contract.
+
+    - Creative mode (BIMODAL_ENABLED=1 + creative): returns the
+      _CORE_CONTRACT_CREATIVE variant (soft vantage, full latitude).
+    - Preserve mode (BIMODAL_ENABLED=1 + preserve): returns the base
+      contract WITHOUT the C2.b head-boundary tail (voice #1 dropped per
+      Wave 5.5.14f).
+    - Default (flag off / unknown mode): returns the full Wave 5.5.4
+      contract → byte-identical to pre-5.5.14d.
+    """
+    from .atmosphere_dna.bimodal_classifier import (
+        is_creative_mode_active,
+        is_preserve_mode_active,
+    )
+    if is_creative_mode_active(generation_mode):
+        return _CORE_CONTRACT_CREATIVE
+    if is_preserve_mode_active(generation_mode):
+        return _CORE_CONTRACT_V1_BASE
+    return _CORE_CONTRACT_V1
 
 # V2+ preamble (Wave 4.7.3 source-continuity intent, integrated cleanly).
 _CORE_PREAMBLE_V2 = (
@@ -142,11 +195,26 @@ _STYLE_PREFIX_ATMOSPHERE_SWITCH = (
 # composer.py's `_PHOTO_EDIT_WOW` ("WOW only through materials, lighting,
 # atmosphere — NOT geometry") into composer_v2's AMBITION. Ensures V2/V3
 # pure switches get the tail boundary voice equivalent to V1.
-_TRANSFORMATION_AMBITION = (
+# Wave 5.5.14f — base + voice-#4 split so preserve mode can drop the tail.
+_TRANSFORMATION_AMBITION_BASE = (
     "AMBITION — premium hospitality-grade restyling. "
-    "Decorate this photo; do not recompose it. "
-    "WOW only through materials, lighting, atmosphere — NOT geometry."
+    "Decorate this photo; do not recompose it."
 )
+_TRANSFORMATION_AMBITION_VOICE_TAIL = (
+    " WOW only through materials, lighting, atmosphere — NOT geometry."
+)
+_TRANSFORMATION_AMBITION = (
+    _TRANSFORMATION_AMBITION_BASE + _TRANSFORMATION_AMBITION_VOICE_TAIL
+)
+
+
+def _transformation_ambition_for_mode(generation_mode: str) -> str:
+    """Return the base ambition when preserve mode is active (voice #4
+    dropped), otherwise the full Wave 5.5.4 string."""
+    from .atmosphere_dna.bimodal_classifier import is_preserve_mode_active
+    if is_preserve_mode_active(generation_mode):
+        return _TRANSFORMATION_AMBITION_BASE
+    return _TRANSFORMATION_AMBITION
 
 # Wave 5.2c — greeting-pattern regex used to extract the V1 atmosphere label
 # from the chat history. Pattern source: chat_screen.dart initial AI message
@@ -536,6 +604,10 @@ def _build_style_block(
         # identical to pre-5.5.14c output.
         dna_text = build_dna_block(dna_obj)
         dna_text = apply_bimodal(dna_text, atmosphere_id, generation_mode)
+        # Wave 5.5.14d — creative-mode revival of dormant DNA fields.
+        dna_text = inject_creative_revival(
+            dna_text, atmosphere_id, room_type, generation_mode
+        )
 
     prefix = (
         _STYLE_PREFIX_ATMOSPHERE_SWITCH
@@ -544,7 +616,9 @@ def _build_style_block(
     )
     if compact_prompts:
         return f"{prefix}\n{dna_text}"
-    return f"{prefix}\n{dna_text}\n{_TRANSFORMATION_AMBITION}"
+    # Wave 5.5.14f — AMBITION tail (voice #4) drops in preserve mode.
+    ambition = _transformation_ambition_for_mode(generation_mode)
+    return f"{prefix}\n{dna_text}\n{ambition}"
 
 
 def _build_user_block(
@@ -605,6 +679,7 @@ def _build_user_block(
 def _build_core(
     iteration: int,
     edit_mode: EditMode,
+    generation_mode: str = "preserve",
 ) -> str:
     """
     [1] CORE SPATIAL CONTRACT — V1 base, with optional V2+ preamble.
@@ -614,20 +689,26 @@ def _build_core(
     structural — but a permission sentence allows the SPECIFIC requested
     structural edit to alter them (only that one edit). This mirrors
     composer.py's V3 mode handling but keeps the CORE coherent.
+
+    Wave 5.5.14f — when preserve mode is active (BIMODAL_ENABLED=1 + mode==
+    "preserve"), the C2.b head boundary voice ("Atmosphere = these aesthetic
+    dimensions — NEVER geometry") is dropped because the DNA itself no longer
+    carries architectural language to arbitrate against.
     """
-    core = _CORE_CONTRACT_V1
+    contract = _core_contract_v1_for_mode(generation_mode)
+    core = contract
     if iteration > 1:
         if edit_mode == EditMode.STRUCTURAL_TRANSFORMATION:
             core = (
                 _CORE_PREAMBLE_V2
                 + " "
-                + _CORE_CONTRACT_V1
+                + contract
                 + " Only the explicitly requested structural change may "
                 "alter the architectural facts; every other architectural "
                 "anchor remains frozen."
             )
         else:
-            core = _CORE_PREAMBLE_V2 + " " + _CORE_CONTRACT_V1
+            core = _CORE_PREAMBLE_V2 + " " + contract
     return core
 
 
@@ -813,7 +894,7 @@ def compose_generation_prompt(
 
     # ── 5-section architecture: FV / SR / STRUCTURAL ─────────────────────────
     # [1] CORE SPATIAL CONTRACT — single unified block (V2+ preamble when iter>1).
-    core = _build_core(iteration, edit_mode)
+    core = _build_core(iteration, edit_mode, generation_mode)
 
     # [2] SOURCE ARCHITECTURAL FACTS — only when facts exist (zero cost when empty).
     anchor_profile = detect_anchors(room_description)
@@ -902,12 +983,21 @@ def compose_generation_prompt(
     # immediately after design_intel in Path D. Completes the 3-voice
     # boundary stack on V2/V3 paths (core C2.b head + this C3 middle +
     # AMBITION C1.b tail inside style_transformation).
+    # Wave 5.5.14f — voice #3 dropped in preserve mode (BIMODAL_ENABLED=1):
+    # the boundary section exists only to arbitrate DNA-vs-photo conflict,
+    # and the DNA itself is stripped of architectural language in preserve.
+    from .atmosphere_dna.bimodal_classifier import is_preserve_mode_active
+    dna_boundary = (
+        "" if is_preserve_mode_active(generation_mode)
+        else build_atmosphere_dna_boundary()
+    )
+
     sections: list[tuple[str, str]] = [
         ("header", header),
         ("core_contract", core),
         ("source_facts", source_facts),
         ("style_transformation", style_block),
-        ("atmosphere_dna_boundary", build_atmosphere_dna_boundary()),
+        ("atmosphere_dna_boundary", dna_boundary),
         ("quality_floor", quality_floor),
         ("user_direction", user_block),
     ]

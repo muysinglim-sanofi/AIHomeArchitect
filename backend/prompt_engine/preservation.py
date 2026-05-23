@@ -247,7 +247,45 @@ _SAME_APARTMENT_V2 = (
 )
 
 
-def build_simplified_fv_contract(room_type: str) -> str:
+# Wave 5.5.14d — Creative-mode contract.
+#
+# Used only when BIMODAL_ENABLED=1 AND generation_mode=="creative" (Surprise Me
+# / "Create" UI path). Trades strict architectural preservation for the
+# atmosphere's full architectural latitude — Bali can open the wall, Tropical
+# can dissolve the boundary, Japandi can reproportion negative space.
+#
+# Critical NOT random-room safeguards (the user's "SANS devenir random
+# unrelated room" caveat):
+#   • Camera vantage explicitly PREFERRED (not forced) → the model stays
+#     anchored on the same viewpoint even when reinterpreting structure.
+#   • SAME SPACE language retained → identity grounding.
+#   • Spatial recognizability retained as a goal → "this is MY room, reimagined".
+#
+# What is DROPPED vs Preserve mode:
+#   • "FROZEN" hard-lock language → softened to "preferred".
+#   • STRUCTURAL LOCK forbidden list → removed entirely.
+#   • CHANGE ONLY restriction → removed entirely.
+#   • "ATMOSPHERE BOUNDARY — geometry overrides atmosphere" → removed.
+#
+# Rollback: any `BIMODAL_ENABLED=0` request falls back to _SAME_APARTMENT_V2
+# automatically (creative branch never fires unless flag is on).
+_SAME_APARTMENT_CREATIVE = (
+    "SAME SPACE REIMAGINED — apply the chosen atmosphere as a full "
+    "architectural concept on THIS space. The photographed room is the "
+    "starting point; openings, ceiling treatments, partition language, "
+    "and material structure may evolve to express the atmosphere fully. "
+    "CAMERA VANTAGE — keep the same viewpoint and approximate focal "
+    "feel so the result reads as a transformation OF this space, not a "
+    "different room. SPATIAL RECOGNIZABILITY — multi-zone presence and "
+    "the dominant opening's relationship to the room should remain "
+    "legible even when their exact form is reinterpreted."
+)
+
+
+def build_simplified_fv_contract(
+    room_type: str,
+    generation_mode: str = "preserve",
+) -> str:
     """
     Tier 1.5 — simplified FIRST_VISION contract (Wave 4.5.0). ~693 chars.
 
@@ -265,5 +303,14 @@ def build_simplified_fv_contract(room_type: str) -> str:
     specific furniture positions not grounded in the uploaded photo ("preserve TV
     wall or fireplace position, sofa zone..."). Photo-first philosophy: the uploaded
     photo IS the truth — do not instruct based on furniture that may not exist.
+
+    Wave 5.5.14d — Creative-mode variant: when BIMODAL_ENABLED=1 AND
+    generation_mode=="creative", returns _SAME_APARTMENT_CREATIVE (soft
+    vantage + drop of STRUCTURAL LOCK / CHANGE ONLY / ATMOSPHERE BOUNDARY).
+    The default path (and every Preserve-mode request) returns the original
+    _SAME_APARTMENT_V2 string → byte-identical to pre-5.5.14d.
     """
+    from .atmosphere_dna.bimodal_classifier import is_creative_mode_active
+    if is_creative_mode_active(generation_mode):
+        return _SAME_APARTMENT_CREATIVE
     return _SAME_APARTMENT_V2
