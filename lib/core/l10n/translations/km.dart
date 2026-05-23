@@ -138,6 +138,13 @@ const Map<String, String> kmTranslations = {
   'replacePhoto': 'ជំនួស​រូបថត',
   'sourcePhotoUpdated': 'ធ្វើ​បច្ចុប្បន្ន​ភាព​រូបថត​ដើម',
 
+  // Bimodal intent (Wave 5.5.14b.2)
+  'modeChooserTitle': 'តើ AI គួរ​បន្ត​រចនា​លំនៅដ្ឋាន​របស់​អ្នក​យ៉ាង​ដូចម្ដេច?',
+  'modePreserve': 'រក្សា',
+  'modePreserveSub': 'រក្សា​ទុក​លំនៅដ្ឋាន​ដូច​ដើម',
+  'modeCreate': 'បង្កើត',
+  'modeCreateSub': 'ស្រម័យ​ឱ្យ​ស្រេច',
+
   // Chat timeline & project state
   'vision': 'ទស្សនៈ',
   'visions': 'ទស្សនៈ',

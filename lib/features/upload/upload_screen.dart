@@ -44,6 +44,10 @@ class _UploadScreenState extends State<UploadScreen>
   // architectural direction that flows to the backend prompt verbatim.
   bool _aiDecideRoom = false;
   bool _surpriseStyle = false;
+  // Wave 5.5.14b.2 — bimodal intent. Preserve preselected per design decision.
+  // "preserve" strips architectural tokens from atmosphere DNA + keeps full
+  // preservation stack. "creative" keeps full DNA + relaxes preservation.
+  String _selectedMode = 'preserve';
   final _descController = TextEditingController();
   final _picker = ImagePicker();
 
@@ -162,6 +166,10 @@ class _UploadScreenState extends State<UploadScreen>
     }
     final desc = _descController.text.trim();
     if (desc.isNotEmpty) params['desc'] = desc;
+    // Wave 5.5.14b.2 — carry the bimodal intent forward. Default 'preserve'
+    // is omitted from the URL when unchanged (cleaner deep-links); only the
+    // explicit 'creative' choice is serialised.
+    if (_selectedMode == 'creative') params['mode'] = 'creative';
 
     final uri = Uri(path: '/chat/new', queryParameters: params);
     context.pushReplacement(uri.toString(), extra: _image);
@@ -246,6 +254,17 @@ class _UploadScreenState extends State<UploadScreen>
                         _surpriseStyle = !_surpriseStyle;
                         if (_surpriseStyle) _selectedStyle = null;
                       }),
+                    ),
+                    const SizedBox(height: AppSpacing.xxl),
+                    // Wave 5.5.14b.2 — bimodal intent chooser. Preserve is
+                    // preselected (today's behaviour). User can opt into the
+                    // Creative path here; the choice can still be flipped
+                    // per-generation later from the source-photo sheet in chat.
+                    _Eyebrow(label: l10n.modeChooserTitle),
+                    const SizedBox(height: AppSpacing.md),
+                    _ModeChooser(
+                      selectedMode: _selectedMode,
+                      onSelected: (m) => setState(() => _selectedMode = m),
                     ),
                     const SizedBox(height: AppSpacing.xxl),
                     // Wave 4.8.7 — description elevation. The architectural
@@ -694,6 +713,124 @@ class _AtmosphereScroller extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// ── Bimodal intent chooser (Wave 5.5.14b.2) ──────────────────────────────────
+//
+// Two side-by-side cards: Preserve (lock icon, today's default) and Create
+// (sparkles icon, looser architectural latitude). Tapping a card selects it
+// and unselects the other — never both, never neither. Visual weight matches
+// the room/atmosphere selectors above so the upload screen reads as one
+// continuous editorial composition.
+class _ModeChooser extends StatelessWidget {
+  final String selectedMode; // 'preserve' | 'creative'
+  final ValueChanged<String> onSelected;
+  const _ModeChooser({required this.selectedMode, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: _ModeCard(
+            icon: Icons.lock_outline,
+            title: l10n.modePreserve,
+            subtitle: l10n.modePreserveSub,
+            selected: selectedMode == 'preserve',
+            onTap: () => onSelected('preserve'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _ModeCard(
+            icon: Icons.auto_awesome_outlined,
+            title: l10n.modeCreate,
+            subtitle: l10n.modeCreateSub,
+            selected: selectedMode == 'creative',
+            onTap: () => onSelected('creative'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ModeCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ModeCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppColors.accent;
+    final borderColor = selected ? accent : AppColors.border;
+    final bg = selected
+        ? accent.withValues(alpha: 0.06)
+        : AppColors.surface;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+            border: Border.all(
+              color: borderColor,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 22,
+                color: selected ? accent : AppColors.textSecondary,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                title,
+                style: AppTheme.displayEditorial(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w500,
+                  height: 1.15,
+                  letterSpacing: -0.1,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                      height: 1.35,
+                      fontSize: 12,
+                    ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

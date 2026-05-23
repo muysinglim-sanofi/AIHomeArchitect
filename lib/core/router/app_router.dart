@@ -86,6 +86,10 @@ final appRouter = GoRouter(
         final aiDecide = q['aiDecide'] == '1';
         final surprise = q['surprise'] == '1';
         final description = q['desc'];
+        // Wave 5.5.14b.2 — bimodal intent forwarded from upload screen.
+        // Absent / unknown values fall back to "preserve" (today's behaviour).
+        final modeParam = q['mode'];
+        final initialMode = modeParam == 'creative' ? 'creative' : 'preserve';
         final sourceImageFile = state.extra as File?;
         return _slideUpPage(
           ChatScreen(
@@ -95,6 +99,7 @@ final appRouter = GoRouter(
             initialAiDecide: aiDecide,
             initialSurprise: surprise,
             initialDescription: description,
+            initialMode: initialMode,
             sourceImageFile: sourceImageFile,
           ),
           state,

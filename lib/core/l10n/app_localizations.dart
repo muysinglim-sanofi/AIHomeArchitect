@@ -200,6 +200,13 @@ class AppLocalizations {
   String get sourcePhoto => _get('sourcePhoto');
   String get replacePhoto => _get('replacePhoto');
   String get sourcePhotoUpdated => _get('sourcePhotoUpdated');
+
+  // ── Bimodal intent (Wave 5.5.14b.2) ───────────────────────────────────────
+  String get modeChooserTitle => _get('modeChooserTitle');
+  String get modePreserve => _get('modePreserve');
+  String get modePreserveSub => _get('modePreserveSub');
+  String get modeCreate => _get('modeCreate');
+  String get modeCreateSub => _get('modeCreateSub');
 }
 
 // ── Delegate ──────────────────────────────────────────────────────────────────

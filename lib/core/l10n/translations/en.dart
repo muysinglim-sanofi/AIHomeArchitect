@@ -134,6 +134,13 @@ const Map<String, String> enTranslations = {
   'replacePhoto': 'Replace photo',
   'sourcePhotoUpdated': 'Source photo updated',
 
+  // Bimodal intent (Wave 5.5.14b.2)
+  'modeChooserTitle': 'How should AI redesign your space?',
+  'modePreserve': 'Preserve',
+  'modePreserveSub': 'Keep your exact space',
+  'modeCreate': 'Create',
+  'modeCreateSub': 'Reimagine freely',
+
   // Hero
   'featuredVision': 'Featured Vision',
 

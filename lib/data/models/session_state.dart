@@ -105,6 +105,15 @@ class SessionState {
   /// V1-only free-text description from upload screen.
   final String? pendingDescription;
 
+  /// Wave 5.5.14b — Bimodal intent. One of:
+  ///   "preserve" — strip architecture from atmosphere DNA, keep full
+  ///                preservation stack. Default for new sessions.
+  ///   "creative" — full DNA (incl. architecture), relaxed preservation.
+  /// Persisted as the LAST-USED mode so reopen restores the UI toggle;
+  /// passed per /generate request (per-generation binding lets V1 be
+  /// Preserve and V2 be Creative within the same session).
+  final String generationMode;
+
   const SessionState({
     this.schemaVersion = currentSchemaVersion,
     this.structuralIdentity = '',
@@ -116,6 +125,7 @@ class SessionState {
     this.letAiDecide = false,
     this.surpriseMe = false,
     this.pendingDescription,
+    this.generationMode = 'preserve',
   });
 
   /// Empty / fresh state — used when no snapshot is available.
@@ -154,6 +164,9 @@ class SessionState {
       letAiDecide: (json['letAiDecide'] as bool?) ?? false,
       surpriseMe: (json['surpriseMe'] as bool?) ?? false,
       pendingDescription: json['pendingDescription'] as String?,
+      // Wave 5.5.14b — older snapshots without this field default to
+      // "preserve" (today's behaviour); no migration needed.
+      generationMode: (json['generationMode'] as String?) ?? 'preserve',
     );
   }
 
@@ -168,6 +181,7 @@ class SessionState {
         'letAiDecide': letAiDecide,
         'surpriseMe': surpriseMe,
         'pendingDescription': pendingDescription,
+        'generationMode': generationMode,
       };
 
   String toJsonString() => jsonEncode(toJson());
@@ -184,6 +198,7 @@ class SessionState {
     bool? surpriseMe,
     String? pendingDescription,
     bool clearPendingDescription = false,
+    String? generationMode,
   }) =>
       SessionState(
         schemaVersion: currentSchemaVersion,
@@ -200,6 +215,7 @@ class SessionState {
         pendingDescription: clearPendingDescription
             ? null
             : (pendingDescription ?? this.pendingDescription),
+        generationMode: generationMode ?? this.generationMode,
       );
 
   /// True if this snapshot carries enough protocol state to round-trip a

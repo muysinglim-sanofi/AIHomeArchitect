@@ -91,6 +91,7 @@ class GenerationService {
     bool surpriseMe = false,
     String structuralIdentity = '',
     String versions = '',
+    String generationMode = 'preserve', // Wave 5.5.14c — bimodal intent
   }) async {
     try {
       final res = await _dio.post<Map<String, dynamic>>(
@@ -109,6 +110,7 @@ class GenerationService {
           'surprise_me_flag': surpriseMe.toString(),
           'structural_identity': structuralIdentity,
           'versions': versions,
+          'generation_mode': generationMode,
         }),
       );
       return res.data!;

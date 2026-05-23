@@ -54,6 +54,10 @@ class ChatScreen extends ConsumerStatefulWidget {
   final bool initialAiDecide;
   final bool initialSurprise;
   final String? initialDescription;
+  // Wave 5.5.14b.2 — bimodal intent at session start. "preserve" (default,
+  // today's behaviour) or "creative". User can flip per-generation later via
+  // the source-photo sheet; this seeds the initial value for V1.
+  final String initialMode;
   final File? sourceImageFile;
   const ChatScreen({
     super.key,
@@ -63,6 +67,7 @@ class ChatScreen extends ConsumerStatefulWidget {
     this.initialAiDecide = false,
     this.initialSurprise = false,
     this.initialDescription,
+    this.initialMode = 'preserve',
     this.sourceImageFile,
   });
 
@@ -101,6 +106,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   bool _letAiDecide = false;
   bool _surpriseMe = false;
   String? _pendingDescription;
+
+  // Wave 5.5.14c — bimodal generation intent. "preserve" (default, today's
+  // behaviour) | "creative" (Surprise Me / Create path). Per-generation
+  // binding: each /generate POST sends the current value; state persisted
+  // via SessionState so reopen restores last-used mode.
+  String _generationMode = 'preserve';
 
   late ProjectModel _project;
   late List<MessageModel> _messages;
@@ -169,6 +180,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       _surpriseMe = widget.initialSurprise;
       final desc = widget.initialDescription?.trim();
       _pendingDescription = (desc != null && desc.isNotEmpty) ? desc : null;
+      // Wave 5.5.14b.2 — seed bimodal intent from upload-screen choice.
+      _generationMode = widget.initialMode;
 
       // Real semantics, never fake strings:
       //  • AI Decide → no explicit room (backend infers via classify_room).
@@ -324,6 +337,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       if (snapshot.pendingDescription != null) {
         _pendingDescription = snapshot.pendingDescription;
       }
+      _generationMode = snapshot.generationMode;
     });
     debugPrint(
       '[Persistence] hydrated ${widget.projectId} — '
@@ -353,6 +367,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       letAiDecide: _letAiDecide,
       surpriseMe: _surpriseMe,
       pendingDescription: _pendingDescription,
+      generationMode: _generationMode,
     );
     // Fire-and-forget; SharedPreferences.setString is locally fast.
     unawaited(svc.save(id, state));
@@ -818,6 +833,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         // structural_identity_clause and version ledger survive across V2+.
         structuralIdentity: _structuralIdentity,
         versions: _versions,
+        // Wave 5.5.14c — per-generation bimodal intent. Default "preserve"
+        // matches today's behaviour; backend no-ops unless BIMODAL_ENABLED=1.
+        generationMode: _generationMode,
       );
 
       _longGenerationTimer?.cancel();
@@ -1067,6 +1085,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
             _currentStyle = style;
           });
           // Wave 4.10g — room/atmosphere selection survives restart.
+          _persistSession();
+        },
+        // Wave 5.5.14b.2 — per-generation mode flip surface. Sheet only
+        // mutates UI state through this callback; persistence + log live
+        // here so the source-of-truth stays in the parent.
+        initialMode: _generationMode,
+        onModeChanged: (mode) {
+          setState(() => _generationMode = mode);
           _persistSession();
         },
       ),
@@ -2116,6 +2142,12 @@ class _SourcePhotoSheet extends StatefulWidget {
   final String initialStyle;
   final VoidCallback onReplace;
   final void Function(String roomType, String style) onDirectionChanged;
+  // Wave 5.5.14b.2 — per-generation bimodal intent. The sheet displays a
+  // compact Preserve/Create toggle in the direction controls; flipping calls
+  // [onModeChanged] which the parent persists. [initialMode] seeds the
+  // toggle so reopening the sheet reflects the last-used choice.
+  final String initialMode;
+  final ValueChanged<String> onModeChanged;
 
   const _SourcePhotoSheet({
     required this.project,
@@ -2127,6 +2159,8 @@ class _SourcePhotoSheet extends StatefulWidget {
     required this.initialStyle,
     required this.onReplace,
     required this.onDirectionChanged,
+    required this.initialMode,
+    required this.onModeChanged,
   });
 
   @override
@@ -2136,12 +2170,17 @@ class _SourcePhotoSheet extends StatefulWidget {
 class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
   late String _selectedRoomType;
   late String _selectedStyle;
+  // Wave 5.5.14b.2 — local mirror of bimodal intent. Sheet drives the
+  // parent through [onModeChanged]; this field is just for the UI toggle's
+  // selected state inside the sheet's lifetime.
+  late String _selectedMode;
 
   @override
   void initState() {
     super.initState();
     _selectedRoomType = widget.initialRoomType;
     _selectedStyle = widget.initialStyle;
+    _selectedMode = widget.initialMode;
   }
 
   void _apply() {
@@ -2345,6 +2384,20 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
                         );
                       },
                     ),
+                  ),
+                  const SizedBox(height: 22),
+
+                  // Wave 5.5.14b.2 — compact bimodal toggle. Flipping here
+                  // changes the NEXT generation only (per-generation binding);
+                  // parent persists the choice via [widget.onModeChanged].
+                  const _SheetEyebrow(label: 'MODE'),
+                  const SizedBox(height: 10),
+                  _SheetModeToggle(
+                    selectedMode: _selectedMode,
+                    onChanged: (m) {
+                      setState(() => _selectedMode = m);
+                      widget.onModeChanged(m);
+                    },
                   ),
                 ],
               ),
@@ -2566,6 +2619,108 @@ class _SheetRoomLabel extends StatelessWidget {
             fontWeight: FontWeight.w500,
             color: AppColors.textTertiary,
           ),
+    );
+  }
+}
+
+// ── Bimodal toggle (Wave 5.5.14b.2) ──────────────────────────────────────────
+//
+// Compact segmented control for flipping between Preserve and Create modes
+// mid-session. Lives inside the source-photo sheet — adjacent to the room +
+// atmosphere selectors so "generation parameters" stay grouped. Per-generation
+// binding: changing here affects the NEXT /generate only; previous visions are
+// unaffected. Visuals match `_SheetEyebrow` weight + AtmosphereCard selection
+// language (accent border on selected segment).
+class _SheetModeToggle extends StatelessWidget {
+  final String selectedMode; // 'preserve' | 'creative'
+  final ValueChanged<String> onChanged;
+  const _SheetModeToggle({
+    required this.selectedMode,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return Row(
+      children: [
+        Expanded(
+          child: _SheetModeSegment(
+            icon: Icons.lock_outline,
+            label: l10n.modePreserve,
+            selected: selectedMode == 'preserve',
+            onTap: () => onChanged('preserve'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _SheetModeSegment(
+            icon: Icons.auto_awesome_outlined,
+            label: l10n.modeCreate,
+            selected: selectedMode == 'creative',
+            onTap: () => onChanged('creative'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SheetModeSegment extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _SheetModeSegment({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppColors.accent;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+          decoration: BoxDecoration(
+            color: selected
+                ? accent.withValues(alpha: 0.06)
+                : AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: selected ? accent : AppColors.border,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: selected ? accent : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      color: selected ? accent : AppColors.textPrimary,
+                      fontSize: 13,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
