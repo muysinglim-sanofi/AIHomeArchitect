@@ -733,29 +733,34 @@ class _ModeChooser extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: _ModeCard(
-            icon: Icons.lock_outline,
-            title: l10n.modePreserve,
-            subtitle: l10n.modePreserveSub,
-            selected: selectedMode == 'preserve',
-            onTap: () => onSelected('preserve'),
+    // IntrinsicHeight gives the Row a definite height (= max of its children)
+    // BEFORE the stretch constraint is applied. Without it, the parent
+    // SingleChildScrollView passes infinite height down → stretch crashes.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _ModeCard(
+              icon: Icons.lock_outline,
+              title: l10n.modePreserve,
+              subtitle: l10n.modePreserveSub,
+              selected: selectedMode == 'preserve',
+              onTap: () => onSelected('preserve'),
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _ModeCard(
-            icon: Icons.auto_awesome_outlined,
-            title: l10n.modeCreate,
-            subtitle: l10n.modeCreateSub,
-            selected: selectedMode == 'creative',
-            onTap: () => onSelected('creative'),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _ModeCard(
+              icon: Icons.auto_awesome_outlined,
+              title: l10n.modeCreate,
+              subtitle: l10n.modeCreateSub,
+              selected: selectedMode == 'creative',
+              onTap: () => onSelected('creative'),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
