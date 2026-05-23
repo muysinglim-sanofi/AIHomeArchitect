@@ -272,6 +272,7 @@ from .edit_intent import (
     build_structural_transformation_header,
 )
 from .atmosphere_dna import get_room_dna, build_dna_block, label_to_atmosphere_id
+from .atmosphere_dna.bimodal_classifier import apply_bimodal  # Wave 5.5.14c — no-op unless BIMODAL_ENABLED=1
 from .visible_space_logic import build_visible_spaces_block
 
 # ── Budget system ─────────────────────────────────────────────────────────────
@@ -401,6 +402,7 @@ def _design_intelligence_block(
     room_type: str,
     style_dna: StyleDNA,
     style_label: str,
+    generation_mode: str = "preserve",  # Wave 5.5.14c — bimodal hook
 ) -> tuple[str, bool]:
     room_dna = get_room_dna(atmosphere_id, room_type)
     # Wave 4.8.1b: observability for the label→DNA resolution fix.
@@ -411,7 +413,12 @@ def _design_intelligence_block(
         bool(room_dna), "DNA" if room_dna else "fallback_style_block",
     )
     if room_dna:
-        return build_dna_block(room_dna), True
+        # Wave 5.5.14c — apply_bimodal is a no-op unless BIMODAL_ENABLED env
+        # var is set AND generation_mode == "preserve". Default → byte-
+        # identical to pre-5.5.14c output.
+        block = build_dna_block(room_dna)
+        block = apply_bimodal(block, atmosphere_id, generation_mode)
+        return block, True
     return _style_block(style_dna, style_label), False
 
 
@@ -450,6 +457,7 @@ def compose_generation_prompt(
     source_continuity: str = "",
     structural_negative_anchors: str = "",
     authorized_user_changes: str = "",
+    generation_mode: str = "preserve",  # Wave 5.5.14c — bimodal intent; passed to _design_intelligence_block. No-op unless BIMODAL_ENABLED env var is truthy.
 ) -> str:
     """
     Build the complete generation prompt from all intelligence layers.
@@ -506,7 +514,7 @@ def compose_generation_prompt(
             )
         contract = build_atmosphere_switch_contract(room_type, anchor_profile.clause)
 
-        intel_block, used_dna = _design_intelligence_block(atmosphere_id, room_type, dna, style_label)
+        intel_block, used_dna = _design_intelligence_block(atmosphere_id, room_type, dna, style_label, generation_mode)
 
         source = f"SOURCE SPACE: {room_description}" if room_description else ""
 
@@ -566,7 +574,7 @@ def compose_generation_prompt(
         contract = build_structural_evolution_contract(room_type)
 
         source = f"SOURCE SPACE: {room_description}" if room_description else ""
-        intel_block, used_dna = _design_intelligence_block(atmosphere_id, room_type, dna, style_label)
+        intel_block, used_dna = _design_intelligence_block(atmosphere_id, room_type, dna, style_label, generation_mode)
         # room_context omitted from STRUCTURAL_TRANSFORMATION for the same budget
         # reason as STYLE_REFINEMENT — the header's architectural intent is sufficient.
         refinement_block = build_refinement_block(refinement_state, iteration)
@@ -626,7 +634,7 @@ def compose_generation_prompt(
     # Wave 4.6.1: source="" — vision analysis text reinterprets the room before generation,
     # destroying fidelity. input_fidelity=high + image upload makes the image the source of truth.
     source = ""
-    intel_block, used_dna = _design_intelligence_block(atmosphere_id, room_type, dna, style_label)
+    intel_block, used_dna = _design_intelligence_block(atmosphere_id, room_type, dna, style_label, generation_mode)
 
     # DEV compact mode: skip all P4 enrichments, use compact realism.
     # PROD mode: wow_directive replaces dream_micro/addendum (Wave 4.3.1).

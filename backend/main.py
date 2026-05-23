@@ -610,6 +610,7 @@ async def generate(
     source_mode: str = Form(""),          # Wave 4.7.3 — ORIGINAL | LATEST | SPECIFIC_VERSION (missing => default)
     source_version_id: str = Form(""),    # Wave 4.7.3 — target version id when source_mode=SPECIFIC_VERSION
     versions: str = Form(""),             # Wave 4.7.3 — JSON ledger of prior versions (client round-trip)
+    generation_mode: str = Form("preserve"),  # Wave 5.5.14b.1 — bimodal intent: "preserve" | "creative". Default matches today's behaviour. NOT YET ROUTED — read & logged only; composer wiring lands in Wave 5.5.14c.
 ):
     # ── Step 0: resolve generation profile ───────────────────────────────────
     profile = get_active_profile()
@@ -625,6 +626,18 @@ async def generate(
     log.info("  style_label   : %s", style_label)
     log.info("  room_type     : %s", room_type or "(none)")
     log.info("  iteration     : %d", iteration)
+    # Wave 5.5.14c — bimodal intent routed conditionally. Strip applied only
+    # when BIMODAL_ENABLED env var is truthy AND generation_mode=="preserve".
+    # Unknown values normalised to "preserve" (today's behaviour).
+    if generation_mode not in ("preserve", "creative"):
+        generation_mode = "preserve"
+    from prompt_engine.atmosphere_dna.bimodal_classifier import is_bimodal_enabled
+    log.info(
+        "  mode          : %s  (BIMODAL_ENABLED=%s — strip %s)",
+        generation_mode,
+        is_bimodal_enabled(),
+        "ACTIVE" if (is_bimodal_enabled() and generation_mode == "preserve") else "INACTIVE",
+    )
     log.info("  prompt        : %s", prompt or "(empty)")
     log.info("  before_url    : %s", before_image_url[:80] + "..." if len(before_image_url) > 80 else before_image_url)
     log.info("  original_url  : %s", (original_image_url[:80] + "...") if len(original_image_url) > 80 else (original_image_url or "(not provided)"))
@@ -1047,6 +1060,7 @@ async def generate(
         source_continuity=source_continuity_clause,
         structural_negative_anchors=negative_anchors_clause,
         authorized_user_changes=authorized_changes_clause,
+        generation_mode=generation_mode,  # Wave 5.5.14c — no-op unless BIMODAL_ENABLED=1
     )
     _prompt_s = time.monotonic() - _t_prompt
     log.info(

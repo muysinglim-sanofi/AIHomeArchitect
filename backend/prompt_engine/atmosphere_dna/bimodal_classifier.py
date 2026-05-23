@@ -1,0 +1,283 @@
+"""
+Wave 5.5.14b.1 — Bimodal classifier (Preserve vs Creative mode).
+
+Provides surgical strip of architectural-bias phrases from the rendered DNA
+prompt block, leaving decoration-only content for Preserve mode.
+
+This module is the **technical artifact** of the per-atmosphere classification
+documented in `docs/WAVE_5_5_14a_BIMODAL_CLASSIFICATION.md`. Each (search,
+replace) pair below has a direct corresponding entry in that audit's
+🔴 ARCHITECTURE column for its atmosphere.
+
+## Why string replacement, not regex
+
+The DNA data files are static and `build_dna_block` is deterministic — the
+rendered text for a given (atmosphere, room) pair is byte-stable across runs.
+This means simple `str.replace` is reliable; regex is unnecessary complexity
+that would only obscure the per-phrase intent.
+
+## Usage (future wave 5.5.14c will call this)
+
+    from .bimodal_classifier import strip_architecture_tokens
+
+    dna_text = build_dna_block(dna_obj)
+    if mode == "preserve":
+        dna_text = strip_architecture_tokens(dna_text, atmosphere_id)
+
+## Conservative scope
+
+This first version strips only the **HIGH-confidence** architectural phrases
+identified in the audit (philosophy directives, emotional_intent spatial
+words, opening-pressure realism clauses, "open side to garden" directives).
+
+🟨 borderline items ("breathable" Japandi, "human-scaled" Nordic, "sculptural"
+Desert) are included but commented-out — Wave 5.5.14e benchmark will reveal
+whether they need stripping or can stay.
+
+## Safety
+
+- Unknown atmosphere_id → text returned unchanged.
+- Empty text → returned unchanged.
+- Each strip is idempotent (running twice = same result as once).
+- Strips never introduce new vocabulary; only delete or substitute.
+- Whitespace cleanup at the end normalises any double-spaces created.
+
+## Rollback
+
+Delete this module + remove import sites. Preserve mode would then emit
+identical prompts to Creative mode (i.e. today's behaviour). Zero state
+impact.
+"""
+
+from __future__ import annotations
+import os
+import re
+
+
+# ── Feature flag ──────────────────────────────────────────────────────────────
+#
+# Wave 5.5.14c — bimodal composer wiring is **disabled by default** until the
+# Preserve benchmark (Wave 5.5.14e) validates that stripped DNA + full
+# preservation stack ≥ today's baseline quality. To enable locally:
+#
+#     export BIMODAL_ENABLED=1   (Linux / macOS / WSL)
+#     $env:BIMODAL_ENABLED = "1" (Windows PowerShell)
+#
+# When unset (or "0" / "false" / "no"), `apply_bimodal()` returns the input
+# text unchanged → composer behaviour byte-identical to Wave 4.10g baseline.
+_BIMODAL_ENABLED_ENV = "BIMODAL_ENABLED"
+
+
+def is_bimodal_enabled() -> bool:
+    """True iff the BIMODAL_ENABLED env var is set to a truthy value."""
+    val = os.environ.get(_BIMODAL_ENABLED_ENV, "").strip().lower()
+    return val in ("1", "true", "yes", "on")
+
+
+def apply_bimodal(text: str, atmosphere_id: str, mode: str) -> str:
+    """Conditionally apply bimodal strip to a rendered DNA block.
+
+    No-op when:
+      - BIMODAL_ENABLED env var is unset / falsy (default — production
+        invariant: prompt byte-identical to today)
+      - mode == "creative" (Creative mode keeps full DNA, incl. architecture)
+      - text is empty
+      - atmosphere_id has no strips registered (e.g. warm_modern, soft_luxury)
+
+    Applied when:
+      - BIMODAL_ENABLED truthy AND mode == "preserve" → strip_architecture_tokens
+    """
+    if not is_bimodal_enabled():
+        return text
+    if mode != "preserve":
+        return text
+    return strip_architecture_tokens(text, atmosphere_id)
+
+
+# ── Per-atmosphere strip table ────────────────────────────────────────────────
+#
+# Each entry is a list of (search_substring, replacement) tuples. Applied in
+# order — earlier entries can prepare the text for later ones if needed.
+#
+# Sources: docs/WAVE_5_5_14a_BIMODAL_CLASSIFICATION.md sections 1–10.
+# 🔴 = HIGH bias (strip in preserve mode).
+# 🟨 = borderline (kept for now; benchmark will decide).
+
+_STRIPS: dict[str, list[tuple[str, str]]] = {
+    # 1. Tropical Escape — rank 1 most architecturally-loaded
+    "tropical_escape": [
+        # philosophy: 🔴 "Open-air" is the only shipping atmosphere with a direct
+        # topology word in its philosophy.
+        ("Open-air tropical living", "Tropical living"),
+        # emotional_intent: 🟨 "breezy" is mild — included but easy to revert.
+        ("Breezy, ", ""),
+        (", breezy", ""),
+        # Bathroom negative_rules: 🔴 anti-closing pressure.
+        ("no closed cabinet-heavy bathroom", "no cabinet-heavy styling"),
+        # Dining negative_rules: 🔴 anti-closing.
+        ("no enclosed dining room feel", "no heavy dining feel"),
+        # Facade decor_language: 🔴 "architectural facade element" is an
+        # architectural callout, not a decorative one.
+        (
+            "louvred shutters as architectural facade element",
+            "louvred shutters as facade rhythm element",
+        ),
+    ],
+    # 2. Zen Retreat — rank 2, MEDIUM bias
+    "zen_retreat": [
+        # philosophy: 🔴 "architectural silence" is the leak.
+        ("Meditative architectural silence", "Meditative silence"),
+        # emotional_intent: 🔴 "emptied" is a direct emptiness directive.
+        ("emptied, ", ""),
+        (", emptied", ""),
+        # Living realism_constraints: 🔴 "floor space dominant" is topology.
+        ("; floor space dominant — furniture minimal", ""),
+        ("floor space dominant — furniture minimal; ", ""),
+        # Living realism_constraints: 🟨 "empty floor space" — keep for now,
+        # decoration-side (negative restraint, not opening pressure on Zen).
+    ],
+    # 3. Bali Sanctuary — rank 3, MEDIUM bias (matrix DO NOT DILUTE,
+    # but user explicitly authorised the bimodal strip).
+    "bali_sanctuary": [
+        # Living visible_transition_logic (renders in secondary block too).
+        ("continue into adjacent pavilion", "continue into adjacent space"),
+        ("open living pavilion", "open living space"),
+        # Living material_palette: 🔴 "ceiling structure" is architecture.
+        (
+            "reclaimed teak joinery and ceiling structure",
+            "reclaimed teak joinery",
+        ),
+        # Bedroom material_palette: same ceiling structure leak.
+        (
+            "reclaimed teak or timber ceiling structure",
+            "reclaimed teak or timber detailing",
+        ),
+        # Bathroom furniture_language: 🔴 "open-air or semi-open wet room"
+        # is topology (anti-enclosure directive on bathroom).
+        (
+            "open-air or semi-open wet room in volcanic stone",
+            "volcanic stone wet room",
+        ),
+        # Terrace visible_transition_logic: 🔴 ceiling continuity.
+        (
+            "teak ceiling extends from indoor living room",
+            "teak detailing echoes indoor living room",
+        ),
+    ],
+    # 4. Desert Luxe — rank 4, MEDIUM bias
+    "desert_luxe": [
+        # emotional_intent: 🔴 "sculptural" and "monumental" are spatial words.
+        ("Sculptural, ", ""),
+        (", sculptural", ""),
+        ("monumental, ", ""),
+        (", monumental", ""),
+        # philosophy: 🟨 "desert architecture and sculptural calm" — leave for
+        # now; "desert architecture" is identity-defining; "sculptural calm"
+        # is mostly emotional. Benchmark will decide.
+        # Bathroom furniture_language: 🔴 wet-room topology.
+        (
+            "full tadelakt wet room — walls and floor continuous",
+            "tadelakt wet room finish — walls and floor",
+        ),
+    ],
+    # 5. Japandi Calm — rank 5, MEDIUM bias
+    "japandi_calm": [
+        # emotional_intent: 🟨 "breathable" — mild spatial cue.
+        (", breathable", ""),
+        ("breathable, ", ""),
+        # Living realism_constraints: 🔴 main offender — "empty floor space
+        # is deliberate, not absent" pushes openness on cramped apartments.
+        ("; empty floor space is deliberate, not absent", ""),
+        ("empty floor space is deliberate, not absent; ", ""),
+    ],
+    # 6. Warm Modern — rank 6, LOW bias (no strips needed in shipped fields).
+    "warm_modern": [],
+    # 7. Soft Luxury — rank 7, LOW (matrix reference — DO NOT DILUTE; no
+    # shipping-field strips needed).
+    "soft_luxury": [],
+    # 8. Dark Contemporary — rank 8, LOW (matrix reference).
+    "dark_contemporary": [
+        # philosophy: 🟨 metaphor "Architectural sophistication" — soften.
+        ("Architectural sophistication", "Sophistication"),
+        # emotional_intent: 🟨 "architecturally confident".
+        (", architecturally confident", ""),
+        ("architecturally confident, ", ""),
+    ],
+    # 9. Nature Retreat — rank 9, LOW
+    "nature_retreat": [
+        # philosophy: 🟨 "architectural realism" borderline. Source text reads
+        # "Biophilic calm integrated with architectural realism and earthy
+        # luxury" — drop the "architectural realism and " segment.
+        ("architectural realism and ", ""),
+    ],
+    # 10. Nordic Warmth — rank 10, LOW (the HIGH-bias content is in the
+    # never-shipped architectural_language field; benchmark will say if
+    # "human-scaled" in emotional_intent needs touching).
+    "nordic_warmth": [
+        # 🟨 left as-is for now — Wave 5.5.14e benchmark candidate.
+        # (", human-scaled", ""),
+    ],
+}
+
+
+def strip_architecture_tokens(text: str, atmosphere_id: str) -> str:
+    """Strip architectural-bias phrases from `text` for the given atmosphere.
+
+    Returns decoration-only content suitable for Preserve mode prompt
+    assembly. Idempotent and safe — unknown atmosphere or empty input
+    returns `text` unchanged.
+
+    Args:
+        text: The rendered DNA block (e.g. output of `build_dna_block`).
+        atmosphere_id: e.g. "tropical_escape", "japandi_calm".
+
+    Returns:
+        Stripped text. Whitespace normalised (no double-spaces, no orphan
+        punctuation introduced by the strips).
+    """
+    if not text:
+        return text
+    strips = _STRIPS.get(atmosphere_id)
+    if not strips:
+        return text
+
+    out = text
+    for search, repl in strips:
+        out = out.replace(search, repl)
+
+    # Cleanup: collapse double whitespace, fix orphan punctuation a strip
+    # might have created (e.g. "..,  ," → ".").
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    out = re.sub(r"\s+([.,;])", r"\1", out)  # space before punctuation
+    out = re.sub(r"([.,;])\1+", r"\1", out)  # duplicated punctuation
+    return out
+
+
+def architecture_token_count(atmosphere_id: str) -> int:
+    """Diagnostic — how many strips are defined for an atmosphere.
+
+    Useful for tests and for logging "how aggressive is Preserve mode for
+    this atmosphere". 0 = clean atmosphere (no strips needed in shipping
+    fields). Higher = more architectural surface to strip.
+    """
+    return len(_STRIPS.get(atmosphere_id, []))
+
+
+# ── Atmospheres covered (sanity check on module load) ─────────────────────────
+
+_EXPECTED_ATMOSPHERES = frozenset({
+    "tropical_escape", "zen_retreat", "bali_sanctuary", "desert_luxe",
+    "japandi_calm", "warm_modern", "soft_luxury", "dark_contemporary",
+    "nature_retreat", "nordic_warmth",
+})
+
+
+def _self_check() -> None:
+    """Module-load sanity check — all 10 atmospheres registered."""
+    missing = _EXPECTED_ATMOSPHERES - _STRIPS.keys()
+    extra = _STRIPS.keys() - _EXPECTED_ATMOSPHERES
+    assert not missing, f"bimodal_classifier missing atmospheres: {missing}"
+    assert not extra, f"bimodal_classifier unknown atmospheres: {extra}"
+
+
+_self_check()

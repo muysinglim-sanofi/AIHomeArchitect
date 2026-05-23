@@ -54,6 +54,7 @@ from typing import Optional
 # Read-only imports from frozen / shared modules. Nothing here is modified.
 from .anchor_detector import detect_anchors
 from .atmosphere_dna import build_dna_block, get_core, get_room_dna, label_to_atmosphere_id
+from .atmosphere_dna.bimodal_classifier import apply_bimodal  # Wave 5.5.14c — no-op unless BIMODAL_ENABLED=1
 from .edit_intent import (
     EditMode,
     build_local_edit_prompt,
@@ -508,6 +509,7 @@ def _build_style_block(
     style_label: str,
     compact_prompts: bool,
     is_atmosphere_switch: bool = False,
+    generation_mode: str = "preserve",  # Wave 5.5.14c — bimodal hook
 ) -> str:
     """
     [3] STYLE TRANSFORMATION — DNA + the consolidated quality / ambition signal.
@@ -529,7 +531,11 @@ def _build_style_block(
         # composer.py non-DNA fallback at this layer.
         dna_text = f"ATMOSPHERE: {style_label}."
     else:
+        # Wave 5.5.14c — apply_bimodal is a no-op unless BIMODAL_ENABLED env
+        # var truthy AND generation_mode == "preserve". Default = byte-
+        # identical to pre-5.5.14c output.
         dna_text = build_dna_block(dna_obj)
+        dna_text = apply_bimodal(dna_text, atmosphere_id, generation_mode)
 
     prefix = (
         _STYLE_PREFIX_ATMOSPHERE_SWITCH
@@ -641,6 +647,7 @@ def compose_generation_prompt(
     source_continuity: str = "",
     structural_negative_anchors: str = "",
     authorized_user_changes: str = "",
+    generation_mode: str = "preserve",  # Wave 5.5.14c — bimodal intent. Forwarded into _build_style_block / _v1_compose. No-op unless BIMODAL_ENABLED env var truthy.
 ) -> str:
     """
     Drop-in replacement for composer.py::compose_generation_prompt.
@@ -690,6 +697,7 @@ def compose_generation_prompt(
             iteration, history, secondary_visible_spaces, compact_prompts,
             structural_identity, source_continuity, structural_negative_anchors,
             authorized_user_changes,
+            generation_mode,  # Wave 5.5.14c — forward bimodal intent
         )
 
     # ── LOCAL_EDIT — delegate to the existing targeted-edit path ─────────────
@@ -800,6 +808,7 @@ def compose_generation_prompt(
             "",                                 # source_continuity (V1 has none)
             structural_negative_anchors,
             "",                                 # authorized_user_changes (none)
+            generation_mode,                    # Wave 5.5.14c — forward bimodal intent
         )
 
     # ── 5-section architecture: FV / SR / STRUCTURAL ─────────────────────────
@@ -823,6 +832,7 @@ def compose_generation_prompt(
         style_label=style_label,
         compact_prompts=compact_prompts,
         is_atmosphere_switch=is_atmosphere_switch,
+        generation_mode=generation_mode,  # Wave 5.5.14c — forward bimodal intent
     )
 
     # [4] QUALITY FLOOR — anti-CGI vocabulary. Untouched.
