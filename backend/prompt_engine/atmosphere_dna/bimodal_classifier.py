@@ -91,6 +91,40 @@ def is_preserve_mode_active(mode: str) -> bool:
     return is_bimodal_enabled() and mode == "preserve"
 
 
+def should_drop_boundary_voices(mode: str) -> bool:
+    """True iff the bimodal flag is set, REGARDLESS of mode.
+
+    Wave 5.5.14i — the 4-voice 'atmosphere = decoration, never geometry'
+    boundary stack made sense in the pre-bimodal single-track world: it
+    arbitrated the DNA-vs-photo conflict when the DNA carried architectural
+    language. In the bimodal redesign, both Preserve and Creative paths
+    have replaced that arbitration with mode-specific framing:
+
+      - Preserve: DNA architectural tokens stripped (apply_bimodal),
+        so the boundary voices are redundant defensive prose against a
+        threat that no longer exists.
+
+      - Creative: SAME SPACE REIMAGINED task framing + soft contract +
+        ARCHITECTURAL MEMORY + revived dormant DNA fields all grant the
+        atmosphere full architectural latitude. Voice #3 ('Preserve the
+        photographed apartment's geometry exactly') and voice #4 ('WOW
+        only through materials... NOT geometry') DIRECTLY CONTRADICT the
+        rest of the creative-mode prompt, ankylosing the model.
+
+    Drop voices 3 and 4 in BOTH bimodal modes. Voice 2 (ATMOSPHERE
+    BOUNDARY inside _SAME_APARTMENT_V2) stays in preserve as a single
+    arbiter; in creative the entire _SAME_APARTMENT_V2 is replaced by the
+    soft _SAME_APARTMENT_CREATIVE, so voice 2 is implicitly absent there
+    too. Voice 1 (task tail) is already absent in creative (REIMAGINED
+    framing replaces the PHOTO-EDIT task entirely) and absent in preserve
+    (Wave 5.5.14f trims the PHOTO-EDIT task tail).
+
+    Default (BIMODAL_ENABLED unset): returns False → all 4 voices ship
+    intact, prompt byte-identical to Wave 4.10g baseline.
+    """
+    return is_bimodal_enabled()
+
+
 def is_creative_mode_active(mode: str) -> bool:
     """True iff the bimodal flag is set AND the request is in creative mode.
 

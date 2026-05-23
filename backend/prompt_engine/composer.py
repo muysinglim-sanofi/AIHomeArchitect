@@ -693,15 +693,21 @@ def compose_generation_prompt(
 
     direction = f"DESIGN DIRECTION: {user_instruction.strip()[:300]}" if user_instruction.strip() else ""
 
-    # Wave 5.5.14f — voice #3 (atmosphere DNA boundary) is the middle
-    # counter-signal that arbitrates DNA-vs-photo conflict. With the DNA
-    # already stripped of architectural language in preserve mode, the
-    # boundary section becomes defensive prose against a non-existent
-    # threat → drop it. Default + creative paths keep it (byte-identical
-    # to pre-5.5.14f).
-    from .atmosphere_dna.bimodal_classifier import is_preserve_mode_active
+    # Wave 5.5.14f / Wave 5.5.14i — voice #3 (atmosphere DNA boundary) is
+    # the middle counter-signal that arbitrates DNA-vs-photo conflict.
+    #
+    # - Preserve mode (5.5.14f): DNA architectural tokens stripped → section
+    #   becomes defensive prose against a non-existent threat → drop.
+    # - Creative mode (5.5.14i): section says "Preserve the photographed
+    #   apartment's geometry exactly" which DIRECTLY CONTRADICTS the
+    #   SAME SPACE REIMAGINED + ARCHITECTURAL MEMORY blocks earlier in the
+    #   prompt. Was ankylosing creative outputs → drop.
+    #
+    # Default (BIMODAL_ENABLED unset): section emits in full → byte-
+    # identical baseline.
+    from .atmosphere_dna.bimodal_classifier import should_drop_boundary_voices
     dna_boundary = (
-        "" if is_preserve_mode_active(generation_mode)
+        "" if should_drop_boundary_voices(generation_mode)
         else build_atmosphere_dna_boundary()
     )
 

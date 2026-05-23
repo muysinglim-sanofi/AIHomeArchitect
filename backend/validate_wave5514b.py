@@ -372,6 +372,83 @@ def test_creative_mode_with_flag() -> None:
     os.environ.pop("BIMODAL_ENABLED", None)
 
 
+def test_v2_reboot_fresh_preserves_user_instruction() -> None:
+    """Wave 5.5.14h — composer_v2 REBOOT_FRESH delegation must forward the
+    real user_instruction to composer.py so the DESIGN DIRECTION block
+    appears at the tail of V2/V3 pure-switch prompts (parity nudge with V1).
+
+    Before this fix: V1 prompts had DESIGN DIRECTION, V2/V3 pure switches
+    did not (composer_v2 sanitized user_instruction to ""). Bench data on
+    2026-05-24 showed V1 preserved kitchen 4/6 vs V2/V3 2/6 — the missing
+    nudge was the only diff.
+
+    SAFETY: classify_edit_mode(any_text, iteration=1) → FIRST_VISION
+    unconditionally (edit_intent.py:82), so passing the real instruction
+    cannot accidentally re-route REBOOT_FRESH to STYLE_REFINEMENT."""
+    import os
+    from prompt_engine.composer_v2 import compose_generation_prompt as v2_compose
+
+    print("\n── V2 REBOOT_FRESH user_instruction preservation (Wave 5.5.14h) ──")
+
+    # Reproduce the real frontend call:
+    #   chat_screen.dart::_exploreDirection sends overridePrompt =
+    #   "Redesign this space in the Japandi style." when the user taps
+    #   a different atmosphere card. composer_v2 detects atmosphere SWITCH
+    #   on this history pattern (greeting mentions prev atmosphere), routes
+    #   REBOOT_FRESH, delegates to composer.py.
+    prev_greeting = [
+        {"role": "ai",
+         "content": "Your space is ready. Generating your first Warm Modern vision now."},
+    ]
+
+    for atm in ("Japandi Calm", "Nordic Warmth", "Bali Sanctuary"):
+        user_instr = f"Redesign this space in the {atm} style."
+        prompt = v2_compose(
+            style_label=atm,
+            room_type="living_room",
+            room_description="",
+            user_instruction=user_instr,
+            iteration=2,
+            history=prev_greeting,
+        )
+        _check(
+            "DESIGN DIRECTION" in prompt,
+            f"V2 REBOOT_FRESH ({atm}): DESIGN DIRECTION block must appear",
+        )
+        _check(
+            user_instr in prompt,
+            f"V2 REBOOT_FRESH ({atm}): real user_instruction must reach the prompt",
+        )
+        # The atmosphere SWITCH log line proves the REBOOT_FRESH path actually fired.
+        # Negative regression check: the sanitized empty placeholder must NOT win.
+        _check(
+            f"DESIGN DIRECTION: {user_instr}" in prompt,
+            f"V2 REBOOT_FRESH ({atm}): user_instruction must be the DIRECTION content (no sanitisation)",
+        )
+    print("  v2_reboot_fresh_design_dir   OK  across 3 target atmospheres")
+
+    # Regression guard: bimodal preserve/creative modes must STILL work
+    # on REBOOT_FRESH with the real user_instruction (the flag controls a
+    # different code path; this guards against accidental coupling).
+    os.environ["BIMODAL_ENABLED"] = "1"
+    for mode in ("preserve", "creative"):
+        prompt = v2_compose(
+            style_label="Japandi Calm",
+            room_type="living_room",
+            room_description="",
+            user_instruction="Redesign this space in the Japandi style.",
+            iteration=2,
+            history=prev_greeting,
+            generation_mode=mode,
+        )
+        _check(
+            "DESIGN DIRECTION" in prompt,
+            f"V2 REBOOT_FRESH + BIMODAL_ENABLED + {mode}: DESIGN DIRECTION still present",
+        )
+    os.environ.pop("BIMODAL_ENABLED", None)
+    print("  v2_reboot_fresh_bimodal_ok   OK  for preserve + creative")
+
+
 def test_voice_drops_with_flag() -> None:
     """Wave 5.5.14f — when BIMODAL_ENABLED=1 + mode=preserve, voices 1/3/4
     must disappear from the rendered prompt; mode=creative keeps them; with
@@ -427,11 +504,11 @@ def test_voice_drops_with_flag() -> None:
     )
 
     # Flag ON + creative: voice #1 is REPLACED by the Wave 5.5.14d creative
-    # framing entirely (no PHOTO-EDIT task → the C2.b tail can't exist on
-    # this path). Voices #3 and #4 are still emitted as DNA-vs-photo
-    # arbiters because creative mode kept the full DNA + revives the
-    # dormant architectural fields — the boundary voices help anchor the
-    # generation.
+    # framing (no PHOTO-EDIT task → C2.b tail cannot exist on this path).
+    # Wave 5.5.14i: voices #3 and #4 are ALSO dropped in creative mode now —
+    # they were saying 'Preserve geometry exactly / NOT geometry' which
+    # contradicted the SAME SPACE REIMAGINED + ARCHITECTURAL MEMORY framing
+    # earlier in the prompt, ankylosing creative outputs.
     cr = _build("Tropical Escape", "creative")
     _check(
         "SAME SPACE REIMAGINED" in cr,
@@ -441,8 +518,14 @@ def test_voice_drops_with_flag() -> None:
         "SAME APARTMENT PHOTO-EDIT" not in cr,
         "Flag ON + creative: must NOT keep PHOTO-EDIT framing",
     )
-    _check(_VOICE3_DNA_BOUNDARY in cr, "Flag ON + creative: voice #3 must remain")
-    _check(_VOICE4_WOW_TAIL in cr, "Flag ON + creative: voice #4 must remain")
+    _check(
+        _VOICE3_DNA_BOUNDARY not in cr,
+        "Flag ON + creative (Wave 5.5.14i): voice #3 must be DROPPED — contradicts REIMAGINED",
+    )
+    _check(
+        _VOICE4_WOW_TAIL not in cr,
+        "Flag ON + creative (Wave 5.5.14i): voice #4 'NOT geometry' must be DROPPED",
+    )
     print(f"  flag_on_creative_v1     OK  ({len(cr)} chars)")
 
     # V2 path (composer_v2) — same expectations on the propagated voices.
@@ -460,8 +543,14 @@ def test_voice_drops_with_flag() -> None:
         _VOICE4_WOW_TAIL not in p2,
         "Flag ON + preserve: V2 voice #4 must be DROPPED",
     )
-    _check(_VOICE3_DNA_BOUNDARY in cr2, "Flag ON + creative: V2 voice #3 must remain")
-    _check(_VOICE4_WOW_TAIL in cr2, "Flag ON + creative: V2 voice #4 must remain")
+    _check(
+        _VOICE3_DNA_BOUNDARY not in cr2,
+        "Flag ON + creative (Wave 5.5.14i): V2 voice #3 must be DROPPED",
+    )
+    _check(
+        _VOICE4_WOW_TAIL not in cr2,
+        "Flag ON + creative (Wave 5.5.14i): V2 voice #4 must be DROPPED",
+    )
     print(f"  flag_on_v2_paths        OK")
 
     # Restore flag-off baseline for any subsequent test.
@@ -480,6 +569,7 @@ def main() -> int:
     test_whitespace_hygiene()
     test_voice_drops_with_flag()
     test_creative_mode_with_flag()
+    test_v2_reboot_fresh_preserves_user_instruction()
 
     print("\n" + "=" * 60)
     print(f"Passed: {_PASS}")

@@ -209,10 +209,17 @@ _TRANSFORMATION_AMBITION = (
 
 
 def _transformation_ambition_for_mode(generation_mode: str) -> str:
-    """Return the base ambition when preserve mode is active (voice #4
-    dropped), otherwise the full Wave 5.5.4 string."""
-    from .atmosphere_dna.bimodal_classifier import is_preserve_mode_active
-    if is_preserve_mode_active(generation_mode):
+    """Wave 5.5.14f / Wave 5.5.14i — drop the C1.b tail ('WOW only through
+    materials, lighting, atmosphere — NOT geometry') in BOTH bimodal modes.
+
+    - Preserve (5.5.14f): DNA stripped → tail is defensive prose redundant.
+    - Creative (5.5.14i): tail contradicts the SAME SPACE REIMAGINED +
+      ARCHITECTURAL MEMORY + revived dormant DNA fields → must drop.
+
+    Default (BIMODAL_ENABLED unset): full Wave 5.5.4 string → byte-identical
+    baseline."""
+    from .atmosphere_dna.bimodal_classifier import should_drop_boundary_voices
+    if should_drop_boundary_voices(generation_mode):
         return _TRANSFORMATION_AMBITION_BASE
     return _TRANSFORMATION_AMBITION
 
@@ -877,11 +884,25 @@ def compose_generation_prompt(
         log.info(
             "[ComposerV2] REBOOT_FRESH → delegating to frozen composer.py "
             "Path D (Wave 5.5.6 — V1=V2/V3 parity on pure switches; "
-            "user_instruction/history sanitized; iteration forced to 1)"
+            "history sanitized; iteration forced to 1; "
+            "Wave 5.5.14h — user_instruction now preserved → DESIGN DIRECTION "
+            "block emitted in composer.py with the actual switch instruction "
+            "(e.g. 'Redesign this space in the Japandi style.'))"
         )
         return _v1_compose(
             style_label, room_type, room_description,
-            "",                                 # user_instruction sanitized
+            # Wave 5.5.14h — user_instruction NO LONGER sanitized. Backend
+            # bench (2026-05-24) showed V1 prompts produce 4/6 kitchen
+            # preservation vs V2/V3's 2/6 — the missing DESIGN DIRECTION block
+            # (consequence of the old `""` sanitization) was the only diff.
+            # SAFETY: classify_edit_mode(any_text, iteration=1) → FIRST_VISION
+            # unconditionally (edit_intent.py:82), so passing the real
+            # instruction cannot accidentally route to STYLE_REFINEMENT or
+            # LOCAL_EDIT. Tested: 4/4 trigger paths in chat_screen.dart send
+            # non-empty user_instruction (atmosphere card tap → "Redesign in
+            # <style>"; typed input → the typed text; V1 fallback path is
+            # composer.py direct, not this delegation).
+            user_instruction,
             1,                                  # iteration forced for FIRST_VISION
             [],                                 # history empty — no memory carry
             secondary_visible_spaces, compact_prompts,
@@ -983,12 +1004,14 @@ def compose_generation_prompt(
     # immediately after design_intel in Path D. Completes the 3-voice
     # boundary stack on V2/V3 paths (core C2.b head + this C3 middle +
     # AMBITION C1.b tail inside style_transformation).
-    # Wave 5.5.14f — voice #3 dropped in preserve mode (BIMODAL_ENABLED=1):
-    # the boundary section exists only to arbitrate DNA-vs-photo conflict,
-    # and the DNA itself is stripped of architectural language in preserve.
-    from .atmosphere_dna.bimodal_classifier import is_preserve_mode_active
+    # Wave 5.5.14f / Wave 5.5.14i — voice #3 dropped in BOTH bimodal modes
+    # (BIMODAL_ENABLED=1). Preserve: DNA stripped → defensive prose against
+    # a non-existent conflict. Creative: section says 'Preserve geometry
+    # exactly' which contradicts the SAME SPACE REIMAGINED framing earlier
+    # in the V2 5-section prompt → ankylosed creative latitude.
+    from .atmosphere_dna.bimodal_classifier import should_drop_boundary_voices
     dna_boundary = (
-        "" if is_preserve_mode_active(generation_mode)
+        "" if should_drop_boundary_voices(generation_mode)
         else build_atmosphere_dna_boundary()
     )
 

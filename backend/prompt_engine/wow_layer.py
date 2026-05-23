@@ -118,16 +118,23 @@ def build_photo_edit_wow_directive(generation_mode: str = "preserve") -> str:
     Replaces build_restyling_wow_directive() in FIRST_VISION Path D (DNA + non-DNA).
     Removes "furniture styling" signal that implied furniture composition authority.
 
-    Wave 5.5.14f (Preserve mode only): the C1.b boundary tail "WOW only
-    through materials, lighting, atmosphere — NOT geometry" is dropped because
-    the atmosphere DNA itself is stripped of architectural language in Preserve
-    mode. The tail counter-signal arbitrates a conflict that no longer exists.
-    Net: ~75 chars freed. Creative mode and BIMODAL_ENABLED-unset path keep
-    the full directive (byte-identical baseline).
-    """
-    from .atmosphere_dna.bimodal_classifier import is_preserve_mode_active
+    Wave 5.5.14f (Preserve mode): the C1.b boundary tail "WOW only through
+    materials, lighting, atmosphere — NOT geometry" was dropped because the
+    DNA itself is stripped of architectural language in Preserve mode → the
+    tail counter-signal arbitrates a conflict that no longer exists.
 
-    if is_preserve_mode_active(generation_mode):
+    Wave 5.5.14i (Creative mode too): the same tail is now dropped in
+    Creative mode because it DIRECTLY CONTRADICTS the SAME SPACE REIMAGINED
+    + soft contract + ARCHITECTURAL MEMORY blocks that grant the atmosphere
+    full architectural latitude. Telling the model both "openings may evolve"
+    AND "NOT geometry" was schizophrenic and corseted creative outputs.
+
+    Default (BIMODAL_ENABLED unset): keeps the full Wave 5.5.2 directive →
+    byte-identical baseline.
+    """
+    from .atmosphere_dna.bimodal_classifier import should_drop_boundary_voices
+
+    if should_drop_boundary_voices(generation_mode):
         return _PHOTO_EDIT_WOW_HEAD
     return _PHOTO_EDIT_WOW
 
