@@ -55,6 +55,9 @@ from typing import Optional
 from .anchor_detector import detect_anchors
 from .atmosphere_dna import build_dna_block, get_core, get_room_dna, label_to_atmosphere_id
 from .atmosphere_dna.bimodal_classifier import apply_bimodal, inject_creative_revival  # Wave 5.5.14c/d — no-op unless BIMODAL_ENABLED=1
+# Wave 5.5.15c — trimmed retry of emotional_realism (see composer.py imports
+# block for rationale). Same gate applies — BIMODAL_ENABLED unset → "".
+from .emotional_realism import build_emotional_realism_signal
 from .edit_intent import (
     EditMode,
     build_local_edit_prompt,
@@ -1023,6 +1026,10 @@ def compose_generation_prompt(
         ("atmosphere_dna_boundary", dna_boundary),
         ("quality_floor", quality_floor),
         ("user_direction", user_block),
+        # Wave 5.5.15c — opportunistic emotional realism micro-signal.
+        # No priority system in composer_v2 5-section path → if budget
+        # overflow becomes an issue, drop here. Bimodal-gated.
+        ("emotional_realism", build_emotional_realism_signal(generation_mode)),
     ]
     present = [(name, txt) for name, txt in sections if txt and txt.strip()]
     prompt = "\n\n".join(txt for _, txt in present)

@@ -273,6 +273,19 @@ from .edit_intent import (
 )
 from .atmosphere_dna import get_room_dna, build_dna_block, label_to_atmosphere_id
 from .atmosphere_dna.bimodal_classifier import apply_bimodal, inject_creative_revival  # Wave 5.5.14c/d — no-op unless BIMODAL_ENABLED=1
+# Wave 5.5.15c — trimmed retry of emotional_realism.
+# Wave 5.5.15b shipped "lived-in micro-layering" (preserve) + "layered texture
+# realism" + "lived-in storytelling" (creative) → wall invention 3/9 on bench
+# (Warm M #1 wall right, Japandi #1 wall left, Japandi #3 wall right + rear
+# window suppressed). Suspected cause: surface-implying nouns ("layering",
+# "texture", "lived-in") invite the model to invent walls to layer ON.
+# Wave 5.5.15c drops those nouns entirely and keeps ONLY lighting/atmosphere
+# concepts that carry no spatial implication:
+#   Preserve : shadow falloff + restrained imperfections
+#   Creative : cinematic lighting depth + restrained imperfections +
+#              atmospheric warmth around the existing focal zone
+# All bimodal-gated → no-op when BIMODAL_ENABLED is unset.
+from .emotional_realism import build_emotional_realism_signal
 from .visible_space_logic import build_visible_spaces_block
 
 # ── Budget system ─────────────────────────────────────────────────────────────
@@ -326,6 +339,7 @@ _SECTION_PRIORITY: dict[str, int] = {
     "visible_spaces": 5,
     "refinement_memory": 5,
     "design_direction": 5,
+    "emotional_realism": 5,  # Wave 5.5.15c — bimodal-gated opportunistic signal; P5 drops first under budget pressure
 }
 
 
@@ -727,6 +741,12 @@ def compose_generation_prompt(
         ("natural_enrichment", natural_enrichment),  # P4 — Wave 4.6.2: light natural decor
         ("visible_spaces", vs_block),
         ("design_direction", direction),
+        # Wave 5.5.15c — opportunistic emotional realism micro-signal.
+        # P5 priority → drops first under budget pressure (creative mode on
+        # tight atmospheres can overflow; silent no-op preferred over
+        # forcing higher-priority sections out). BIMODAL_ENABLED gate inside
+        # build_emotional_realism_signal → byte-identical default path.
+        ("emotional_realism", build_emotional_realism_signal(generation_mode)),
         ("compact_realism", realism),              # P3 — compact block (Wave 4.4.1: was full_realism/medium)
     ]
     _audit("FIRST_VISION", raw_sections)
