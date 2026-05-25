@@ -53,12 +53,6 @@ _CASES: list[tuple[str, str, list[str], list[str]]] = [
         ["Meditative silence", "grey slate floor", "wabi plaster"],
     ),
     (
-        "bali_sanctuary",
-        "living_room",
-        ["and ceiling structure"],
-        ["volcanic grey stone", "reclaimed teak joinery", "handwoven"],
-    ),
-    (
         "desert_luxe",
         "living_room",
         ["Sculptural,", "monumental,"],
@@ -193,7 +187,7 @@ def test_idempotency() -> None:
             once == twice,
             f"[{atm}] not idempotent: 2nd pass changed output",
         )
-    print("  idempotency           OK across all 10 atmospheres")
+    print("  idempotency           OK across all 9 atmospheres")
 
 
 def test_whitespace_hygiene() -> None:
@@ -272,7 +266,7 @@ def test_creative_mode_with_flag() -> None:
         id_clause = _render_id(identity, "V1", mode)
         neg_clause = _render_neg(identity, mode)
         return v1_compose(
-            style_label="Bali Sanctuary",
+            style_label="Tropical Escape",
             room_type="living_room",
             room_description=identity_desc,
             user_instruction="",
@@ -341,11 +335,11 @@ def test_creative_mode_with_flag() -> None:
         "ATMOSPHERE KEYWORDS" not in creative,
         "Flag ON + creative (post-5.5.14g): atmosphere_keywords no longer injected",
     )
-    # The DNA itself should still contain Bali's architectural language
+    # The DNA itself should still contain Tropical's architectural language
     # (the strip is a preserve-only operation).
     _check(
-        "pavilion" in creative.lower(),
-        "Flag ON + creative: Bali pavilion language must REMAIN (no strip)",
+        "open-plan" in creative.lower(),
+        "Flag ON + creative: Tropical open-plan language must REMAIN (no strip)",
     )
     print(f"  flag_on_creative_v1         OK  ({len(creative)} chars)")
 
@@ -401,7 +395,7 @@ def test_v2_reboot_fresh_preserves_user_instruction() -> None:
          "content": "Your space is ready. Generating your first Warm Modern vision now."},
     ]
 
-    for atm in ("Japandi Calm", "Nordic Warmth", "Bali Sanctuary"):
+    for atm in ("Japandi Calm", "Nordic Warmth", "Soft Luxury"):
         user_instr = f"Redesign this space in the {atm} style."
         prompt = v2_compose(
             style_label=atm,

@@ -37,7 +37,7 @@ from prompt_engine.structural_identity import (
 
 
 _ATMOSPHERES = [
-    "Tropical Escape", "Bali Sanctuary", "Zen Retreat", "Desert Luxe",
+    "Tropical Escape", "Zen Retreat", "Desert Luxe",
     "Japandi Calm", "Warm Modern", "Soft Luxury", "Dark Contemporary",
     "Nature Retreat", "Nordic Warmth",
 ]

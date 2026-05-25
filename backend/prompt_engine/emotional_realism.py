@@ -129,10 +129,6 @@ _EMOTIONAL_REALISM_CREATIVE_BY_ATM: dict[str, str] = {
         "EMOTIONAL REALISM — diffused daylight quiet, meditative "
         "stillness, restrained presence around the existing focal zone."
     ),
-    "bali_sanctuary": (
-        "EMOTIONAL REALISM — sensual low light, serene calm, candle-warm "
-        "atmosphere around the existing focal zone."
-    ),
     "soft_luxury": (
         "EMOTIONAL REALISM — refined ambient depth, soft luminous calm, "
         "cinematic atmospheric warmth around the existing focal zone."

@@ -71,14 +71,14 @@ _QUESTION = re.compile(
 )
 
 _REDIRECT = re.compile(
-    r"\b(switch\s*(to|this|it)|try\s+(japandi|zen|bali|tropical|nordic|warm\s*modern|"
-    r"soft\s*luxury|dark|desert|nature|sanctuary|contemporary)|"
+    r"\b(switch\s*(to|this|it)|try\s+(japandi|zen|tropical|nordic|warm\s*modern|"
+    r"soft\s*luxury|dark|desert|nature|contemporary)|"
     r"change\s*(to|the\s*(style|atmosphere|direction|look))|go\s+(for|with)|"
     r"different\s*(style|atmosphere|direction|feel|look|vibe)|instead|"
     r"something\s*else|another\s*(style|direction|atmosphere|look|vibe|option)|"
     r"completely\s*different|start\s*over|fresh\s*(direction|start)|"
     # French
-    r"essaie\s+(japandi|zen|bali|tropical|nordique|chaleureux|sombre|d[eé]sert|nature|sanctuaire)|"
+    r"essaie\s+(japandi|zen|tropical|nordique|chaleureux|sombre|d[eé]sert|nature)|"
     r"change\s+de\s+(style|direction|atmosph[eè]re|ambiance)|"
     r"passe\s+(en|au|[aà])\s+\w|quelque\s*chose\s*de\s*(diff[eé]rent|autre)|"
     r"compl[eè]tement\s*diff[eé]rent|repartir\s*([aà]\s*z[eé]ro)?|"

@@ -58,7 +58,6 @@ _ATMOSPHERES = [
     ("dark_contemporary", "Dark Contemporary · Noir"),
     ("nature_retreat",    "Nature Retreat · Forest"),
     ("desert_luxe",       "Desert Luxe · Dusk"),
-    ("bali_sanctuary",    "Bali Sanctuary · Zen"),
     ("tropical_escape",   "Tropical Escape · Bloom"),
 ]
 

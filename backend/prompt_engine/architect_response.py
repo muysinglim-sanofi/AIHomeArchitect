@@ -115,17 +115,6 @@ _ATM_TONE: dict[str, dict] = {
             "What would you refine next?",
         ],
     },
-    "bali_sanctuary": {
-        "adj": "layered",
-        "quality": "rich and immersive",
-        "direction_word": "atmosphere",
-        "material_verb": "deepens",
-        "follow_q": [
-            "Would you add more layering, or keep it here?",
-            "Does the sanctuary feeling come through?",
-            "What would you add to strengthen the mood?",
-        ],
-    },
     "tropical_escape": {
         "adj": "breezy",
         "quality": "open and light",
@@ -342,11 +331,6 @@ _QUESTION_RESPONSES: dict[str, list[str]] = {
         "This direction works best when one material does everything. Multiple materials competing dilutes the feeling.",
         "With Desert Luxe, the less you add, the stronger it gets.",
     ],
-    "bali_sanctuary": [
-        "In Bali Sanctuary, the richness comes from layering volcanic stone, teak, and handwoven textiles.",
-        "The sanctuary feeling comes from enclosure. The arrival — how you enter a space — matters more than most things.",
-        "With Bali Sanctuary, three large-scale plants placed deliberately reads better than a full garden.",
-    ],
     "tropical_escape": [
         "In Tropical Escape, the openness is structural — the space should feel like it breathes outward.",
         "This direction works best with a restrained palette. The tropical feeling comes from the openness, not the decoration.",
@@ -392,10 +376,6 @@ _PRAISE_RESPONSES: dict[str, list[str]] = {
     "desert_luxe": [
         "The mineral quality reads well — strong without being cold.",
         "The weight is right. What would you push further?",
-    ],
-    "bali_sanctuary": [
-        "The atmosphere is there. The layering feels immersive without being too much.",
-        "This is landing well. What would you add to strengthen it?",
     ],
     "tropical_escape": [
         "The openness reads well — casual but considered.",
@@ -453,11 +433,6 @@ _STRUCTURAL_RESPONSES: dict[str, list[str]] = {
         "That changes the zone logic — the mineral quality stays through the shift.",
         "A real spatial change. The sculptural weight follows the new zone function.",
         "The zone purpose shifts. The desert calm transfers.",
-    ],
-    "bali_sanctuary": [
-        "That changes the zone identity — the sanctuary feeling follows the new function.",
-        "A genuine spatial transformation. The layered atmosphere carries through.",
-        "The zone function shifts. The sanctuary quality stays.",
     ],
     "tropical_escape": [
         "That shifts how the zone reads — the openness stays through the change.",

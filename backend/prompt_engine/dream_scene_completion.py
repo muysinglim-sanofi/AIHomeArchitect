@@ -75,7 +75,6 @@ _ATMOSPHERE_QUALITY: dict[str, str] = {
     "nature_retreat":     "biophilic calm — raw organic materials, nature brought fully inside",
     "dark_contemporary":  "dramatic but liveable — moody depth with spatial warmth, not flat darkness",
     "desert_luxe":        "sun-drenched luxury — tactile warmth, terracotta richness, artisan craft",
-    "bali_sanctuary":     "crafted serenity — tropical warmth, hand-made quality, spiritual calm",
 }
 
 _DEFAULT_QUALITY = "premium, warm, emotionally desirable — lived-in and aspirational"

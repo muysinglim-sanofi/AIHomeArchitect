@@ -154,6 +154,15 @@ def _norm_id(s: str) -> str:
     return "_".join(s.lower().replace("·", " ").replace("-", " ").split())
 
 
+# Wave 5.5.41 — atmospheres removed from the registry. Legacy sessions that
+# still carry these ids/labels (and any future atmosphere-switch input typed by
+# the user) get re-routed to a safe replacement so generation does not silently
+# fall off the DNA path.
+_LEGACY_ALIASES: dict[str, str] = {
+    "bali_sanctuary": "warm_modern",
+}
+
+
 def label_to_atmosphere_id(style_label: str) -> str:
     """
     Resolve a display label to a registered atmosphere id.
@@ -187,6 +196,10 @@ def label_to_atmosphere_id(style_label: str) -> str:
     base = _norm_id(raw.split("·")[0])
     ids = _CORE_REGISTRY  # keys = registered atmosphere ids (populated at import)
 
+    if full in _LEGACY_ALIASES:
+        return _LEGACY_ALIASES[full]
+    if base in _LEGACY_ALIASES:
+        return _LEGACY_ALIASES[base]
     if full in ids:
         return full
     if base in ids:

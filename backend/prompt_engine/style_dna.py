@@ -46,7 +46,6 @@ _STYLES: dict[str, StyleDNA] = {
             "layered depth — foreground plants, midground furniture, background space",
         ],
         avoid=[
-            "Balinese carved stone or ceremonial objects (belongs to Bali Sanctuary)",
             "cold industrial steel or concrete dominance",
             "stark minimalism or intentional emptiness",
             "grey or cool Scandinavian palette",
@@ -73,28 +72,6 @@ _STYLES: dict[str, StyleDNA] = {
             "rustic imperfection or worn surfaces",
             "warm beige luxury (Warm Modern) aesthetic",
             "woven rattan as dominant material (too casual resort)",
-        ],
-    ),
-
-    # ── Bali Sanctuary ────────────────────────────────────────────────────────
-    "Bali Sanctuary": StyleDNA(
-        name="Bali Sanctuary",
-        materials=["volcanic andesite stone", "reclaimed teak", "alang-alang thatch", "raw concrete", "bronze"],
-        lighting=["stone lanterns on ground plane", "deep tropical shadow play", "low warm candlelight pools", "filtered daylight through thatch ceiling"],
-        mood=["sacred ceremonial arrival", "open-air Balinese luxury", "spiritual depth and ancient craft", "timeless handwork"],
-        furniture=["carved teak day beds", "stone ceremonial benches", "low teak platforms", "handwoven ceremonial cushions"],
-        architectural_elements=["carved stone feature wall with Hindu motif", "thatched pavilion roof", "water channel or reflecting pool", "Pandanus palm gateway"],
-        color_palette=["volcanic grey", "deep reclaimed teak", "ceremonial gold", "tropical shadow green", "bone off-white"],
-        composition=[
-            "carved stone or water element as the centrepiece arrival moment that everything else frames",
-            "strong vertical carved stone mass against long horizontal teak plane",
-        ],
-        avoid=[
-            "modern minimalist coldness or glass curtain walls",
-            "flat painted wall surfaces",
-            "hotel-generic contemporary furniture",
-            "rattan casual resort furniture (belongs to Tropical Escape)",
-            "Scandinavian or Japanese minimalist influence",
         ],
     ),
 

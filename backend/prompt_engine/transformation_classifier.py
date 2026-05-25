@@ -39,15 +39,15 @@ class TransformationType(str, Enum):
 _ATMOSPHERE_SWITCH_RE = re.compile(
     r"\b(switch\s+to|change\s+(the\s+)?(atmosphere|style|look|feel)|try\s+(a\s+|the\s+)?(\w+\s+)+(style|look|atmosphere|vibe)|"
     r"go\s+with|try\s+(zen|japandi|warm\s+modern|nordic|scandinavian|luxury|dark\s+contemporary|"
-    r"tropical|bali|desert|organic|wabi.sabi|soft\s+luxury|nature|coastal|art\s+deco|eclectic)|"
-    r"(zen|japandi|nordique|scandinave|luxe|organique|tropical|balinais|désertique|"
+    r"tropical|desert|organic|wabi.sabi|soft\s+luxury|nature|coastal|art\s+deco|eclectic)|"
+    r"(zen|japandi|nordique|scandinave|luxe|organique|tropical|désertique|"
     r"côtier|art\s+déco)\s+(retreat|style|atmosphere|look)?|"
     r"essaie\s+le?\s+(style|atmosphère|look)|"
     # Wave 5.5.8 — frontend atmosphere-card trigger pattern. The reveal-screen
     # tap sends user_instruction='Redesign this space in the {style} style.'
     # (cf. chat_screen.dart:366 `_exploreDirection`). Pre-Wave-5.5.8 this
     # pattern was classified as UNKNOWN for 6/10 atmospheres (Nordic, Warm,
-    # Bali, Soft Luxury, Dark Contemporary, Nature Retreat) because their
+    # Soft Luxury, Dark Contemporary, Nature Retreat) because their
     # names weren't in the alternation-6 keyword list. UNKNOWN is then
     # treated as a customization (is_customization_transformation
     # conservative policy), which made all subsequent V2/V3 pure switches

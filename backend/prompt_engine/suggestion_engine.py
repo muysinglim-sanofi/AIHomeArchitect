@@ -120,18 +120,6 @@ _ATM_CHIPS: dict[str, list[str]] = {
         "More desert warmth",
         "Push the monolithic quality",
     ],
-    "bali_sanctuary": [
-        "Add tropical foliage layer",
-        "Deepen the volcanic stone",
-        "Add a carved timber detail",
-        "More ceremonial layering",
-        "Try a four-poster canopy",
-        "Add a water feature",
-        "More sanctuary atmosphere",
-        "Deepen the teak palette",
-        "Add an offering detail",
-        "Push the resort quality",
-    ],
     "tropical_escape": [
         "Open the space visually",
         "Add more natural rattan",

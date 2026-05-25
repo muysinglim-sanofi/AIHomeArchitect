@@ -271,35 +271,7 @@ _STRIPS: dict[str, list[tuple[str, str]]] = {
         # Living realism_constraints: 🟨 "empty floor space" — keep for now,
         # decoration-side (negative restraint, not opening pressure on Zen).
     ],
-    # 3. Bali Sanctuary — rank 3, MEDIUM bias (matrix DO NOT DILUTE,
-    # but user explicitly authorised the bimodal strip).
-    "bali_sanctuary": [
-        # Living visible_transition_logic (renders in secondary block too).
-        ("continue into adjacent pavilion", "continue into adjacent space"),
-        ("open living pavilion", "open living space"),
-        # Living material_palette: 🔴 "ceiling structure" is architecture.
-        (
-            "reclaimed teak joinery and ceiling structure",
-            "reclaimed teak joinery",
-        ),
-        # Bedroom material_palette: same ceiling structure leak.
-        (
-            "reclaimed teak or timber ceiling structure",
-            "reclaimed teak or timber detailing",
-        ),
-        # Bathroom furniture_language: 🔴 "open-air or semi-open wet room"
-        # is topology (anti-enclosure directive on bathroom).
-        (
-            "open-air or semi-open wet room in volcanic stone",
-            "volcanic stone wet room",
-        ),
-        # Terrace visible_transition_logic: 🔴 ceiling continuity.
-        (
-            "teak ceiling extends from indoor living room",
-            "teak detailing echoes indoor living room",
-        ),
-    ],
-    # 4. Desert Luxe — rank 4, MEDIUM bias
+    # 3. Desert Luxe — rank 3, MEDIUM bias
     "desert_luxe": [
         # emotional_intent: 🔴 "sculptural" and "monumental" are spatial words.
         ("Sculptural, ", ""),
@@ -401,7 +373,7 @@ def architecture_token_count(atmosphere_id: str) -> int:
 # ── Atmospheres covered (sanity check on module load) ─────────────────────────
 
 _EXPECTED_ATMOSPHERES = frozenset({
-    "tropical_escape", "zen_retreat", "bali_sanctuary", "desert_luxe",
+    "tropical_escape", "zen_retreat", "desert_luxe",
     "japandi_calm", "warm_modern", "soft_luxury", "dark_contemporary",
     "nature_retreat", "nordic_warmth",
 })

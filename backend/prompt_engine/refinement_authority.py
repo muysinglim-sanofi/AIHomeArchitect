@@ -174,9 +174,9 @@ _APPEND_MARK = re.compile(
 # refinement_authority._CHANGE matches the bare verb "switch", so this guard is
 # required to keep "switch to Japandi" out of the accumulated request.
 _ATMO_SWITCH = re.compile(
-    r"\b(japandi|zen\s*retreat|zen|bali\s*sanctuary|bali|tropical(\s*escape)?|"
+    r"\b(japandi|zen\s*retreat|zen|tropical(\s*escape)?|"
     r"nordic(\s*warmth)?|warm\s*modern|soft\s*luxury|dark\s*contemporary|"
-    r"desert(\s*luxe)?|nature\s*retreat|sanctuary|contemporary|minimalist|"
+    r"desert(\s*luxe)?|nature\s*retreat|contemporary|minimalist|"
     r"scandinavian|industrial|mediterranean|boho|art\s*deco)\b"
     r"|\b(switch|change|go)\s+(to|with|for)\s+(the\s+)?"
     r"(style|atmosphere|mood|look|vibe|theme|aesthetic|direction)\b"

@@ -1,8 +1,8 @@
 """
 atmosphere_dna — room-specific atmosphere intelligence registry.
 
-Import this package to populate the global registry with all 130 DNA entries
-(10 atmospheres × 13 room types).
+Import this package to populate the global registry with all 117 DNA entries
+(9 atmospheres × 13 room types).
 
 Public API:
   get_room_dna(atmosphere_id, room_type)  → RoomAtmosphereDNA | None
@@ -34,7 +34,6 @@ from . import nordic_warmth        # noqa: F401
 from . import dark_contemporary    # noqa: F401
 from . import nature_retreat       # noqa: F401
 from . import desert_luxe          # noqa: F401
-from . import bali_sanctuary       # noqa: F401
 from . import tropical_escape      # noqa: F401
 
 __all__ = [
