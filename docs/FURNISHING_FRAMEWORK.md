@@ -120,6 +120,18 @@ Where objects safely attach.
 - suppress kitchen continuity
 - restructure the photographed footprint
 
+### Special warning — Mirrors
+
+**Mirrors are MEDIUM/HIGH preserve-risk objects** (user-locked 2026-05-25).
+
+Why : mirrors can visually behave like openings — they create fake depth, simulate windows/walls, trigger spatial reinterpretation by the model. A misplaced mirror in preserve mode = effective architecture modification even though no wall was edited in the prompt.
+
+**Mandatory rules for any DNA edit adding mirrors :**
+1. Mirror MUST anchor to existing geometry (above existing vanity, on existing wall) — never floating, never inventing wall
+2. Fallback must explicit : if no vanity in source photo → no mirror in render
+3. **Preserve smoke bench MANDATORY before ship. NO EXCEPTIONS.** Even if creative bench passes.
+4. Watch bench results for : fake depth, window-like reflection, perspective drift, opening invention
+
 ### 4. Fallback Logic
 
 What happens when ideal placement is impossible.

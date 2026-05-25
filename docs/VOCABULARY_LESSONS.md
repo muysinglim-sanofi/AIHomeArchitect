@@ -36,6 +36,7 @@ Risk scale :
 | `side lighting / lamp` | SAFE | Anchored to seating geometry | Wave 5.5.19 : appears reliably |
 | `media presence` | LOW (creative only) | Replaces explicit `TV` in early Wave 5.5.16 to dodge focal-wall pressure | Worked safely but failed the actual TV-appearance goal (Wave 5.5.19 went back to explicit `television`) |
 | `media wall` | CRITICAL | Banned vocabulary per user spec Wave 5.5.16 | Triggers wall invention to host the media wall. Never use |
+| `mirror` | **MEDIUM/HIGH (preserve)** / LOW (creative) | User-locked 2026-05-25. Mirrors can behave visually like openings, create fake depth, simulate windows/walls, trigger spatial reinterpretation | **Preserve smoke bench MANDATORY before any mirror addition. NO EXCEPTIONS.** Must be anchored to existing vanity/wall geometry in DNA wording. If no vanity in source, no mirror added |
 
 ---
 

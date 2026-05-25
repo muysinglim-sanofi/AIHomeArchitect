@@ -189,13 +189,23 @@ Justification : if Wave 5.5.27a bench reveals rug-related drift, we catch it bef
 - **Tier :** Standard creative + Smoke preserve
 - **Atmospheres :**
   - Creative bench : 3 atms × 3 cells (Warm Modern + Soft Luxury + Dark Contemporary living + bathroom + bedroom = 27 cells)
-  - Preserve smoke : 2 atms × 3 cells (Warm Modern + Soft Luxury preserve living = 6 cells)
+  - **Preserve smoke for MIRRORS specifically — MANDATORY NO EXCEPTIONS (user-locked 2026-05-25)** : 3 atms × 3 cells bathroom preserve = 9 cells
+  - Preserve smoke for rugs : 2 atms × 3 cells living preserve = 6 cells
 - **Photo :** `tests/golden_inputs/primary_living_room.jpg` for living/bedroom ; need photos for bathroom (could use existing if applicable)
 - **Pass criteria :**
   - Rug appears in ≥6/9 living + ≥4/9 bedroom cells (improvement)
   - Mirror appears in ≥2/3 bathroom cells (improvement)
-  - 0 wall invention (preserve mode critical)
+  - **0 wall invention (preserve mode critical — IMMEDIATE ROLLBACK if any)**
+  - **0 fake depth / fake opening from mirrors (mirror-specific watch)**
   - 0 floor pattern change (rugs ANCHOR, don't recompose)
+
+**MIRROR SPECIAL DISCIPLINE :** Per user lock 2026-05-25 + VOCABULARY_LESSONS.md, mirrors are MEDIUM/HIGH preserve-risk. The bathroom preserve smoke bench is MANDATORY before ship. Even if creative bench passes, preserve must pass independently. NO EXCEPTIONS.
+
+**Phased split recommended for mirror rollout :**
+1. First : rugs only (living + bedroom) — proven safer pattern
+2. Bench rugs → if 0 preserve violation, proceed
+3. Then : mirrors (bathrooms) — separate sub-wave with dedicated preserve bench
+4. If mirror bench shows ANY depth/opening simulation → IMMEDIATE ROLLBACK, no debate
 
 ### Wave 5.5.29 — Density tunings
 
