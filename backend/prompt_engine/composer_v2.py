@@ -1028,8 +1028,11 @@ def compose_generation_prompt(
     )
 
     # Wave 5.5.18 — revive dormant DNA fields (creative-only via signal gate).
+    # Wave 5.5.32 — gate through apply_bimodal so per-atmosphere strips
+    # neutralise architectural directives that previously bypassed.
     v2_room_dna = get_room_dna(atmosphere_id, room_type)
     dna_context_v2 = build_dna_room_context_signal(v2_room_dna, generation_mode)
+    dna_context_v2 = apply_bimodal(dna_context_v2, atmosphere_id, generation_mode)
 
     sections: list[tuple[str, str]] = [
         ("header", header),

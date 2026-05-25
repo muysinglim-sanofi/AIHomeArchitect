@@ -257,6 +257,13 @@ _STRIPS: dict[str, list[tuple[str, str]]] = {
             "louvred shutters as architectural facade element",
             "louvred shutters as facade rhythm element",
         ),
+        # Wave 5.5.32 — room_context leaks via build_dna_room_context_signal.
+        # Kitchen room_specific_constraints: 🔴 "no upper cabinets to ceiling"
+        # is a direct topology directive on existing cabinetry.
+        (" — no upper cabinets to ceiling", ""),
+        # Facade room_specific_constraints: 🔴 "facade identity" pushes
+        # whole-facade redesign.
+        (" — facade identity", ""),
     ],
     # 2. Desert Luxe — rank 2, MEDIUM bias
     "desert_luxe": [
@@ -303,6 +310,27 @@ _STRIPS: dict[str, list[tuple[str, str]]] = {
         # "Biophilic calm integrated with architectural realism and earthy
         # luxury" — drop the "architectural realism and " segment.
         ("architectural realism and ", ""),
+        # Wave 5.5.32 — room_context leaks via build_dna_room_context_signal.
+        # Living room_specific_constraints: 🔴 "stone or timber wall" pushes
+        # wall-material addition on an existing wall surface.
+        (
+            "single statement stone or timber wall — not all four walls",
+            "single statement stone or timber accent",
+        ),
+        # Bedroom room_specific_constraints: 🔴 "clay plaster wall as
+        # composition" pushes wall material change.
+        (" — clay plaster wall as composition", ""),
+        # Bathroom room_specific_constraints: 🔴 "single stone throughout"
+        # pushes wholesale surface override.
+        (
+            "single stone throughout — no tile mixing",
+            "stone palette consistent — no busy tile pattern",
+        ),
+        # Pool area room_specific_constraints: 🟨 deck-material directive.
+        (
+            "natural material deck only — no artificial surface",
+            "natural material deck palette",
+        ),
     ],
     # 10. Nordic Warmth — rank 10, LOW (the HIGH-bias content is in the
     # never-shipped architectural_language field; benchmark will say if

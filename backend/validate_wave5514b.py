@@ -199,6 +199,89 @@ def test_whitespace_hygiene() -> None:
     print("  whitespace_hygiene    OK")
 
 
+# ── Wave 5.5.32 — room_context strips (build_dna_room_context output) ────────
+#
+# Wave 5.5.31 audit identified build_dna_room_context_signal as bypassing
+# apply_bimodal. Wave 5.5.32 gates the call sites AND adds per-atmosphere
+# strips targeting architectural leaks in room_specific_constraints.
+# These tests verify the new strips fire on the rendered room_context block.
+
+_ROOM_CONTEXT_CASES: list[tuple[str, str, list[str], list[str]]] = [
+    # Tropical Escape kitchen — "no upper cabinets to ceiling" topology
+    (
+        "tropical_escape",
+        "kitchen",
+        ["no upper cabinets to ceiling"],
+        ["open shelf mandatory"],
+    ),
+    # Tropical Escape facade — "facade identity" pushes whole-facade redesign
+    (
+        "tropical_escape",
+        "facade",
+        ["facade identity"],
+        ["louvred element visible"],
+    ),
+    # Nature Retreat living — "stone or timber wall" pushes wall material
+    (
+        "nature_retreat",
+        "living_room",
+        ["stone or timber wall — not all four walls"],
+        ["single statement stone or timber accent", "maximum 2 large statement plants"],
+    ),
+    # Nature Retreat bedroom — "clay plaster wall as composition"
+    (
+        "nature_retreat",
+        "master_bedroom",
+        ["clay plaster wall as composition"],
+        ["no wall art"],
+    ),
+    # Nature Retreat bathroom — "single stone throughout — no tile mixing"
+    (
+        "nature_retreat",
+        "bathroom",
+        ["single stone throughout — no tile mixing"],
+        ["stone palette consistent — no busy tile pattern", "fixtures in aged brass"],
+    ),
+    # Nature Retreat pool_area — "no artificial surface" deck directive
+    (
+        "nature_retreat",
+        "pool_area",
+        ["no artificial surface"],
+        ["natural material deck palette"],
+    ),
+]
+
+
+def test_room_context_strips() -> None:
+    print("\n── Wave 5.5.32 — room_context strips on build_dna_room_context ──")
+    from prompt_engine.atmosphere_dna import build_dna_room_context
+    for atm, room, must_drop, must_keep in _ROOM_CONTEXT_CASES:
+        dna = get_room_dna(atm, room)
+        if dna is None:
+            _FAIL.append(f"[{atm}/{room}] DNA not registered")
+            continue
+        rendered = build_dna_room_context(dna)
+        stripped = strip_architecture_tokens(rendered, atm)
+        for phrase in must_drop:
+            _check(
+                phrase in rendered,
+                f"[{atm}/{room}] expected leak phrase '{phrase}' missing from source DNA — stale test",
+            )
+            _check(
+                phrase not in stripped,
+                f"[{atm}/{room}] phrase '{phrase}' STILL present after strip",
+            )
+        for phrase in must_keep:
+            _check(
+                phrase in stripped,
+                f"[{atm}/{room}] kept phrase '{phrase}' was LOST during strip",
+            )
+        print(
+            f"  {atm:18s} {room:14s} | rendered={len(rendered):4d}c | "
+            f"stripped={len(stripped):4d}c | delta={len(rendered) - len(stripped):+d}c"
+        )
+
+
 # ── Wave 5.5.14f — boundary-voice drop validation ────────────────────────────
 
 # Phrases that compose into the 3 boundary voices currently shipping in the
@@ -543,6 +626,7 @@ def main() -> int:
     test_empty_input_passthrough()
     test_idempotency()
     test_whitespace_hygiene()
+    test_room_context_strips()
     test_voice_drops_with_flag()
     test_creative_mode_with_flag()
     test_v2_reboot_fresh_preserves_user_instruction()

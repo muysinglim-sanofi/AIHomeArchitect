@@ -576,8 +576,11 @@ def compose_generation_prompt(
         # Wave 5.5.18 — revive dormant DNA fields (room_specific_constraints +
         # visible_transition_logic). Bimodal-gated to creative-mode only in v1.
         # Returns "" for default + preserve → byte-identical baseline.
+        # Wave 5.5.32 — gate through apply_bimodal so per-atmosphere strips
+        # neutralise architectural directives that previously bypassed.
         sr_room_dna = get_room_dna(atmosphere_id, room_type)
         dna_context_sr = build_dna_room_context_signal(sr_room_dna, generation_mode)
+        dna_context_sr = apply_bimodal(dna_context_sr, atmosphere_id, generation_mode)
 
         raw_sections = [
             ("header", header),
@@ -623,8 +626,11 @@ def compose_generation_prompt(
         realism = build_compact_realism_block()
 
         # Wave 5.5.18 — dormant DNA fields revival (creative-only via signal gate).
+        # Wave 5.5.32 — gate through apply_bimodal (see room_context fix at
+        # STYLE_REFINEMENT call site for rationale).
         st_room_dna = get_room_dna(atmosphere_id, room_type)
         dna_context_st = build_dna_room_context_signal(st_room_dna, generation_mode)
+        dna_context_st = apply_bimodal(dna_context_st, atmosphere_id, generation_mode)
 
         raw_sections = [
             ("header", header),
@@ -755,8 +761,11 @@ def compose_generation_prompt(
     # Wave 5.5.18 — revive dormant DNA fields (room_specific_constraints +
     # visible_transition_logic). Bimodal-gated to creative-mode only in v1.
     # Returns "" for default + preserve → byte-identical baseline.
+    # Wave 5.5.32 — gate through apply_bimodal so per-atmosphere strips
+    # neutralise architectural directives that previously bypassed.
     fv_room_dna = get_room_dna(atmosphere_id, room_type)
     dna_context_fv = build_dna_room_context_signal(fv_room_dna, generation_mode)
+    dna_context_fv = apply_bimodal(dna_context_fv, atmosphere_id, generation_mode)
 
     raw_sections = [
         ("task", task),
