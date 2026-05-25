@@ -24,7 +24,7 @@ This emotional recognition — same room, different life — is the product's co
 
 Every image in this folder is the **same physical space**, rendered in a different atmosphere.
 
-**What must stay identical across all 9 images:**
+**What must stay identical across all 8 images:**
 
 | Element | Requirement |
 |---|---|
@@ -54,7 +54,7 @@ Every image in this folder is the **same physical space**, rendered in a differe
 | Textiles | Varies (linen, wool, silk, cotton canvas…) |
 | Lighting mood | Varies (warm golden, cool grey, dramatic directional, candle glow…) |
 | Color palette | Varies per atmosphere |
-| Decorative objects | Varies (minimal per zen; layered per Nordic; artisanal per desert) |
+| Decorative objects | Varies (restrained per Japandi; layered per Nordic; artisanal per desert) |
 
 ---
 
@@ -199,36 +199,6 @@ Palette: warm white, oat, camel, honey oak, brushed brass.
 
 ---
 
-### `ftue_zen_retreat.jpg` — Zen Retreat
-
-**Emotional target:** A room that breathes. Silence as luxury. The feeling after a week in a Japanese ryokan — everything unnecessary has been removed.
-
-**Atmosphere block:**
-```
-Rendered as a Japanese zen living space.
-Floor: pale honed limestone or tatami-textured surface in near-white grey.
-Sofa: replaced by a very low platform sofa — 25 cm off the floor — in
-  undyed natural linen. Almost floor-level. One thin cushion.
-Coffee table: extremely low lacquered cherry or black table, the height of
-  the cushions.
-Armchair: removed or replaced by a single zazen cushion beside the table.
-Wall finish: smooth pale grey plaster, flawless. No objects on walls.
-Fireplace opening: a simple framed niche, empty except for a single dried
-  branch arrangement in a small ceramic vessel on the hearth.
-Window: shoji-inspired translucent rice paper panels in front of the glass,
-  diffusing daylight into a soft even grey-white glow. No direct sun.
-No curtains. No rugs except a single off-white cotton floor runner.
-No objects visible except: the branch arrangement and one ceramic vessel.
-Lighting: soft diffused grey-white natural daylight. No artificial sources
-  visible. Even, calm, shadowless.
-Palette: near-white, pale grey, natural linen, ash, black lacquer.
-```
-
-**Differentiation from Japandi Calm:** More austere, no warmth in palette, near-monochrome, almost meditative emptiness.  
-**Avoid:** Yoga equipment, cushions with people, spa reception aesthetic, bamboo motifs.
-
----
-
 ### `ftue_japandi_calm.jpg` — Japandi Calm
 
 **Emotional target:** The room where everything is in its right place. Muji elevated. The warmth of Scandinavian wood + the restraint of Japanese aesthetics.
@@ -253,7 +223,7 @@ Lighting: soft cool-to-neutral natural daylight, even, clean. No warm
 Palette: pale ash, ivory, natural linen, cool white, minimal black detail.
 ```
 
-**Differentiation from Zen Retreat:** Warmer palette (wood tones vs grey), more furnished (shelf, rug), less austere — Nordic livability added to Japanese restraint.  
+**Differentiation from Nordic Warmth:** Cooler restraint vs hygge warmth; fewer textiles; Japanese minimalism vs Scandinavian cosiness.  
 **Avoid:** Colourful cushions, maximalist styling, generic IKEA aesthetic.
 
 ---
@@ -419,7 +389,6 @@ Generate in this order to establish same-space consistency early:
 1. `ftue_warm_modern.jpg` — most neutral atmosphere; establishes baseline room clearly
 2. `ftue_japandi_calm.jpg` — minimal transformation; validates camera/geometry
 3. `ftue_soft_luxury.jpg` — cream marble version; tests light handling
-4. `ftue_zen_retreat.jpg` — most stripped-back; validates minimal extreme
 5. `ftue_nordic_warmth.jpg` — warm fire variant; tests artificial light
 6. `ftue_dark_contemporary.jpg` — dark material extreme; tests contrast range
 7. `ftue_nature_retreat.jpg` — forest view; tests window-view replacement
@@ -453,7 +422,6 @@ Run this comparison matrix before finalizing. Each pair should feel clearly diff
 
 | Pair | Key Differentiator |
 |---|---|
-| Zen Retreat vs Japandi Calm | Monochrome austere vs warm wood; nearly empty vs curated |
 | Warm Modern vs Soft Luxury | Residential warmth vs hotel refinement; travertine vs marble |
 | Nordic Warmth vs Nature Retreat | Firelight cozy vs forest daylight; winter vs green |
 | Dark Contemporary vs Desert Luxe | Urban mineral vs artisanal earthen; cool dark vs warm sand |
@@ -476,7 +444,6 @@ They remain in use only for the card hero fallback in `atmosphere_card.dart`.
 ```
 ftue_tropical_escape.jpg
 ftue_warm_modern.jpg
-ftue_zen_retreat.jpg
 ftue_japandi_calm.jpg
 ftue_soft_luxury.jpg
 ftue_nordic_warmth.jpg

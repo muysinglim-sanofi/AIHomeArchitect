@@ -81,18 +81,6 @@ const kAtmospheres = <AtmosphereStyle>[
     ftueHeroImagePath: 'assets/atmospheres/ftue/ftue_warm_modern.jpg',
   ),
   AtmosphereStyle(
-    id: 'zen_retreat',
-    name: 'Zen Retreat',
-    tagline: 'Balanced, peaceful and calming minimalism',
-    heroImagePath: 'assets/atmospheres/zen_retreat.jpg',
-    iconImagePath: 'assets/atmospheres/zen_retreat_icon.png',
-    showcaseAsset: null,
-    fallbackImageUrl:
-        'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=400&fit=crop&crop=center',
-    iconData: Icons.spa,
-    ftueHeroImagePath: 'assets/atmospheres/ftue/ftue_zen_retreat.jpg',
-  ),
-  AtmosphereStyle(
     id: 'japandi_calm',
     name: 'Japandi Calm',
     tagline: 'Japanese-Scandinavian harmony and restraint',
