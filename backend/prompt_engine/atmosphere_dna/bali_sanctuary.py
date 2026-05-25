@@ -21,7 +21,10 @@ for _d in [
         lighting_behavior="Concealed warm uplights behind stone wall feature + rattan or brass pendant lantern.",
         decor_language=["single large stone or clay vessel with tropical foliage", "woven wall hanging in natural undyed textile"],
         realism_constraints=["sofa low — 40–45 cm — Balinese floor-culture scale", "stone floor with correct texture — not hyper-polished CGI"],
-        room_specific_constraints=["open side to garden or pool — pavilion character", "maximum 2 decorative objects plus one plant"],
+        # Wave 5.5.25 fix #3 — softened "open side to garden or pool" from
+        # architectural directive to conditional. Same risk as Tropical
+        # Escape : would instruct model to open walls on indoor apartments.
+        room_specific_constraints=["where the photographed apartment shows an open side to garden or pool, preserve and emphasize that connection", "maximum 2 decorative objects plus one plant"],
         visible_transition_logic="volcanic stone floor and teak ceiling continue into adjacent pavilion; stone palette echoes through visible pool area",
         negative_rules=["no bamboo furniture", "no bright tropical colour", "no tourist ornament collection", "no cold modern surfaces"],
     ),
@@ -57,7 +60,10 @@ for _d in [
         lighting_behavior="Single brass lantern pendant + concealed warm uplight behind stone wall; hammam-adjacent warmth.",
         decor_language=["fresh frangipani or tropical flower on stone beside basin", "folded white linen towels on teak peg"],
         realism_constraints=["stone wet room correctly seamless — no grout lines in open shower zone", "stone tub at correct floor-standing weight"],
-        room_specific_constraints=["open or semi-open shower — no full enclosure in pavilion bathroom", "all fixtures in aged brass — single finish"],
+        # Wave 5.5.25 fix #4 — softened "open or semi-open shower" from
+        # architectural directive to conditional. Original would forbid
+        # enclosed shower on apartments not designed as open-pavilion.
+        room_specific_constraints=["if the photographed bathroom is open-pavilion style, preserve the open shower ; otherwise respect the existing enclosure", "all fixtures in aged brass — single finish"],
         visible_transition_logic="volcanic stone continues from bedroom floor; garden or tropical foliage visible from open bathroom side",
         negative_rules=["no white ceramic tiles", "no chrome fixtures", "no glass-box shower enclosure", "no Western bathroom vanity unit"],
     ),

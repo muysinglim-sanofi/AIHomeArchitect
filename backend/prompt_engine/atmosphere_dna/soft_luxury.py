@@ -24,7 +24,12 @@ for _d in [
         # Wave 5.5.22 — added "a television" as a third focal-element option
         # so the model has explicit permission to place TV. Originally read
         # "fireplace or art wall" only (TV implicitly excluded).
-        room_specific_constraints=["seating centred on focal element — fireplace, art wall, or a television", "symmetry in furniture placement — not haphazard"],
+        # Wave 5.5.25 fix #5 — softened "symmetry in furniture placement —
+        # not haphazard" composition mandate to "considered placement that
+        # respects the photographed layout". Original wording instructed
+        # the model to IMPOSE symmetry on apartments with asymmetric
+        # architecture → preserve-mode drift risk.
+        room_specific_constraints=["seating centred on focal element — fireplace, art wall, or a television", "considered furniture placement that respects the photographed layout"],
         visible_transition_logic="ivory plaster walls and marble floor flow continuously into dining and hallway; brass accents echo across visible rooms",
         # Wave 5.5.22 — dropped "no visible TV above fireplace" negative rule.
         # It explicitly forbade the most natural TV placement (the wall focal),

@@ -277,7 +277,8 @@
       "Bash(BIMODAL_ENABLED=1 backend/.venv/Scripts/python.exe -m uvicorn main:app --reload --port 8000 --log-level info --app-dir backend)",
       "Bash(tasklist /FI \"PID eq 28032\")",
       "PowerShell($tree = Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq 21600 -or $_.ProcessId -eq 21600 }; $pids = $tree.ProcessId; foreach \\($p in $pids\\) { try { Stop-Process -Id $p -Force -ErrorAction Stop; \"killed $p\" } catch { \"failed $p\" } }; Start-Sleep -Milliseconds 1000; if \\(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue\\) { \"STILL LISTENING\" } else { \"port 8000 free\" })",
-      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://127.0.0.1:8000/health)"
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://127.0.0.1:8000/health)",
+      "Bash(PYTHONIOENCODING=utf-8 backend/.venv/Scripts/python.exe tools/prompt_diff.py --atm \"Warm Modern\" --mode preserve --before HEAD~1)"
     ],
     "additionalDirectories": [
       "C:\\Projects\\AIHomeArchitect\\backend",

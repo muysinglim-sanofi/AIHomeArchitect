@@ -21,7 +21,11 @@ for _d in [
         lighting_behavior="Warm rattan pendant + concealed warm ceiling slot; bright in day, warm in evening.",
         decor_language=["single large tropical plant — bird of paradise or monstera in concrete pot", "woven rattan tray on coffee table"],
         realism_constraints=["sofa at normal residential height — 45 cm", "concrete floor with correct texture — not CGI smooth"],
-        room_specific_constraints=["open side to terrace or garden — tropical villa character", "plant as living room's primary accent — one large specimen"],
+        # Wave 5.5.25 fix #1 — softened "open side to terrace or garden" from
+        # architectural directive to conditional. Original wording would
+        # instruct the model to OPEN walls on indoor apartments without
+        # terrace → wall modification. Now conditional on existing photo.
+        room_specific_constraints=["where the photographed apartment shows an open side to terrace or garden, preserve and emphasize that opening", "plant as living room's primary accent — one large specimen"],
         visible_transition_logic="white walls and concrete floor continue into terrace; rattan furniture palette echoes outdoor seating",
         negative_rules=["no dark tropical furniture", "no nautical motifs", "no shell or driftwood decor", "no overly lush plant collection"],
     ),
@@ -57,7 +61,10 @@ for _d in [
         lighting_behavior="Bright natural daytime light + concealed warm evening slot; clean tropical bathroom.",
         decor_language=["single tropical flower or leaf beside basin", "folded white linen towels on timber peg"],
         realism_constraints=["wet room at correct seamless level — no step to shower", "tub at correct scale for room"],
-        room_specific_constraints=["white or near-white throughout — light and airy", "open or semi-open if villa allows"],
+        # Wave 5.5.25 fix #2 — softened "open or semi-open if villa allows"
+        # from architectural directive to conditional. Original could push
+        # model to open walls on apartments without villa context.
+        room_specific_constraints=["white or near-white throughout — light and airy", "if the photographed bathroom is open-villa style, preserve openness"],
         visible_transition_logic="white render and concrete continue from bedroom; tropical garden visible if open outdoor bathroom",
         negative_rules=["no dark stone", "no chrome fixtures", "no closed cabinet-heavy bathroom", "no overly styled vanity top"],
     ),
