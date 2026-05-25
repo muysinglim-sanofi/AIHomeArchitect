@@ -115,6 +115,78 @@ Risk scale :
 
 ---
 
+---
+
+## Reference Profile : Warm Modern preserve V1 (locked 2026-05-25)
+
+**Empirical reference :** After cumulative tuning Wave 5.5.20 + 5.5.21 + 5.5.22, Warm Modern living_room preserve V1 consistently produces "perfect" renders : TV present, structure preserved, atmosphere identity intact, kitchen continuity respected.
+
+User confirmed (2026-05-25) : 10/10 last preserve V1 generations on Warm Modern reach this quality bar. **Other atmospheres do not yet match this level.**
+
+This is the empirical reference for what a TV-friendly + preserve-safe atmosphere looks like structurally.
+
+### The 5-dimension profile
+
+| Dimension | Warm Modern living_room current state | Why it works |
+|---|---|---|
+| `room_specific_constraints` | `"seating in conversation grouping"` + `"single clear focal wall — fireplace, artwork, or a television, not multiple"` | TV explicitly listed in focal options ; no anti-TV negation ; no symmetry mandate |
+| `decor_language` | 1 item only : `"floor-length warm linen curtains"` | LEAN. No wall-competing decor (vessel was dropped Wave 5.5.21) ; curtains anchored to existing window |
+| `negative_rules` | style-only : palette, hardware, matching suite, floating furniture | ZERO anti-furniture / anti-TV / anti-rug rules. Restrictions are stylistic not structural |
+| `visible_transition_logic` | continuity wording : oak floor flows into adjacent rooms, brass echoes through visible kitchen / hallway | Continuity-friendly, not architectural-directive |
+| `core.forbidden_elements` | stylistic : cold minimalism, sterile white, glossy marble overload, fake luxury gold, overdecorated | ZERO architectural forbidden (no "no open-plan" / "no pavilion") |
+
+### Profile pattern summary
+
+A TV-friendly + preserve-safe atmosphere DNA has :
+1. Focal-wall constraint EXPLICITLY listing TV as an option
+2. `decor_language` LEAN (1-2 items max, all anchored to existing geometry)
+3. ZERO anti-TV / anti-rug / anti-furniture rules in `negative_rules`
+4. `room_specific_constraints` = simple structural rules, NO composition mandates (no "symmetry", no "must center on X")
+5. `core.forbidden_elements` = style-only, NO architectural directives
+
+### Per-atmosphere alignment status (post Wave 5.5.26)
+
+| Atm | Alignment | Gap | Effort to align | Risk |
+|---|---|---|---|---|
+| **warm_modern** | ✓ **REFERENCE** | (none — this IS the reference) | — | — |
+| **nordic_warmth** | ✓ Aligned post Wave 5.5.22 | Minimal | — | LOW |
+| **dark_contemporary** | ✓ Aligned post Wave 5.5.22 + 5.5.26 | Minimal — artwork removed from decor | — | LOW |
+| **soft_luxury** | ⚠️ Partial | Symmetry mandate restant (post Wave 5.5.25 rollback). Need anchor "where apartment allows" instead of drop | Mineur, careful wording | MEDIUM (rollback once already) |
+| **tropical_escape** | ⚠️ Partial | "open side" softened ✓ ; plant-focal mandate restant | Soften "plant as primary accent" | MEDIUM |
+| **bali_sanctuary** | ❌ Major gap | Pavilion identity spread across architectural_language + material_palette + visible_transition_logic + room_specific_constraints. Single fix insufficient (rollback proved Wave 5.5.25) | Holistic redesign required | HIGH |
+| **nature_retreat** | ⚠️ Partial | Bedroom "no technology visible" = identity (skip). Living mostly aligned | Living-only edits | LOW |
+| **desert_luxe** | ⚠️ Partial | Density limit "max 2 decorative objects" too restrictive vs WM | Tunable density (Wave 5.5.29) | LOW |
+| **japandi_calm** | n/a — anti-furnishing by identity | (do not align — identity protection) | — | — |
+| **zen_retreat** | n/a — anti-furnishing by identity | (do not align — identity protection) | — | — |
+
+### How to use as evaluation checklist
+
+Before any future DNA edit on an atmosphere, evaluate against the 5-dimension profile :
+
+```
+For atmosphere X, living_room :
+1. Does room_specific_constraints explicitly list TV as a focal option ?    [Y/N]
+2. Is decor_language LEAN (1-2 items max, all geometry-anchored) ?           [Y/N]
+3. Are negative_rules style-only (no anti-furniture rules) ?                 [Y/N]
+4. Is room_specific_constraints free of composition mandates ?               [Y/N]
+5. Is core.forbidden_elements style-only (no architectural directives) ?     [Y/N]
+```
+
+If all 5 = Y → atmosphere is WM-aligned, preserve-safe + TV-friendly profile
+If any = N → identify gap, design surgical edit, bench gate per Wave 5.5.23 protocol
+
+### Important caveat
+
+Aligning to the WM reference profile means following the **structural pattern**, NOT copying WM's content. Each atmosphere keeps its own :
+- Material palette (Soft Luxury = marble/cashmere, Dark Contemporary = charcoal/bronze, etc.)
+- Color palette
+- Texture vocabulary
+- Decor character
+
+The profile is about STRUCTURE of the DNA, not its AESTHETIC content.
+
+---
+
 ## Appending new lessons
 
 Template per entry :
