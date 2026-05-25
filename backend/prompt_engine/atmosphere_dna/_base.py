@@ -250,3 +250,64 @@ def build_secondary_space_block(dna: RoomAdaptationDNA) -> str:
     room_name = dna.room_type.replace("_", " ").upper()
     mat_hint = ", ".join(dna.material_palette[:2])
     return f"VISIBLE {room_name}: {mat_hint}; {dna.visible_transition_logic}."
+
+
+# ── Wave 5.5.18 — Dormant DNA fields revival ─────────────────────────────────
+#
+# `room_specific_constraints` and `visible_transition_logic` are defined in
+# all 130 RoomAdaptationDNA entries but were NEVER emitted by build_dna_block.
+# They contain concrete room semantics (TV, fireplace, kitchen continuity,
+# conversation seating, etc.) that the model needs to populate rooms beyond
+# the abstract material vocabulary of furniture_language (which Wave 4.6.0
+# stripped of named pieces).
+#
+# This function ONLY emits existing DNA content — no new wording added.
+# Returns "" when both fields are absent (e.g. unmapped atmosphere/room).
+#
+# Audit reference: docs/WAVE_5_5_17a_DNA_RESTORATION_AUDIT.md sections 2.2 + 4.
+
+def build_dna_room_context(dna: RoomAdaptationDNA) -> str:
+    """Emit previously-dormant DNA fields: room_specific_constraints +
+    visible_transition_logic. Pure data emission — no new wording."""
+    parts: list[str] = []
+    if dna.room_specific_constraints:
+        ctx = "; ".join(dna.room_specific_constraints[:2])
+        parts.append(f"ROOM CONTEXT: {ctx}.")
+    if dna.visible_transition_logic:
+        parts.append(f"VISIBLE CONTINUITY: {dna.visible_transition_logic}.")
+    return " ".join(parts)
+
+
+def build_dna_room_context_signal(
+    dna: Optional[RoomAdaptationDNA],
+    generation_mode: str = "preserve",
+) -> str:
+    """Wave 5.5.18 bimodal-gated wrapper.
+
+    Returns the dormant-fields context block only when:
+      - BIMODAL_ENABLED env var is truthy (production safety invariant)
+      - generation_mode is "preserve" or "creative" (Wave 5.5.18 Phase 2:
+        the bench-gate that originally restricted to creative-only was
+        explicitly skipped by user decision 2026-05-24. Preserve now fires
+        the same signal as creative; watch carefully for wall invention
+        regression — historical pattern Wave 5.5.15b/c/16 showed preserve
+        is ultra-sensitive to surface/density signals).
+      - DNA is registered for this atmosphere×room
+
+    Returns "" for unknown modes or unmapped rooms.
+
+    Rollback paths:
+      1. `unset BIMODAL_ENABLED` → byte-identical baseline
+      2. Re-add a `if generation_mode != "creative": return ""` line to
+         restrict back to creative-only (Phase 1 state)
+      3. Edit this function to `return ""` unconditionally
+      4. Remove the section from composer.py + composer_v2.py raw_sections
+    """
+    from .bimodal_classifier import is_bimodal_enabled
+    if not is_bimodal_enabled():
+        return ""
+    if generation_mode not in ("preserve", "creative"):
+        return ""
+    if dna is None:
+        return ""
+    return build_dna_room_context(dna)

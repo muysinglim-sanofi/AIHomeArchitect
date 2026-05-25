@@ -19,6 +19,8 @@ from ._base import (
     get_core,
     get_room_dna,
     build_dna_block,
+    build_dna_room_context,             # Wave 5.5.18
+    build_dna_room_context_signal,      # Wave 5.5.18 (bimodal-gated wrapper)
     build_secondary_space_block,
     label_to_atmosphere_id,
 )
@@ -43,6 +45,8 @@ __all__ = [
     "get_core",
     "get_room_dna",
     "build_dna_block",
+    "build_dna_room_context",
+    "build_dna_room_context_signal",
     "build_secondary_space_block",
     "label_to_atmosphere_id",
 ]

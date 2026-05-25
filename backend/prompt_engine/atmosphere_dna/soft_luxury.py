@@ -21,9 +21,16 @@ for _d in [
         lighting_behavior="Concealed perimeter cove + silk shade floor lamps; warm evening tone, no ceiling spotlights.",
         decor_language=["oversized ceramic vessel with dried pampas or lunaria", "layered silk and bouclé cushions in cream and blush"],
         realism_constraints=["sofa sized to room — not oversized for space", "marble floor with correct 3–5 mm grout lines"],
-        room_specific_constraints=["seating centred on focal element — fireplace or art wall", "symmetry in furniture placement — not haphazard"],
+        # Wave 5.5.22 — added "a television" as a third focal-element option
+        # so the model has explicit permission to place TV. Originally read
+        # "fireplace or art wall" only (TV implicitly excluded).
+        room_specific_constraints=["seating centred on focal element — fireplace, art wall, or a television", "symmetry in furniture placement — not haphazard"],
         visible_transition_logic="ivory plaster walls and marble floor flow continuously into dining and hallway; brass accents echo across visible rooms",
-        negative_rules=["no jewel-tone colour pops", "no gold leaf or metallic wallpaper", "no asymmetric art gallery wall", "no visible TV above fireplace"],
+        # Wave 5.5.22 — dropped "no visible TV above fireplace" negative rule.
+        # It explicitly forbade the most natural TV placement (the wall focal),
+        # making TV nearly impossible to introduce. Other negative rules
+        # (no jewel tones, no gold leaf, no asymmetric gallery wall) retained.
+        negative_rules=["no jewel-tone colour pops", "no gold leaf or metallic wallpaper", "no asymmetric art gallery wall"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="soft_luxury",

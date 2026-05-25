@@ -21,7 +21,9 @@ for _d in [
         lighting_behavior="Amber floor lamp behind sofa + hanging filament bulb pendant; candle-warm, no ceiling wash.",
         decor_language=["cluster of amber or clear glass candle holders on coffee table", "woven basket with wool throw at sofa end"],
         realism_constraints=["sofa at normal residential height — 45 cm", "candleholders at varied heights — not matching set"],
-        room_specific_constraints=["layered rugs permitted — wool flatweave under pile", "fireplace or wood stove as focal point if present"],
+        # Wave 5.5.22 — added "a television" as third focal option.
+        # Originally "fireplace or wood stove as focal point" excluded TV.
+        room_specific_constraints=["layered rugs permitted — wool flatweave under pile", "fireplace, wood stove, or a television as focal point if present"],
         visible_transition_logic="pine floor and warm white plaster continue into kitchen; wool palette echoes through visible bedroom door",
         negative_rules=["no sleek dark furniture", "no chrome accents", "no minimalist floating shelves", "no cold grey palette"],
     ),

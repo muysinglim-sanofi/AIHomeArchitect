@@ -275,7 +275,9 @@
       "Bash(BIMODAL_ENABLED=1 PYTHONIOENCODING=utf-8 ./.venv/Scripts/python.exe validate_wave5514g_margins.py)",
       "Bash(BIMODAL_ENABLED=1 ./.venv/Scripts/python.exe -m uvicorn main:app --reload --port 8000 --log-level info)",
       "Bash(BIMODAL_ENABLED=1 backend/.venv/Scripts/python.exe -m uvicorn main:app --reload --port 8000 --log-level info --app-dir backend)",
-      "Bash(tasklist /FI \"PID eq 28032\")"
+      "Bash(tasklist /FI \"PID eq 28032\")",
+      "PowerShell($tree = Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq 21600 -or $_.ProcessId -eq 21600 }; $pids = $tree.ProcessId; foreach \\($p in $pids\\) { try { Stop-Process -Id $p -Force -ErrorAction Stop; \"killed $p\" } catch { \"failed $p\" } }; Start-Sleep -Milliseconds 1000; if \\(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue\\) { \"STILL LISTENING\" } else { \"port 8000 free\" })",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://127.0.0.1:8000/health)"
     ],
     "additionalDirectories": [
       "C:\\Projects\\AIHomeArchitect\\backend",

@@ -19,9 +19,21 @@ for _d in [
         furniture_language=["bouclé in oat or camel — warm curved tactile richness", "travertine — warm stone surface depth with brass or oak accent", "warm linen — oak-toned textural warmth"],
         material_palette=["wide-plank European oak floor", "warm sand plaster walls", "travertine slab surfaces"],
         lighting_behavior="Concealed ceiling cove + tungsten-glow table lamps; warm evening tone.",
-        decor_language=["oversized ceramic vessel on floating oak shelf", "floor-length warm linen curtains"],
+        # Wave 5.5.21 fix A2 — dropped "oversized ceramic vessel on floating
+        # oak shelf" from decor_language. This decor element was occupying
+        # the wall focal area (shelf + vessel) and competing with TV
+        # placement. Kept floor-length curtains (window-anchored, no
+        # conflict with TV).
+        decor_language=["floor-length warm linen curtains"],
         realism_constraints=["sofa at residential scale — not model-set proportions", "furniture legs visible and grounded on floor"],
-        room_specific_constraints=["seating in conversation grouping, not TV-facing row", "single clear focal wall — fireplace or artwork, not both"],
+        # Wave 5.5.20 fix #2 — dropped ", not TV-facing row" sub-clause
+        # (contradicted the Wave 5.5.19 furnishing signal).
+        # Wave 5.5.21 fix A1 — expanded focal-wall constraint from
+        # "fireplace or artwork, not both" to include television as a
+        # third valid focal option: "fireplace, artwork, or a television,
+        # not multiple". This unblocks the prior structural block where
+        # the DNA only permitted 2 focal options, none being TV.
+        room_specific_constraints=["seating in conversation grouping", "single clear focal wall — fireplace, artwork, or a television, not multiple"],
         visible_transition_logic="oak floor and warm plaster continue into adjacent rooms; brass accents echo through visible kitchen or hallway",
         negative_rules=["no cold grey palette", "no chrome hardware", "no matching 3-piece suite", "no floating furniture without visible support"],
     ),

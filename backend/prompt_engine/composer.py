@@ -271,7 +271,12 @@ from .edit_intent import (
     build_style_refinement_header,
     build_structural_transformation_header,
 )
-from .atmosphere_dna import get_room_dna, build_dna_block, label_to_atmosphere_id
+from .atmosphere_dna import (
+    get_room_dna,
+    build_dna_block,
+    build_dna_room_context_signal,  # Wave 5.5.18 — revives dormant DNA fields
+    label_to_atmosphere_id,
+)
 from .atmosphere_dna.bimodal_classifier import apply_bimodal, inject_creative_revival  # Wave 5.5.14c/d — no-op unless BIMODAL_ENABLED=1
 # Wave 5.5.15c — trimmed retry of emotional_realism.
 # Wave 5.5.15b shipped "lived-in micro-layering" (preserve) + "layered texture
@@ -286,6 +291,14 @@ from .atmosphere_dna.bimodal_classifier import apply_bimodal, inject_creative_re
 #              atmospheric warmth around the existing focal zone
 # All bimodal-gated → no-op when BIMODAL_ENABLED is unset.
 from .emotional_realism import build_emotional_realism_signal
+# Wave 5.5.16 — geometry-attached furnishing semantics (5 rooms × 2 modes).
+# Replaces the Wave 5.5.15g safe_furnishing_intelligence module: same
+# bimodal-split + room-keyed dict shape, but every named furnishing item
+# is anchored to a specific existing geometric element of the photographed
+# apartment (coffee table → seating footprint, TV → existing wall geometry,
+# etc.). See geometry_attached_furnishing.py docstring for the full design
+# contract and anchor architecture.
+from .geometry_attached_furnishing import build_furnishing_signal
 from .visible_space_logic import build_visible_spaces_block
 
 # ── Budget system ─────────────────────────────────────────────────────────────
@@ -327,6 +340,7 @@ _SECTION_PRIORITY: dict[str, int] = {
     # P3 — realism quality floor
     "full_realism": 3,
     "compact_realism": 3,
+    "dna_room_context": 3,  # Wave 5.5.18 — revives dormant DNA fields (room_specific_constraints + visible_transition_logic). Same tier as realism: drops before P4/P5 enrichments but after P2 design_intel.
     # P4 — dream richness / scene enrichment
     # P5 — interior completeness (nice-to-have; drops before wow_directive — Wave 4.4.1)
     "interior_completeness": 5,
@@ -340,6 +354,7 @@ _SECTION_PRIORITY: dict[str, int] = {
     "refinement_memory": 5,
     "design_direction": 5,
     "emotional_realism": 5,  # Wave 5.5.15c — bimodal-gated opportunistic signal; P5 drops first under budget pressure
+    "geometry_attached_furnishing": 5,  # Wave 5.5.16 — geometry-anchored furnishing (replaces Wave 5.5.15g safe_furnishing); P5 drops first under budget pressure
 }
 
 
@@ -558,6 +573,12 @@ def compose_generation_prompt(
             dream_block = build_dream_addendum(atmosphere_id)
             dream_key = "dream_addendum"
 
+        # Wave 5.5.18 — revive dormant DNA fields (room_specific_constraints +
+        # visible_transition_logic). Bimodal-gated to creative-mode only in v1.
+        # Returns "" for default + preserve → byte-identical baseline.
+        sr_room_dna = get_room_dna(atmosphere_id, room_type)
+        dna_context_sr = build_dna_room_context_signal(sr_room_dna, generation_mode)
+
         raw_sections = [
             ("header", header),
             ("source_continuity", source_continuity),  # P1 — Wave 4.7.3: continue from current design vs restart
@@ -567,6 +588,7 @@ def compose_generation_prompt(
             ("authorized_user_changes", authorized_user_changes),  # P1.5 — Wave 4.7.5: local user authority
             ("source_space", source),
             ("design_intel", intel_block),
+            ("dna_room_context", dna_context_sr),  # P3 — Wave 5.5.18 dormant fields revival
             (dream_key, dream_block),
             ("visible_spaces", vs_block),
             ("refinement_memory", refinement_block),
@@ -600,6 +622,10 @@ def compose_generation_prompt(
         refinement_block = build_refinement_block(refinement_state, iteration)
         realism = build_compact_realism_block()
 
+        # Wave 5.5.18 — dormant DNA fields revival (creative-only via signal gate).
+        st_room_dna = get_room_dna(atmosphere_id, room_type)
+        dna_context_st = build_dna_room_context_signal(st_room_dna, generation_mode)
+
         raw_sections = [
             ("header", header),
             ("source_continuity", source_continuity),  # P1 — Wave 4.7.3: continue from current design vs restart
@@ -609,6 +635,7 @@ def compose_generation_prompt(
             ("authorized_user_changes", authorized_user_changes),  # P1.5 — Wave 4.7.5: local user authority
             ("source_space", source),
             ("design_intel", intel_block),
+            ("dna_room_context", dna_context_st),  # P3 — Wave 5.5.18 dormant fields revival
             ("refinement_memory", refinement_block),
             ("compact_realism", realism),
         ]
@@ -725,6 +752,12 @@ def compose_generation_prompt(
         else build_atmosphere_dna_boundary()
     )
 
+    # Wave 5.5.18 — revive dormant DNA fields (room_specific_constraints +
+    # visible_transition_logic). Bimodal-gated to creative-mode only in v1.
+    # Returns "" for default + preserve → byte-identical baseline.
+    fv_room_dna = get_room_dna(atmosphere_id, room_type)
+    dna_context_fv = build_dna_room_context_signal(fv_room_dna, generation_mode)
+
     raw_sections = [
         ("task", task),
         ("full_contract", contract),
@@ -734,6 +767,7 @@ def compose_generation_prompt(
         ("architectural_anchors", fv_anchor_clause),  # P1 — Wave 4.7.1 R1: concrete image anchors (text-derived)
         ("source_space", source),                  # P1 — source="" in FV (Wave 4.6.1)
         ("design_intel", intel_block),
+        ("dna_room_context", dna_context_fv),     # P3 — Wave 5.5.18 dormant fields revival
         ("atmosphere_dna_boundary", dna_boundary),  # P1 — Wave 5.5.3 / dropped by Wave 5.5.14f in preserve mode
         ("interior_completeness", completeness),   # P5 — drops first (Wave 4.4.1: was P4)
         ("scene_completion", completion_block),    # P4 — drops before wow_directive
@@ -741,12 +775,18 @@ def compose_generation_prompt(
         ("natural_enrichment", natural_enrichment),  # P4 — Wave 4.6.2: light natural decor
         ("visible_spaces", vs_block),
         ("design_direction", direction),
-        # Wave 5.5.15c — opportunistic emotional realism micro-signal.
+        # Wave 5.5.15c — per-atmosphere creative emotional signal.
         # P5 priority → drops first under budget pressure (creative mode on
         # tight atmospheres can overflow; silent no-op preferred over
-        # forcing higher-priority sections out). BIMODAL_ENABLED gate inside
-        # build_emotional_realism_signal → byte-identical default path.
-        ("emotional_realism", build_emotional_realism_signal(generation_mode)),
+        # forcing higher-priority sections out). BIMODAL_ENABLED gate +
+        # preserve-mode silence inside build_emotional_realism_signal →
+        # byte-identical default + preserve paths.
+        ("emotional_realism", build_emotional_realism_signal(generation_mode, atmosphere_id)),
+        # Wave 5.5.16 — geometry-attached furnishing semantics (5 rooms × 2
+        # modes). Empty string for unmapped rooms or flag-off paths → section
+        # filtered out via the standard budget pipeline. Replaces the Wave
+        # 5.5.15g safe_furnishing wiring.
+        ("geometry_attached_furnishing", build_furnishing_signal(generation_mode, room_type)),
         ("compact_realism", realism),              # P3 — compact block (Wave 4.4.1: was full_realism/medium)
     ]
     _audit("FIRST_VISION", raw_sections)

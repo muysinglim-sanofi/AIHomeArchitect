@@ -53,11 +53,20 @@ from typing import Optional
 
 # Read-only imports from frozen / shared modules. Nothing here is modified.
 from .anchor_detector import detect_anchors
-from .atmosphere_dna import build_dna_block, get_core, get_room_dna, label_to_atmosphere_id
+from .atmosphere_dna import (
+    build_dna_block,
+    build_dna_room_context_signal,  # Wave 5.5.18 — dormant DNA fields revival
+    get_core,
+    get_room_dna,
+    label_to_atmosphere_id,
+)
 from .atmosphere_dna.bimodal_classifier import apply_bimodal, inject_creative_revival  # Wave 5.5.14c/d — no-op unless BIMODAL_ENABLED=1
 # Wave 5.5.15c — trimmed retry of emotional_realism (see composer.py imports
 # block for rationale). Same gate applies — BIMODAL_ENABLED unset → "".
 from .emotional_realism import build_emotional_realism_signal
+# Wave 5.5.16 — replaces Wave 5.5.15g safe_furnishing_intelligence.
+# Same wiring rationale as composer.py (see imports there).
+from .geometry_attached_furnishing import build_furnishing_signal
 from .edit_intent import (
     EditMode,
     build_local_edit_prompt,
@@ -1018,18 +1027,27 @@ def compose_generation_prompt(
         else build_atmosphere_dna_boundary()
     )
 
+    # Wave 5.5.18 — revive dormant DNA fields (creative-only via signal gate).
+    v2_room_dna = get_room_dna(atmosphere_id, room_type)
+    dna_context_v2 = build_dna_room_context_signal(v2_room_dna, generation_mode)
+
     sections: list[tuple[str, str]] = [
         ("header", header),
         ("core_contract", core),
         ("source_facts", source_facts),
         ("style_transformation", style_block),
+        ("dna_room_context", dna_context_v2),  # Wave 5.5.18 — dormant fields revival
         ("atmosphere_dna_boundary", dna_boundary),
         ("quality_floor", quality_floor),
         ("user_direction", user_block),
-        # Wave 5.5.15c — opportunistic emotional realism micro-signal.
+        # Wave 5.5.15c — per-atmosphere creative emotional signal.
         # No priority system in composer_v2 5-section path → if budget
-        # overflow becomes an issue, drop here. Bimodal-gated.
-        ("emotional_realism", build_emotional_realism_signal(generation_mode)),
+        # overflow becomes an issue, drop here. Bimodal-gated +
+        # preserve-mode silenced internally.
+        ("emotional_realism", build_emotional_realism_signal(generation_mode, atmosphere_id)),
+        # Wave 5.5.16 — geometry-attached furnishing semantics (5 rooms × 2
+        # modes). Empty string for unmapped rooms or flag-off paths.
+        ("geometry_attached_furnishing", build_furnishing_signal(generation_mode, room_type)),
     ]
     present = [(name, txt) for name, txt in sections if txt and txt.strip()]
     prompt = "\n\n".join(txt for _, txt in present)

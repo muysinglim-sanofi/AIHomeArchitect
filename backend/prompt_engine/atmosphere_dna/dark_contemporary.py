@@ -21,7 +21,9 @@ for _d in [
         lighting_behavior="Concealed warm ceiling cove + single sculptural bronze floor lamp; room lit by glow, not flood.",
         decor_language=["large-scale abstract artwork in dark or muted tones", "single sculptural ceramic vessel in dark or metallic finish"],
         realism_constraints=["sofa sized correctly — not modelling-scale oversized", "floor in correct proportion — wood grain or stone texture visible"],
-        room_specific_constraints=["artwork as single focal wall — not gallery cluster", "balanced dark-to-warm lighting ratio — not pure darkness"],
+        # Wave 5.5.22 — added "a television" as alternative focal option.
+        # Originally "artwork as single focal wall" implicitly excluded TV.
+        room_specific_constraints=["artwork or a television as single focal wall — not gallery cluster", "balanced dark-to-warm lighting ratio — not pure darkness"],
         visible_transition_logic="charcoal plaster and smoked oak floor continue into adjacent rooms; bronze accents echo through visible dining area",
         negative_rules=["no all-black room", "no neon or coloured accent light", "no chrome or silver hardware", "no grey rather than charcoal — must be warm dark"],
     ),
