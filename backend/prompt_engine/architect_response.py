@@ -60,17 +60,6 @@ _ATM_TONE: dict[str, dict] = {
             "What would you adjust next?",
         ],
     },
-    "zen_retreat": {
-        "adj": "spare",
-        "quality": "calm and minimal",
-        "direction_word": "simplicity",
-        "material_verb": "allows",
-        "follow_q": [
-            "Does the space feel calm enough, or would you remove more?",
-            "Would you take anything else out, or hold here?",
-            "What still feels like too much?",
-        ],
-    },
     "nordic_warmth": {
         "adj": "cozy",
         "quality": "warm and lived-in",
@@ -306,11 +295,6 @@ _QUESTION_RESPONSES: dict[str, list[str]] = {
         "The direction works best with diffused, perimeter lighting. Direct overhead light kills the softness.",
         "With Soft Luxury, colour restraint is the point — the richness lives in the materials themselves.",
     ],
-    "zen_retreat": [
-        "In Zen Retreat, the question is always: what can you take out? The calm comes from removing things, not adding them.",
-        "This direction only feels complete when you stop adding. The tension between material and empty space is the design.",
-        "An empty surface here isn't incomplete — it's the whole point.",
-    ],
     "nordic_warmth": [
         "In Nordic Warmth, lighting is the main tool. The hygge feeling is mostly about warm, layered light sources.",
         "This direction works best with materials that look better with use — pine, linen, wool. Things that age well.",
@@ -356,10 +340,6 @@ _PRAISE_RESPONSES: dict[str, list[str]] = {
     "soft_luxury": [
         "The softness feels right here. What would you refine next?",
         "This is working well. What's the next move?",
-    ],
-    "zen_retreat": [
-        "Good — the calm is intentional. Hold this direction.",
-        "The simplicity is working. What would you take out next?",
     ],
     "nordic_warmth": [
         "This feels warm and lived-in — that's exactly the right quality.",
@@ -408,11 +388,6 @@ _STRUCTURAL_RESPONSES: dict[str, list[str]] = {
         "That changes the zone identity — the softness can follow into the new function.",
         "A real spatial transformation. The luxury quality transfers to the new zone.",
         "The zone function changes. The softness of the space follows it.",
-    ],
-    "zen_retreat": [
-        "That's a genuine zone change — the calm transfers into the new function.",
-        "The zone purpose shifts. The meditative quality stays throughout.",
-        "Understood — the spatial logic changes. The simplicity stays.",
     ],
     "nordic_warmth": [
         "That changes the zone use — the warmth can stay consistent through the shift.",

@@ -258,20 +258,7 @@ _STRIPS: dict[str, list[tuple[str, str]]] = {
             "louvred shutters as facade rhythm element",
         ),
     ],
-    # 2. Zen Retreat — rank 2, MEDIUM bias
-    "zen_retreat": [
-        # philosophy: 🔴 "architectural silence" is the leak.
-        ("Meditative architectural silence", "Meditative silence"),
-        # emotional_intent: 🔴 "emptied" is a direct emptiness directive.
-        ("emptied, ", ""),
-        (", emptied", ""),
-        # Living realism_constraints: 🔴 "floor space dominant" is topology.
-        ("; floor space dominant — furniture minimal", ""),
-        ("floor space dominant — furniture minimal; ", ""),
-        # Living realism_constraints: 🟨 "empty floor space" — keep for now,
-        # decoration-side (negative restraint, not opening pressure on Zen).
-    ],
-    # 3. Desert Luxe — rank 3, MEDIUM bias
+    # 2. Desert Luxe — rank 2, MEDIUM bias
     "desert_luxe": [
         # emotional_intent: 🔴 "sculptural" and "monumental" are spatial words.
         ("Sculptural, ", ""),
@@ -373,7 +360,7 @@ def architecture_token_count(atmosphere_id: str) -> int:
 # ── Atmospheres covered (sanity check on module load) ─────────────────────────
 
 _EXPECTED_ATMOSPHERES = frozenset({
-    "tropical_escape", "zen_retreat", "desert_luxe",
+    "tropical_escape", "desert_luxe",
     "japandi_calm", "warm_modern", "soft_luxury", "dark_contemporary",
     "nature_retreat", "nordic_warmth",
 })

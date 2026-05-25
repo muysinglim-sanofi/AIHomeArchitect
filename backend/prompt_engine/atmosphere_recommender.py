@@ -24,11 +24,9 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "desert_luxe": 0.65,
         "nature_retreat": 0.60,
         "tropical_escape": 0.60,
-        "zen_retreat": 0.40,
     },
     "master_bedroom": {
         "soft_luxury": 0.90,
-        "zen_retreat": 0.85,
         "japandi_calm": 0.85,
         "warm_modern": 0.75,
         "dark_contemporary": 0.65,
@@ -45,11 +43,9 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "soft_luxury": 0.65,
         "nature_retreat": 0.60,
         "desert_luxe": 0.60,
-        "zen_retreat": 0.55,
         "tropical_escape": 0.35,
     },
     "bathroom": {
-        "zen_retreat": 0.90,
         "soft_luxury": 0.90,
         "japandi_calm": 0.85,
         "dark_contemporary": 0.80,
@@ -64,7 +60,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "japandi_calm": 0.85,
         "warm_modern": 0.80,
         "nature_retreat": 0.75,
-        "zen_retreat": 0.65,
         "soft_luxury": 0.60,
         "nordic_warmth": 0.60,
         "desert_luxe": 0.45,
@@ -79,7 +74,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "nordic_warmth": 0.65,
         "nature_retreat": 0.50,
         "tropical_escape": 0.50,
-        "zen_retreat": 0.35,
     },
     "entrance_hall": {
         "soft_luxury": 0.90,
@@ -87,7 +81,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "warm_modern": 0.80,
         "desert_luxe": 0.65,
         "japandi_calm": 0.65,
-        "zen_retreat": 0.60,
         "nature_retreat": 0.45,
         "nordic_warmth": 0.45,
         "tropical_escape": 0.40,
@@ -101,7 +94,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "japandi_calm": 0.65,
         "tropical_escape": 0.60,
         "nordic_warmth": 0.45,
-        "zen_retreat": 0.40,
     },
     "garden": {
         "nature_retreat": 0.90,
@@ -112,7 +104,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "soft_luxury": 0.60,
         "japandi_calm": 0.55,
         "dark_contemporary": 0.40,
-        "zen_retreat": 0.40,
     },
     "pool_area": {
         "tropical_escape": 0.90,
@@ -123,7 +114,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "nature_retreat": 0.60,
         "nordic_warmth": 0.40,
         "japandi_calm": 0.40,
-        "zen_retreat": 0.35,
     },
     "terrace": {
         "tropical_escape": 0.85,
@@ -134,7 +124,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "soft_luxury": 0.60,
         "nordic_warmth": 0.55,
         "japandi_calm": 0.45,
-        "zen_retreat": 0.40,
     },
     "balcony": {
         "warm_modern": 0.80,
@@ -145,7 +134,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "nordic_warmth": 0.60,
         "soft_luxury": 0.55,
         "desert_luxe": 0.45,
-        "zen_retreat": 0.40,
     },
     "driveway": {
         "warm_modern": 0.85,
@@ -156,7 +144,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "japandi_calm": 0.60,
         "tropical_escape": 0.45,
         "nordic_warmth": 0.45,
-        "zen_retreat": 0.35,
     },
 }
 
@@ -166,7 +153,6 @@ _DEFAULT_COMPAT: dict[str, float] = {
     "soft_luxury": 0.75,
     "dark_contemporary": 0.75,
     "japandi_calm": 0.75,
-    "zen_retreat": 0.60,
     "nordic_warmth": 0.60,
     "nature_retreat": 0.60,
     "desert_luxe": 0.55,
@@ -184,7 +170,6 @@ _SIGNAL_BONUSES: list[tuple[str, str, float]] = [
     ("vaulted",          "dark_contemporary", 0.10),
     ("vaulted",          "soft_luxury",       0.08),
     ("small",            "japandi_calm",      0.10),
-    ("small",            "zen_retreat",       0.10),
     ("compact",          "japandi_calm",      0.08),
     ("compact",          "warm_modern",       0.05),
     # Material signals
@@ -195,7 +180,6 @@ _SIGNAL_BONUSES: list[tuple[str, str, float]] = [
     ("timber",           "nordic_warmth",     0.08),
     ("timber",           "warm_modern",       0.05),
     ("stone",            "dark_contemporary", 0.08),
-    ("stone",            "zen_retreat",       0.05),
     ("concrete",         "dark_contemporary", 0.10),
     ("concrete",         "japandi_calm",      0.05),
     ("marble",           "soft_luxury",       0.10),
@@ -216,7 +200,6 @@ _SIGNAL_BONUSES: list[tuple[str, str, float]] = [
     ("urban",            "warm_modern",       0.05),
     # Light signals
     ("dark",             "dark_contemporary", 0.10),
-    ("dark",             "zen_retreat",       0.05),
     ("white",            "soft_luxury",       0.05),
     ("white",            "japandi_calm",      0.05),
     ("warm light",       "warm_modern",       0.08),

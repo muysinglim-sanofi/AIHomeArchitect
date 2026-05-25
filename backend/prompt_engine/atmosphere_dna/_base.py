@@ -160,6 +160,7 @@ def _norm_id(s: str) -> str:
 # fall off the DNA path.
 _LEGACY_ALIASES: dict[str, str] = {
     "bali_sanctuary": "warm_modern",
+    "zen_retreat": "japandi_calm",  # Wave 5.5.42 — Japandi is the closest restraint-driven sibling
 }
 
 

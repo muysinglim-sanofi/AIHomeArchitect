@@ -38,9 +38,9 @@ class TransformationType(str, Enum):
 
 _ATMOSPHERE_SWITCH_RE = re.compile(
     r"\b(switch\s+to|change\s+(the\s+)?(atmosphere|style|look|feel)|try\s+(a\s+|the\s+)?(\w+\s+)+(style|look|atmosphere|vibe)|"
-    r"go\s+with|try\s+(zen|japandi|warm\s+modern|nordic|scandinavian|luxury|dark\s+contemporary|"
+    r"go\s+with|try\s+(japandi|warm\s+modern|nordic|scandinavian|luxury|dark\s+contemporary|"
     r"tropical|desert|organic|wabi.sabi|soft\s+luxury|nature|coastal|art\s+deco|eclectic)|"
-    r"(zen|japandi|nordique|scandinave|luxe|organique|tropical|désertique|"
+    r"(japandi|nordique|scandinave|luxe|organique|tropical|désertique|"
     r"côtier|art\s+déco)\s+(retreat|style|atmosphere|look)?|"
     r"essaie\s+le?\s+(style|atmosphère|look)|"
     # Wave 5.5.8 — frontend atmosphere-card trigger pattern. The reveal-screen
@@ -223,17 +223,6 @@ _REALISM_ADDENDUM = (
     "inaccessible zones, or spatially incoherent geometry."
 )
 
-_ZEN_LIGHTING_DISCIPLINE = (
-    "ZEN LIGHTING DISCIPLINE — CRITICAL: "
-    "Zen calm = breathable and naturally lit, NOT dark. "
-    "Preserve daylight from all windows, maintain visual readability, "
-    "keep the space soft and balanced. "
-    "DO NOT darken the apartment, suppress windows, or create cinematic heavy shadow. "
-    "Zen calm is achieved through MATERIAL RESTRAINT and SPATIAL EMPTINESS — not darkness. "
-    "The apartment must remain visually open and naturally lit throughout."
-)
-
-
 def build_spatial_preservation_addendum(
     transformation_type: TransformationType,
     secondary_spaces: list[str],
@@ -248,13 +237,6 @@ def build_spatial_preservation_addendum(
     the frozen structural contract already provides.
     """
     parts: list[str] = []
-
-    # Zen Retreat lighting discipline MUST appear first — prompt budget truncation
-    # cuts late content, and this constraint must override the DNA lighting_behavior
-    # ("near-darkness punctuated by warm shafts") which causes cinematic darkness.
-    # Position 0 guarantees it survives even when the full addendum exceeds budget.
-    if atmosphere_id == "zen_retreat":
-        parts.append(_ZEN_LIGHTING_DISCIPLINE)
 
     # Transformation-specific addendum
     if transformation_type == TransformationType.ATMOSPHERE_SWITCH:

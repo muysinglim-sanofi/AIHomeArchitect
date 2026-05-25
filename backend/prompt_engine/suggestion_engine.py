@@ -60,18 +60,6 @@ _ATM_CHIPS: dict[str, list[str]] = {
         "More tactile layering",
         "Try a warmer stone",
     ],
-    "zen_retreat": [
-        "Remove one more element",
-        "Keep the natural light visible",
-        "Increase the empty floor space",
-        "Preserve the calm brightness",
-        "Reduce to one material",
-        "Add a single stone accent",
-        "Keep the windows clear and open",
-        "Remove the last decorative item",
-        "Try total material austerity",
-        "Maintain the breathable atmosphere",
-    ],
     "nordic_warmth": [
         "Add a sheepskin layer",
         "More warm pine tones",

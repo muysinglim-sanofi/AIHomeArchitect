@@ -98,7 +98,7 @@ _STYLES: dict[str, StyleDNA] = {
             "pale ash or blonde Japandi timber (too minimal, belongs to Japandi)",
             "cold grey or blue Scandinavian palette",
             "raw unfinished surfaces or visible grain-only materials without finish",
-            "floor cushions or Zen low-to-ground seating",
+            "floor cushions or low-to-ground meditation seating",
             "Buddhist emptiness or radical negative space",
             "sparse furniture — warmth comes from layered richness, not absence",
             "washi paper or shoji-inspired screens",
@@ -192,30 +192,6 @@ _STYLES: dict[str, StyleDNA] = {
         ],
     ),
 
-    # ── Zen Retreat ───────────────────────────────────────────────────────────
-    "Zen Retreat": StyleDNA(
-        name="Zen Retreat",
-        materials=["white plaster", "pale oak", "river-washed stone", "washi paper", "undyed linen", "dry sand"],
-        lighting=["diffused even natural light — no single point source visible", "concealed minimal warm glow for evening", "absolutely no visible light fixtures in frame"],
-        mood=["profound meditative stillness", "intentional emptiness as achievement", "monastery calm", "breath and space as luxury"],
-        furniture=["floor cushions only — no raised furniture if possible", "single low timber platform if necessary", "nothing else"],
-        architectural_elements=["smooth unadorned plaster walls — zero applied detail", "natural stone or sand element at floor level", "single window as the only light source", "flush minimal door"],
-        color_palette=["pure warm white", "stone grey", "pale oak", "soft sage", "natural sand"],
-        composition=[
-            "extreme negative space — one deliberate object earns its place, everything else is absence",
-            "the room itself is the composition — furniture is an intrusion, not an addition",
-        ],
-        avoid=[
-            "any furniture accumulation — maximum two objects in entire frame",
-            "decoration of any kind",
-            "colour saturation or pattern",
-            "multiple light sources or visible fixtures",
-            "visual complexity or material richness",
-            "Japandi warmth or wooden furniture richness (too comfortable for Zen Retreat)",
-            "anything that interrupts the stillness",
-        ],
-    ),
-
     # ── Soft Luxury ───────────────────────────────────────────────────────────
     "Soft Luxury": StyleDNA(
         name="Soft Luxury",
@@ -234,7 +210,7 @@ _STYLES: dict[str, StyleDNA] = {
             "cold material surfaces — concrete, steel, raw stone",
             "stark overhead lighting",
             "masculine austerity or architectural severity",
-            "Japandi restraint or Zen emptiness",
+            "Japandi restraint",
             "walnut or dark wood dominance (too masculine)",
         ],
     ),

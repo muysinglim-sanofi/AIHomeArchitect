@@ -68,7 +68,6 @@ _ROOM_ELEMENTS: dict[str, str] = {
 _ATMOSPHERE_QUALITY: dict[str, str] = {
     "soft_luxury":        "plush, premium, effortlessly elegant — every surface tactile and warm",
     "japandi_calm":       "warm and complete — deeply considered calm, never sparse or cold",
-    "zen_retreat":        "breathable and light-filled — serene, not dark, never cave-like",
     "tropical_escape":    "lush indoor-outdoor — layered greenery, open, air-filled",
     "warm_modern":        "grounded warmth — architecturally resolved, rich without being heavy",
     "nordic_warmth":      "cosy and layered — hygge warmth, candlelit textiles, not sterile",

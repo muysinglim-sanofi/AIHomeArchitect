@@ -47,12 +47,6 @@ _CASES: list[tuple[str, str, list[str], list[str]]] = [
          "Tropical living with relaxed contemporary luxury"],
     ),
     (
-        "zen_retreat",
-        "living_room",
-        ["architectural silence", "floor space dominant"],
-        ["Meditative silence", "grey slate floor", "wabi plaster"],
-    ),
-    (
         "desert_luxe",
         "living_room",
         ["Sculptural,", "monumental,"],
@@ -187,7 +181,7 @@ def test_idempotency() -> None:
             once == twice,
             f"[{atm}] not idempotent: 2nd pass changed output",
         )
-    print("  idempotency           OK across all 9 atmospheres")
+    print("  idempotency           OK across all 8 atmospheres")
 
 
 def test_whitespace_hygiene() -> None:

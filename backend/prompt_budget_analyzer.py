@@ -53,7 +53,6 @@ _ATMOSPHERES = [
     ("warm_modern",       "Warm Modern · V2"),
     ("japandi_calm",      "Japandi · Harmony"),
     ("soft_luxury",       "Soft Luxury · Gold"),
-    ("zen_retreat",       "Zen Retreat · Serenity"),
     ("nordic_warmth",     "Nordic Warmth · Dawn"),
     ("dark_contemporary", "Dark Contemporary · Noir"),
     ("nature_retreat",    "Nature Retreat · Forest"),

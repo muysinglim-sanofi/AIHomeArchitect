@@ -125,10 +125,6 @@ _EMOTIONAL_REALISM_CREATIVE_BY_ATM: dict[str, str] = {
         "EMOTIONAL REALISM — golden-hour glow, restrained emotional "
         "warmth, warm ambient depth around the existing focal zone."
     ),
-    "zen_retreat": (
-        "EMOTIONAL REALISM — diffused daylight quiet, meditative "
-        "stillness, restrained presence around the existing focal zone."
-    ),
     "soft_luxury": (
         "EMOTIONAL REALISM — refined ambient depth, soft luminous calm, "
         "cinematic atmospheric warmth around the existing focal zone."
