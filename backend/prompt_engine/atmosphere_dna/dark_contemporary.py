@@ -19,7 +19,15 @@ for _d in [
         furniture_language=["dark charcoal bouclé or leather — deep low tactile richness", "dark marble or stone — sculptural surface depth", "dark velvet — high-contrast atmospheric depth"],
         material_palette=["dark charcoal plaster walls", "smoked oak or dark stone floor", "dark marble or bronze accent surfaces"],
         lighting_behavior="Concealed warm ceiling cove + single sculptural bronze floor lamp; room lit by glow, not flood.",
-        decor_language=["large-scale abstract artwork in dark or muted tones", "single sculptural ceramic vessel in dark or metallic finish"],
+        # Wave 5.5.26 — "large-scale abstract artwork" → "deep dark velvet
+        # throw layered on the sofa". Original artwork occupied wall focal
+        # area competing with TV (per Wave 5.5.22 audit). Sofa-anchored
+        # throw preserves Dark Contemporary moody identity without wall
+        # competition. Sculptural vessel kept as second decor element.
+        # NOTE : artwork is still permitted as focal-wall option via
+        # room_specific_constraints (Wave 5.5.22) ; not removed from
+        # atmosphere, just not mandated as decor.
+        decor_language=["deep dark velvet throw layered on the sofa", "single sculptural ceramic vessel in dark or metallic finish"],
         realism_constraints=["sofa sized correctly — not modelling-scale oversized", "floor in correct proportion — wood grain or stone texture visible"],
         # Wave 5.5.22 — added "a television" as alternative focal option.
         # Originally "artwork as single focal wall" implicitly excluded TV.

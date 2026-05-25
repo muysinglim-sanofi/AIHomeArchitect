@@ -19,7 +19,11 @@ for _d in [
         furniture_language=["warm bouclé in ivory or blush — plush tactile richness", "honed marble or stone — champagne brass accents, premium surface warmth", "cashmere or velvet in cream — layered textile softness"],
         material_palette=["fluted ivory plaster walls", "honed cream marble floor", "brushed champagne metal accents"],
         lighting_behavior="Concealed perimeter cove + silk shade floor lamps; warm evening tone, no ceiling spotlights.",
-        decor_language=["oversized ceramic vessel with dried pampas or lunaria", "layered silk and bouclé cushions in cream and blush"],
+        # Wave 5.5.26 — "oversized ceramic vessel" → "floor-level ceramic
+        # vessel". Original "oversized" implied wall-shelf placement competing
+        # with TV for wall focal area. Floor-level anchors the vessel without
+        # competing for wall space, preserving Soft Luxury hospitality identity.
+        decor_language=["floor-level ceramic vessel with dried pampas or lunaria", "layered silk and bouclé cushions in cream and blush"],
         realism_constraints=["sofa sized to room — not oversized for space", "marble floor with correct 3–5 mm grout lines"],
         # Wave 5.5.22 — added "a television" as a third focal-element option
         # so the model has explicit permission to place TV. Originally read
