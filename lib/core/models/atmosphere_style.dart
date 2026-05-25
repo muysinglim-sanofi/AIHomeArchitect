@@ -93,18 +93,6 @@ const kAtmospheres = <AtmosphereStyle>[
     ftueHeroImagePath: 'assets/atmospheres/ftue/ftue_zen_retreat.jpg',
   ),
   AtmosphereStyle(
-    id: 'bali_sanctuary',
-    name: 'Bali Sanctuary',
-    tagline: 'Open-air luxury of tropical villas',
-    heroImagePath: 'assets/atmospheres/bali_sanctuary.jpg',
-    iconImagePath: 'assets/atmospheres/bali_sanctuary_icon.png',
-    showcaseAsset: 'assets/showcase/villa_after.jpg',
-    fallbackImageUrl:
-        'https://images.unsplash.com/photo-1602343168117-bb8ffe3e2e9f?w=400&fit=crop&crop=center',
-    iconData: Icons.local_florist,
-    ftueHeroImagePath: 'assets/atmospheres/ftue/ftue_bali_sanctuary.jpg',
-  ),
-  AtmosphereStyle(
     id: 'japandi_calm',
     name: 'Japandi Calm',
     tagline: 'Japanese-Scandinavian harmony and restraint',

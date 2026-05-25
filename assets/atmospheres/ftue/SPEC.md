@@ -24,7 +24,7 @@ This emotional recognition — same room, different life — is the product's co
 
 Every image in this folder is the **same physical space**, rendered in a different atmosphere.
 
-**What must stay identical across all 10 images:**
+**What must stay identical across all 9 images:**
 
 | Element | Requirement |
 |---|---|
@@ -168,7 +168,7 @@ Accents: a single large tropical leaf in a ceramic pot, a rattan floor lamp
 Palette: warm cream, teak brown, volcanic grey, tropical green.
 ```
 
-**Differentiation from Bali Sanctuary:** Lighter, more open, resort-casual rather than intimate spa.  
+**Differentiation from Tropical Escape neighbours:** Lighter, more open, resort-casual.  
 **Avoid:** Beach stock photography, palm trees as wallpaper, thatched roofs.
 
 ---
@@ -226,35 +226,6 @@ Palette: near-white, pale grey, natural linen, ash, black lacquer.
 
 **Differentiation from Japandi Calm:** More austere, no warmth in palette, near-monochrome, almost meditative emptiness.  
 **Avoid:** Yoga equipment, cushions with people, spa reception aesthetic, bamboo motifs.
-
----
-
-### `ftue_bali_sanctuary.jpg` — Bali Sanctuary
-
-**Emotional target:** A private villa pavilion suite. Rich, intimate, sensory luxury. The feeling of Alila Villas Uluwatu at dusk — stone, teak, tropical warmth.
-
-**Atmosphere block:**
-```
-Rendered as a luxury Balinese open-air pavilion suite.
-Floor: large-format grey volcanic stone tiles, slightly textured.
-Sofa: replaced by a wide dark teak daybed frame — architectural, carved —
-  with thick ivory linen upholstered mattress and oversized bolster cushions.
-Coffee table: dark teak with organic carved stone inlay top.
-Wall finish: rough warm limestone or natural sandy plaster, slightly uneven.
-Fireplace opening: replaced by a traditional Balinese carved stone panel
-  (paduraksa gate motif, low relief) or a stone water bowl feature.
-Overhead: a dark teak wood pergola or ceiling framework suggests a pavilion
-  roof — visible beams overhead.
-Window wall: open to a lush private tropical garden — stone path, Balinese
-  stone lantern, banana palms, frangipani blossoms.
-Lighting: warm golden lantern light from hanging rattan pendant lamps +
-  diffused tropical late-afternoon sun from the left. Warm amber tone.
-  Candle flicker warmth.
-Palette: volcanic grey, dark teak, ivory linen, tropical green, amber gold.
-```
-
-**Differentiation from Tropical Escape:** More intimate, heavier, richer materials, more enclosed — resort suite rather than open terrace.  
-**Avoid:** Infinity pools as background, beach resort clichés, generic tropical stock.
 
 ---
 
@@ -405,7 +376,7 @@ Lighting: warm amber desert sunset light from the left. Long shadows.
 Palette: warm terracotta, sand, clay amber, warm cream, woven natural tones.
 ```
 
-**Differentiation from Bali Sanctuary:** Dry, mineral, North African-Latin American rather than humid tropical-Southeast Asian.  
+**Differentiation from Tropical/Nature neighbours:** Dry, mineral, North African-Latin American rather than humid tropical or green forest.  
 **Avoid:** Cowboys, cacti as kitsch, generic Moroccan souk feel, overdecorated riad excess.
 
 ---
@@ -453,8 +424,7 @@ Generate in this order to establish same-space consistency early:
 6. `ftue_dark_contemporary.jpg` — dark material extreme; tests contrast range
 7. `ftue_nature_retreat.jpg` — forest view; tests window-view replacement
 8. `ftue_desert_luxe.jpg` — clay/terracotta; tests material range
-9. `ftue_bali_sanctuary.jpg` — tropical intimate; tests furniture transformation
-10. `ftue_tropical_escape.jpg` — open-air extreme; tests indoor/outdoor dissolution
+9. `ftue_tropical_escape.jpg` — open-air extreme; tests indoor/outdoor dissolution
 
 ---
 
@@ -483,7 +453,6 @@ Run this comparison matrix before finalizing. Each pair should feel clearly diff
 
 | Pair | Key Differentiator |
 |---|---|
-| Tropical Escape vs Bali Sanctuary | Open/airy vs intimate/enclosed; lighter vs richer |
 | Zen Retreat vs Japandi Calm | Monochrome austere vs warm wood; nearly empty vs curated |
 | Warm Modern vs Soft Luxury | Residential warmth vs hotel refinement; travertine vs marble |
 | Nordic Warmth vs Nature Retreat | Firelight cozy vs forest daylight; winter vs green |
@@ -508,7 +477,6 @@ They remain in use only for the card hero fallback in `atmosphere_card.dart`.
 ftue_tropical_escape.jpg
 ftue_warm_modern.jpg
 ftue_zen_retreat.jpg
-ftue_bali_sanctuary.jpg
 ftue_japandi_calm.jpg
 ftue_soft_luxury.jpg
 ftue_nordic_warmth.jpg

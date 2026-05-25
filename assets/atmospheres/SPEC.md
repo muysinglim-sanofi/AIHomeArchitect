@@ -73,15 +73,6 @@ Japanese zen room. Tatami mat floor. Shoji paper screen with soft diffused dayli
 
 ---
 
-### `bali_sanctuary.jpg`
-Balinese villa bedroom or open-air pavilion. Carved dark teak canopy bed. White linen draping. Woven grass ceiling. Tropical garden through open screens. Warm candlelight glow. Volcanic stone accents.
-
-**AI prompt:** `Balinese villa bedroom, carved dark teak canopy bed, white linen draping, woven grass ceiling, open-air tropical garden, candlelight, volcanic stone, no people, luxury resort interior photography, ultra-detailed`
-
-**Avoid:** generic resort pools, beach tourism, plastic loungers
-
----
-
 ### `japandi_calm.jpg`
 Minimal Japanese-Scandinavian bedroom or living room. Pale oak bed frame or low sofa. Handmade ceramic on floating shelf. Natural daylight from large window. Soft plaster walls. Very little decoration.
 
@@ -173,7 +164,6 @@ Style: Minimal line icon or flat symbol. No text. No humans.
 | `tropical_escape_icon.png` | Palm frond + open pavilion roofline |
 | `warm_modern_icon.png` | Rounded armchair + pendant lamp |
 | `zen_retreat_icon.png` | Stacked stones + single bamboo stalk |
-| `bali_sanctuary_icon.png` | Balinese temple gate (candi bentar) + palm |
 | `japandi_calm_icon.png` | Shoji screen grid + low table silhouette |
 | `nordic_warmth_icon.png` | Fireplace arch + small flame |
 | `dark_contemporary_icon.png` | Townhouse facade with chandelier in window |
@@ -192,7 +182,6 @@ assets/atmospheres/
 ├── tropical_escape.jpg
 ├── warm_modern.jpg
 ├── zen_retreat.jpg
-├── bali_sanctuary.jpg
 ├── japandi_calm.jpg
 ├── soft_luxury.jpg
 ├── nordic_warmth.jpg
@@ -205,7 +194,6 @@ assets/atmospheres/
 ├── ftue/ftue_tropical_escape.jpg
 ├── ftue/ftue_warm_modern.jpg
 ├── ftue/ftue_zen_retreat.jpg
-├── ftue/ftue_bali_sanctuary.jpg
 ├── ftue/ftue_japandi_calm.jpg
 ├── ftue/ftue_soft_luxury.jpg
 ├── ftue/ftue_nordic_warmth.jpg
@@ -217,7 +205,6 @@ assets/atmospheres/
 ├── tropical_escape_icon.png
 ├── warm_modern_icon.png
 ├── zen_retreat_icon.png
-├── bali_sanctuary_icon.png
 ├── japandi_calm_icon.png
 ├── soft_luxury_icon.png
 ├── nordic_warmth_icon.png
@@ -226,7 +213,7 @@ assets/atmospheres/
 └── desert_luxe_icon.png
 ```
 
-Total: 30 files
+Total: 27 files
 
 ---
 
@@ -234,13 +221,13 @@ Total: 30 files
 
 - [ ] No human subjects in any image
 - [ ] Every card hero shows a complete architectural space
-- [ ] All 10 FTUE heroes use the SAME baseline architecture
+- [ ] All 9 FTUE heroes use the SAME baseline architecture
 - [ ] No stock lifestyle photography
 - [ ] Card heroes under 300 KB each
 - [ ] FTUE heroes under 250 KB each
 - [ ] Icons are 128 × 128 px with transparent background
 - [ ] Icons sharp at 28 × 28 pt on 3× screen (84 × 84 px effective)
-- [ ] All 30 files present with exact snake_case filenames
+- [ ] All 27 files present with exact snake_case filenames
 
 ---
 
