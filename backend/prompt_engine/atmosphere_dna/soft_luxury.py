@@ -78,7 +78,11 @@ for _d in [
         furniture_language=["floating vanity in fluted ivory lacquer with marble top", "freestanding sculptural stone soaking tub", "frameless glass shower with marble surround"],
         material_palette=["book-matched Calacatta or blush marble floor and walls", "ivory lacquer vanity", "brushed champagne brass fixtures"],
         lighting_behavior="Concealed perimeter cove at ceiling + soft warm backlit mirror; no harsh downlights.",
-        decor_language=["single orchid in white ceramic pot on vanity", "folded cashmere hand towels on brass wall bar"],
+        # Wave 5.5.27 Phase 3b — REPLACED orchid (decorative accent) with
+        # mirror (bathroom essential). Mirror is anchored to "existing
+        # vanity" (user-locked wording — simpler than "floating vanity",
+        # reduces designer-staging semantics + opening simulation risk).
+        decor_language=["single warm brass-framed mirror above the existing vanity", "folded cashmere hand towels on brass wall bar"],
         realism_constraints=["freestanding tub with floor waste — no bath panel", "marble wall slabs correctly veined and matched"],
         room_specific_constraints=["single stone throughout — no mixing marble types", "all fixtures in brushed champagne — no chrome"],
         visible_transition_logic="marble floor and ivory vanity palette continue into dressing room; brass fixtures echo through hallway hardware",

@@ -58,7 +58,10 @@ for _d in [
         furniture_language=["floating reclaimed timber vanity with stone basin", "freestanding stone soaking tub — rough-cut or honed basalt", "open wet room with pebble or slate floor"],
         material_palette=["rough slate or basalt stone floor and walls", "reclaimed timber vanity", "brushed nickel or aged brass fixtures"],
         lighting_behavior="Concealed warm slot above vanity + warm wall-mounted candle lanterns flanking tub.",
-        decor_language=["single smooth river stone beside basin", "folded undyed linen towels on timber peg"],
+        # Wave 5.5.27 Phase 3b — REPLACED river stone (decorative accent)
+        # with mirror. User-locked wording : "existing timber vanity"
+        # echoes DNA furniture material.
+        decor_language=["reclaimed timber-framed mirror above the existing timber vanity", "folded undyed linen towels on timber peg"],
         realism_constraints=["stone floor with correct grout joint depth", "timber vanity with correct weathered texture"],
         room_specific_constraints=["single stone throughout — no tile mixing", "fixtures in aged brass or brushed nickel — no chrome"],
         visible_transition_logic="stone floor and timber palette continue into dressing area; natural material austerity throughout",

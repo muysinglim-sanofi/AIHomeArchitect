@@ -60,7 +60,10 @@ for _d in [
         furniture_language=["full tadelakt wet room — walls and floor continuous", "freestanding stone soaking tub — sandstone or terracotta composite", "single hammered brass basin on stone slab"],
         material_palette=["tadelakt walls and floor in warm sand or terracotta", "sandstone or stone slab vanity", "hammered brass fixtures throughout"],
         lighting_behavior="Single concealed warm slot at ceiling perimeter; room lit by raking warm glow — hammam-adjacent.",
-        decor_language=["single carved wooden stool beside tub", "folded raw cotton towels on cedar wall peg"],
+        # Wave 5.5.27 Phase 3b — REPLACED carved wooden stool (decorative
+        # accent) with mirror. Anchored to "the basin" — existing hammered
+        # brass basin per furniture_language.
+        decor_language=["hammered brass-framed mirror above the basin", "folded raw cotton towels on cedar wall peg"],
         realism_constraints=["tadelakt floor and walls correctly seamless — no grout lines", "stone tub at correct weight and floor-standing scale"],
         room_specific_constraints=["tadelakt throughout — no mixed surface", "all fixtures hammered brass — single finish"],
         visible_transition_logic="tadelakt continues from bedroom floor without threshold; warm sand palette continuous",

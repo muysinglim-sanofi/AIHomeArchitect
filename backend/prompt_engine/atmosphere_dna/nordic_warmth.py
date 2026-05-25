@@ -57,7 +57,11 @@ for _d in [
         furniture_language=["white-painted timber vanity with ceramic basin", "freestanding cast iron or steel soaking tub in white", "simple pine slatted bath mat"],
         material_palette=["white handmade tile floor and walls", "white-painted timber vanity", "brushed nickel or matte black fixtures"],
         lighting_behavior="Single pendant in amber glass above tub + warm wall sconce above vanity mirror.",
-        decor_language=["pine slat bath mat", "folded linen towels in oat or undyed on wall peg"],
+        # Wave 5.5.27 Phase 3b — REPLACED pine slat bath mat (redundant —
+        # already in furniture_language) with mirror (bathroom essential).
+        # Mirror anchored to existing white-painted vanity (matches DNA
+        # vanity material in furniture_language).
+        decor_language=["simple round mirror in matte nickel or pine frame above the white-painted vanity", "folded linen towels in oat or undyed on wall peg"],
         realism_constraints=["cast iron tub at correct floor-standing weight scale", "tile grout lines correct — 3–5 mm, not perfect CGI"],
         room_specific_constraints=["fixtures all in one finish — brushed nickel or matte black, not both", "no chrome"],
         visible_transition_logic="white tile and pine tone continue into dressing area; linen towel palette echoes bedroom bedding",

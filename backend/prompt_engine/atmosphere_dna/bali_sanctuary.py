@@ -60,7 +60,11 @@ for _d in [
         furniture_language=["open-air or semi-open wet room in volcanic stone", "freestanding stone or terracotta tub", "carved teak vanity with stone basin"],
         material_palette=["volcanic grey stone floor and walls — continuous wet room", "carved teak vanity", "dark bronze or aged brass fixtures"],
         lighting_behavior="Single brass lantern pendant + concealed warm uplight behind stone wall; hammam-adjacent warmth.",
-        decor_language=["fresh frangipani or tropical flower on stone beside basin", "folded white linen towels on teak peg"],
+        # Wave 5.5.27 Phase 3b — REPLACED frangipani (decorative accent)
+        # with mirror. User-locked simpler wording : "simple teak-framed"
+        # (drops "carved" pavilion-spa semantics) + "existing teak vanity"
+        # (anchors to DNA furniture material).
+        decor_language=["simple teak-framed mirror above the existing teak vanity", "folded white linen towels on teak peg"],
         realism_constraints=["stone wet room correctly seamless — no grout lines in open shower zone", "stone tub at correct floor-standing weight"],
         # Wave 5.5.25 fix #4 ROLLED BACK 2026-05-25 — same Bali pavilion-
         # identity interaction as fix #3. Restored original to maintain

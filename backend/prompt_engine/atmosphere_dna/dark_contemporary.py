@@ -70,7 +70,10 @@ for _d in [
         furniture_language=["floating dark stone or concrete vanity top with recessed basin", "dark stone or concrete freestanding tub", "frameless glass shower with dark stone surround"],
         material_palette=["book-matched dark marble or black stone floor and walls", "brushed bronze or gunmetal fixtures", "dark timber or concrete vanity"],
         lighting_behavior="Concealed warm perimeter slot at ceiling + single warm backlit mirror; near-dark ambience.",
-        decor_language=["single dark ceramic or stone vessel — empty", "folded dark linen towel on bronze wall bar"],
+        # Wave 5.5.27 Phase 3b — REPLACED vessel with mirror (bathroom
+        # essential). User-locked wording : "above the existing vanity"
+        # (drops "floating" — opening-simulation risk mitigation).
+        decor_language=["single dark-framed mirror above the existing vanity", "folded dark linen towel on bronze wall bar"],
         realism_constraints=["vanity slab at correct 80–85 cm height", "stone walls with correct veining and joint lines"],
         room_specific_constraints=["all fixtures in brushed bronze or gunmetal — single finish only", "no light countertop surfaces — dark throughout"],
         visible_transition_logic="dark stone floor continues from dressing area; bronze fixtures echo through door hardware",

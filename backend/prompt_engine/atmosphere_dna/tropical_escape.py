@@ -64,7 +64,10 @@ for _d in [
         furniture_language=["white render or pale stone wet room", "freestanding stone or concrete tub", "simple timber or concrete vanity with white basin"],
         material_palette=["pale concrete or white render floor and walls", "white or off-white fixtures", "timber or concrete vanity"],
         lighting_behavior="Bright natural daytime light + concealed warm evening slot; clean tropical bathroom.",
-        decor_language=["single tropical flower or leaf beside basin", "folded white linen towels on timber peg"],
+        # Wave 5.5.27 Phase 3b — REPLACED tropical flower/leaf (decorative
+        # accent) with mirror. User-locked wording : "above the existing
+        # vanity" (simpler than "white-basin vanity").
+        decor_language=["simple timber-framed mirror above the existing vanity", "folded white linen towels on timber peg"],
         realism_constraints=["wet room at correct seamless level — no step to shower", "tub at correct scale for room"],
         # Wave 5.5.25 fix #2 — softened "open or semi-open if villa allows"
         # from architectural directive to conditional. Original could push
