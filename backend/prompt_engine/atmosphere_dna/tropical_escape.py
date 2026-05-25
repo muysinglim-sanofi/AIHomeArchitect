@@ -19,7 +19,10 @@ for _d in [
         furniture_language=["natural rattan or cane with thick white linen — tactile tropical warmth", "concrete or pale stone — cool surface texture depth", "louvred timber — warm tropical surface quality"],
         material_palette=["polished concrete or pale stone floor", "white render walls", "louvred timber panels or shutters"],
         lighting_behavior="Warm rattan pendant + concealed warm ceiling slot; bright in day, warm in evening.",
-        decor_language=["single large tropical plant — bird of paradise or monstera in concrete pot", "woven rattan tray on coffee table"],
+        # Wave 5.5.27 — REPLACED rattan tray with seating-footprint rug.
+        # Tray cosmetic ; rug essential. User-locked wording drops "or sisal"
+        # for Tropical to reduce preserve-sensitive semantic pressure.
+        decor_language=["single large tropical plant — bird of paradise or monstera in concrete pot", "simple jute rug within the seating footprint"],
         realism_constraints=["sofa at normal residential height — 45 cm", "concrete floor with correct texture — not CGI smooth"],
         # Wave 5.5.25 fix #1 — softened "open side to terrace or garden" from
         # architectural directive to conditional. Original wording would
@@ -35,7 +38,9 @@ for _d in [
         furniture_language=["timber or rattan with white linen — tropical tactile warmth", "cane or timber — natural surface warmth at low level", "louvred timber — warm shutter surface quality"],
         material_palette=["polished concrete or pale stone floor", "white render walls", "white and sage linen bedding"],
         lighting_behavior="Concealed warm ceiling slot above headboard + rattan pendant or warm table lamp at bedside.",
-        decor_language=["layered white and sage linen bedding", "single tropical leaf in white ceramic vase on bedside"],
+        # Wave 5.5.27 — REPLACED tropical leaf vase with bedside rug. Leaf
+        # cosmetic ; rug essential.
+        decor_language=["layered white and sage linen bedding", "simple jute or sisal rug at the bedside"],
         realism_constraints=["bed at correct height — 45 cm", "bedding folded with natural linen texture — not stiff"],
         room_specific_constraints=["louvred shutters as primary window treatment — no heavy curtains", "single plant or leaf — not a collection"],
         visible_transition_logic="white walls and concrete floor flow into ensuite; linen palette echoes bathroom towels",

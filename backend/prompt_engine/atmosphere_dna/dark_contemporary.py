@@ -27,7 +27,10 @@ for _d in [
         # NOTE : artwork is still permitted as focal-wall option via
         # room_specific_constraints (Wave 5.5.22) ; not removed from
         # atmosphere, just not mandated as decor.
-        decor_language=["deep dark velvet throw layered on the sofa", "single sculptural ceramic vessel in dark or metallic finish"],
+        # Wave 5.5.27 — REPLACED vessel with seating-footprint rug. Vessel
+        # was less critical than rug for inhabitation realism. Kept velvet
+        # throw (sofa-anchored, moody character).
+        decor_language=["deep dark velvet throw layered on the sofa", "deep-pile rug in charcoal or dark tonal within the seating footprint"],
         realism_constraints=["sofa sized correctly — not modelling-scale oversized", "floor in correct proportion — wood grain or stone texture visible"],
         # Wave 5.5.22 — added "a television" as alternative focal option.
         # Originally "artwork as single focal wall" implicitly excluded TV.
@@ -41,7 +44,9 @@ for _d in [
         furniture_language=["dark velvet or leather — low tactile surface depth", "smoked oak or dark stone — floating surface drama", "dark bronze — metallic mirror depth"],
         material_palette=["dark charcoal plaster walls", "smoked oak or dark stone floor", "dark velvet or leather upholstery"],
         lighting_behavior="Concealed warm slot above headboard + bedside table lamps with dark shade and warm bulb.",
-        decor_language=["dark tonal layered bedding — charcoal, slate, deep taupe", "single artwork in warm-dark tones above headboard"],
+        # Wave 5.5.27 — REPLACED artwork with bedside rug. Same logic as
+        # living : essential over decoration.
+        decor_language=["dark tonal layered bedding — charcoal, slate, deep taupe", "deep-pile rug at the bedside in charcoal or dark tonal"],
         realism_constraints=["platform bed at correct height — 40–45 cm", "bedding layers visible and weighted, not flat"],
         room_specific_constraints=["dark tonal palette throughout — no light contrast piece breaking mood", "no decorative ceiling feature — ceiling plain dark"],
         visible_transition_logic="dark plaster and smoked oak flow into ensuite; tonal dark palette maintains continuity through visible dressing area",

@@ -19,7 +19,10 @@ for _d in [
         furniture_language=["undyed natural linen — deep biophilic tactile warmth", "rough-cut stone or slate — raw surface honesty", "woven rattan or jute — organic textural depth"],
         material_palette=["wide-plank reclaimed oak floor", "rammed earth or clay plaster walls", "rough-cut stone accent wall"],
         lighting_behavior="Warm concealed cove above stone wall + timber-shaded floor lamp; warm organic tone.",
-        decor_language=["single large ceramic vessel with dried botanicals", "hanging woven wall textile — natural undyed"],
+        # Wave 5.5.27 — REPLACED hanging wall textile with seating-footprint
+        # rug. Wall textile competed for wall focal area ; rug at floor more
+        # essential for inhabitation realism.
+        decor_language=["single large ceramic vessel with dried botanicals", "natural jute rug within the seating footprint"],
         realism_constraints=["sofa at residential scale — not modelling scale", "stone wall texture visible — not flat CGI"],
         room_specific_constraints=["single statement stone or timber wall — not all four walls", "planting: maximum 2 large statement plants"],
         visible_transition_logic="reclaimed oak floor and clay plaster continue into adjacent rooms; stone and plant accents echo through visible dining area",

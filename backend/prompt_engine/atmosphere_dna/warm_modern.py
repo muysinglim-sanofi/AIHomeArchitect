@@ -24,7 +24,9 @@ for _d in [
         # the wall focal area (shelf + vessel) and competing with TV
         # placement. Kept floor-length curtains (window-anchored, no
         # conflict with TV).
-        decor_language=["floor-length warm linen curtains"],
+        # Wave 5.5.27 — APPEND rug essential (only 1 decor item so no
+        # replacement needed). Rug anchored to seating footprint.
+        decor_language=["floor-length warm linen curtains", "soft wool rug in oat or camel within the seating footprint"],
         realism_constraints=["sofa at residential scale — not model-set proportions", "furniture legs visible and grounded on floor"],
         # Wave 5.5.20 fix #2 — dropped ", not TV-facing row" sub-clause
         # (contradicted the Wave 5.5.19 furnishing signal).
@@ -43,7 +45,10 @@ for _d in [
         furniture_language=["warm oat linen — layered tactile warmth", "oak timber — floating surface warmth at wall level", "oak and warm-toned timber — warm mirror surface quality"],
         material_palette=["European oak floor", "warm sand plaster walls", "travertine bedside surfaces"],
         lighting_behavior="Concealed cove above headboard + bedside table lamps with tungsten glow; no overhead downlights.",
-        decor_language=["layered warm linen and boucle bedding", "single framed artwork centred above headboard"],
+        # Wave 5.5.27 — REPLACED artwork with bedside rug (Option A : essential
+        # over decoration). Artwork was decor-only, rug is bedroom essential.
+        # Kept layered bedding (bedroom essential).
+        decor_language=["layered warm linen and boucle bedding", "soft wool rug at the bedside in oat or camel"],
         realism_constraints=["bed at correct height — not floating too high", "bedding draped naturally, not hotel-stiff"],
         room_specific_constraints=["nightstands matched in height with bedside lamps", "no TV directly facing bed unless wall-mounted flush"],
         visible_transition_logic="oak floor and warm plaster flow into visible ensuite; linen palette continues in towel accents",

@@ -19,7 +19,10 @@ for _d in [
         furniture_language=["raw cotton or camel leather — tactile desert warmth", "solid sandstone or terracotta — sun-drenched surface warmth", "carved wood — artisan surface richness"],
         material_palette=["polished tadelakt floor in sand or warm ivory", "tadelakt plaster walls in terracotta or warm sand", "walnut or cedar timber accents"],
         lighting_behavior="Single hammered brass pendant + concealed warm floor slot; low-angled warm glow.",
-        decor_language=["single large dark ceramic vessel — empty", "woven camel or natural textile throw on sofa"],
+        # Wave 5.5.27 — REPLACED textile throw on sofa with seating-footprint
+        # rug. Throw + rug overlap ; rug at floor-level more impactful for
+        # inhabitation realism.
+        decor_language=["single large dark ceramic vessel — empty", "woven raw-cotton or camel-tone rug within the seating footprint"],
         realism_constraints=["sofa low — 40–45 cm — correct desert floor culture scale", "plaster texture visible — not flat paint"],
         room_specific_constraints=["no pattern on walls — tadelakt is the texture", "maximum 2 decorative objects in room"],
         visible_transition_logic="tadelakt floor and plaster walls continue into adjacent rooms; warm sand palette unbroken through visible spaces",
@@ -31,7 +34,9 @@ for _d in [
         furniture_language=["warm timber or sandstone — low platform surface warmth", "tadelakt or stone slab — tactile warmth at night level", "hammered brass — warm metallic mirror richness"],
         material_palette=["polished tadelakt floor", "tadelakt plaster walls in warm sand or terracotta", "raw cotton or camel linen bedding"],
         lighting_behavior="Concealed warm slot above headboard wall + single hammered brass wall sconce at bedside.",
-        decor_language=["layered raw cotton and natural linen bedding in sand tones", "single carved wooden object on bedside slab"],
+        # Wave 5.5.27 — REPLACED carved wooden object with bedside rug.
+        # Decor object → essential rug for bedroom inhabitation realism.
+        decor_language=["layered raw cotton and natural linen bedding in sand tones", "woven cotton rug at the bedside in sand tones"],
         realism_constraints=["platform bed at correct low height — 35–40 cm", "tadelakt walls with correct reflective polish — not flat"],
         room_specific_constraints=["monochrome sand-toned palette for all bedding", "no artwork — wall left as plaster composition"],
         visible_transition_logic="tadelakt floor and warm plaster flow into ensuite; sand-toned palette continuous",

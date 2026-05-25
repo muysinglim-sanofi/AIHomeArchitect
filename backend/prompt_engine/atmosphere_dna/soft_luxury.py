@@ -23,7 +23,11 @@ for _d in [
         # vessel". Original "oversized" implied wall-shelf placement competing
         # with TV for wall focal area. Floor-level anchors the vessel without
         # competing for wall space, preserving Soft Luxury hospitality identity.
-        decor_language=["floor-level ceramic vessel with dried pampas or lunaria", "layered silk and bouclé cushions in cream and blush"],
+        # Wave 5.5.27 — REPLACED cushions with seating-footprint rug. Cushions
+        # were sofa-anchored redundant with rug. Rug is living essential, more
+        # impactful for inhabitation realism. User-locked wording (drops
+        # "silk-blend" and "blush" to reduce hotel-staging semantics).
+        decor_language=["floor-level ceramic vessel with dried pampas or lunaria", "soft wool-blend rug in cream tones within the seating footprint"],
         realism_constraints=["sofa sized to room — not oversized for space", "marble floor with correct 3–5 mm grout lines"],
         # Wave 5.5.22 — added "a television" as a third focal-element option
         # so the model has explicit permission to place TV. Originally read
@@ -48,7 +52,9 @@ for _d in [
         furniture_language=["cashmere or bouclé in ivory or champagne — plush tactile luxury", "brushed brass — warm champagne metal refinement", "velvet or bouclé in champagne — layered softness and warmth"],
         material_palette=["honed marble or travertine floor", "fluted ivory plaster walls", "raw silk or velvet soft furnishings"],
         lighting_behavior="Concealed cove above padded headboard wall + brushed brass bedside table lamps with silk shade.",
-        decor_language=["layered cream-to-ivory bedding with velvet throw", "single large-scale abstract artwork above headboard"],
+        # Wave 5.5.27 — REPLACED artwork with bedside rug. User-locked wording
+        # drops "cashmere or champagne" hotel-staging semantics.
+        decor_language=["layered cream-to-ivory bedding with velvet throw", "soft wool rug at the bedside in cream tones"],
         realism_constraints=["headboard at correct height — 120–140 cm above mattress", "bench at foot of bed sized to bed width"],
         room_specific_constraints=["single bedding palette — cream, ivory, champagne only", "dressing area separated if space allows"],
         visible_transition_logic="marble floor and ivory plaster continue into ensuite; silk soft furnishing palette echoes dressing room",
