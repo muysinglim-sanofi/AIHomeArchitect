@@ -6,10 +6,19 @@ register_core(AtmosphereCoreDNA(
     emotional_intent="Dramatic, sophisticated, powerful, sensory, moody but refined, architecturally confident.",
     architectural_language="Deep tonal volumes with high-contrast material surfaces, concealed warm light, and gallery-level spatial control.",
     material_palette=["dark charcoal plaster", "black or dark grey marble", "smoked oak or wenge", "brushed bronze or gunmetal", "concrete"],
-    lighting_behavior="Concealed precision lighting — warm glow against dark surfaces; darkness as design element.",
+    # Wave 5.5.38 — dropped "darkness as design element". The phrase
+    # licensed pure-darkness renders (bench 2026-05-25 showed "trop sombre,
+    # on voit quasiment rien"). Replaced with "cinematic warmth with
+    # maintained architectural readability" — keeps the moody-luxury intent
+    # while establishing a readability floor at the core level.
+    lighting_behavior="Concealed precision lighting — warm glow against dark surfaces; cinematic warmth with maintained architectural readability.",
     luxury_level="Contemporary penthouse luxury",
     forbidden_elements=["Nightclub atmosphere", "cyberpunk lighting", "black void interiors", "aggressive contrast", "horror-dark rooms"],
-    atmosphere_keywords=["dark luxury", "charcoal plaster", "smoked oak", "bronze", "precision light"],
+    # Wave 5.5.38 — "dark luxury" → "cinematic luxury" (drop the "dark"
+    # framing which was reinforcing pure-darkness interpretations). Added
+    # "warm" to "precision light" so the keyword pair stays consistent
+    # with the new lighting_behavior emphasis.
+    atmosphere_keywords=["cinematic luxury", "charcoal plaster", "smoked oak", "bronze", "warm precision light"],
 ))
 
 for _d in [
@@ -18,7 +27,12 @@ for _d in [
         room_type="living_room",
         furniture_language=["dark charcoal bouclé or leather — deep low tactile richness", "dark marble or stone — sculptural surface depth", "dark velvet — high-contrast atmospheric depth"],
         material_palette=["dark charcoal plaster walls", "smoked oak or dark stone floor", "dark marble or bronze accent surfaces"],
-        lighting_behavior="Concealed warm ceiling cove + single sculptural bronze floor lamp; room lit by glow, not flood.",
+        # Wave 5.5.38 — dropped "room lit by glow, not flood". The "not
+        # flood" framing was too aggressive — the model interpreted it as
+        # "minimize all light sources" → underexposed renders. Replaced
+        # with "warm cinematic glow with maintained natural daylight from
+        # windows" so windows-as-light-source remains a primary signal.
+        lighting_behavior="Concealed warm ceiling cove + single sculptural bronze floor lamp; warm cinematic glow with maintained natural daylight from windows.",
         # Wave 5.5.26 — "large-scale abstract artwork" → "deep dark velvet
         # throw layered on the sofa". Original artwork occupied wall focal
         # area competing with TV (per Wave 5.5.22 audit). Sofa-anchored
@@ -34,8 +48,17 @@ for _d in [
         realism_constraints=["sofa sized correctly — not modelling-scale oversized", "floor in correct proportion — wood grain or stone texture visible"],
         # Wave 5.5.22 — added "a television" as alternative focal option.
         # Originally "artwork as single focal wall" implicitly excluded TV.
-        room_specific_constraints=["artwork or a television as single focal wall — not gallery cluster", "balanced dark-to-warm lighting ratio — not pure darkness"],
-        visible_transition_logic="charcoal plaster and smoked oak floor continue into adjacent rooms; bronze accents echo through visible dining area",
+        # Wave 5.5.38 — WM-parity rewrite. [0] standardized TV anchor
+        # ("single clear focal wall — ..., not multiple") forces a clear
+        # focal choice (resolves the TV emission paradox observed in bench
+        # 2026-05-25 despite the anchor existing — dark atmosphere was
+        # overwhelming the focal directive). [1] luminosity floor
+        # strengthened: explicit "maintain natural daylight from windows"
+        # signal added so window-as-light-source survives the dark mood.
+        room_specific_constraints=["single clear focal wall — artwork, fireplace, or a television, not multiple", "maintain natural daylight from windows + balanced warm interior glow — not pure darkness"],
+        # Wave 5.5.38 — added "visible kitchen" continuity matching WM
+        # pattern. Previous wording mentioned only "visible dining area".
+        visible_transition_logic="charcoal plaster and smoked oak floor continue into adjacent rooms; bronze accents echo through visible kitchen or dining area if present",
         negative_rules=["no all-black room", "no neon or coloured accent light", "no chrome or silver hardware", "no grey rather than charcoal — must be warm dark"],
     ),
     RoomAdaptationDNA(
