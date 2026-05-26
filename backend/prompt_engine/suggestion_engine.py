@@ -72,7 +72,7 @@ _ATM_CHIPS: dict[str, list[str]] = {
         "Add botanical detail",
         "Soften the furniture scale",
     ],
-    "dark_contemporary": [
+    "penthouse_contemporary": [
         "Push the contrast further",
         "Add darker stone surface",
         "More bronze accent detail",

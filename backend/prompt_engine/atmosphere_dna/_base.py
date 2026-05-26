@@ -161,6 +161,7 @@ def _norm_id(s: str) -> str:
 _LEGACY_ALIASES: dict[str, str] = {
     "bali_sanctuary": "warm_modern",
     "zen_retreat": "japandi_calm",  # Wave 5.5.42 — Japandi is the closest restraint-driven sibling
+    "dark_contemporary": "penthouse_contemporary",  # Wave 5.5.53 — renamed, legacy sessions route to new id
 }
 
 

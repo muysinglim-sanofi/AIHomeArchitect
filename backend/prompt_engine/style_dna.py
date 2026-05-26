@@ -261,9 +261,9 @@ _STYLES: dict[str, StyleDNA] = {
         ],
     ),
 
-    # ── Dark Contemporary ─────────────────────────────────────────────────────
-    "Dark Contemporary": StyleDNA(
-        name="Dark Contemporary",
+    # ── Penthouse Contemporary (Wave 5.5.53 — renamed from Dark Contemporary) ──
+    "Penthouse Contemporary": StyleDNA(
+        name="Penthouse Contemporary",
         materials=["blackened brushed steel", "smoked oak", "raw architectural concrete", "tinted glass", "matte black hardware"],
         lighting=[
             "dramatic recessed architectural accent lighting only",

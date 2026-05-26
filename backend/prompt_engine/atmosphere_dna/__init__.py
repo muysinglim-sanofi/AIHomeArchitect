@@ -30,7 +30,7 @@ from . import warm_modern          # noqa: F401
 from . import japandi_calm         # noqa: F401
 from . import soft_luxury          # noqa: F401
 from . import nordic_warmth        # noqa: F401
-from . import dark_contemporary    # noqa: F401
+from . import penthouse_contemporary    # noqa: F401
 from . import nature_retreat       # noqa: F401
 from . import desert_luxe          # noqa: F401
 from . import tropical_escape      # noqa: F401

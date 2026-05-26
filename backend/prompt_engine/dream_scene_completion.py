@@ -72,7 +72,7 @@ _ATMOSPHERE_QUALITY: dict[str, str] = {
     "warm_modern":        "grounded warmth — architecturally resolved, rich without being heavy",
     "nordic_warmth":      "cosy and layered — hygge warmth, candlelit textiles, not sterile",
     "nature_retreat":     "biophilic calm — raw organic materials, nature brought fully inside",
-    "dark_contemporary":  "dramatic but liveable — moody depth with spatial warmth, not flat darkness",
+    "penthouse_contemporary":  "dramatic but liveable — moody depth with spatial warmth, not flat darkness",
     "desert_luxe":        "sun-drenched luxury — tactile warmth, terracotta richness, artisan craft",
 }
 

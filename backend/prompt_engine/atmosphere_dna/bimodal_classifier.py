@@ -297,7 +297,7 @@ _STRIPS: dict[str, list[tuple[str, str]]] = {
     # shipping-field strips needed).
     "soft_luxury": [],
     # 8. Dark Contemporary — rank 8, LOW (matrix reference).
-    "dark_contemporary": [
+    "penthouse_contemporary": [
         # philosophy: 🟨 metaphor "Architectural sophistication" — soften.
         ("Architectural sophistication", "Sophistication"),
         # emotional_intent: 🟨 "architecturally confident".
@@ -392,7 +392,7 @@ def architecture_token_count(atmosphere_id: str) -> int:
 
 _EXPECTED_ATMOSPHERES = frozenset({
     "tropical_escape", "desert_luxe",
-    "japandi_calm", "warm_modern", "soft_luxury", "dark_contemporary",
+    "japandi_calm", "warm_modern", "soft_luxury", "penthouse_contemporary",
     "nature_retreat", "nordic_warmth",
 })
 

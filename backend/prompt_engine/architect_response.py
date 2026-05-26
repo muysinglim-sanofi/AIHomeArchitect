@@ -71,7 +71,7 @@ _ATM_TONE: dict[str, dict] = {
             "What would make this feel more like home?",
         ],
     },
-    "dark_contemporary": {
+    "penthouse_contemporary": {
         "adj": "cinematic",
         "quality": "deep and controlled",
         "direction_word": "contrast",
@@ -300,10 +300,10 @@ _QUESTION_RESPONSES: dict[str, list[str]] = {
         "This direction works best with materials that look better with use — pine, linen, wool. Things that age well.",
         "With Nordic Warmth, the goal is a space that feels lived-in, not arranged.",
     ],
-    "dark_contemporary": [
-        "In Dark Contemporary, the depth comes from the materials, not just the darkness. Charcoal plaster, smoked oak — each has its own quality.",
-        "This direction needs controlled contrast. Purely dark without warm accents tends to feel empty rather than deep.",
-        "With Dark Contemporary, the lighting is doing most of the work. Warm targeted sources against dark surfaces — that's the effect.",
+    "penthouse_contemporary": [
+        "In Penthouse Contemporary, the depth comes from the materials. Mineral plaster, smoked oak — each has its own quality.",
+        "This direction needs controlled contrast — material richness, not lighting darkness. Warm accents keep it readable.",
+        "With Penthouse Contemporary, daylight remains dominant and the bronze accents lift the room. The materials do the work, not the shadow.",
     ],
     "nature_retreat": [
         "In Nature Retreat, the material order is: stone, then timber, then textile. Natural over processed.",
@@ -345,7 +345,7 @@ _PRAISE_RESPONSES: dict[str, list[str]] = {
         "This feels warm and lived-in — that's exactly the right quality.",
         "The coziness is there. What would make it feel even more like home?",
     ],
-    "dark_contemporary": [
+    "penthouse_contemporary": [
         "The depth is controlled well — not too heavy, not too light.",
         "This is reading well. Would you push the contrast further?",
     ],
@@ -394,7 +394,7 @@ _STRUCTURAL_RESPONSES: dict[str, list[str]] = {
         "A real spatial change. The cozy quality transfers to the new zone arrangement.",
         "The zone function changes. The warm Nordic feel holds through it.",
     ],
-    "dark_contemporary": [
+    "penthouse_contemporary": [
         "That changes the zone logic — the depth stays, the function shifts.",
         "A real spatial transformation. The material depth carries into the new zone.",
         "The zone purpose changes. The controlled darkness follows.",

@@ -1,7 +1,7 @@
 from ._base import AtmosphereCoreDNA, RoomAdaptationDNA, register_core, register
 
 register_core(AtmosphereCoreDNA(
-    atmosphere_id="dark_contemporary",
+    atmosphere_id="penthouse_contemporary",
     philosophy="Architectural sophistication through depth, contrast, material richness, and restraint.",
     # Wave 5.5.52 — Photographic Reinterpretation: dropped "Dramatic, "
     # from emotional_intent. "Dramatic" was the strongest cinematic-mood
@@ -72,7 +72,7 @@ register_core(AtmosphereCoreDNA(
 
 for _d in [
     RoomAdaptationDNA(
-        atmosphere_id="dark_contemporary",
+        atmosphere_id="penthouse_contemporary",
         room_type="living_room",
         # Wave 5.5.47 — material vocab softening (room-level mirror of
         # core changes). "dark" / "black" removed everywhere they
@@ -155,7 +155,7 @@ for _d in [
         negative_rules=["render as editorial daylight interior photography — natural daylight remains dominant — preserve photographic exposure level", "no monochrome saturation", "no neon or coloured accent light", "no chrome or silver hardware", "no neutral grey — warm mineral tones only"],
     ),
     RoomAdaptationDNA(
-        atmosphere_id="dark_contemporary",
+        atmosphere_id="penthouse_contemporary",
         room_type="master_bedroom",
         furniture_language=["dark velvet or leather — low tactile surface depth", "smoked oak or dark stone — floating surface drama", "dark bronze — metallic mirror depth"],
         material_palette=["dark charcoal plaster walls", "smoked oak or dark stone floor", "dark velvet or leather upholstery"],
@@ -169,7 +169,7 @@ for _d in [
         negative_rules=["no light or white bedding", "no chrome hardware", "no mirrored furniture", "no cold grey tone"],
     ),
     RoomAdaptationDNA(
-        atmosphere_id="dark_contemporary",
+        atmosphere_id="penthouse_contemporary",
         room_type="kitchen",
         furniture_language=["dark charcoal or black matte cabinetry — flat-front", "dark marble or black stone countertop and island", "integrated appliances behind dark panel fronts"],
         material_palette=["dark matte cabinetry in charcoal or black", "dark Nero Marquina or black stone countertop", "brushed bronze or gunmetal hardware"],
@@ -181,7 +181,7 @@ for _d in [
         negative_rules=["no white or cream cabinetry", "no chrome handles", "no warm wood visible", "no under-lit glass shelving"],
     ),
     RoomAdaptationDNA(
-        atmosphere_id="dark_contemporary",
+        atmosphere_id="penthouse_contemporary",
         room_type="bathroom",
         furniture_language=["floating dark stone or concrete vanity top with recessed basin", "dark stone or concrete freestanding tub", "frameless glass shower with dark stone surround"],
         material_palette=["book-matched dark marble or black stone floor and walls", "brushed bronze or gunmetal fixtures", "dark timber or concrete vanity"],
@@ -196,7 +196,7 @@ for _d in [
         negative_rules=["no white tiles", "no chrome", "no light stone", "no over-lit mirror wall"],
     ),
     RoomAdaptationDNA(
-        atmosphere_id="dark_contemporary",
+        atmosphere_id="penthouse_contemporary",
         room_type="terrace",
         furniture_language=["deep outdoor sofa in dark charcoal outdoor fabric", "dark concrete or stone low table", "minimal steel or concrete pergola"],
         material_palette=["dark honed stone or brushed concrete paving", "dark charcoal outdoor upholstery", "brushed steel or dark concrete structure"],
@@ -208,7 +208,7 @@ for _d in [
         negative_rules=["no rattan", "no warm timber pergola", "no coloured cushions", "no string lights"],
     ),
     RoomAdaptationDNA(
-        atmosphere_id="dark_contemporary",
+        atmosphere_id="penthouse_contemporary",
         room_type="facade",
         furniture_language=["dark render or black concrete facade", "steel or concrete cantilevered canopy at entrance", "pivot door in dark steel or timber"],
         material_palette=["dark charcoal render or black concrete finish", "dark steel window frames", "dark bronze or gunmetal door hardware"],
@@ -220,7 +220,7 @@ for _d in [
         negative_rules=["no warm sand render", "no timber cladding", "no white or light facade", "no suburban window proportions"],
     ),
     RoomAdaptationDNA(
-        atmosphere_id="dark_contemporary",
+        atmosphere_id="penthouse_contemporary",
         room_type="dining_room",
         furniture_language=["dark marble or stone dining table on sculptural bronze base", "upholstered chairs in dark velvet or leather", "dark timber or bronze credenza"],
         material_palette=["smoked oak or dark stone floor", "dark charcoal plaster walls", "dark velvet or leather upholstery"],
@@ -232,7 +232,7 @@ for _d in [
         negative_rules=["no light table surface", "no crystal chandelier", "no patterned upholstery", "no bright centrepiece"],
     ),
     RoomAdaptationDNA(
-        atmosphere_id="dark_contemporary",
+        atmosphere_id="penthouse_contemporary",
         room_type="balcony",
         furniture_language=["two dark steel or concrete armchairs", "small dark concrete side table", "single sculptural dark planter"],
         material_palette=["dark honed stone or brushed concrete balcony floor", "dark steel or glass balustrade", "dark outdoor upholstery"],
@@ -244,7 +244,7 @@ for _d in [
         negative_rules=["no warm rattan", "no coloured cushions", "no decorative lanterns", "no suburban balcony chair set"],
     ),
     RoomAdaptationDNA(
-        atmosphere_id="dark_contemporary",
+        atmosphere_id="penthouse_contemporary",
         room_type="pool_area",
         furniture_language=["dark stone or concrete sun loungers or platforms", "minimal steel or concrete cantilevered shade", "single sculptural planter at pool edge"],
         material_palette=["dark honed stone or concrete pool deck", "dark pool liner — black or deep charcoal", "brushed steel or dark concrete pool coping"],
@@ -256,7 +256,7 @@ for _d in [
         negative_rules=["no light stone deck", "no white loungers", "no bright parasols", "no resort-blue water tone"],
     ),
     RoomAdaptationDNA(
-        atmosphere_id="dark_contemporary",
+        atmosphere_id="penthouse_contemporary",
         room_type="garden",
         furniture_language=["single dark steel or concrete garden bench", "architectural specimen tree — black bamboo or olive", "dark crushed stone or gravel ground plane"],
         material_palette=["dark crushed stone or black gravel ground plane", "dark steel garden bench or plinth", "deep green or dark foliage planting only"],
@@ -268,7 +268,7 @@ for _d in [
         negative_rules=["no lawn", "no light gravel", "no mixed planting", "no colourful planting"],
     ),
     RoomAdaptationDNA(
-        atmosphere_id="dark_contemporary",
+        atmosphere_id="penthouse_contemporary",
         room_type="entrance_hall",
         furniture_language=["dark stone or concrete console table — floating or slab-based", "large dark bronze-framed mirror", "single sculptural vessel in dark ceramic or stone"],
         material_palette=["large-format dark stone floor", "dark charcoal plaster walls", "brushed bronze or gunmetal hardware"],
@@ -280,7 +280,7 @@ for _d in [
         negative_rules=["no warm oak console", "no decorative objects cluster", "no coat rack", "no warm-toned entry"],
     ),
     RoomAdaptationDNA(
-        atmosphere_id="dark_contemporary",
+        atmosphere_id="penthouse_contemporary",
         room_type="home_office",
         furniture_language=["large dark stone or lacquer desk — floating or on dark base", "high-back chair in dark leather", "floor-to-ceiling dark shelving with edited display"],
         material_palette=["smoked oak or dark stone floor", "dark charcoal plaster walls", "brushed bronze desk accessories"],
@@ -292,7 +292,7 @@ for _d in [
         negative_rules=["no light wood desk", "no white walls", "no cold LED task light", "no RGB accent lighting"],
     ),
     RoomAdaptationDNA(
-        atmosphere_id="dark_contemporary",
+        atmosphere_id="penthouse_contemporary",
         room_type="driveway",
         furniture_language=["dark concrete or steel gate", "dark stone or concrete driveway with minimal edging", "single specimen tree in dark crushed stone forecourt"],
         material_palette=["dark honed stone or brushed concrete driveway", "dark steel or concrete gate pillars", "dark crushed stone or black gravel infill"],

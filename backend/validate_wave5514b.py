@@ -71,7 +71,7 @@ _CASES: list[tuple[str, str, list[str], list[str]]] = [
         ["fluted ivory plaster", "honed cream marble", "bouclé"],
     ),
     (
-        "dark_contemporary",
+        "penthouse_contemporary",
         "living_room",
         ["Architectural sophistication", "architecturally confident"],
         # Wave 5.5.47/48 softened "dark charcoal" → "warm charcoal";

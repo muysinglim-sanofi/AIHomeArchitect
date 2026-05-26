@@ -54,7 +54,7 @@ _ATMOSPHERES = [
     ("japandi_calm",      "Japandi · Harmony"),
     ("soft_luxury",       "Soft Luxury · Gold"),
     ("nordic_warmth",     "Nordic Warmth · Dawn"),
-    ("dark_contemporary", "Dark Contemporary · Noir"),
+    ("penthouse_contemporary", "Penthouse Contemporary · Editorial"),
     ("nature_retreat",    "Nature Retreat · Forest"),
     ("desert_luxe",       "Desert Luxe · Dusk"),
     ("tropical_escape",   "Tropical Escape · Bloom"),
