@@ -24,7 +24,17 @@ for _d in [
         # inhabitation realism.
         decor_language=["single large dark ceramic vessel — empty", "woven raw-cotton or camel-tone rug within the seating footprint"],
         realism_constraints=["sofa low — 40–45 cm — correct desert floor culture scale", "plaster texture visible — not flat paint"],
-        room_specific_constraints=["no pattern on walls — tadelakt is the texture", "maximum 2 decorative objects in room"],
+        # Wave 5.5.40 — minimal TV-only remediation per Wave 5.5.33 audit
+        # Option A. Slot [0] becomes standardized TV anchor (WM pattern,
+        # atm-coherent options: sandstone niche + artwork + television).
+        # Previous "no pattern on walls — tadelakt is the texture" dropped
+        # entirely: the "no pattern" anti-pattern intent is already covered
+        # by existing negative_rules[0] "no arabesque tile pattern" and the
+        # "tadelakt is the texture" half was redundant with material_palette
+        # which already mandates tadelakt walls. No fix on kitchen
+        # continuity or material override this wave (Desert kept minimal-
+        # investment per user direction 2026-05-25 pending Phase 2 review).
+        room_specific_constraints=["single clear focal wall — sandstone niche, artwork, or a television, not multiple", "maximum 2 decorative objects in room"],
         visible_transition_logic="tadelakt floor and plaster walls continue into adjacent rooms; warm sand palette unbroken through visible spaces",
         negative_rules=["no arabesque tile pattern", "no cold marble", "no bright orange", "no maximalist Moroccan styling"],
     ),
