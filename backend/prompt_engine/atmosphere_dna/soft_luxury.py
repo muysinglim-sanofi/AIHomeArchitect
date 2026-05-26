@@ -35,11 +35,24 @@ for _d in [
         # Wave 5.5.25 fix #5 ROLLED BACK 2026-05-25 — preserve bench showed
         # wall added on right side. Dropping the symmetry mandate appears to
         # have removed structural discipline that was indirectly protecting
-        # the architecture. Restored original wording. Future Soft Luxury
-        # preserve fix needs a different approach (e.g. anchor symmetry to
-        # "where the photographed apartment allows" instead of dropping it).
-        room_specific_constraints=["seating centred on focal element — fireplace, art wall, or a television", "symmetry in furniture placement — not haphazard"],
-        visible_transition_logic="ivory plaster walls and marble floor flow continuously into dining and hallway; brass accents echo across visible rooms",
+        # the architecture. Restored original wording.
+        # Wave 5.5.36 — WM-parity rewrite + symmetry paradox resolution.
+        # [0] standardized TV anchor pattern ("single clear focal wall — ...,
+        # not multiple") — resolves the TV emission paradox observed in
+        # bench 2026-05-25 where the original 3-option list without a cap
+        # let the model default to classical fireplace-centric setups.
+        # [1] "symmetry in furniture placement" → "balanced furniture
+        # placement" — the "symmetry as implicit structural stabilizer"
+        # insight (Wave 5.5.33 audit + Wave 5.5.25 rollback history):
+        # dropping symmetry caused wall added (lost the discipline);
+        # keeping symmetry caused wall added (model mirrored a wall to
+        # match symmetry). "Balanced" preserves the structural discipline
+        # function while removing the wall-mirroring interpretation pressure.
+        room_specific_constraints=["single clear focal wall — fireplace, art wall, or a television, not multiple", "balanced furniture placement — not haphazard"],
+        # Wave 5.5.36 — added "visible kitchen" continuity matching the WM
+        # pattern. Previous wording mentioned dining + hallway but never
+        # kitchen, contributing to "coin cuisine perdu" in bench 2026-05-25.
+        visible_transition_logic="ivory plaster walls and marble floor flow continuously into adjacent rooms; brass accents echo through visible kitchen, dining or hallway if present",
         # Wave 5.5.22 — dropped "no visible TV above fireplace" negative rule.
         # It explicitly forbade the most natural TV placement (the wall focal),
         # making TV nearly impossible to introduce. Other negative rules
