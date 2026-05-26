@@ -17,7 +17,15 @@ for _d in [
         atmosphere_id="soft_luxury",
         room_type="living_room",
         furniture_language=["warm bouclé in ivory or blush — plush tactile richness", "honed marble or stone — champagne brass accents, premium surface warmth", "cashmere or velvet in cream — layered textile softness"],
-        material_palette=["fluted ivory plaster walls", "honed cream marble floor", "brushed champagne metal accents"],
+        # Wave 5.7e — anchored "fluted ivory plaster walls" → "fluted
+        # ivory plaster finish on existing walls" (Wave 5.7 pattern, now
+        # applied to living_room). Defense in depth against the fluted-
+        # plaster signature creating new walls (bench 2026-05-26 showed
+        # a new fluted wall built specifically to display SL signature +
+        # anchor TV/console). Pairs with strengthened wall-preservation
+        # negative_rule below. Core material_palette + atmosphere_keywords
+        # intentionally left untouched (user-locked 2026-05-26).
+        material_palette=["fluted ivory plaster finish on existing walls", "honed cream marble floor", "brushed champagne metal accents"],
         lighting_behavior="Concealed perimeter cove + silk shade floor lamps; warm evening tone, no ceiling spotlights.",
         # Wave 5.5.26 — "oversized ceramic vessel" → "floor-level ceramic
         # vessel". Original "oversized" implied wall-shelf placement competing
@@ -75,7 +83,19 @@ for _d in [
         # of AVOID line. Trade-off: "no asymmetric art gallery wall"
         # demoted to slot [3] (not emitted in AVOID); wall preservation
         # is more critical than gallery-wall avoidance.
-        negative_rules=["preserve existing wall layout and partitions exactly — no new walls or wall extensions", "no jewel-tone colour pops", "no gold leaf or metallic wallpaper", "no asymmetric art gallery wall"],
+        # Wave 5.7e — strengthened wall-preservation wording. Bench
+        # 2026-05-26 showed SL invented a new fluted-plaster wall to
+        # mount TV + console, DESPITE the Wave 5.5.49 defensive rule.
+        # The fluted-plaster signature (repeated in core material_palette
+        # and atmosphere_keywords) was winning the attention battle
+        # against the standard "no new walls" rule. New wording makes
+        # the architectural-hierarchy distinction explicit : decoration
+        # only on photographed surfaces, no new architectural support
+        # surfaces for furniture or TV anchoring, preserve open sides /
+        # voids / window zones / circulation spaces exactly as
+        # photographed. Slot [0] stays defensive (build_dna_block ships
+        # [:3]).
+        negative_rules=["preserve all photographed walls, open sides, voids, window zones, and circulation spaces exactly — no new walls or partitions, including for furniture or TV anchoring", "no jewel-tone colour pops", "no gold leaf or metallic wallpaper", "no asymmetric art gallery wall"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="soft_luxury",

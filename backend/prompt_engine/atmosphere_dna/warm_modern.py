@@ -43,7 +43,15 @@ for _d in [
         # newly created wall. Canonical reference profile updated.
         room_specific_constraints=["seating in conversation grouping", "television visible in living area on existing wall surface or media console — never on a newly created wall"],
         visible_transition_logic="oak floor and warm plaster continue into adjacent rooms; brass accents echo through visible kitchen or hallway",
-        negative_rules=["no cold grey palette", "no chrome hardware", "no matching 3-piece suite", "no floating furniture without visible support"],
+        # Wave 5.7d — defensive wall-preservation parity with SL (5.5.49)
+        # and Desert (5.5.51). Bench 2026-05-26 showed WM still invented a
+        # wall on the right side to anchor TV + media console, EVEN WITH
+        # the media console flex wording in room_specific_constraints. WM
+        # had been missed in the 5.5.49 / 5.5.51 propagation wave.
+        # Trade-off : "no matching 3-piece suite" demoted to slot [3]
+        # (not emitted in AVOID since build_dna_block ships [:3]); wall
+        # preservation > stylistic furniture matching.
+        negative_rules=["preserve existing wall layout and partitions exactly — no new walls or wall extensions", "no cold grey palette", "no chrome hardware", "no matching 3-piece suite", "no floating furniture without visible support"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="warm_modern",
