@@ -14,6 +14,7 @@ import 'widgets/chat_input_bar.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
+import '../../core/providers/pending_generations_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/services/session_persistence_service.dart';
 import '../../data/mock/mock_projects.dart';
@@ -174,6 +175,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     // real Supabase id exists (handled inside _initNewSession via
     // _persistSession() after the createSession returns).
     _initPersistence();
+
+    // Wave 5.6c — clear any pending readyUnseen / errorUnseen flag for
+    // this session. User opening the chat IS the acknowledgement that
+    // the badge can be cleared. inFlight states are preserved (generation
+    // still in progress, no acknowledgement yet).
+    if (widget.projectId != 'new') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final notifier = ref.read(pendingGenerationsProvider.notifier);
+        final state = ref.read(pendingGenerationsProvider)[widget.projectId];
+        if (state == GenerationLifecycle.readyUnseen ||
+            state == GenerationLifecycle.errorUnseen) {
+          notifier.clear(widget.projectId);
+        }
+      });
+    }
 
     if (widget.projectId == 'new') {
       _letAiDecide = widget.initialAiDecide;
@@ -812,6 +829,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       }
     });
 
+    // Wave 5.6c — capture the notifier reference BEFORE the await so that
+    // even if the chat screen is disposed mid-generation we can still update
+    // the global lifecycle state when the Future resolves. The notifier
+    // itself is a long-lived ProviderScope singleton, so holding a reference
+    // outlives the widget's dispose().
+    final pendingNotifier = ref.read(pendingGenerationsProvider.notifier);
+    final sessionIdForLifecycle = _project.id;
+    pendingNotifier.markInFlight(sessionIdForLifecycle);
+
     try {
       // Wave 4.8.5: the AI-intent flags are only meaningful for the FIRST
       // vision (room inference / atmosphere selection happen once). Later
@@ -840,7 +866,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
 
       _longGenerationTimer?.cancel();
       _longGenerationTimer = null;
-      if (!mounted) return;
+      if (!mounted) {
+        // Wave 5.6c — user navigated away during the generation. Flag the
+        // session as "result ready, not yet seen" so the home screen shows
+        // a badge + snackbar via the pending generations provider.
+        pendingNotifier.markReadyUnseen(sessionIdForLifecycle);
+        return;
+      }
+      // Wave 5.6c — user is still on the chat screen at completion; clear
+      // any pending state for this session (result will render inline).
+      pendingNotifier.clear(sessionIdForLifecycle);
 
       final afterUrl = result['after_image_url'] as String;
       final aiText = result['ai_message'] as String;
@@ -926,7 +961,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       // Only now do we surface the failure to the user.
       _longGenerationTimer?.cancel();
       _longGenerationTimer = null;
-      if (!mounted) return;
+      if (!mounted) {
+        // Wave 5.6c — failure arrived after user navigated away.
+        // Mark the session as "error, not yet seen" so home shows a badge.
+        pendingNotifier.markErrorUnseen(sessionIdForLifecycle);
+        return;
+      }
+      // Wave 5.6c — failure shown inline; clear pending state.
+      pendingNotifier.clear(sessionIdForLifecycle);
 
       final failureMessage = e.userMessage;
       final errMsg = MessageModel(
@@ -957,7 +999,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       // working. Keep loading state and poll for the result every 5s for 90s.
       _longGenerationTimer?.cancel();
       _longGenerationTimer = null;
-      if (!mounted) return;
+      if (!mounted) {
+        // Wave 5.6c — transport error after user left. Backend may still
+        // complete (Wave 5.6 server-side persistence catches this), so we
+        // optimistically flag readyUnseen — _loadMessages on reopen will
+        // hydrate the actual result if it appeared. If the backend truly
+        // failed too, the Wave 5.6b failure-message-persist will mean the
+        // user still sees feedback (an error message instead of an image)
+        // — either way, the session deserves a badge for re-attention.
+        pendingNotifier.markReadyUnseen(sessionIdForLifecycle);
+        return;
+      }
 
       if (_project.id == 'new') {
         // No session to reconcile against — surface gracefully.

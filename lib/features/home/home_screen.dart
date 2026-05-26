@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
+import '../../core/providers/pending_generations_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/mock/mock_projects.dart';
@@ -79,9 +80,56 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     super.dispose();
   }
 
+  /// Wave 5.6c — toast/snackbar shown when a generation completes (or fails)
+  /// while the user is on the home screen. Calm, brief, dismissible.
+  void _showCompletionSnackBar(BuildContext context, {required bool isError}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          isError
+              ? 'A design generation failed — tap the session to see details.'
+              : 'A design is ready — tap the session to view it.',
+        ),
+        backgroundColor:
+            isError ? AppColors.error : AppColors.textPrimary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+
+    // Wave 5.6c — surface a snackbar transition when a generation completes
+    // while the user is on the home screen. The badge on the session card
+    // is the persistent visual; the snackbar is the immediate audible/
+    // visible "your design is ready" beat.
+    ref.listen<Map<String, GenerationLifecycle>>(
+      pendingGenerationsProvider,
+      (previous, next) {
+        if (!mounted) return;
+        for (final entry in next.entries) {
+          final prevState = previous?[entry.key];
+          final newState = entry.value;
+          if (prevState == newState) continue;
+          // Only fire for transitions INTO readyUnseen / errorUnseen
+          // (i.e. completion). Don't fire on initial markInFlight.
+          if (newState == GenerationLifecycle.readyUnseen &&
+              prevState != GenerationLifecycle.readyUnseen) {
+            _showCompletionSnackBar(context, isError: false);
+          } else if (newState == GenerationLifecycle.errorUnseen &&
+              prevState != GenerationLifecycle.errorUnseen) {
+            _showCompletionSnackBar(context, isError: true);
+          }
+        }
+      },
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -397,12 +445,12 @@ class _HeroOverlay extends StatelessWidget {
 
 // ── Continue card ─────────────────────────────────────────────────────────────
 
-class _ContinueCard extends StatelessWidget {
+class _ContinueCard extends ConsumerWidget {
   final ProjectModel project;
   const _ContinueCard({required this.project});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final previewUrl = _latestVisionUrl(project);
     // "0 visions" reads as a broken/empty session — show a calm "Draft"
     // instead. Wave 4.7: progression-forward, real data only.
@@ -412,6 +460,13 @@ class _ContinueCard extends StatelessWidget {
     final meta = project.iterationCount > 0
         ? 'Vision ${project.iterationCount} · ${_timeAgo(project.lastUpdatedAt)}'
         : 'Draft · ${_timeAgo(project.lastUpdatedAt)}';
+
+    // Wave 5.6c — watch the pending generations provider for this session
+    // and surface a small badge on the image band if the session has a
+    // result the user hasn't seen yet (inFlight, readyUnseen, errorUnseen).
+    final pendingState = ref.watch(
+      pendingGenerationsProvider.select((m) => m[project.id]),
+    );
 
     return _TapScaleWidget(
       onTap: () => context.push('/chat/${project.id}'),
@@ -433,16 +488,27 @@ class _ContinueCard extends StatelessWidget {
             SizedBox(
               height: 120,
               width: double.infinity,
-              child: previewUrl != null
-                  ? CachedNetworkImage(
-                      imageUrl: previewUrl,
-                      fit: BoxFit.cover,
-                      placeholder: (_, _) =>
-                          Container(color: AppColors.shimmerBase),
-                      errorWidget: (_, _, _) =>
-                          Container(color: AppColors.shimmerBase),
-                    )
-                  : Container(color: AppColors.shimmerBase),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  previewUrl != null
+                      ? CachedNetworkImage(
+                          imageUrl: previewUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (_, _) =>
+                              Container(color: AppColors.shimmerBase),
+                          errorWidget: (_, _, _) =>
+                              Container(color: AppColors.shimmerBase),
+                        )
+                      : Container(color: AppColors.shimmerBase),
+                  if (pendingState != null)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: _PendingBadge(state: pendingState),
+                    ),
+                ],
+              ),
             ),
             Expanded(
               child: Padding(
@@ -492,6 +558,86 @@ class _ContinueCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// Wave 5.6c — small badge rendered on the session card image band when a
+// generation is in flight (or finished while the user was off-screen).
+// Three visual states match the GenerationLifecycle enum:
+//   inFlight     — small spinner dot ("generation still running")
+//   readyUnseen  — accent dot ("result ready to view")
+//   errorUnseen  — error dot ("failed; tap to see")
+class _PendingBadge extends StatelessWidget {
+  final GenerationLifecycle state;
+  const _PendingBadge({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    switch (state) {
+      case GenerationLifecycle.inFlight:
+        return Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: AppColors.textPrimary.withAlpha(200),
+            shape: BoxShape.circle,
+          ),
+          child: const SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5,
+              valueColor:
+                  AlwaysStoppedAnimation<Color>(AppColors.surface),
+            ),
+          ),
+        );
+      case GenerationLifecycle.readyUnseen:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.accent,
+            borderRadius: BorderRadius.circular(50),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.auto_awesome, size: 10, color: AppColors.surface),
+              SizedBox(width: 4),
+              Text(
+                'Ready',
+                style: TextStyle(
+                  color: AppColors.surface,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        );
+      case GenerationLifecycle.errorUnseen:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.error,
+            borderRadius: BorderRadius.circular(50),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline, size: 10, color: AppColors.surface),
+              SizedBox(width: 4),
+              Text(
+                'Failed',
+                style: TextStyle(
+                  color: AppColors.surface,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        );
+    }
   }
 }
 
