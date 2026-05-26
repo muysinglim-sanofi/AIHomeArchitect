@@ -17,13 +17,39 @@ for _d in [
         atmosphere_id="japandi_calm",
         room_type="living_room",
         furniture_language=["natural linen in stone or fog tones — unhurried tactile calm", "wabi-sabi ceramic or ash — raw surface honesty", "natural rush or jute — organic textural warmth"],
-        material_palette=["pale ash or birch floor", "wabi-sabi plaster walls in off-white or putty", "dark charcoal ceramic accents"],
+        # Wave 5.5.39 — softened "wabi-sabi plaster walls" → "wabi-sabi
+        # plaster finish on existing walls". Investigation (Wave 5.5.33
+        # audit + 2026-05-25 bench analysis) identified this as the
+        # suspect #1 leak: the "plaster walls" plural noun implied "all
+        # walls are wabi-sabi plaster" — model converted the baie vitrée
+        # area into a plaster wall to match. Same fix pattern as Nature
+        # Retreat Wave 5.5.37 ("accent wall" → "accents on existing
+        # surfaces"): explicit "existing walls" anchor.
+        material_palette=["pale ash or birch floor", "wabi-sabi plaster finish on existing walls in off-white or putty", "dark charcoal ceramic accents"],
         lighting_behavior="Paper lantern pendant + concealed warm floor slot; no harsh downlights.",
         decor_language=["single branch in handmade ceramic vase", "one framed Japanese ink artwork"],
         realism_constraints=["sofa low enough to feel grounded — 40–45 cm seat height", "empty floor space is deliberate, not absent"],
-        room_specific_constraints=["maximum 3 decorative objects in room", "solid neutral rug or no rug — no pattern"],
+        # Wave 5.5.39 — slot [0] becomes standardized TV anchor (WM
+        # pattern: "single clear focal wall — <opt1>, <opt2>, or a
+        # television, not multiple"). Atmosphere-coherent options stay
+        # minimal (fireplace + artwork) — both compatible with Japandi
+        # restraint. Slot [1] "maximum 3 decorative objects" preserved
+        # (decor restraint discipline). "solid neutral rug or no rug —
+        # no pattern" demoted to slot [2] (not emitted by [:2] in
+        # build_dna_room_context, accepted trade-off — rug pattern is a
+        # secondary concern vs TV + restraint).
+        room_specific_constraints=["single clear focal wall — fireplace, artwork, or a television, not multiple", "maximum 3 decorative objects in room", "solid neutral rug or no rug — no pattern"],
         visible_transition_logic="pale ash floor and plaster walls extend into adjacent rooms; ceramic palette echoes through visible kitchen",
-        negative_rules=["no cluttered surfaces", "no patterned textiles", "no warm-orange wood tones", "no cold grey minimalism"],
+        # Wave 5.5.39 — added defensive anti-wall-replacement rule
+        # ("preserve existing windows and glass openings as photographed").
+        # Defense in depth against the "wabi-sabi plaster walls" leak
+        # (now softened in material_palette). Per the "prudence maximale"
+        # discipline locked 2026-05-25 for Japandi.
+        # POSITIONING : slot [0]. build_dna_block emits negative_rules[:3]
+        # only; the defensive rule must be in the first 3 slots to ship.
+        # Trade-off : "no warm-orange wood tones" demoted to slot [3]
+        # (not emitted in DNA block but kept for documentation).
+        negative_rules=["preserve existing windows and glass openings as photographed", "no cluttered surfaces", "no patterned textiles", "no warm-orange wood tones", "no cold grey minimalism"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="japandi_calm",
