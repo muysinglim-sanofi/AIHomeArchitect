@@ -17,7 +17,14 @@ for _d in [
         atmosphere_id="tropical_escape",
         room_type="living_room",
         furniture_language=["natural rattan or cane with thick white linen — tactile tropical warmth", "concrete or pale stone — cool surface texture depth", "louvred timber — warm tropical surface quality"],
-        material_palette=["polished concrete or pale stone floor", "white render walls", "louvred timber panels or shutters"],
+        # Wave 5.5.51 preventive — "white render walls" -> "white render
+        # finish on existing walls". Tropical hasn't shown wall invention
+        # in bench, but the same plural-walls noun pattern that caused
+        # issues for Japandi (5.5.39), Nature (5.5.37), and Desert
+        # (5.5.51) was present here too. Applied preventively per user
+        # direction 2026-05-25 to harden against future regressions on
+        # different source photos.
+        material_palette=["polished concrete or pale stone floor", "white render finish on existing walls", "louvred timber panels or shutters"],
         lighting_behavior="Warm rattan pendant + concealed warm ceiling slot; bright in day, warm in evening.",
         # Wave 5.5.27 — REPLACED rattan tray with seating-footprint rug.
         # Tray cosmetic ; rug essential. User-locked wording drops "or sisal"

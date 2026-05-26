@@ -17,7 +17,14 @@ for _d in [
         atmosphere_id="desert_luxe",
         room_type="living_room",
         furniture_language=["raw cotton or camel leather — tactile desert warmth", "solid sandstone or terracotta — sun-drenched surface warmth", "carved wood — artisan surface richness"],
-        material_palette=["polished tadelakt floor in sand or warm ivory", "tadelakt plaster walls in terracotta or warm sand", "walnut or cedar timber accents"],
+        # Wave 5.5.51 — "tadelakt plaster walls in terracotta or warm
+        # sand" -> "tadelakt plaster finish on existing walls in
+        # terracotta or warm sand". Same fix pattern as Japandi
+        # (Wave 5.5.39) and Nature (Wave 5.5.37): the plural "walls"
+        # noun implied "all walls are tadelakt" and the model
+        # invented a new wall to apply tadelakt + mount TV (bench
+        # 2026-05-25 round 5). Explicit "existing walls" anchor.
+        material_palette=["polished tadelakt floor in sand or warm ivory", "tadelakt plaster finish on existing walls in terracotta or warm sand", "walnut or cedar timber accents"],
         lighting_behavior="Single hammered brass pendant + concealed warm floor slot; low-angled warm glow.",
         # Wave 5.5.27 — REPLACED textile throw on sofa with seating-footprint
         # rug. Throw + rug overlap ; rug at floor-level more impactful for
@@ -44,7 +51,13 @@ for _d in [
         # explicitly forbid creating a new wall.
         room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "maximum 2 decorative objects in room"],
         visible_transition_logic="tadelakt floor and plaster walls continue into adjacent rooms; warm sand palette unbroken through visible spaces",
-        negative_rules=["no arabesque tile pattern", "no cold marble", "no bright orange", "no maximalist Moroccan styling"],
+        # Wave 5.5.51 — added defensive wall-preservation rule at slot
+        # [0] (same as Soft Luxury 5.5.49). Even with media console
+        # flex pattern (Wave 5.5.48), Desert's strong tadelakt-on-walls
+        # material identity still pushed wall invention. Trade-off :
+        # "no bright orange" demoted to slot [3] (not emitted in AVOID).
+        # Wall-invention risk > orange-cliché risk.
+        negative_rules=["preserve existing wall layout and partitions exactly — no new walls or wall extensions", "no arabesque tile pattern", "no cold marble", "no bright orange", "no maximalist Moroccan styling"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="desert_luxe",
