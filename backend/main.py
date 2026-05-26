@@ -174,12 +174,18 @@ class GenerationError(Exception):
         retryable: bool,
         request_id: str = "",
         status_code: int = 500,
+        # Wave 5.6b — carry the session_id so the exception handler can
+        # persist the failure message to Supabase. Needed for users who
+        # navigate away mid-generation: without server-side persistence
+        # they'd see no error feedback on session reopen.
+        session_id: str = "",
     ):
         self.error_code = error_code
         self.user_message = user_message
         self.retryable = retryable
         self.request_id = request_id
         self.status_code = status_code
+        self.session_id = session_id
 
 
 app = FastAPI(title="AIHomeArchitect API")
@@ -189,6 +195,30 @@ app = FastAPI(title="AIHomeArchitect API")
 async def _generation_error_handler(_req: Request, exc: GenerationError) -> JSONResponse:
     log.warning("GenerationError  code=%s  retryable=%s  request_id=%s",
                 exc.error_code, exc.retryable, exc.request_id)
+    # Wave 5.6b — best-effort server-side persistence of the failure
+    # message. Mirrors the Wave 5.6 success-path persistence (frontend
+    # also writes on disconnect-free path; backend write is the
+    # disconnect-tolerant fallback). Skipped for session_id == "" or
+    # "new" (no session row to attach to yet).
+    message_persisted = False
+    if exc.session_id and exc.session_id != "new":
+        try:
+            supa.from_("messages").insert({
+                "session_id": exc.session_id,
+                "role": "ai",
+                "content": exc.user_message,
+                "message_type": "text",
+            }).execute()
+            message_persisted = True
+            log.info(
+                "[Wave 5.6b] failure message persisted server-side  session_id=%s  code=%s",
+                exc.session_id, exc.error_code,
+            )
+        except Exception as msg_err:
+            log.warning(
+                "[Wave 5.6b] server-side failure-message insert FAILED: %s: %s",
+                type(msg_err).__name__, msg_err,
+            )
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -196,6 +226,10 @@ async def _generation_error_handler(_req: Request, exc: GenerationError) -> JSON
             "user_message": exc.user_message,
             "retryable": exc.retryable,
             "request_id": exc.request_id,
+            # Wave 5.6b — same flag as success path: frontend skips its
+            # own insertMessage when backend already wrote, falls back
+            # to client-side write if backend failed to persist.
+            "message_persisted": message_persisted,
         },
     )
 
@@ -743,6 +777,7 @@ async def generate(
             retryable=False,
             request_id=request_id,
             status_code=400,
+            session_id=session_id,
         )
 
     # ── Step 3: parse conversation history ───────────────────────────────────
@@ -1217,6 +1252,7 @@ async def generate(
                     retryable=True,
                     request_id=request_id,
                     status_code=502,
+                    session_id=session_id,
                 )
 
             generated_bytes = base64.b64decode(b64)
@@ -1237,6 +1273,7 @@ async def generate(
                 retryable=False,
                 request_id=request_id,
                 status_code=502,
+                session_id=session_id,
             )
 
         except (HTTPException, GenerationError):
@@ -1263,6 +1300,7 @@ async def generate(
                     retryable=False,
                     request_id=request_id,
                     status_code=502,
+                    session_id=session_id,
                 )
 
             # Transient or unknown — retry if attempts remain
@@ -1298,6 +1336,7 @@ async def generate(
             retryable=True,
             request_id=request_id,
             status_code=502,
+            session_id=session_id,
         )
 
     # ── Step 7: upload to Supabase Storage ────────────────────────────────────
@@ -1326,6 +1365,7 @@ async def generate(
             retryable=True,
             request_id=request_id,
             status_code=500,
+            session_id=session_id,
         )
 
     # ── Step 8: compose architect response + suggestion chips ─────────────────
