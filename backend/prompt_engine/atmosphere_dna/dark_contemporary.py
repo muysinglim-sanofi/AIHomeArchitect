@@ -3,8 +3,21 @@ from ._base import AtmosphereCoreDNA, RoomAdaptationDNA, register_core, register
 register_core(AtmosphereCoreDNA(
     atmosphere_id="dark_contemporary",
     philosophy="Architectural sophistication through depth, contrast, material richness, and restraint.",
-    emotional_intent="Dramatic, sophisticated, powerful, sensory, moody but refined, architecturally confident.",
-    architectural_language="Deep tonal volumes with high-contrast material surfaces, concealed warm light, and gallery-level spatial control.",
+    # Wave 5.5.52 — Photographic Reinterpretation: dropped "Dramatic, "
+    # from emotional_intent. "Dramatic" was the strongest cinematic-mood
+    # trigger surviving the previous waves. Kept "moody but refined"
+    # (user-validated compromise) — preserves Dark Contemp identity
+    # without the photographic-darkness priming.
+    emotional_intent="sophisticated, powerful, sensory, moody but refined, architecturally confident.",
+    # Wave 5.5.52 — architectural_language rewrite (creative-only field
+    # but consistent vocab matters): "Deep tonal volumes" -> "Premium
+    # tonal volumes" (drop "Deep" priming). "high-contrast material
+    # surfaces" -> "textured material surfaces" (drop "high-contrast"
+    # cinematic-darkness trigger). "concealed warm light" -> "warm
+    # interior light alongside natural daylight" (positive daylight
+    # framing). "gallery-level spatial control" -> "gallery-level
+    # spatial composition" (less directive, more compositional).
+    architectural_language="Premium tonal volumes with textured material surfaces, warm interior light alongside natural daylight, and gallery-level spatial composition.",
     # Wave 5.5.47 — softened paradoxical "dark"/"black" vocabulary in
     # material_palette. Bench 2026-05-25 (round 2) showed Dark Contemp
     # still rendering "trop sombre" despite Wave 5.5.38 + 5.5.45 fixes.
@@ -25,16 +38,15 @@ register_core(AtmosphereCoreDNA(
     # keeps the sophistication + natural finish identity without the
     # darkness cue.
     material_palette=["warm mineral plaster", "deep grey or smoked marble", "warm walnut or smoked oak", "brushed bronze or gunmetal", "concrete"],
-    # Wave 5.5.38 — dropped "darkness as design element". The phrase
-    # licensed pure-darkness renders (bench 2026-05-25 showed "trop sombre,
-    # on voit quasiment rien"). Replaced with "cinematic warmth with
-    # maintained architectural readability" — keeps the moody-luxury intent
-    # while establishing a readability floor at the core level.
-    # Wave 5.5.50 — Daylight Recovery: "dark surfaces" -> "rich textured
-    # surfaces". The "dark surfaces" string was the last paradoxical
-    # darkness trigger surviving in the lighting_behavior; replacement
-    # preserves richness+texture without low-light priming.
-    lighting_behavior="Concealed precision lighting — warm glow against rich textured surfaces; cinematic warmth with maintained architectural readability.",
+    # Wave 5.5.38 — dropped "darkness as design element".
+    # Wave 5.5.50 — "dark surfaces" -> "rich textured surfaces".
+    # Wave 5.5.52 — Photographic Reinterpretation. Removed "Concealed"
+    # (priming hidden light), "warm glow" (low-light source implication
+    # when said alone), "cinematic warmth" (cinematic = low-light photo
+    # framing). New wording explicitly positions natural daylight as
+    # the dominant light source with warm interior accents as supporting
+    # — the "dark materials photographed in daylight" philosophy lock.
+    lighting_behavior="Precision warm accent lighting on rich textured surfaces; natural daylight remains the dominant light source — architectural readability preserved throughout.",
     luxury_level="Contemporary penthouse luxury",
     # Wave 5.5.45 — removed paradoxical "dark"/"black" words from
     # forbidden_elements. Even in negative formulations, these tokens
@@ -48,11 +60,14 @@ register_core(AtmosphereCoreDNA(
     # framing which was reinforcing pure-darkness interpretations). Added
     # "warm" to "precision light" so the keyword pair stays consistent
     # with the new lighting_behavior emphasis.
-    # Wave 5.5.47 — "charcoal plaster" → "warm charcoal plaster" for
-    # consistency with material_palette softening.
-    # Wave 5.5.50 — "warm charcoal plaster" -> "warm mineral plaster"
-    # consistent with material_palette change.
-    atmosphere_keywords=["cinematic luxury", "warm mineral plaster", "smoked oak", "bronze", "warm precision light"],
+    # Wave 5.5.47 — "charcoal plaster" → "warm charcoal plaster".
+    # Wave 5.5.50 — "warm charcoal plaster" -> "warm mineral plaster".
+    # Wave 5.5.52 — "cinematic luxury" -> "editorial luxury" (drop the
+    # cinematic priming entirely, replace with editorial = magazine-
+    # interior photography vibe). "warm precision light" -> "daylight
+    # architectural photography" (explicit daylight framing as a
+    # keyword, even though creative-only emission).
+    atmosphere_keywords=["editorial luxury", "warm mineral plaster", "smoked oak", "bronze", "daylight architectural photography"],
 ))
 
 for _d in [
@@ -69,26 +84,22 @@ for _d in [
         # walnut or honed stone floor". Lighter floor reflects more
         # ambient light, reducing overall darkness while keeping walls
         # charcoal for mood.
-        # Wave 5.5.50 — Daylight Recovery surgical softening:
-        # - "warm charcoal bouclé" -> "warm mineral bouclé" (drop charcoal)
-        # - "deep low tactile richness" -> "tactile richness" (drop deep
-        #   priming + redundant "low")
-        # - "deep marble or stone — sculptural surface depth" -> "honed
-        #   marble or stone — sculptural surface depth" (drop deep priming)
-        # - "rich velvet — high-contrast atmospheric depth" -> "rich
-        #   velvet — layered atmospheric texture" (remove "high-contrast"
-        #   cinematic-darkness trigger, "depth" priming)
-        # - "warm charcoal plaster walls" -> "warm mineral plaster walls"
-        # - "deep marble or bronze accent surfaces" -> "honed marble or
-        #   bronze accent surfaces" (drop deep priming)
-        furniture_language=["warm mineral bouclé or leather — tactile richness", "honed marble or stone — sculptural surface depth", "rich velvet — layered atmospheric texture"],
+        # Wave 5.5.50 — Daylight Recovery surgical softening (dropped
+        # "deep" + "charcoal" + "high-contrast" priming across furniture
+        # and material_palette).
+        # Wave 5.5.52 — "layered atmospheric texture" -> "layered textural
+        # depth". "atmospheric" was on the photographic-darkness trigger
+        # list (atmospheric = mood-shot framing).
+        furniture_language=["warm mineral bouclé or leather — tactile richness", "honed marble or stone — sculptural surface depth", "rich velvet — layered textural depth"],
         material_palette=["warm mineral plaster walls", "warm walnut or honed stone floor", "honed marble or bronze accent surfaces"],
-        # Wave 5.5.38 — dropped "room lit by glow, not flood". The "not
-        # flood" framing was too aggressive — the model interpreted it as
-        # "minimize all light sources" → underexposed renders. Replaced
-        # with "warm cinematic glow with maintained natural daylight from
-        # windows" so windows-as-light-source remains a primary signal.
-        lighting_behavior="Concealed warm ceiling cove + single sculptural bronze floor lamp; warm cinematic glow with maintained natural daylight from windows.",
+        # Wave 5.5.38 — dropped "room lit by glow, not flood".
+        # Wave 5.5.52 — Photographic Reinterpretation: dropped
+        # "Concealed" (priming hidden light), "warm cinematic glow"
+        # (cinematic = low-light photo framing). Reframed so natural
+        # daylight is the dominant light source, with warm bronze
+        # accent lamps as supporting. Explicit "bright architectural
+        # daylight" anchor.
+        lighting_behavior="Warm ceiling cove + single sculptural bronze floor lamp as accent lighting; natural daylight from windows remains the dominant light source — bright architectural daylight throughout.",
         # Wave 5.5.26 — "large-scale abstract artwork" → "deep dark velvet
         # throw layered on the sofa". Original artwork occupied wall focal
         # area competing with TV (per Wave 5.5.22 audit). Sofa-anchored
@@ -117,37 +128,31 @@ for _d in [
         # overwhelming the focal directive). [1] luminosity floor
         # strengthened: explicit "maintain natural daylight from windows"
         # signal added so window-as-light-source survives the dark mood.
-        # Wave 5.5.45 — [0] TV-first reorder (same pattern as 5.5.43/44).
-        # [1] dropped trailing "not pure darkness" - the word "darkness"
-        # was reinforcing what it was trying to forbid. Replaced with
-        # positive framing "preserve visible interior detail".
-        # Wave 5.5.47 — [1] strengthened daylight preservation directive.
-        # User feedback: "met de jour toujours" (always render daytime).
-        # Wave 5.5.49 — [0] adopting universal media console flex pattern
-        # for consistency across all 8 atmospheres.
-        room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "maintain photographed natural daylight from windows + warm interior glow — render daytime scene matching photographed time of day"],
+        # Wave 5.5.45 — [0] TV-first reorder.
+        # Wave 5.5.47 — [1] strengthened daylight preservation.
+        # Wave 5.5.49 — [0] universal media console flex pattern.
+        # Wave 5.5.52 — [1] reframed: "warm interior glow" -> "warm
+        # interior accents" (drop "glow" priming). Explicit "natural
+        # daylight from windows remains dominant" + "bright architectural
+        # daylight" anchors push the model toward editorial daylight
+        # interior photography, away from cinematic mood-shot grading.
+        room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "natural daylight from windows remains the dominant light source + warm interior accents — bright architectural daylight matching photographed time of day"],
         # Wave 5.5.38 — added "visible kitchen" continuity matching WM
         # pattern. Previous wording mentioned only "visible dining area".
         # Wave 5.5.50 — "charcoal plaster" -> "warm mineral plaster"
         # consistent with material_palette rename. Maintains continuity
         # with the new naming and drops another charcoal occurrence.
         visible_transition_logic="warm mineral plaster and smoked oak floor continue into adjacent rooms; bronze accents echo through visible kitchen or dining area if present",
-        # Wave 5.5.45 — paradoxical "black"/"dark" words removed from
-        # negative_rules. Even in anti-formulations these prime the model.
-        # [0] "no all-black room" → "no monochrome saturation" (positive
-        # framing of same intent without "black").
-        # [3] "no grey rather than charcoal — must be warm dark" → "no
-        # neutral grey — warm charcoal tones only" (drops "dark").
-        # Slots [1] + [2] unchanged.
-        # Wave 5.5.48 Path 1 — daylight photography stylistic directive
-        # added at slot [0] (most-emitted position). The model was treating
-        # the photo as a "cinematic night shot of a dark luxury space"
-        # instead of "daytime modern living room with dark luxury
-        # aesthetic". Explicit "architectural daylight photography" tag
-        # blocks the cinematic-mood-shot interpretation. Trade-off : "no
-        # chrome or silver hardware" demoted to slot [3] (not emitted in
-        # AVOID line). Daylight readability is the higher product priority.
-        negative_rules=["render as architectural daylight photography — NOT cinematic night or evening mood shot — preserve photographic exposure level", "no monochrome saturation", "no neon or coloured accent light", "no chrome or silver hardware", "no neutral grey — warm charcoal tones only"],
+        # Wave 5.5.45 — paradoxical "black"/"dark" removed.
+        # Wave 5.5.48 — daylight directive at slot [0].
+        # Wave 5.5.52 — slot [0] rephrased positively. Original wording
+        # "NOT cinematic night or evening mood shot" contained "cinematic"
+        # + "night" + "mood shot" — three paradoxical reinforcement
+        # words in one rule. Replaced with positive framing using
+        # "editorial daylight interior photography" + "natural daylight
+        # remains dominant" — no negative trigger words. Slot [4]
+        # rephrased similarly to drop "charcoal tones" priming.
+        negative_rules=["render as editorial daylight interior photography — natural daylight remains dominant — preserve photographic exposure level", "no monochrome saturation", "no neon or coloured accent light", "no chrome or silver hardware", "no neutral grey — warm mineral tones only"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="dark_contemporary",
