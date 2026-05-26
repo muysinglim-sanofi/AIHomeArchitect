@@ -18,7 +18,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
     "living_room": {
         "warm_modern": 0.90,
         "soft_luxury": 0.85,
-        "penthouse_contemporary": 0.80,
         "japandi_calm": 0.80,
         "nordic_warmth": 0.65,
         "desert_luxe": 0.65,
@@ -29,7 +28,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "soft_luxury": 0.90,
         "japandi_calm": 0.85,
         "warm_modern": 0.75,
-        "penthouse_contemporary": 0.65,
         "nordic_warmth": 0.65,
         "desert_luxe": 0.60,
         "nature_retreat": 0.45,
@@ -38,7 +36,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
     "kitchen": {
         "warm_modern": 0.90,
         "japandi_calm": 0.85,
-        "penthouse_contemporary": 0.80,
         "nordic_warmth": 0.75,
         "soft_luxury": 0.65,
         "nature_retreat": 0.60,
@@ -48,7 +45,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
     "bathroom": {
         "soft_luxury": 0.90,
         "japandi_calm": 0.85,
-        "penthouse_contemporary": 0.80,
         "warm_modern": 0.70,
         "nature_retreat": 0.65,
         "desert_luxe": 0.65,
@@ -56,7 +52,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "tropical_escape": 0.45,
     },
     "home_office": {
-        "penthouse_contemporary": 0.85,
         "japandi_calm": 0.85,
         "warm_modern": 0.80,
         "nature_retreat": 0.75,
@@ -66,7 +61,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "tropical_escape": 0.35,
     },
     "dining_room": {
-        "penthouse_contemporary": 0.85,
         "soft_luxury": 0.85,
         "warm_modern": 0.80,
         "desert_luxe": 0.75,
@@ -77,7 +71,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
     },
     "entrance_hall": {
         "soft_luxury": 0.90,
-        "penthouse_contemporary": 0.85,
         "warm_modern": 0.80,
         "desert_luxe": 0.65,
         "japandi_calm": 0.65,
@@ -87,7 +80,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
     },
     "facade": {
         "warm_modern": 0.85,
-        "penthouse_contemporary": 0.85,
         "soft_luxury": 0.80,
         "nature_retreat": 0.75,
         "desert_luxe": 0.65,
@@ -103,12 +95,10 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "desert_luxe": 0.65,
         "soft_luxury": 0.60,
         "japandi_calm": 0.55,
-        "penthouse_contemporary": 0.40,
     },
     "pool_area": {
         "tropical_escape": 0.90,
         "soft_luxury": 0.80,
-        "penthouse_contemporary": 0.75,
         "warm_modern": 0.65,
         "desert_luxe": 0.65,
         "nature_retreat": 0.60,
@@ -120,7 +110,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "warm_modern": 0.75,
         "nature_retreat": 0.70,
         "desert_luxe": 0.65,
-        "penthouse_contemporary": 0.60,
         "soft_luxury": 0.60,
         "nordic_warmth": 0.55,
         "japandi_calm": 0.45,
@@ -129,7 +118,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "warm_modern": 0.80,
         "tropical_escape": 0.75,
         "japandi_calm": 0.75,
-        "penthouse_contemporary": 0.70,
         "nature_retreat": 0.65,
         "nordic_warmth": 0.60,
         "soft_luxury": 0.55,
@@ -137,7 +125,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
     },
     "driveway": {
         "warm_modern": 0.85,
-        "penthouse_contemporary": 0.85,
         "soft_luxury": 0.80,
         "desert_luxe": 0.70,
         "nature_retreat": 0.65,
@@ -151,7 +138,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
 _DEFAULT_COMPAT: dict[str, float] = {
     "warm_modern": 0.80,
     "soft_luxury": 0.75,
-    "penthouse_contemporary": 0.75,
     "japandi_calm": 0.75,
     "nordic_warmth": 0.60,
     "nature_retreat": 0.60,
@@ -166,8 +152,6 @@ _DEFAULT_COMPAT: dict[str, float] = {
 _SIGNAL_BONUSES: list[tuple[str, str, float]] = [
     # Architectural signals
     ("high ceiling",     "soft_luxury",       0.10),
-    ("high ceiling",     "penthouse_contemporary", 0.10),
-    ("vaulted",          "penthouse_contemporary", 0.10),
     ("vaulted",          "soft_luxury",       0.08),
     ("small",            "japandi_calm",      0.10),
     ("compact",          "japandi_calm",      0.08),
@@ -179,11 +163,8 @@ _SIGNAL_BONUSES: list[tuple[str, str, float]] = [
     ("timber",           "nature_retreat",    0.10),
     ("timber",           "nordic_warmth",     0.08),
     ("timber",           "warm_modern",       0.05),
-    ("stone",            "penthouse_contemporary", 0.08),
-    ("concrete",         "penthouse_contemporary", 0.10),
     ("concrete",         "japandi_calm",      0.05),
     ("marble",           "soft_luxury",       0.10),
-    ("marble",           "penthouse_contemporary", 0.08),
     ("travertine",       "warm_modern",       0.10),
     # View/location signals
     ("garden",           "nature_retreat",    0.08),
@@ -195,11 +176,8 @@ _SIGNAL_BONUSES: list[tuple[str, str, float]] = [
     ("desert",           "desert_luxe",       0.15),
     ("moroccan",         "desert_luxe",       0.12),
     ("ocean view",       "tropical_escape",   0.10),
-    ("city view",        "penthouse_contemporary", 0.08),
-    ("urban",            "penthouse_contemporary", 0.08),
     ("urban",            "warm_modern",       0.05),
     # Light signals
-    ("dark",             "penthouse_contemporary", 0.10),
     ("white",            "soft_luxury",       0.05),
     ("white",            "japandi_calm",      0.05),
     ("warm light",       "warm_modern",       0.08),

@@ -71,17 +71,6 @@ _CASES: list[tuple[str, str, list[str], list[str]]] = [
         ["fluted ivory plaster", "honed cream marble", "bouclé"],
     ),
     (
-        "penthouse_contemporary",
-        "living_room",
-        ["Architectural sophistication", "architecturally confident"],
-        # Wave 5.5.47/48 softened "dark charcoal" → "warm charcoal";
-        # floor became "warm walnut or honed stone".
-        # Wave 5.5.50 — "warm charcoal plaster" -> "warm mineral plaster"
-        # as part of Daylight Recovery (reduce charcoal saturation across
-        # emitted preserve prompt). must_keep updated to match.
-        ["Sophistication", "warm mineral plaster", "warm walnut"],
-    ),
-    (
         "nature_retreat",
         "living_room",
         ["architectural realism"],

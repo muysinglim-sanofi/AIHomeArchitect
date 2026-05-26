@@ -71,17 +71,6 @@ _ATM_TONE: dict[str, dict] = {
             "What would make this feel more like home?",
         ],
     },
-    "penthouse_contemporary": {
-        "adj": "cinematic",
-        "quality": "deep and controlled",
-        "direction_word": "contrast",
-        "material_verb": "defines",
-        "follow_q": [
-            "Would you push the contrast further, or bring in a warmer element?",
-            "Is the depth feeling right, or too heavy?",
-            "What surface would you change next?",
-        ],
-    },
     "nature_retreat": {
         "adj": "earthy",
         "quality": "natural and grounded",
@@ -300,11 +289,6 @@ _QUESTION_RESPONSES: dict[str, list[str]] = {
         "This direction works best with materials that look better with use — pine, linen, wool. Things that age well.",
         "With Nordic Warmth, the goal is a space that feels lived-in, not arranged.",
     ],
-    "penthouse_contemporary": [
-        "In Penthouse Contemporary, the depth comes from the materials. Mineral plaster, smoked oak — each has its own quality.",
-        "This direction needs controlled contrast — material richness, not lighting darkness. Warm accents keep it readable.",
-        "With Penthouse Contemporary, daylight remains dominant and the bronze accents lift the room. The materials do the work, not the shadow.",
-    ],
     "nature_retreat": [
         "In Nature Retreat, the material order is: stone, then timber, then textile. Natural over processed.",
         "This direction reads best when the materials are actually what they look like. No printed wood grain or imitation stone.",
@@ -344,10 +328,6 @@ _PRAISE_RESPONSES: dict[str, list[str]] = {
     "nordic_warmth": [
         "This feels warm and lived-in — that's exactly the right quality.",
         "The coziness is there. What would make it feel even more like home?",
-    ],
-    "penthouse_contemporary": [
-        "The depth is controlled well — not too heavy, not too light.",
-        "This is reading well. Would you push the contrast further?",
     ],
     "nature_retreat": [
         "The natural quality is landing well. What would you add or take out?",
@@ -393,11 +373,6 @@ _STRUCTURAL_RESPONSES: dict[str, list[str]] = {
         "That changes the zone use — the warmth can stay consistent through the shift.",
         "A real spatial change. The cozy quality transfers to the new zone arrangement.",
         "The zone function changes. The warm Nordic feel holds through it.",
-    ],
-    "penthouse_contemporary": [
-        "That changes the zone logic — the depth stays, the function shifts.",
-        "A real spatial transformation. The material depth carries into the new zone.",
-        "The zone purpose changes. The controlled darkness follows.",
     ],
     "nature_retreat": [
         "That shifts the zone use — the natural quality stays through the change.",

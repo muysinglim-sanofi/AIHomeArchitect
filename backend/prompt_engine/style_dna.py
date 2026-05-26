@@ -261,34 +261,6 @@ _STYLES: dict[str, StyleDNA] = {
         ],
     ),
 
-    # ── Penthouse Contemporary (Wave 5.5.53 — renamed from Dark Contemporary) ──
-    "Penthouse Contemporary": StyleDNA(
-        name="Penthouse Contemporary",
-        materials=["blackened brushed steel", "smoked oak", "raw architectural concrete", "tinted glass", "matte black hardware"],
-        lighting=[
-            "dramatic recessed architectural accent lighting only",
-            "warm amber against darkness — no ambient fill light",
-            "concealed uplight on concrete panel",
-            "single warm beam as spotlight drama",
-        ],
-        mood=["bold architectural confidence", "sophisticated editorial precision", "night-time gallery residence", "controlled power"],
-        furniture=["sharp geometric upholstered forms in dark fabric", "floating dark timber volumes", "architectural cantilever shelving", "low platform forms"],
-        architectural_elements=["raw concrete panel or feature wall", "floating dark joinery mass", "black steel window frame as graphic element", "polished or honed concrete floor"],
-        color_palette=["near-black", "warm charcoal", "smoked oak brown", "amber warm accent", "cold white as high contrast"],
-        composition=[
-            "darkness is the space — objects emerge from shadow rather than being placed against a wall",
-            "single warm amber accent light as the compositional focus point",
-        ],
-        avoid=[
-            "beige, cream, or warm neutral dominance (belongs to Warm Modern)",
-            "decorative objects or styling items",
-            "soft textiles in bulk (cushions, throws)",
-            "traditional or classical furniture forms",
-            "warm wood tones — smoked oak only, not walnut warmth",
-            "any sense of domestic comfort or residential softness",
-        ],
-    ),
-
     # ── Dark Modern Luxury ────────────────────────────────────────────────────
     "Dark Modern Luxury": StyleDNA(
         name="Dark Modern Luxury",

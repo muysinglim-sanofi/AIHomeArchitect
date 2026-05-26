@@ -72,18 +72,6 @@ _ATM_CHIPS: dict[str, list[str]] = {
         "Add botanical detail",
         "Soften the furniture scale",
     ],
-    "penthouse_contemporary": [
-        "Push the contrast further",
-        "Add darker stone surface",
-        "More bronze accent detail",
-        "Increase material depth",
-        "Try smoked oak flooring",
-        "Add a dramatic pendant",
-        "Reduce ambient lighting",
-        "More architectural shadow",
-        "Deepen the charcoal palette",
-        "Add a sculptural object",
-    ],
     "nature_retreat": [
         "Add more reclaimed timber",
         "Deepen the stone palette",
