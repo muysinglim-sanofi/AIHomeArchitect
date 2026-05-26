@@ -23,7 +23,12 @@ for _d in [
         realism_constraints=["sofa at normal residential height — 45 cm", "candleholders at varied heights — not matching set"],
         # Wave 5.5.22 — added "a television" as third focal option.
         # Originally "fireplace or wood stove as focal point" excluded TV.
-        room_specific_constraints=["layered rugs permitted — wool flatweave under pile", "fireplace, wood stove, or a television as focal point if present"],
+        # Wave 5.5.34 — WM-parity rewrite: dropped "if present" qualifier
+        # (model was interpreting as "skip if not photographed") and added
+        # "not multiple" cap matching WM pattern. Standardized wording:
+        # "single clear focal wall — <option 1>, <option 2>, or a television,
+        # not multiple". TV anchor now explicit + unconditional.
+        room_specific_constraints=["layered rugs permitted — wool flatweave under pile", "single clear focal wall — fireplace, wood stove, or a television, not multiple"],
         visible_transition_logic="pine floor and warm white plaster continue into kitchen; wool palette echoes through visible bedroom door",
         negative_rules=["no sleek dark furniture", "no chrome accents", "no minimalist floating shelves", "no cold grey palette"],
     ),
