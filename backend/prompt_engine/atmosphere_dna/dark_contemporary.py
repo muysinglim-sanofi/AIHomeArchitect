@@ -13,7 +13,14 @@ register_core(AtmosphereCoreDNA(
     # while establishing a readability floor at the core level.
     lighting_behavior="Concealed precision lighting — warm glow against dark surfaces; cinematic warmth with maintained architectural readability.",
     luxury_level="Contemporary penthouse luxury",
-    forbidden_elements=["Nightclub atmosphere", "cyberpunk lighting", "black void interiors", "aggressive contrast", "horror-dark rooms"],
+    # Wave 5.5.45 — removed paradoxical "dark"/"black" words from
+    # forbidden_elements. Even in negative formulations, these tokens
+    # were priming the model toward darkness (paradoxical reinforcement
+    # = "don't think of an elephant"). "black void interiors" → "void
+    # interiors" (drop "black", keep "void" anti-emptiness). "horror-
+    # dark rooms" → "horror-aesthetic interiors" (drop "dark", keep the
+    # horror reference).
+    forbidden_elements=["Nightclub atmosphere", "cyberpunk lighting", "void interiors", "aggressive contrast", "horror-aesthetic interiors"],
     # Wave 5.5.38 — "dark luxury" → "cinematic luxury" (drop the "dark"
     # framing which was reinforcing pure-darkness interpretations). Added
     # "warm" to "precision light" so the keyword pair stays consistent
@@ -55,11 +62,22 @@ for _d in [
         # overwhelming the focal directive). [1] luminosity floor
         # strengthened: explicit "maintain natural daylight from windows"
         # signal added so window-as-light-source survives the dark mood.
-        room_specific_constraints=["single clear focal wall — artwork, fireplace, or a television, not multiple", "maintain natural daylight from windows + balanced warm interior glow — not pure darkness"],
+        # Wave 5.5.45 — [0] TV-first reorder (same pattern as 5.5.43/44).
+        # [1] dropped trailing "not pure darkness" - the word "darkness"
+        # was reinforcing what it was trying to forbid. Replaced with
+        # positive framing "preserve visible interior detail".
+        room_specific_constraints=["single clear focal wall — a television, artwork, or fireplace, not multiple", "maintain natural daylight from windows + balanced warm interior glow — preserve visible interior detail"],
         # Wave 5.5.38 — added "visible kitchen" continuity matching WM
         # pattern. Previous wording mentioned only "visible dining area".
         visible_transition_logic="charcoal plaster and smoked oak floor continue into adjacent rooms; bronze accents echo through visible kitchen or dining area if present",
-        negative_rules=["no all-black room", "no neon or coloured accent light", "no chrome or silver hardware", "no grey rather than charcoal — must be warm dark"],
+        # Wave 5.5.45 — paradoxical "black"/"dark" words removed from
+        # negative_rules. Even in anti-formulations these prime the model.
+        # [0] "no all-black room" → "no monochrome saturation" (positive
+        # framing of same intent without "black").
+        # [3] "no grey rather than charcoal — must be warm dark" → "no
+        # neutral grey — warm charcoal tones only" (drops "dark").
+        # Slots [1] + [2] unchanged.
+        negative_rules=["no monochrome saturation", "no neon or coloured accent light", "no chrome or silver hardware", "no neutral grey — warm charcoal tones only"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="dark_contemporary",
