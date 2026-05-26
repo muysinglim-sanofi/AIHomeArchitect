@@ -22,16 +22,14 @@ for _d in [
         decor_language=["cluster of amber or clear glass candle holders on coffee table", "woven basket with wool throw at sofa end"],
         realism_constraints=["sofa at normal residential height — 45 cm", "candleholders at varied heights — not matching set"],
         # Wave 5.5.22 — added "a television" as third focal option.
-        # Originally "fireplace or wood stove as focal point" excluded TV.
-        # Wave 5.5.34 — WM-parity rewrite: dropped "if present" qualifier
-        # (model was interpreting as "skip if not photographed") and added
-        # "not multiple" cap matching WM pattern.
-        # Wave 5.5.43 — TV-first reorder. Previous wording put TV at the
-        # END of the option list, and bench showed the model picking the
-        # FIRST atmosphere-coherent option (wood stove for Nordic) instead
-        # of TV. New wording puts "a television" FIRST so the model has a
-        # clear primary anchor; fireplace/wood stove remain as alternatives.
-        room_specific_constraints=["layered rugs permitted — wool flatweave under pile", "single clear focal wall — a television, fireplace, or wood stove, not multiple"],
+        # Wave 5.5.34 — dropped "if present" + added "not multiple" cap.
+        # Wave 5.5.43 — TV-first reorder.
+        # Wave 5.5.49 — adopting universal media console flex pattern
+        # (same fix as WM 5.5.49 + Soft Luxury / Nature / Desert 5.5.48).
+        # Allows TV placement on existing wall OR media console; explicitly
+        # forbids creating a new wall. Standardized across all atmospheres
+        # to prevent wall-invention side effects.
+        room_specific_constraints=["layered rugs permitted — wool flatweave under pile", "television visible in living area on existing wall surface or media console — never on a newly created wall"],
         # Wave 5.5.34b — dropped "visible bedroom door" reference. Bench
         # 2026-05-25 showed the model literally invented a bedroom zone +
         # glass partition when the photo had no bedroom. Replaced with the

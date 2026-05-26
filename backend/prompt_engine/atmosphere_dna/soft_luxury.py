@@ -66,7 +66,16 @@ for _d in [
         # It explicitly forbade the most natural TV placement (the wall focal),
         # making TV nearly impossible to introduce. Other negative rules
         # (no jewel tones, no gold leaf, no asymmetric gallery wall) retained.
-        negative_rules=["no jewel-tone colour pops", "no gold leaf or metallic wallpaper", "no asymmetric art gallery wall"],
+        # Wave 5.5.49 — added defensive wall-preservation rule at slot [0].
+        # Bench 2026-05-25 (round 4) showed Soft Luxury still created a
+        # wall on the right side to mount TV, EVEN WITH the media console
+        # flex wording in room_specific_constraints. The curved-form +
+        # symmetry semantics of Soft Luxury appear to give the model
+        # permission to invent walls. Explicit defensive rule at slot [0]
+        # of AVOID line. Trade-off: "no asymmetric art gallery wall"
+        # demoted to slot [3] (not emitted in AVOID); wall preservation
+        # is more critical than gallery-wall avoidance.
+        negative_rules=["preserve existing wall layout and partitions exactly — no new walls or wall extensions", "no jewel-tone colour pops", "no gold leaf or metallic wallpaper", "no asymmetric art gallery wall"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="soft_luxury",

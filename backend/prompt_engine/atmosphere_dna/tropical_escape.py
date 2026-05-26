@@ -36,10 +36,11 @@ for _d in [
         # "plant as primary accent" slot is dropped because it duplicates
         # the plant option already in the TV anchor and competes for the
         # focal area.
-        # Wave 5.5.43 — TV-first reorder. Bench 2026-05-25 showed the
-        # model picking "plant" (matching Tropical's plant-heavy DNA)
-        # instead of TV. New wording puts "a television" FIRST.
-        room_specific_constraints=["single clear focal wall — a television, fireplace, or plant accent, not multiple", "where the photographed apartment shows an open side to terrace or garden, preserve and emphasize that opening"],
+        # Wave 5.5.43 — TV-first reorder.
+        # Wave 5.5.49 — adopting universal media console flex pattern
+        # (standardization across all atmospheres). Allows TV on existing
+        # wall OR media console; explicitly forbids creating a new wall.
+        room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "where the photographed apartment shows an open side to terrace or garden, preserve and emphasize that opening"],
         # Wave 5.5.35 — drop hard "into terrace" (assumed terrace exists,
         # leak source on indoor apartments). Add explicit "visible kitchen"
         # continuity matching the WM pattern. Terrace kept as conditional.

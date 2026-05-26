@@ -97,9 +97,9 @@ for _d in [
         # positive framing "preserve visible interior detail".
         # Wave 5.5.47 — [1] strengthened daylight preservation directive.
         # User feedback: "met de jour toujours" (always render daytime).
-        # Model was converting photographed daytime scenes to evening/night
-        # for dark mood. New wording explicitly anchors time-of-day.
-        room_specific_constraints=["single clear focal wall — a television, artwork, or fireplace, not multiple", "maintain photographed natural daylight from windows + warm interior glow — render daytime scene matching photographed time of day"],
+        # Wave 5.5.49 — [0] adopting universal media console flex pattern
+        # for consistency across all 8 atmospheres.
+        room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "maintain photographed natural daylight from windows + warm interior glow — render daytime scene matching photographed time of day"],
         # Wave 5.5.38 — added "visible kitchen" continuity matching WM
         # pattern. Previous wording mentioned only "visible dining area".
         visible_transition_logic="charcoal plaster and smoked oak floor continue into adjacent rooms; bronze accents echo through visible kitchen or dining area if present",

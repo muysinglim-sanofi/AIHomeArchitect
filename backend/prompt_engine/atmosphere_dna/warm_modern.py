@@ -35,7 +35,13 @@ for _d in [
         # third valid focal option: "fireplace, artwork, or a television,
         # not multiple". This unblocks the prior structural block where
         # the DNA only permitted 2 focal options, none being TV.
-        room_specific_constraints=["seating in conversation grouping", "single clear focal wall — fireplace, artwork, or a television, not multiple"],
+        # Wave 5.5.49 — adopting the universal media console flex pattern.
+        # Bench 2026-05-25 (round 4) showed the option-list TV anchor
+        # caused WM to add a "faux mur" to mount the TV. Same fix
+        # pattern as Soft Luxury / Nature / Desert (5.5.48): allow TV
+        # placement on EXISTING wall OR media console, never on a
+        # newly created wall. Canonical reference profile updated.
+        room_specific_constraints=["seating in conversation grouping", "television visible in living area on existing wall surface or media console — never on a newly created wall"],
         visible_transition_logic="oak floor and warm plaster continue into adjacent rooms; brass accents echo through visible kitchen or hallway",
         negative_rules=["no cold grey palette", "no chrome hardware", "no matching 3-piece suite", "no floating furniture without visible support"],
     ),

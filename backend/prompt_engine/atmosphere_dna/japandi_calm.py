@@ -38,7 +38,10 @@ for _d in [
         # no pattern" demoted to slot [2] (not emitted by [:2] in
         # build_dna_room_context, accepted trade-off — rug pattern is a
         # secondary concern vs TV + restraint).
-        room_specific_constraints=["single clear focal wall — fireplace, artwork, or a television, not multiple", "maximum 3 decorative objects in room", "solid neutral rug or no rug — no pattern"],
+        # Wave 5.5.49 — adopting universal media console flex pattern
+        # (standardization across all atmospheres). Allows TV on existing
+        # wall OR media console; explicitly forbids creating a new wall.
+        room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "maximum 3 decorative objects in room", "solid neutral rug or no rug — no pattern"],
         visible_transition_logic="pale ash floor and plaster walls extend into adjacent rooms; ceramic palette echoes through visible kitchen",
         # Wave 5.5.39 — added defensive anti-wall-replacement rule
         # ("preserve existing windows and glass openings as photographed").
