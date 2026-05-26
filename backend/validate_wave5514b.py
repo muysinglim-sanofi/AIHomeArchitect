@@ -74,7 +74,10 @@ _CASES: list[tuple[str, str, list[str], list[str]]] = [
         "dark_contemporary",
         "living_room",
         ["Architectural sophistication", "architecturally confident"],
-        ["Sophistication", "dark charcoal plaster", "smoked oak"],
+        # Wave 5.5.47 softened "dark charcoal" → "warm charcoal" so the
+        # must_keep keyword updated accordingly. "Sophistication" +
+        # "smoked oak" still load-bearing for atmosphere identity.
+        ["Sophistication", "warm charcoal plaster", "smoked oak"],
     ),
     (
         "nature_retreat",

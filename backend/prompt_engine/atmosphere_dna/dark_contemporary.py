@@ -5,7 +5,15 @@ register_core(AtmosphereCoreDNA(
     philosophy="Architectural sophistication through depth, contrast, material richness, and restraint.",
     emotional_intent="Dramatic, sophisticated, powerful, sensory, moody but refined, architecturally confident.",
     architectural_language="Deep tonal volumes with high-contrast material surfaces, concealed warm light, and gallery-level spatial control.",
-    material_palette=["dark charcoal plaster", "black or dark grey marble", "smoked oak or wenge", "brushed bronze or gunmetal", "concrete"],
+    # Wave 5.5.47 — softened paradoxical "dark"/"black" vocabulary in
+    # material_palette. Bench 2026-05-25 (round 2) showed Dark Contemp
+    # still rendering "trop sombre" despite Wave 5.5.38 + 5.5.45 fixes.
+    # The material_palette darkness saturation (6 "dark"/"black"
+    # occurrences across core+room) was the residual driver. Replaced
+    # "dark charcoal" -> "warm charcoal", "black or dark grey" -> "deep
+    # grey or smoked". Mood preserved (charcoal + smoked still convey
+    # depth), readability gained.
+    material_palette=["warm charcoal plaster", "deep grey or smoked marble", "smoked oak or wenge", "brushed bronze or gunmetal", "concrete"],
     # Wave 5.5.38 — dropped "darkness as design element". The phrase
     # licensed pure-darkness renders (bench 2026-05-25 showed "trop sombre,
     # on voit quasiment rien"). Replaced with "cinematic warmth with
@@ -25,15 +33,22 @@ register_core(AtmosphereCoreDNA(
     # framing which was reinforcing pure-darkness interpretations). Added
     # "warm" to "precision light" so the keyword pair stays consistent
     # with the new lighting_behavior emphasis.
-    atmosphere_keywords=["cinematic luxury", "charcoal plaster", "smoked oak", "bronze", "warm precision light"],
+    # Wave 5.5.47 — "charcoal plaster" → "warm charcoal plaster" for
+    # consistency with material_palette softening.
+    atmosphere_keywords=["cinematic luxury", "warm charcoal plaster", "smoked oak", "bronze", "warm precision light"],
 ))
 
 for _d in [
     RoomAdaptationDNA(
         atmosphere_id="dark_contemporary",
         room_type="living_room",
-        furniture_language=["dark charcoal bouclé or leather — deep low tactile richness", "dark marble or stone — sculptural surface depth", "dark velvet — high-contrast atmospheric depth"],
-        material_palette=["dark charcoal plaster walls", "smoked oak or dark stone floor", "dark marble or bronze accent surfaces"],
+        # Wave 5.5.47 — material vocab softening (room-level mirror of
+        # core changes). "dark" / "black" removed everywhere they
+        # appeared in positive descriptors. Mood preserved via "warm
+        # charcoal", "deep marble", "smoked", "rich velvet" — all still
+        # convey moody luxury depth without the over-dark cue.
+        furniture_language=["warm charcoal bouclé or leather — deep low tactile richness", "deep marble or stone — sculptural surface depth", "rich velvet — high-contrast atmospheric depth"],
+        material_palette=["warm charcoal plaster walls", "smoked oak or deep stone floor", "deep marble or bronze accent surfaces"],
         # Wave 5.5.38 — dropped "room lit by glow, not flood". The "not
         # flood" framing was too aggressive — the model interpreted it as
         # "minimize all light sources" → underexposed renders. Replaced
@@ -51,7 +66,10 @@ for _d in [
         # Wave 5.5.27 — REPLACED vessel with seating-footprint rug. Vessel
         # was less critical than rug for inhabitation realism. Kept velvet
         # throw (sofa-anchored, moody character).
-        decor_language=["deep dark velvet throw layered on the sofa", "deep-pile rug in charcoal or dark tonal within the seating footprint"],
+        # Wave 5.5.47 — "deep dark velvet" → "rich velvet";
+        # "charcoal or dark tonal" → "charcoal tones". Same mood-
+        # preserving cleanup.
+        decor_language=["rich velvet throw layered on the sofa", "deep-pile rug in charcoal tones within the seating footprint"],
         realism_constraints=["sofa sized correctly — not modelling-scale oversized", "floor in correct proportion — wood grain or stone texture visible"],
         # Wave 5.5.22 — added "a television" as alternative focal option.
         # Originally "artwork as single focal wall" implicitly excluded TV.
@@ -66,7 +84,11 @@ for _d in [
         # [1] dropped trailing "not pure darkness" - the word "darkness"
         # was reinforcing what it was trying to forbid. Replaced with
         # positive framing "preserve visible interior detail".
-        room_specific_constraints=["single clear focal wall — a television, artwork, or fireplace, not multiple", "maintain natural daylight from windows + balanced warm interior glow — preserve visible interior detail"],
+        # Wave 5.5.47 — [1] strengthened daylight preservation directive.
+        # User feedback: "met de jour toujours" (always render daytime).
+        # Model was converting photographed daytime scenes to evening/night
+        # for dark mood. New wording explicitly anchors time-of-day.
+        room_specific_constraints=["single clear focal wall — a television, artwork, or fireplace, not multiple", "maintain photographed natural daylight from windows + warm interior glow — render daytime scene matching photographed time of day"],
         # Wave 5.5.38 — added "visible kitchen" continuity matching WM
         # pattern. Previous wording mentioned only "visible dining area".
         visible_transition_logic="charcoal plaster and smoked oak floor continue into adjacent rooms; bronze accents echo through visible kitchen or dining area if present",
