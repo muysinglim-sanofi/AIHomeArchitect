@@ -17,15 +17,39 @@ for _d in [
         atmosphere_id="nature_retreat",
         room_type="living_room",
         furniture_language=["undyed natural linen — deep biophilic tactile warmth", "rough-cut stone or slate — raw surface honesty", "woven rattan or jute — organic textural depth"],
-        material_palette=["wide-plank reclaimed oak floor", "rammed earth or clay plaster walls", "rough-cut stone accent wall"],
-        lighting_behavior="Warm concealed cove above stone wall + timber-shaded floor lamp; warm organic tone.",
+        # Wave 5.5.37 — dropped "rough-cut stone accent wall" from
+        # material_palette. The "accent wall" noun directly directs the
+        # model to add a stone wall, which in turn displaces existing
+        # windows (bench 2026-05-25 showed back window deletion on Nature
+        # preserve). Replaced with "rough-cut stone accents on existing
+        # surfaces" so stone stays a material accent vocabulary without
+        # naming a wall to add.
+        material_palette=["wide-plank reclaimed oak floor", "rammed earth or clay plaster walls", "rough-cut stone accents on existing surfaces"],
+        # Wave 5.5.37 — dropped "above stone wall" lighting anchor since
+        # the stone wall is no longer mandated; concealed cove now neutral.
+        lighting_behavior="Warm concealed cove + timber-shaded floor lamp; warm organic tone.",
         # Wave 5.5.27 — REPLACED hanging wall textile with seating-footprint
         # rug. Wall textile competed for wall focal area ; rug at floor more
         # essential for inhabitation realism.
         decor_language=["single large ceramic vessel with dried botanicals", "natural jute rug within the seating footprint"],
-        realism_constraints=["sofa at residential scale — not modelling scale", "stone wall texture visible — not flat CGI"],
-        room_specific_constraints=["single statement stone or timber wall — not all four walls", "planting: maximum 2 large statement plants"],
-        visible_transition_logic="reclaimed oak floor and clay plaster continue into adjacent rooms; stone and plant accents echo through visible dining area",
+        # Wave 5.5.37 — softened "stone wall texture visible" → "stone or
+        # timber texture on existing surfaces". The original wording
+        # implicitly required a stone wall to BE present so its texture
+        # could be visible. The replacement keeps the anti-CGI realism
+        # signal without requiring a new wall surface.
+        realism_constraints=["sofa at residential scale — not modelling scale", "stone or timber texture on existing surfaces — not flat CGI"],
+        # Wave 5.5.37 — slot [0] becomes standardized TV anchor with
+        # atmosphere-coherent options (stone + timber accent + television).
+        # Replaces the previous "single statement stone or timber wall —
+        # not all four walls" which the Wave 5.5.32 strip targeted at
+        # runtime. With the source clean, the Wave 5.5.32 strip on this
+        # phrase becomes a no-op (kept temporarily as defense in depth).
+        room_specific_constraints=["single clear focal wall — stone, timber accent, or a television, not multiple", "planting: maximum 2 large statement plants"],
+        # Wave 5.5.37 — added "visible kitchen" continuity matching WM
+        # pattern. Previous wording mentioned only "visible dining area".
+        # Softened "stone and plant accents" → "natural accents" (don't
+        # imply stone wall in adjacent rooms either).
+        visible_transition_logic="reclaimed oak floor and clay plaster continue into adjacent rooms; natural accents echo through visible kitchen or dining area if present",
         negative_rules=["no plastic or synthetic pot", "no plant collection overload", "no polished surfaces", "no cold grey palette"],
     ),
     RoomAdaptationDNA(

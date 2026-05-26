@@ -221,13 +221,10 @@ _ROOM_CONTEXT_CASES: list[tuple[str, str, list[str], list[str]]] = [
         ["facade identity"],
         ["louvred element visible"],
     ),
-    # Nature Retreat living — "stone or timber wall" pushes wall material
-    (
-        "nature_retreat",
-        "living_room",
-        ["stone or timber wall — not all four walls"],
-        ["single statement stone or timber accent", "maximum 2 large statement plants"],
-    ),
+    # Nature Retreat living — strip removed Wave 5.5.37 (source DNA no
+    # longer contains the original leak phrase, replaced by standardized TV
+    # anchor "single clear focal wall - stone, timber accent, or a
+    # television, not multiple"). Test case retired.
     # Nature Retreat bedroom — "clay plaster wall as composition"
     (
         "nature_retreat",

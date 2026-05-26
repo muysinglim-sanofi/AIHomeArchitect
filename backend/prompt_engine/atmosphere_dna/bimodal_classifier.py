@@ -311,12 +311,10 @@ _STRIPS: dict[str, list[tuple[str, str]]] = {
         # luxury" — drop the "architectural realism and " segment.
         ("architectural realism and ", ""),
         # Wave 5.5.32 — room_context leaks via build_dna_room_context_signal.
-        # Living room_specific_constraints: 🔴 "stone or timber wall" pushes
-        # wall-material addition on an existing wall surface.
-        (
-            "single statement stone or timber wall — not all four walls",
-            "single statement stone or timber accent",
-        ),
+        # Living room_specific_constraints strip removed Wave 5.5.37 — the
+        # source DNA no longer contains "single statement stone or timber
+        # wall — not all four walls" (replaced by the standardized TV
+        # anchor pattern). Strip is now a no-op, removed for clarity.
         # Bedroom room_specific_constraints: 🔴 "clay plaster wall as
         # composition" pushes wall material change.
         (" — clay plaster wall as composition", ""),
