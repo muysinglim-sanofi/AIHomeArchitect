@@ -943,7 +943,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       _scrollToBottom();
 
       if (_project.id != 'new') {
-        _svc.insertMessage(sessionId: _project.id, role: 'ai', content: failureMessage);
+        // Wave 5.6b — backend now writes failure messages to Supabase
+        // via the GenerationError handler (so disconnect-tolerant users
+        // see the failure on reopen). Frontend only inserts as fallback
+        // when the backend write failed.
+        if (!e.messagePersisted) {
+          debugPrint('[Wave 5.6b] backend failure-message write failed — frontend fallback inserting');
+          _svc.insertMessage(sessionId: _project.id, role: 'ai', content: failureMessage);
+        }
       }
     } catch (e) {
       // Transport error (timeout, network drop, etc.) — backend may still be

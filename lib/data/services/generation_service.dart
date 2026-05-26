@@ -7,12 +7,18 @@ class GenerationException implements Exception {
   final String userMessage;
   final bool retryable;
   final String requestId;
+  /// Wave 5.6b — true when the backend has already persisted this failure
+  /// message to the Supabase messages table. The caller should SKIP its
+  /// own insertMessage in that case to avoid duplicates. Defaults to false
+  /// so older backends without the flag fall through to client-side write.
+  final bool messagePersisted;
 
   const GenerationException({
     required this.errorCode,
     required this.userMessage,
     required this.retryable,
     this.requestId = '',
+    this.messagePersisted = false,
   });
 
   @override
@@ -121,11 +127,13 @@ class GenerationService {
         final userMessage = (data['user_message'] as String?) ?? 'Generation failed.';
         final retryable = (data['retryable'] as bool?) ?? true;
         final requestId = (data['request_id'] as String?) ?? '';
+        final messagePersisted = (data['message_persisted'] as bool?) ?? false;
         throw GenerationException(
           errorCode: errorCode,
           userMessage: userMessage,
           retryable: retryable,
           requestId: requestId,
+          messagePersisted: messagePersisted,
         );
       }
       rethrow;
