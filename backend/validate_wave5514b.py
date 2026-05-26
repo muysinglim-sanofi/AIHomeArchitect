@@ -74,13 +74,12 @@ _CASES: list[tuple[str, str, list[str], list[str]]] = [
         "dark_contemporary",
         "living_room",
         ["Architectural sophistication", "architecturally confident"],
-        # Wave 5.5.47 softened "dark charcoal" → "warm charcoal".
-        # Wave 5.5.48 softened room.material_palette floor from "smoked
-        # oak or deep stone" to "warm walnut or honed stone". "smoked
-        # oak" now lives only in core fields (not emitted in build_dna_
-        # block). must_keep updated to use floor materials present in
-        # the rendered ROOM block.
-        ["Sophistication", "warm charcoal plaster", "warm walnut"],
+        # Wave 5.5.47/48 softened "dark charcoal" → "warm charcoal";
+        # floor became "warm walnut or honed stone".
+        # Wave 5.5.50 — "warm charcoal plaster" -> "warm mineral plaster"
+        # as part of Daylight Recovery (reduce charcoal saturation across
+        # emitted preserve prompt). must_keep updated to match.
+        ["Sophistication", "warm mineral plaster", "warm walnut"],
     ),
     (
         "nature_retreat",

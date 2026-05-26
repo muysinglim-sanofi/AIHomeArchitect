@@ -19,13 +19,22 @@ register_core(AtmosphereCoreDNA(
     # "smoked oak or wenge" -> "warm walnut or smoked oak" (drop "wenge"
     # which is the darkest wood). Wenge alone was driving floor-level
     # darkness on top of charcoal walls.
-    material_palette=["warm charcoal plaster", "deep grey or smoked marble", "warm walnut or smoked oak", "brushed bronze or gunmetal", "concrete"],
+    # Wave 5.5.50 — Daylight Recovery: "warm charcoal plaster" -> "warm
+    # mineral plaster". Reduces charcoal saturation across the prompt
+    # (target: at most 1 occurrence in emitted preserve). "Mineral"
+    # keeps the sophistication + natural finish identity without the
+    # darkness cue.
+    material_palette=["warm mineral plaster", "deep grey or smoked marble", "warm walnut or smoked oak", "brushed bronze or gunmetal", "concrete"],
     # Wave 5.5.38 — dropped "darkness as design element". The phrase
     # licensed pure-darkness renders (bench 2026-05-25 showed "trop sombre,
     # on voit quasiment rien"). Replaced with "cinematic warmth with
     # maintained architectural readability" — keeps the moody-luxury intent
     # while establishing a readability floor at the core level.
-    lighting_behavior="Concealed precision lighting — warm glow against dark surfaces; cinematic warmth with maintained architectural readability.",
+    # Wave 5.5.50 — Daylight Recovery: "dark surfaces" -> "rich textured
+    # surfaces". The "dark surfaces" string was the last paradoxical
+    # darkness trigger surviving in the lighting_behavior; replacement
+    # preserves richness+texture without low-light priming.
+    lighting_behavior="Concealed precision lighting — warm glow against rich textured surfaces; cinematic warmth with maintained architectural readability.",
     luxury_level="Contemporary penthouse luxury",
     # Wave 5.5.45 — removed paradoxical "dark"/"black" words from
     # forbidden_elements. Even in negative formulations, these tokens
@@ -41,7 +50,9 @@ register_core(AtmosphereCoreDNA(
     # with the new lighting_behavior emphasis.
     # Wave 5.5.47 — "charcoal plaster" → "warm charcoal plaster" for
     # consistency with material_palette softening.
-    atmosphere_keywords=["cinematic luxury", "warm charcoal plaster", "smoked oak", "bronze", "warm precision light"],
+    # Wave 5.5.50 — "warm charcoal plaster" -> "warm mineral plaster"
+    # consistent with material_palette change.
+    atmosphere_keywords=["cinematic luxury", "warm mineral plaster", "smoked oak", "bronze", "warm precision light"],
 ))
 
 for _d in [
@@ -58,8 +69,20 @@ for _d in [
         # walnut or honed stone floor". Lighter floor reflects more
         # ambient light, reducing overall darkness while keeping walls
         # charcoal for mood.
-        furniture_language=["warm charcoal bouclé or leather — deep low tactile richness", "deep marble or stone — sculptural surface depth", "rich velvet — high-contrast atmospheric depth"],
-        material_palette=["warm charcoal plaster walls", "warm walnut or honed stone floor", "deep marble or bronze accent surfaces"],
+        # Wave 5.5.50 — Daylight Recovery surgical softening:
+        # - "warm charcoal bouclé" -> "warm mineral bouclé" (drop charcoal)
+        # - "deep low tactile richness" -> "tactile richness" (drop deep
+        #   priming + redundant "low")
+        # - "deep marble or stone — sculptural surface depth" -> "honed
+        #   marble or stone — sculptural surface depth" (drop deep priming)
+        # - "rich velvet — high-contrast atmospheric depth" -> "rich
+        #   velvet — layered atmospheric texture" (remove "high-contrast"
+        #   cinematic-darkness trigger, "depth" priming)
+        # - "warm charcoal plaster walls" -> "warm mineral plaster walls"
+        # - "deep marble or bronze accent surfaces" -> "honed marble or
+        #   bronze accent surfaces" (drop deep priming)
+        furniture_language=["warm mineral bouclé or leather — tactile richness", "honed marble or stone — sculptural surface depth", "rich velvet — layered atmospheric texture"],
+        material_palette=["warm mineral plaster walls", "warm walnut or honed stone floor", "honed marble or bronze accent surfaces"],
         # Wave 5.5.38 — dropped "room lit by glow, not flood". The "not
         # flood" framing was too aggressive — the model interpreted it as
         # "minimize all light sources" → underexposed renders. Replaced
@@ -80,7 +103,10 @@ for _d in [
         # Wave 5.5.47 — "deep dark velvet" → "rich velvet";
         # "charcoal or dark tonal" → "charcoal tones". Same mood-
         # preserving cleanup.
-        decor_language=["rich velvet throw layered on the sofa", "deep-pile rug in charcoal tones within the seating footprint"],
+        # Wave 5.5.50 — "in charcoal tones" -> "in warm tonal textures".
+        # Drops charcoal occurrence in decor; "deep-pile" kept (refers to
+        # rug pile depth, not visual darkness).
+        decor_language=["rich velvet throw layered on the sofa", "deep-pile rug in warm tonal textures within the seating footprint"],
         realism_constraints=["sofa sized correctly — not modelling-scale oversized", "floor in correct proportion — wood grain or stone texture visible"],
         # Wave 5.5.22 — added "a television" as alternative focal option.
         # Originally "artwork as single focal wall" implicitly excluded TV.
@@ -102,7 +128,10 @@ for _d in [
         room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "maintain photographed natural daylight from windows + warm interior glow — render daytime scene matching photographed time of day"],
         # Wave 5.5.38 — added "visible kitchen" continuity matching WM
         # pattern. Previous wording mentioned only "visible dining area".
-        visible_transition_logic="charcoal plaster and smoked oak floor continue into adjacent rooms; bronze accents echo through visible kitchen or dining area if present",
+        # Wave 5.5.50 — "charcoal plaster" -> "warm mineral plaster"
+        # consistent with material_palette rename. Maintains continuity
+        # with the new naming and drops another charcoal occurrence.
+        visible_transition_logic="warm mineral plaster and smoked oak floor continue into adjacent rooms; bronze accents echo through visible kitchen or dining area if present",
         # Wave 5.5.45 — paradoxical "black"/"dark" words removed from
         # negative_rules. Even in anti-formulations these prime the model.
         # [0] "no all-black room" → "no monochrome saturation" (positive
