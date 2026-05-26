@@ -14,17 +14,18 @@ import '../../shared/widgets/room_type_card.dart';
 import '../../shared/widgets/sticky_action_bar.dart';
 import '../chat/widgets/chat_input_bar.dart' show MicButton;
 
-// ── Wave 4.3 — New Design Session V2 ──────────────────────────────────────────
-// Premium architectural-direction flow. Consumes the Wave 4 spine
-// (AtmosphereCard V2 incl. .custom, StickyActionBar, AppPill, editorial type).
-// In scope: atmosphere V2 + custom fold, premium room-type horizontal scroller
-// (exact l10n room strings preserved — route/backend contract), calmer
-// dropzone, sticky CTA with a clear premium disabled state, editorial
-// hierarchy. NOT included (deferred to a future routing+chat wave, by
-// decision): AI-Decide, Surprise-Me, free-text description — they cannot be
-// wired honestly without route/chat_screen/backend changes. No backend /
-// routing / session / generation changes; picker, validation, route contract
-// and session creation preserved verbatim.
+// ── Wave 5.8 — New Design Screen Redesign (Step-by-step architectural journey)
+// Reframes the upload flow as 5 explicit, persistent steps with a guided
+// stepper roadmap. Goals:
+//   1. Clearer journey — Upload → Room → Atmosphere → Redesign Options → Vision
+//   2. Premium editorial feeling (calm, architect-like, not a settings form)
+//   3. Replaces confusing Preserve/Create with Preserve My Space / Reimagine
+//      Freely, plus bullets so the choice is unambiguous
+//   4. Persistent left vertical stepper on tablet/desktop; compact horizontal
+//      top stepper on phones — scroll-driven highlight + click-to-scroll
+// Backend contract unchanged: room_type / style_label / generation_mode flow
+// exactly as before. AI Decide and Surprise Me remain real cards inside their
+// respective selectors (one editorial selection language).
 
 class UploadScreen extends StatefulWidget {
   const UploadScreen({super.key});
@@ -38,18 +39,22 @@ class _UploadScreenState extends State<UploadScreen>
   File? _image;
   String? _selectedRoom;
   String? _selectedStyle;
-  // Wave 4.8.5 — real conversational intent (carried as flags, never fake
-  // strings). AI Decide ⇄ explicit room are mutually exclusive; Surprise Me
-  // ⇄ explicit atmosphere likewise. Description is an optional free-text
-  // architectural direction that flows to the backend prompt verbatim.
+  // Wave 4.8.5 — AI Decide ⇄ explicit room are mutually exclusive; Surprise
+  // Me ⇄ explicit atmosphere likewise. Carried as flags, never fake strings.
   bool _aiDecideRoom = false;
   bool _surpriseStyle = false;
   // Wave 5.5.14b.2 — bimodal intent. Preserve preselected per design decision.
-  // "preserve" strips architectural tokens from atmosphere DNA + keeps full
-  // preservation stack. "creative" keeps full DNA + relaxes preservation.
   String _selectedMode = 'preserve';
   final _descController = TextEditingController();
   final _picker = ImagePicker();
+
+  // Wave 5.8 — stepper plumbing. One GlobalKey per step section so we can
+  // click-to-scroll (Scrollable.ensureVisible) and a scroll listener that
+  // updates [_currentStep] based on which section's top has crossed the
+  // viewport's reading line.
+  final ScrollController _scrollController = ScrollController();
+  final List<GlobalKey> _stepKeys = List.generate(5, (_) => GlobalKey());
+  int _currentStep = 1;
 
   late final AnimationController _entryController;
   late final Animation<double> _fadeAnim;
@@ -61,13 +66,58 @@ class _UploadScreenState extends State<UploadScreen>
         vsync: this, duration: const Duration(milliseconds: 600))
       ..forward();
     _fadeAnim = CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
+    _scrollController.addListener(_recomputeCurrentStep);
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_recomputeCurrentStep);
+    _scrollController.dispose();
     _descController.dispose();
     _entryController.dispose();
     super.dispose();
+  }
+
+  // Find the deepest step whose header has crossed the "reading line" near
+  // the top of the viewport. Avoids fighting with very tall sections (a
+  // long Atmosphere strip never makes Vision feel current unless the user
+  // scrolls past its bottom).
+  void _recomputeCurrentStep() {
+    final scrollBox =
+        _scrollController.position.context.notificationContext?.findRenderObject()
+            as RenderBox?;
+    if (scrollBox == null) return;
+    final viewportTop = scrollBox.localToGlobal(Offset.zero).dy;
+    // Reading line ~120 px below viewport top (roughly: just under the
+    // sticky AppBar). Anything above this counts as "passed".
+    final readingLine = viewportTop + 120;
+    int newStep = 1;
+    for (var i = 0; i < _stepKeys.length; i++) {
+      final ctx = _stepKeys[i].currentContext;
+      if (ctx == null) continue;
+      final box = ctx.findRenderObject() as RenderBox?;
+      if (box == null) continue;
+      final dy = box.localToGlobal(Offset.zero).dy;
+      if (dy <= readingLine) {
+        newStep = i + 1;
+      } else {
+        break;
+      }
+    }
+    if (newStep != _currentStep) {
+      setState(() => _currentStep = newStep);
+    }
+  }
+
+  void _scrollToStep(int step) {
+    final ctx = _stepKeys[step - 1].currentContext;
+    if (ctx == null) return;
+    Scrollable.ensureVisible(
+      ctx,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeInOutCubic,
+      alignment: 0.05, // small offset from viewport top
+    );
   }
 
   // ── Picker (preserved verbatim — non-regression) ──────────────────────────
@@ -142,7 +192,6 @@ class _UploadScreenState extends State<UploadScreen>
   bool get _styleChosen => _selectedStyle != null || _surpriseStyle;
   bool get _canProceed => _image != null && _roomChosen && _styleChosen;
 
-  // Calm, specific hint for the disabled state (premium, never a dead button).
   String get _missingHint {
     if (_image == null) return 'Add a photo of your space to begin';
     if (!_roomChosen) return 'Choose a room — or let the AI decide';
@@ -150,9 +199,6 @@ class _UploadScreenState extends State<UploadScreen>
   }
 
   void _start() {
-    // Real semantics only — AI Decide / Surprise Me travel as typed flags,
-    // never as fake "AI Decide"/"Surprise Me" room/style strings. The
-    // optional free-text direction rides as `desc` → backend prompt.
     final params = <String, String>{};
     if (_aiDecideRoom) {
       params['aiDecide'] = '1';
@@ -166,9 +212,6 @@ class _UploadScreenState extends State<UploadScreen>
     }
     final desc = _descController.text.trim();
     if (desc.isNotEmpty) params['desc'] = desc;
-    // Wave 5.5.14b.2 — carry the bimodal intent forward. Default 'preserve'
-    // is omitted from the URL when unchanged (cleaner deep-links); only the
-    // explicit 'creative' choice is serialised.
     if (_selectedMode == 'creative') params['mode'] = 'creative';
 
     final uri = Uri(path: '/chat/new', queryParameters: params);
@@ -187,168 +230,522 @@ class _UploadScreenState extends State<UploadScreen>
       ),
       body: FadeTransition(
         opacity: _fadeAnim,
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.pagePadding,
-                  AppSpacing.pagePadding,
-                  AppSpacing.pagePadding,
-                  AppSpacing.md,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Tablet/desktop layout: persistent vertical stepper sidebar +
+            // scrollable content. Phones: horizontal top stepper + content.
+            final isWide = constraints.maxWidth >= 720;
+            return Column(
+              children: [
+                if (!isWide)
+                  _StepperTop(
+                    currentStep: _currentStep,
+                    onStep: _scrollToStep,
+                  ),
+                Expanded(
+                  child: isWide
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _StepperSide(
+                              currentStep: _currentStep,
+                              onStep: _scrollToStep,
+                            ),
+                            Expanded(child: _buildContent(isWide: true)),
+                          ],
+                        )
+                      : _buildContent(isWide: false),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                StickyActionBar(
+                  primary: AppButton(
+                    label: 'Generate Design ✨',
+                    onPressed: _canProceed ? _start : null,
+                  ),
+                  secondary: Text(
+                    _canProceed
+                        ? 'AI will create your transformation'
+                        : _missingHint,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent({required bool isWide}) {
+    return SingleChildScrollView(
+      controller: _scrollController,
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.pagePadding,
+        AppSpacing.lg,
+        AppSpacing.pagePadding,
+        AppSpacing.md,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── STEP 1 — Upload your space ────────────────────────────────────
+          _StepSection(
+            anchorKey: _stepKeys[0],
+            stepNumber: 1,
+            title: 'Upload your space',
+            subtitle:
+                'Upload a photo of the room, facade, garden or any space '
+                'you want to redesign.',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _UploadZone(image: _image, onTap: _showImagePicker),
+                const SizedBox(height: 10),
+                Row(
                   children: [
+                    Icon(
+                      Icons.shield_outlined,
+                      size: 14,
+                      color: AppColors.textTertiary,
+                    ),
+                    const SizedBox(width: 6),
                     Text(
-                      l10n.uploadSubtitle,
-                      style: AppTheme.displayEditorial(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w500,
-                        height: 1.15,
-                        letterSpacing: -0.3,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      l10n.uploadHint,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.textSecondary,
-                            height: 1.5,
-                          ),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    _UploadZone(image: _image, onTap: _showImagePicker),
-                    const SizedBox(height: AppSpacing.xl),
-                    // Wave 4.8.7 — AI Decide is now the FIRST card in the
-                    // Interior row (`RoomTypeRow.aiDecide…`), not a separate
-                    // settings-style bar. One editorial selection language.
-                    _Eyebrow(label: l10n.roomTypeLabel),
-                    const SizedBox(height: AppSpacing.md),
-                    _RoomScroller(
-                      selected: _selectedRoom,
-                      onSelected: (v) => setState(() {
-                        _selectedRoom = v;
-                        _aiDecideRoom = false;
-                      }),
-                      aiDecideSelected: _aiDecideRoom,
-                      onAiDecide: () => setState(() {
-                        _aiDecideRoom = !_aiDecideRoom;
-                        if (_aiDecideRoom) _selectedRoom = null;
-                      }),
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    // Wave 4.8.7 — Surprise Me is now the FIRST card in the
-                    // atmosphere strip (`AtmosphereCard.surprise`), a creative
-                    // direction, not a system toggle.
-                    _Eyebrow(label: l10n.styleLabel),
-                    const SizedBox(height: AppSpacing.md),
-                    _AtmosphereScroller(
-                      selected: _selectedStyle,
-                      onSelected: (v) => setState(() {
-                        _selectedStyle = v;
-                        _surpriseStyle = false;
-                      }),
-                      surpriseSelected: _surpriseStyle,
-                      onSurprise: () => setState(() {
-                        _surpriseStyle = !_surpriseStyle;
-                        if (_surpriseStyle) _selectedStyle = null;
-                      }),
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
-                    // Wave 5.5.14b.2 — bimodal intent chooser. Preserve is
-                    // preselected (today's behaviour). User can opt into the
-                    // Creative path here; the choice can still be flipped
-                    // per-generation later from the source-photo sheet in chat.
-                    _Eyebrow(label: l10n.modeChooserTitle),
-                    const SizedBox(height: AppSpacing.md),
-                    _ModeChooser(
-                      selectedMode: _selectedMode,
-                      onSelected: (m) => setState(() => _selectedMode = m),
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
-                    // Wave 4.8.7 — description elevation. The architectural
-                    // briefing is one of the most important creative surfaces
-                    // in the app, so it leads with an editorial heading
-                    // (display type), generous breathing, and a calmer hint —
-                    // never a small eyebrow + form-like field.
-                    Text(
-                      'Describe your vision',
-                      style: AppTheme.displayEditorial(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w500,
-                        height: 1.15,
-                        letterSpacing: -0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Optional — brief the architect in your own words. '
-                      'You can speak or type.',
+                      'Your photos are private and secure',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppColors.textTertiary,
-                            height: 1.4,
                           ),
                     ),
-                    const SizedBox(height: AppSpacing.lg),
-                    _DescriptionField(controller: _descController),
-                    const SizedBox(height: AppSpacing.xl),
                   ],
                 ),
-              ),
+              ],
             ),
-            StickyActionBar(
-              primary: AppButton(
-                label: l10n.startDesign,
-                onPressed: _canProceed ? _start : null,
-              ),
-              secondary: _canProceed
-                  ? null
-                  : Text(
-                      _missingHint,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.textTertiary,
-                          ),
-                    ),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+
+          // ── STEP 2 — Room type ────────────────────────────────────────────
+          _StepSection(
+            anchorKey: _stepKeys[1],
+            stepNumber: 2,
+            title: 'What type of space are we transforming?',
+            subtitle: 'Choose the type of space you want to transform.',
+            child: _RoomScroller(
+              selected: _selectedRoom,
+              onSelected: (v) => setState(() {
+                _selectedRoom = v;
+                _aiDecideRoom = false;
+              }),
+              aiDecideSelected: _aiDecideRoom,
+              onAiDecide: () => setState(() {
+                _aiDecideRoom = !_aiDecideRoom;
+                if (_aiDecideRoom) _selectedRoom = null;
+              }),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+
+          // ── STEP 3 — Atmosphere ───────────────────────────────────────────
+          _StepSection(
+            anchorKey: _stepKeys[2],
+            stepNumber: 3,
+            title: 'Choose your atmosphere',
+            subtitle: 'Select the feeling and style that defines your space.',
+            child: _AtmosphereScroller(
+              selected: _selectedStyle,
+              onSelected: (v) => setState(() {
+                _selectedStyle = v;
+                _surpriseStyle = false;
+              }),
+              surpriseSelected: _surpriseStyle,
+              onSurprise: () => setState(() {
+                _surpriseStyle = !_surpriseStyle;
+                if (_surpriseStyle) _selectedStyle = null;
+              }),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+
+          // ── STEP 4 — Redesign options ─────────────────────────────────────
+          _StepSection(
+            anchorKey: _stepKeys[3],
+            stepNumber: 4,
+            title: 'How should AI redesign your space?',
+            subtitle: 'Choose the level of freedom for the redesign.',
+            child: _ModeChooser(
+              selectedMode: _selectedMode,
+              onSelected: (m) => setState(() => _selectedMode = m),
+              stackVertically: !isWide,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+
+          // ── STEP 5 — Your vision ──────────────────────────────────────────
+          _StepSection(
+            anchorKey: _stepKeys[4],
+            stepNumber: 5,
+            title: 'Describe your vision',
+            titleTrailing: const _OptionalBadge(),
+            subtitle: 'Brief the architect in your own words. '
+                'You can speak or type.',
+            child: _DescriptionField(controller: _descController),
+          ),
+          const SizedBox(height: AppSpacing.xxl),
+        ],
       ),
     );
   }
 }
 
-// Quiet editorial section label (calmer than a titleMedium heading).
-class _Eyebrow extends StatelessWidget {
-  final String label;
-  const _Eyebrow({required this.label});
+// ── Step section wrapper ─────────────────────────────────────────────────────
+// Encapsulates the "STEP X OF 5" badge + title + subtitle + content with
+// consistent spacing. The [anchorKey] lets the stepper scroll to this
+// section and lets the scroll listener detect when it's the current step.
+
+class _StepSection extends StatelessWidget {
+  final GlobalKey anchorKey;
+  final int stepNumber;
+  final String title;
+  final Widget? titleTrailing;
+  final String subtitle;
+  final Widget child;
+
+  const _StepSection({
+    required this.anchorKey,
+    required this.stepNumber,
+    required this.title,
+    this.titleTrailing,
+    required this.subtitle,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label.toUpperCase(),
-      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.2,
-            fontSize: 11,
-            color: AppColors.textTertiary,
-          ),
+    return Column(
+      key: anchorKey,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StepBadge(stepNumber: stepNumber),
+        const SizedBox(height: 10),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Flexible(
+              child: Text(
+                title,
+                style: AppTheme.displayEditorial(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w500,
+                  height: 1.18,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ),
+            if (titleTrailing != null) ...[
+              const SizedBox(width: 10),
+              titleTrailing!,
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          subtitle,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.5,
+              ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        child,
+      ],
     );
   }
 }
 
-// Wave 4.8.7: `_AiChoiceBar` (the settings-style toggle row) was removed.
-// AI Decide and Surprise Me are now real cards INSIDE the room / atmosphere
-// selectors (`RoomTypeCard.ai` + `AtmosphereCard.surprise`) — one editorial
-// selection language, no settings-style fragment. Backend semantics
-// (`_aiDecideRoom` / `_surpriseStyle` → `let_ai_decide` / `surprise_me_flag`)
-// are preserved verbatim from Wave 4.8.5.
+// Small dark pill: "STEP N OF 5".
+class _StepBadge extends StatelessWidget {
+  final int stepNumber;
+  const _StepBadge({required this.stepNumber});
 
-// Calm free-text architectural direction — premium, not form-like. Multiline,
-// keyboard-safe (lives inside the page SingleChildScrollView). Wave 4.8: real
-// voice dictation via the shared `VoiceService` + the same `MicButton` the
-// chat input bar uses → one voice language across the conversational system.
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.textPrimary,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        'STEP $stepNumber OF 5',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.surface,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.0,
+              fontSize: 10,
+            ),
+      ),
+    );
+  }
+}
+
+class _OptionalBadge extends StatelessWidget {
+  const _OptionalBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(
+        'Optional',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textTertiary,
+              fontWeight: FontWeight.w500,
+              fontSize: 11,
+            ),
+      ),
+    );
+  }
+}
+
+// ── Vertical stepper sidebar (tablet/desktop) ────────────────────────────────
+// Persistent left-rail roadmap. 5 numbered nodes connected by a thin line.
+// The current step glows with the accent colour; completed steps look
+// quietly resolved; future steps are subdued.
+
+class _StepperSide extends StatelessWidget {
+  final int currentStep;
+  final ValueChanged<int> onStep;
+
+  static const _labels = [
+    'Upload',
+    'Room Type',
+    'Atmosphere',
+    'Redesign Options',
+    'Your Vision',
+  ];
+
+  const _StepperSide({required this.currentStep, required this.onStep});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 132,
+      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.xl, 8,
+          AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: List.generate(_labels.length, (i) {
+          final step = i + 1;
+          final isCurrent = step == currentStep;
+          final isPast = step < currentStep;
+          final isLast = i == _labels.length - 1;
+          return _StepperNode(
+            stepNumber: step,
+            label: _labels[i],
+            isCurrent: isCurrent,
+            isPast: isPast,
+            isLast: isLast,
+            vertical: true,
+            onTap: () => onStep(step),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+// ── Horizontal stepper (phones) ──────────────────────────────────────────────
+// 5 numbered dots in a horizontal row connected by hairlines. Labels are
+// hidden to save vertical real estate; current step glows.
+
+class _StepperTop extends StatelessWidget {
+  final int currentStep;
+  final ValueChanged<int> onStep;
+
+  const _StepperTop({required this.currentStep, required this.onStep});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.pagePadding,
+        12,
+        AppSpacing.pagePadding,
+        12,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        border: Border(
+          bottom: BorderSide(color: AppColors.border.withValues(alpha: 0.5)),
+        ),
+      ),
+      child: Row(
+        children: List.generate(5, (i) {
+          final step = i + 1;
+          final isCurrent = step == currentStep;
+          final isPast = step < currentStep;
+          final isLast = i == 4;
+          return Expanded(
+            child: _StepperNode(
+              stepNumber: step,
+              label: '',
+              isCurrent: isCurrent,
+              isPast: isPast,
+              isLast: isLast,
+              vertical: false,
+              onTap: () => onStep(step),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+// Single stepper node — number circle + label, with connector to next node.
+class _StepperNode extends StatelessWidget {
+  final int stepNumber;
+  final String label;
+  final bool isCurrent;
+  final bool isPast;
+  final bool isLast;
+  final bool vertical;
+  final VoidCallback onTap;
+
+  const _StepperNode({
+    required this.stepNumber,
+    required this.label,
+    required this.isCurrent,
+    required this.isPast,
+    required this.isLast,
+    required this.vertical,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color circleBg = isCurrent
+        ? AppColors.textPrimary
+        : isPast
+            ? AppColors.textPrimary
+            : AppColors.surface;
+    final Color circleFg = (isCurrent || isPast)
+        ? AppColors.surface
+        : AppColors.textTertiary;
+    final Color borderColor = isCurrent
+        ? AppColors.textPrimary
+        : isPast
+            ? AppColors.textPrimary
+            : AppColors.border;
+    final connectorColor = isPast
+        ? AppColors.textPrimary.withValues(alpha: 0.4)
+        : AppColors.border;
+
+    final circle = AnimatedContainer(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOut,
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        color: circleBg,
+        shape: BoxShape.circle,
+        border: Border.all(color: borderColor, width: isCurrent ? 1.6 : 1),
+        boxShadow: isCurrent
+            ? [
+                BoxShadow(
+                  color: AppColors.textPrimary.withValues(alpha: 0.18),
+                  blurRadius: 16,
+                  spreadRadius: 0,
+                ),
+              ]
+            : const [],
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        '$stepNumber',
+        style: TextStyle(
+          color: circleFg,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+      ),
+    );
+
+    if (vertical) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Column(
+                children: [
+                  circle,
+                  if (!isLast)
+                    Container(
+                      width: 1,
+                      height: 36,
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      color: connectorColor,
+                    ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: isLast ? 0 : 36 + 8.0),
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: isCurrent
+                              ? AppColors.textPrimary
+                              : AppColors.textTertiary,
+                          fontWeight:
+                              isCurrent ? FontWeight.w600 : FontWeight.w500,
+                          letterSpacing: 0.3,
+                        ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Horizontal: circle inline with a connector running rightward.
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Row(
+        children: [
+          circle,
+          if (!isLast)
+            Expanded(
+              child: Container(
+                height: 1,
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                color: connectorColor,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Description field (preserved) ────────────────────────────────────────────
+// Wave 4.8.7: calm free-text architectural direction with real voice
+// dictation via the shared VoiceService + MicButton.
+
 class _DescriptionField extends StatefulWidget {
   final TextEditingController controller;
   const _DescriptionField({required this.controller});
@@ -397,7 +794,6 @@ class _DescriptionFieldState extends State<_DescriptionField>
 
   Future<void> _startListening() async {
     if (!_voiceAvailable || !mounted) return;
-    // Append, never overwrite — preserve anything the user already typed.
     final existing = widget.controller.text;
     final separator = (existing.isEmpty ||
             existing.endsWith(' ') ||
@@ -443,9 +839,6 @@ class _DescriptionFieldState extends State<_DescriptionField>
   Widget build(BuildContext context) {
     final field = TextField(
       controller: widget.controller,
-      // Wave 4.8.7: more presence for the briefing surface (3-5 lines,
-      // calmer 1.5 leading, slightly larger body) without becoming an
-      // enterprise textarea.
       minLines: 3,
       maxLines: 5,
       textInputAction: TextInputAction.newline,
@@ -456,8 +849,7 @@ class _DescriptionFieldState extends State<_DescriptionField>
       decoration: InputDecoration(
         hintText: _isListening
             ? 'Listening…'
-            : 'e.g. “turn the rear space into a bedroom”, “keep the structure '
-                'but modernize everything”, “add a warm tropical resort feeling”',
+            : 'More natural light, warm colors, cozy, minimalist, modern…',
         hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: AppColors.textTertiary,
               height: 1.5,
@@ -483,8 +875,6 @@ class _DescriptionFieldState extends State<_DescriptionField>
 
     if (!_voiceAvailable) return field;
 
-    // Row aligned to the bottom so the mic sits at the same baseline as the
-    // last line of the multiline field — no layout jumps as lines wrap.
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -505,7 +895,9 @@ class _DescriptionFieldState extends State<_DescriptionField>
   }
 }
 
-// ── Upload zone — calmer premium empty/filled state ───────────────────────────
+// ── Upload zone ──────────────────────────────────────────────────────────────
+// Calmer premium empty/filled state. AspectRatio 4:3, accent border when
+// filled, "Replace" pill in the corner of the loaded image.
 
 class _UploadZone extends StatelessWidget {
   final File? image;
@@ -575,14 +967,11 @@ class _UploadZone extends StatelessWidget {
   }
 }
 
-// ── Room-type — premium horizontal scroller (exact l10n strings kept) ─────────
+// ── Room-type — premium horizontal scroller (exact l10n strings kept) ────────
 
 class _RoomScroller extends StatelessWidget {
   final String? selected;
   final ValueChanged<String> onSelected;
-  // Wave 4.8.7 — AI Decide rides at position 0 of the INTERIOR row so the
-  // creative direction lives inside the same selection language. Exterior
-  // keeps its existing behaviour (no AI prefix).
   final bool aiDecideSelected;
   final VoidCallback? onAiDecide;
   const _RoomScroller({
@@ -607,7 +996,7 @@ class _RoomScroller extends StatelessWidget {
           aiDecideSelected: aiDecideSelected,
           aiLabel: onAiDecide != null ? 'AI Decide' : null,
           aiSublabel:
-              onAiDecide != null ? 'Infer the room from your photo' : null,
+              onAiDecide != null ? 'Let AI detect the space for me' : null,
           onAiDecide: onAiDecide,
         ),
         const SizedBox(height: 16),
@@ -634,25 +1023,17 @@ class _RoomGroupLabel extends StatelessWidget {
       style: Theme.of(context).textTheme.bodySmall?.copyWith(
             fontWeight: FontWeight.w500,
             color: AppColors.textTertiary,
+            letterSpacing: 0.4,
           ),
     );
   }
 }
 
-// Wave 4.10h: the old `_RoomRow` / `_RoomChip` text pills were removed —
-// the shared image-led `RoomTypeRow` / `RoomTypeCard` now drive room
-// selection in BOTH upload and the chat re-upload sheet (one foundation,
-// zero duplicated room-type UI logic). The `(rooms, selected, onSelected)`
-// contract — and therefore routing / session / generation — is unchanged.
-
-// ── Atmosphere — shared AtmosphereCard V2 horizontal scroller + custom fold ───
+// ── Atmosphere — shared AtmosphereCard V2 horizontal scroller + custom fold ──
 
 class _AtmosphereScroller extends StatelessWidget {
   final String? selected;
   final ValueChanged<String> onSelected;
-  // Wave 4.8.7 — Surprise Me rides at position 0 as a real `AtmosphereCard
-  // .surprise` (creative direction, not a system toggle). When [onSurprise]
-  // is null the strip renders exactly as before.
   final bool surpriseSelected;
   final VoidCallback? onSurprise;
   const _AtmosphereScroller({
@@ -662,8 +1043,6 @@ class _AtmosphereScroller extends StatelessWidget {
     this.onSurprise,
   });
 
-  // Exact value preserved — route/backend interpret this literal (chat custom
-  // path). Do NOT change.
   static const _customLabel = 'Describe Your Dream Space';
 
   @override
@@ -702,7 +1081,6 @@ class _AtmosphereScroller extends StatelessWidget {
               ),
             );
           }
-          // Custom — folded into the shared shell (AtmosphereCard.custom).
           return SizedBox(
             width: 150,
             child: AtmosphereCard.custom(
@@ -718,47 +1096,71 @@ class _AtmosphereScroller extends StatelessWidget {
   }
 }
 
-// ── Bimodal intent chooser (Wave 5.5.14b.2) ──────────────────────────────────
-//
-// Two side-by-side cards: Preserve (lock icon, today's default) and Create
-// (sparkles icon, looser architectural latitude). Tapping a card selects it
-// and unselects the other — never both, never neither. Visual weight matches
-// the room/atmosphere selectors above so the upload screen reads as one
-// continuous editorial composition.
+// ── Mode chooser (Wave 5.8 — Preserve My Space / Reimagine Freely) ───────────
+// Two large cards with descriptive copy + bullets. Preserve is the default
+// and carries a RECOMMENDED tag. Backend mode values unchanged: 'preserve' |
+// 'creative'. Cards lay side-by-side on tablet/desktop, stack vertically on
+// phones (taller cards with full bullet visibility).
+
 class _ModeChooser extends StatelessWidget {
   final String selectedMode; // 'preserve' | 'creative'
   final ValueChanged<String> onSelected;
-  const _ModeChooser({required this.selectedMode, required this.onSelected});
+  final bool stackVertically;
+  const _ModeChooser({
+    required this.selectedMode,
+    required this.onSelected,
+    this.stackVertically = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    // IntrinsicHeight gives the Row a definite height (= max of its children)
-    // BEFORE the stretch constraint is applied. Without it, the parent
-    // SingleChildScrollView passes infinite height down → stretch crashes.
+    final preserve = _ModeCard(
+      icon: Icons.architecture_outlined,
+      title: 'Preserve My Space',
+      recommended: true,
+      description:
+          'Keep the same architecture, walls, windows and layout. '
+          'Change only the styling and decoration.',
+      bullets: const [
+        'Same layout',
+        'Same openings',
+        'Same structure',
+      ],
+      selected: selectedMode == 'preserve',
+      onTap: () => onSelected('preserve'),
+    );
+    final reimagine = _ModeCard(
+      icon: Icons.auto_awesome_outlined,
+      title: 'Reimagine Freely',
+      recommended: false,
+      description:
+          'Allow AI to redesign freely with new layout options '
+          'and possibilities.',
+      bullets: const [
+        'New layout',
+        'New perspectives',
+        'New designs',
+      ],
+      selected: selectedMode == 'creative',
+      onTap: () => onSelected('creative'),
+    );
+
+    if (stackVertically) {
+      return Column(
+        children: [
+          preserve,
+          const SizedBox(height: 12),
+          reimagine,
+        ],
+      );
+    }
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: _ModeCard(
-              icon: Icons.lock_outline,
-              title: l10n.modePreserve,
-              subtitle: l10n.modePreserveSub,
-              selected: selectedMode == 'preserve',
-              onTap: () => onSelected('preserve'),
-            ),
-          ),
+          Expanded(child: preserve),
           const SizedBox(width: 12),
-          Expanded(
-            child: _ModeCard(
-              icon: Icons.auto_awesome_outlined,
-              title: l10n.modeCreate,
-              subtitle: l10n.modeCreateSub,
-              selected: selectedMode == 'creative',
-              onTap: () => onSelected('creative'),
-            ),
-          ),
+          Expanded(child: reimagine),
         ],
       ),
     );
@@ -768,13 +1170,17 @@ class _ModeChooser extends StatelessWidget {
 class _ModeCard extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String subtitle;
+  final bool recommended;
+  final String description;
+  final List<String> bullets;
   final bool selected;
   final VoidCallback onTap;
   const _ModeCard({
     required this.icon,
     required this.title,
-    required this.subtitle,
+    required this.recommended,
+    required this.description,
+    required this.bullets,
     required this.selected,
     required this.onTap,
   });
@@ -783,9 +1189,7 @@ class _ModeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = AppColors.accent;
     final borderColor = selected ? accent : AppColors.border;
-    final bg = selected
-        ? accent.withValues(alpha: 0.06)
-        : AppColors.surface;
+    final bg = selected ? accent.withValues(alpha: 0.06) : AppColors.surface;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -794,48 +1198,115 @@ class _ModeCard extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
           decoration: BoxDecoration(
             color: bg,
             borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
             border: Border.all(
               color: borderColor,
-              width: selected ? 1.4 : 1,
+              width: selected ? 1.6 : 1,
             ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: 22,
-                color: selected ? accent : AppColors.textSecondary,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    icon,
+                    size: 22,
+                    color: selected ? accent : AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: AppTheme.displayEditorial(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w500,
+                        height: 1.18,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                  ),
+                  if (recommended) ...[
+                    const SizedBox(width: 8),
+                    _RecommendedBadge(active: selected),
+                  ],
+                ],
               ),
               const SizedBox(height: 10),
               Text(
-                title,
-                style: AppTheme.displayEditorial(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w500,
-                  height: 1.15,
-                  letterSpacing: -0.1,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                description,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.textSecondary,
-                      height: 1.35,
-                      fontSize: 12,
+                      height: 1.45,
+                      fontSize: 12.5,
                     ),
+              ),
+              const SizedBox(height: 12),
+              ...bullets.map(
+                (b) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.check_circle_outline,
+                        size: 14,
+                        color: selected ? accent : AppColors.textTertiary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          b,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                                height: 1.3,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _RecommendedBadge extends StatelessWidget {
+  final bool active;
+  const _RecommendedBadge({required this.active});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: active
+            ? AppColors.accent.withValues(alpha: 0.14)
+            : AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: active
+              ? AppColors.accent.withValues(alpha: 0.55)
+              : AppColors.border,
+        ),
+      ),
+      child: Text(
+        'RECOMMENDED',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: active ? AppColors.accent : AppColors.textTertiary,
+              fontWeight: FontWeight.w700,
+              fontSize: 9.5,
+              letterSpacing: 0.6,
+            ),
       ),
     );
   }
