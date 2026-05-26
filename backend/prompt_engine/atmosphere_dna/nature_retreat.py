@@ -46,8 +46,12 @@ for _d in [
         # phrase becomes a no-op (kept temporarily as defense in depth).
         # Wave 5.5.44 — TV-first reorder. Bench 2026-05-25 showed the
         # model picking "stone" (matching Nature's material identity)
-        # instead of TV. New wording puts "a television" FIRST.
-        room_specific_constraints=["single clear focal wall — a television, stone, or timber accent, not multiple", "planting: maximum 2 large statement plants"],
+        # instead of TV.
+        # Wave 5.5.46 — TV baseline pattern. Wave 5.5.44 TV-first reorder
+        # still didn't emit TV (model insists on stone/timber matching
+        # Nature material identity). New pattern makes TV the SUBJECT
+        # of the constraint, not an option in a list.
+        room_specific_constraints=["television positioned on a single clear focal wall — not multiple competing focal walls", "planting: maximum 2 large statement plants"],
         # Wave 5.5.37 — added "visible kitchen" continuity matching WM
         # pattern. Previous wording mentioned only "visible dining area".
         # Softened "stone and plant accents" → "natural accents" (don't
@@ -55,14 +59,13 @@ for _d in [
         visible_transition_logic="reclaimed oak floor and clay plaster continue into adjacent rooms; natural accents echo through visible kitchen or dining area if present",
         # Wave 5.5.44 — added defensive anti-window-modification rule at
         # slot [0]. Bench 2026-05-25 showed back window shrunken + change
-        # of perspective on Nature preserve. Likely cause: residual
-        # "connected to nature" semantics pushing the model to frame
-        # nature elements at the expense of the window. Defensive rule
-        # explicit. POSITIONING : slot [0] so it ships within
-        # build_dna_block's negative_rules[:3] emission window. Trade-off:
-        # "no polished surfaces" demoted to slot [3] (still in source for
-        # documentation but not emitted in AVOID line).
-        negative_rules=["preserve existing window proportions and dimensions as photographed", "no plastic or synthetic pot", "no plant collection overload", "no polished surfaces", "no cold grey palette"],
+        # of perspective on Nature preserve.
+        # Wave 5.5.46 — STRENGTHENED defensive rule. Bench shows window
+        # was actually REMOVED (not just shrunken). Wave 5.5.44 wording
+        # wasn't imperative enough. New wording uses capital "DO NOT" +
+        # explicit "modify, narrow, or remove" verb list + "exactly"
+        # quantifier.
+        negative_rules=["DO NOT modify, narrow, or remove existing windows and openings — preserve all photographed window dimensions exactly", "no plastic or synthetic pot", "no plant collection overload", "no polished surfaces", "no cold grey palette"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="nature_retreat",

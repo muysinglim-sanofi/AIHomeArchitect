@@ -36,8 +36,12 @@ for _d in [
         # investment per user direction 2026-05-25 pending Phase 2 review).
         # Wave 5.5.43 — TV-first reorder. Bench 2026-05-25 showed the
         # model picking "sandstone niche" (matching Desert's mineral
-        # identity) instead of TV. New wording puts "a television" FIRST.
-        room_specific_constraints=["single clear focal wall — a television, sandstone niche, or artwork, not multiple", "maximum 2 decorative objects in room"],
+        # identity) instead of TV.
+        # Wave 5.5.46 — TV baseline pattern. Wave 5.5.43 TV-first reorder
+        # still didn't emit TV (Desert mineral identity too dominant).
+        # New pattern makes TV the SUBJECT of the constraint, not an
+        # option in a list.
+        room_specific_constraints=["television positioned on a single clear focal wall — not multiple competing focal walls", "maximum 2 decorative objects in room"],
         visible_transition_logic="tadelakt floor and plaster walls continue into adjacent rooms; warm sand palette unbroken through visible spaces",
         negative_rules=["no arabesque tile pattern", "no cold marble", "no bright orange", "no maximalist Moroccan styling"],
     ),

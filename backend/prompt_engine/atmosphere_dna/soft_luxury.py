@@ -48,7 +48,14 @@ for _d in [
         # keeping symmetry caused wall added (model mirrored a wall to
         # match symmetry). "Balanced" preserves the structural discipline
         # function while removing the wall-mirroring interpretation pressure.
-        room_specific_constraints=["single clear focal wall — fireplace, art wall, or a television, not multiple", "balanced furniture placement — not haphazard"],
+        # Wave 5.5.46 — TV baseline pattern (TV-first reorder in Wave
+        # 5.5.43 wasn't enough for Soft Luxury — model still defaulted
+        # to fireplace-centric). New pattern makes TV the SUBJECT of the
+        # constraint, not an option in a list: "television positioned on
+        # a single clear focal wall — not multiple competing focal walls".
+        # Atmosphere-specific decor (fireplace, art wall) now comes through
+        # naturally from material_palette / furniture_language / decor_language.
+        room_specific_constraints=["television positioned on a single clear focal wall — not multiple competing focal walls", "balanced furniture placement — not haphazard"],
         # Wave 5.5.36 — added "visible kitchen" continuity matching the WM
         # pattern. Previous wording mentioned dining + hallway but never
         # kitchen, contributing to "coin cuisine perdu" in bench 2026-05-25.
