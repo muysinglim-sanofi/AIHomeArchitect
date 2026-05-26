@@ -1859,6 +1859,11 @@ class _ImageResultBubbleState extends State<_ImageResultBubble>
   late final Animation<Offset> _slide;
   late final Animation<double> _scale;
 
+  // Wave 5.9 — narration capped at 2 lines so the render stays high in the
+  // viewport. Tap the narration to expand the full prose. Lossless : the
+  // backend message remains the source of truth.
+  bool _narrationExpanded = false;
+
   @override
   void initState() {
     super.initState();
@@ -1877,9 +1882,25 @@ class _ImageResultBubbleState extends State<_ImageResultBubble>
     super.dispose();
   }
 
+  // Wave 5.9 — establishes the future vision-timeline mental model.
+  // The backend label is "Style · Vision N"; we surface it as "VISION N ·
+  // STYLE" so the version reads first — a step toward the architectural
+  // evolution timeline. Typography-first, no badge chrome.
+  String _eyebrowLabel(String styleLabel) {
+    if (styleLabel.contains('·')) {
+      final parts = styleLabel.split('·').map((s) => s.trim()).toList();
+      if (parts.length == 2 && parts.every((p) => p.isNotEmpty)) {
+        return '${parts[1]} · ${parts[0]}';
+      }
+    }
+    return styleLabel;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final result = widget.message.result!;
+    final narration = widget.message.content;
     return FadeTransition(
       opacity: _fade,
       child: SlideTransition(
@@ -1887,30 +1908,123 @@ class _ImageResultBubbleState extends State<_ImageResultBubble>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Calm editorial caption (the architect's message) — no bubble
-            // box, no avatar, no 36px indent: the image, not the chat
-            // chrome, leads. Still a chronological list item (bridge — no
-            // Wave 4.11 inversion).
+            // ── Editorial eyebrow ─────────────────────────────────────────
+            // Lightweight orientation : "VISION N · STYLE" in uppercase
+            // tracking. No badge, no border — typography-first.
             Padding(
-              padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
               child: Text(
-                widget.message.content,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textSecondary,
-                      height: 1.5,
+                _eyebrowLabel(result.styleLabel).toUpperCase(),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textTertiary,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 1.0,
+                      fontSize: 10,
                     ),
               ),
             ),
-            // The generated vision — a dominant mini cinematic canvas.
-            ScaleTransition(
-              scale: _scale,
-              child: _GeneratedImageCard(
-                result: result,
-                onRevealTap: widget.onRevealTap,
+            // ── Narration (2-line cap, tap-to-expand) ─────────────────────
+            if (narration.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => setState(
+                      () => _narrationExpanded = !_narrationExpanded),
+                  child: AnimatedSize(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
+                    alignment: Alignment.topLeft,
+                    child: Text(
+                      narration,
+                      maxLines: _narrationExpanded ? null : 2,
+                      overflow: _narrationExpanded
+                          ? TextOverflow.visible
+                          : TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.textSecondary,
+                            height: 1.5,
+                          ),
+                    ),
+                  ),
+                ),
+              ),
+            // ── The render (architectural vision artifact) ────────────────
+            // The image breaks out of the ListView's 24dp page padding to a
+            // 12dp screen-inset via OverflowBox on the horizontal axis. The
+            // outer SizedBox locks the height to the image-card height so
+            // OverflowBox has finite vertical bounds (otherwise it would
+            // inherit infinite height from the surrounding Column and
+            // throw a layout assertion). Premium framing : soft ambient
+            // shadow + 1px hairline border (border lives inside the card).
+            LayoutBuilder(
+              builder: (ctx, constraints) {
+                final breakoutWidth = constraints.maxWidth + 24;
+                final h = (MediaQuery.sizeOf(context).height * 0.52)
+                    .clamp(280.0, 560.0);
+                return SizedBox(
+                  height: h,
+                  child: OverflowBox(
+                    alignment: Alignment.center,
+                    minWidth: breakoutWidth,
+                    maxWidth: breakoutWidth,
+                    minHeight: h,
+                    maxHeight: h,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius:
+                            BorderRadius.circular(AppSpacing.radiusCard),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                            spreadRadius: -4,
+                          ),
+                        ],
+                      ),
+                      child: ScaleTransition(
+                        scale: _scale,
+                        child: _GeneratedImageCard(
+                          result: result,
+                          onRevealTap: widget.onRevealTap,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            // ── Action row (View Full Reveal · Share) ─────────────────────
+            // Moved OUT of the image overlay so the render stays
+            // uninterrupted. "View Full Reveal" is the clear primary
+            // action ; Share keeps its secondary pill weight.
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: AppButton(
+                      label: l10n.viewBeforeAfter,
+                      icon: Icons.compare,
+                      onPressed: widget.onRevealTap,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  AppPill(
+                    text: l10n.shareDesign,
+                    icon: Icons.ios_share,
+                    onTap: () => Share.share(
+                      'Check out my AI home transformation — '
+                      '${result.styleLabel}!',
+                    ),
+                  ),
+                ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(4, 6, 4, 6),
+              padding: const EdgeInsets.fromLTRB(4, 10, 4, 6),
               child: Text(
                 '${context.l10n.visionCreated} '
                 '${_timeAgo(widget.message.createdAt)}',
@@ -1972,67 +2086,44 @@ class _GeneratedImageCardState extends State<_GeneratedImageCard> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     final result = widget.result;
     final onRevealTap = widget.onRevealTap;
     final h =
         (MediaQuery.sizeOf(context).height * 0.52).clamp(280.0, 560.0);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-      child: SizedBox(
-        height: h,
-        width: double.infinity,
-        child: RevealCanvas(
-          ambientImage: _provider,
-          // Null until the intrinsic ratio resolves → the focal image then
-          // centres at its true ratio over the ambient backdrop (no crop,
-          // no letterbox void), staying image-dominant.
-          focalAspectRatio: _aspectRatio,
-          bottomScrim: true,
-          topOverlay: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: AppPill(text: result.styleLabel, dark: true),
-            ),
-          ),
-          bottomOverlay: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
-            child: Row(
-              children: [
-                Expanded(
-                  child: AppButton(
-                    label: l10n.viewBeforeAfter,
-                    icon: Icons.compare,
-                    variant: AppButtonVariant.onImage,
-                    onPressed: onRevealTap,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                AppPill(
-                  text: l10n.shareDesign,
-                  icon: Icons.ios_share,
-                  dark: true,
-                  onTap: () => Share.share(
-                    'Check out my AI home transformation — '
-                    '${result.styleLabel}!',
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Tap the image itself → open the full reveal (preserved).
-          child: GestureDetector(
-            onTap: onRevealTap,
-            child: CachedNetworkImage(
-              imageUrl: result.afterImageUrl,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: double.infinity,
-              placeholder: (_, _) =>
-                  const ColoredBox(color: AppColors.shimmerBase),
-              errorWidget: (_, _, _) =>
-                  const ColoredBox(color: AppColors.shimmerBase),
+    // Wave 5.9 — image becomes a pure architectural vision artifact :
+    // overlays removed (styleLabel + CTAs migrated to _ImageResultBubble
+    // around it), 1px hairline border framing the rounded clip. Less
+    // "chat attachment", more "editorial render". RevealCanvas still
+    // resolves focal aspect ratio from the same shared provider.
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+        border: Border.all(
+          color: AppColors.border.withValues(alpha: 0.5),
+          width: 1,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+        child: SizedBox(
+          height: h,
+          width: double.infinity,
+          child: RevealCanvas(
+            ambientImage: _provider,
+            focalAspectRatio: _aspectRatio,
+            bottomScrim: false,
+            child: GestureDetector(
+              onTap: onRevealTap,
+              child: CachedNetworkImage(
+                imageUrl: result.afterImageUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                height: double.infinity,
+                placeholder: (_, _) =>
+                    const ColoredBox(color: AppColors.shimmerBase),
+                errorWidget: (_, _, _) =>
+                    const ColoredBox(color: AppColors.shimmerBase),
+              ),
             ),
           ),
         ),
@@ -2079,12 +2170,19 @@ class _SuggestionBar extends StatelessWidget {
             child: AnimatedOpacity(
               opacity: enabled ? 1.0 : 0.4,
               duration: const Duration(milliseconds: 200),
+              // Wave 5.9 — lighter editorial chip : transparent fill, hairline
+              // border, tighter padding. Less form-control / dashboard feeling,
+              // more refining-a-vision feeling. Chips are a refinement palette,
+              // not primary controls.
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
+                  color: Colors.transparent,
                   borderRadius: BorderRadius.circular(50),
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(
+                    color: AppColors.border.withValues(alpha: 0.6),
+                  ),
                 ),
                 child: Text(
                   suggestions[index],
