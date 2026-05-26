@@ -24,7 +24,20 @@ for _d in [
         # preserve). Replaced with "rough-cut stone accents on existing
         # surfaces" so stone stays a material accent vocabulary without
         # naming a wall to add.
-        material_palette=["wide-plank reclaimed oak floor", "rammed earth or clay plaster walls", "rough-cut stone accents on existing surfaces"],
+        # Wave 5.7f — anchored "rammed earth or clay plaster walls" →
+        # "rammed earth or clay plaster finish on existing walls" (Wave
+        # 5.7e parity, now applied to Nature living_room). Bench
+        # 2026-05-26 showed Nature removed a back window to extend the
+        # clay-plaster surface (filling the opening with new plaster
+        # wall to anchor TV/console), DESPITE the Wave 5.5.46 "DO NOT
+        # modify, narrow, or remove existing windows" rule shipping at
+        # slot [0]. Same mechanism as SL fluted-plaster signature pull
+        # (5.7e) : positive material identity ("clay plaster walls")
+        # overpowered the defensive negative rule. Anchoring the
+        # primary wall material to "existing walls" parallels the
+        # 3rd-slot stone-accent anchor already in place (5.5.37). The
+        # window-preservation rule stays unchanged.
+        material_palette=["wide-plank reclaimed oak floor", "rammed earth or clay plaster finish on existing walls", "rough-cut stone accents on existing surfaces"],
         # Wave 5.5.37 — dropped "above stone wall" lighting anchor since
         # the stone wall is no longer mandated; concealed cove now neutral.
         lighting_behavior="Warm concealed cove + timber-shaded floor lamp; warm organic tone.",
