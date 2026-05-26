@@ -63,7 +63,7 @@ for _d in [
         atmosphere_id="desert_luxe",
         room_type="master_bedroom",
         furniture_language=["warm timber or sandstone — low platform surface warmth", "tadelakt or stone slab — tactile warmth at night level", "hammered brass — warm metallic mirror richness"],
-        material_palette=["polished tadelakt floor", "tadelakt plaster walls in warm sand or terracotta", "raw cotton or camel linen bedding"],
+        material_palette=["polished tadelakt floor", "tadelakt plaster finish on existing walls in warm sand or terracotta", "raw cotton or camel linen bedding"],
         lighting_behavior="Concealed warm slot above headboard wall + single hammered brass wall sconce at bedside.",
         # Wave 5.5.27 — REPLACED carved wooden object with bedside rug.
         # Decor object → essential rug for bedroom inhabitation realism.
@@ -176,7 +176,7 @@ for _d in [
         atmosphere_id="desert_luxe",
         room_type="entrance_hall",
         furniture_language=["carved stone or tadelakt console slab — wall-mounted", "large hammered brass mirror", "single large dark ceramic vessel"],
-        material_palette=["polished tadelakt floor", "tadelakt plaster walls in warm sand", "hammered brass accents"],
+        material_palette=["polished tadelakt floor", "tadelakt plaster finish on existing walls in warm sand", "hammered brass accents"],
         lighting_behavior="Single concealed warm ceiling slot over console; arrival through raking warm beam.",
         decor_language=["single large dark ceramic — empty, sculptural", "no artwork — warm plaster wall as composition"],
         realism_constraints=["console at correct 80–85 cm height", "mirror height 150 cm+ for proportion"],

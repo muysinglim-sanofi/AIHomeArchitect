@@ -81,7 +81,7 @@ for _d in [
         atmosphere_id="soft_luxury",
         room_type="master_bedroom",
         furniture_language=["cashmere or bouclé in ivory or champagne — plush tactile luxury", "brushed brass — warm champagne metal refinement", "velvet or bouclé in champagne — layered softness and warmth"],
-        material_palette=["honed marble or travertine floor", "fluted ivory plaster walls", "raw silk or velvet soft furnishings"],
+        material_palette=["honed marble or travertine floor", "fluted ivory plaster finish on existing walls", "raw silk or velvet soft furnishings"],
         lighting_behavior="Concealed cove above padded headboard wall + brushed brass bedside table lamps with silk shade.",
         # Wave 5.5.27 — REPLACED artwork with bedside rug. User-locked wording
         # drops "cashmere or champagne" hotel-staging semantics.
@@ -195,7 +195,7 @@ for _d in [
         atmosphere_id="soft_luxury",
         room_type="entrance_hall",
         furniture_language=["marble console table with brushed brass legs", "full-height arched mirror in brass frame", "single statement sculptural vase"],
-        material_palette=["book-matched marble or large-format stone floor", "ivory fluted plaster walls", "brushed brass hardware"],
+        material_palette=["book-matched marble or large-format stone floor", "ivory fluted plaster finish on existing walls", "brushed brass hardware"],
         lighting_behavior="Concealed ceiling cove + pair of warm wall sconces flanking mirror; arrival warmth.",
         decor_language=["single large floral arrangement in sculptural vessel", "single oversized framed artwork at end of hall"],
         realism_constraints=["console at correct 80–85 cm height", "mirror height 150 cm minimum for proportion"],
