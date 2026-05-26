@@ -1406,6 +1406,33 @@ async def generate(
         _new_version.version_id, _new_version.vision_number, len(_updated_versions),
     )
 
+    # ── Wave 5.6 — Backend-side message persistence ──────────────────────────
+    # Write the AI image_result message to Supabase BEFORE returning the HTTP
+    # response. If the client has navigated away mid-generation, this ensures
+    # the result is still recoverable on next session reopen (frontend's
+    # _loadMessages fetches it). Best-effort: on failure we log but still
+    # return the generation result (frontend can fall back to its own
+    # insertMessage via the message_persisted flag in the response).
+    _message_persisted = False
+    if session_id and session_id != "new":
+        try:
+            supa.from_("messages").insert({
+                "session_id": session_id,
+                "role": "ai",
+                "content": ai_message,
+                "message_type": "image_result",
+                "before_image_url": generation_image_url,
+                "after_image_url": public_url,
+                "style_label": style_label,
+            }).execute()
+            _message_persisted = True
+            log.info("[Wave 5.6] message persisted server-side  session_id=%s", session_id)
+        except Exception as msg_err:
+            log.warning(
+                "[Wave 5.6] server-side message insert FAILED — frontend will fall back: %s: %s",
+                type(msg_err).__name__, msg_err,
+            )
+
     payload = {
         "after_image_url": public_url,
         "thumbnail_url": public_url,
@@ -1421,6 +1448,10 @@ async def generate(
         "version_id": _new_version.version_id,
         "version_record": version_to_dict(_new_version),
         "versions": serialize_versions(_updated_versions),
+        # Wave 5.6 — frontend uses this flag to decide whether to do its own
+        # insertMessage fallback. True = backend already wrote the message;
+        # False = backend write failed, frontend should do its own write.
+        "message_persisted": _message_persisted,
     }
     _total_elapsed = time.monotonic() - _req_start
     _est_cost = estimate_cost_usd(
