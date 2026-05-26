@@ -44,13 +44,25 @@ for _d in [
         # not all four walls" which the Wave 5.5.32 strip targeted at
         # runtime. With the source clean, the Wave 5.5.32 strip on this
         # phrase becomes a no-op (kept temporarily as defense in depth).
-        room_specific_constraints=["single clear focal wall — stone, timber accent, or a television, not multiple", "planting: maximum 2 large statement plants"],
+        # Wave 5.5.44 — TV-first reorder. Bench 2026-05-25 showed the
+        # model picking "stone" (matching Nature's material identity)
+        # instead of TV. New wording puts "a television" FIRST.
+        room_specific_constraints=["single clear focal wall — a television, stone, or timber accent, not multiple", "planting: maximum 2 large statement plants"],
         # Wave 5.5.37 — added "visible kitchen" continuity matching WM
         # pattern. Previous wording mentioned only "visible dining area".
         # Softened "stone and plant accents" → "natural accents" (don't
         # imply stone wall in adjacent rooms either).
         visible_transition_logic="reclaimed oak floor and clay plaster continue into adjacent rooms; natural accents echo through visible kitchen or dining area if present",
-        negative_rules=["no plastic or synthetic pot", "no plant collection overload", "no polished surfaces", "no cold grey palette"],
+        # Wave 5.5.44 — added defensive anti-window-modification rule at
+        # slot [0]. Bench 2026-05-25 showed back window shrunken + change
+        # of perspective on Nature preserve. Likely cause: residual
+        # "connected to nature" semantics pushing the model to frame
+        # nature elements at the expense of the window. Defensive rule
+        # explicit. POSITIONING : slot [0] so it ships within
+        # build_dna_block's negative_rules[:3] emission window. Trade-off:
+        # "no polished surfaces" demoted to slot [3] (still in source for
+        # documentation but not emitted in AVOID line).
+        negative_rules=["preserve existing window proportions and dimensions as photographed", "no plastic or synthetic pot", "no plant collection overload", "no polished surfaces", "no cold grey palette"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="nature_retreat",
