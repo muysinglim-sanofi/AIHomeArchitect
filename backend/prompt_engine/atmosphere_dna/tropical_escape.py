@@ -28,8 +28,19 @@ for _d in [
         # architectural directive to conditional. Original wording would
         # instruct the model to OPEN walls on indoor apartments without
         # terrace → wall modification. Now conditional on existing photo.
-        room_specific_constraints=["where the photographed apartment shows an open side to terrace or garden, preserve and emphasize that opening", "plant as living room's primary accent — one large specimen"],
-        visible_transition_logic="white walls and concrete floor continue into terrace; rattan furniture palette echoes outdoor seating",
+        # Wave 5.5.35 — WM-parity rewrite. Slot [0] becomes the
+        # standardized TV anchor ("single clear focal wall - <opt1>, <opt2>,
+        # or a television, not multiple"). Atmosphere-coherent options:
+        # fireplace + plant. Conditional terrace moves to slot [1] (still
+        # emitted by build_dna_room_context which uses [:2]). The previous
+        # "plant as primary accent" slot is dropped because it duplicates
+        # the plant option already in the TV anchor and competes for the
+        # focal area.
+        room_specific_constraints=["single clear focal wall — fireplace, plant, or a television, not multiple", "where the photographed apartment shows an open side to terrace or garden, preserve and emphasize that opening"],
+        # Wave 5.5.35 — drop hard "into terrace" (assumed terrace exists,
+        # leak source on indoor apartments). Add explicit "visible kitchen"
+        # continuity matching the WM pattern. Terrace kept as conditional.
+        visible_transition_logic="white walls and concrete floor continue into adjacent rooms; rattan accents echo through visible kitchen or terrace if present",
         negative_rules=["no dark tropical furniture", "no nautical motifs", "no shell or driftwood decor", "no overly lush plant collection"],
     ),
     RoomAdaptationDNA(
