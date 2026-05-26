@@ -14,7 +14,7 @@ Does NOT need to match any other atmosphere's space or composition.
 ### System B — FTUE Demo Hero  (`ftue_{id}.jpg`)
 Used in: FTUE onboarding Screen 3 large hero area ONLY.
 Shows: THE SAME BASELINE SPACE transformed into each different atmosphere.
-Architecture, composition, and framing must be IDENTICAL across all 10.
+Architecture, composition, and framing must be IDENTICAL across all 7.
 Only the atmosphere style (materials, lighting, mood) changes between images.
 
 **This is the core product proposition: "Same home. Infinite directions."**
@@ -91,15 +91,6 @@ Scandinavian cozy living room. Stone or brick fireplace as focal point with warm
 
 ---
 
-### `penthouse_contemporary.jpg`
-Penthouse contemporary luxury living room. Mineral plaster walls. Honed marble accents. Smoked oak floor. Bronze sculptural floor lamp. Rich velvet sofa. Natural daylight from floor-to-ceiling windows. Editorial daylight interior photography.
-
-**AI prompt:** `penthouse contemporary luxury living room, mineral plaster walls, honed marble accents, smoked oak floor, bronze floor lamp, rich velvet sofa, natural daylight from windows, editorial daylight interior photography, no people, architectural photography, ultra-detailed`
-
-**Avoid:** gaming rooms, nightclubs, cyberpunk neon
-
----
-
 ### `nature_retreat.jpg`
 Forest cabin or biophilic house interior. Massive floor-to-ceiling windows with pine or birch forest view. Raw wood and stone interior. Live-edge table. Trailing indoor plants or moss wall. Dappled forest daylight.
 
@@ -127,7 +118,7 @@ Format: JPG or WebP
 Resolution: 900 × 600 px minimum (landscape — fills FTUE hero container at full width)  
 File size: under 250 KB each
 
-**Critical requirement:** All 10 FTUE images must use THE SAME BASELINE ROOM.
+**Critical requirement:** All 7 FTUE images must use THE SAME BASELINE ROOM.
 The baseline room is a contemporary open-plan living room with floor-to-ceiling windows,
 a rectangular fireplace opening, and a kitchen island visible in the background.
 Architecture (walls, ceiling, window placement, camera angle, framing) stays identical.
@@ -156,7 +147,6 @@ Style: Minimal line icon or flat symbol. No text. No humans.
 | `warm_modern_icon.png` | Rounded armchair + pendant lamp |
 | `japandi_calm_icon.png` | Shoji screen grid + low table silhouette |
 | `nordic_warmth_icon.png` | Fireplace arch + small flame |
-| `penthouse_contemporary_icon.png` | Penthouse silhouette with editorial daylight window |
 | `nature_retreat_icon.png` | Cabin outline + pine tree |
 | `desert_luxe_icon.png` | Pointed arch + cactus + sun arc |
 | `soft_luxury_icon.png` | Elegant doorway arch + sconce lamp |
@@ -174,7 +164,6 @@ assets/atmospheres/
 ├── japandi_calm.jpg
 ├── soft_luxury.jpg
 ├── nordic_warmth.jpg
-├── penthouse_contemporary.jpg
 ├── nature_retreat.jpg
 ├── desert_luxe.jpg
 │
@@ -185,7 +174,6 @@ assets/atmospheres/
 ├── ftue/ftue_japandi_calm.jpg
 ├── ftue/ftue_soft_luxury.jpg
 ├── ftue/ftue_nordic_warmth.jpg
-├── ftue/ftue_penthouse_contemporary.jpg
 ├── ftue/ftue_nature_retreat.jpg
 └── ftue/ftue_desert_luxe.jpg
 │
@@ -195,12 +183,11 @@ assets/atmospheres/
 ├── japandi_calm_icon.png
 ├── soft_luxury_icon.png
 ├── nordic_warmth_icon.png
-├── penthouse_contemporary_icon.png
 ├── nature_retreat_icon.png
 └── desert_luxe_icon.png
 ```
 
-Total: 24 files
+Total: 21 files
 
 ---
 
@@ -208,7 +195,7 @@ Total: 24 files
 
 - [ ] No human subjects in any image
 - [ ] Every card hero shows a complete architectural space
-- [ ] All 8 FTUE heroes use the SAME baseline architecture
+- [ ] All 7 FTUE heroes use the SAME baseline architecture
 - [ ] No stock lifestyle photography
 - [ ] Card heroes under 300 KB each
 - [ ] FTUE heroes under 250 KB each

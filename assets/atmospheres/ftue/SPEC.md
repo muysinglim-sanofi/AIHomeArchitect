@@ -24,7 +24,7 @@ This emotional recognition — same room, different life — is the product's co
 
 Every image in this folder is the **same physical space**, rendered in a different atmosphere.
 
-**What must stay identical across all 8 images:**
+**What must stay identical across all 7 images:**
 
 | Element | Requirement |
 |---|---|
@@ -257,38 +257,6 @@ Palette: oat, cream, warm grey, birch blonde, amber fire glow.
 
 ---
 
-### `ftue_penthouse_contemporary.jpg` — Penthouse Contemporary
-
-**Emotional target:** A premium urban penthouse photographed in editorial daylight. Sophisticated. Material-rich. Naturally lit. The room of an architect who chose contrast through materials, not through darkness.
-
-**Atmosphere block:**
-```
-Rendered as a premium contemporary penthouse interior in editorial
-  daylight.
-Floor: warm walnut or honed stone in a tonal mid-grey — natural reflective
-  finish, not glossy.
-Sofa: warm mineral or charcoal-toned bouclé or leather, clean geometric
-  form, low profile, residentially scaled.
-Coffee table: honed marble top on a sculptural bronze base.
-Armchair: matching mineral-tone fabric, same family as the sofa.
-Wall finish: warm mineral plaster — refined matte texture, mid-tone
-  contemporary.
-Focal wall: honed marble panel or bronze accent surface. Television
-  positioned on the existing focal wall (or a low media console) — not on
-  a newly created wall.
-Window: bronze or steel-framed floor-to-ceiling windows. Natural daylight
-  remains the dominant light source throughout the room.
-Lighting: warm ceiling cove + sculptural bronze floor lamp as supporting
-  accents. Architectural readability preserved.
-Kitchen island visible in background: honed stone top, bronze hardware.
-Palette: warm mineral plaster, smoked oak, honed marble, bronze.
-```
-
-**Differentiation from Nature Retreat:** Refined urban editorial luxury vs organic earthiness; mineral plaster vs clay; bronze accent vs raw stone.  
-**Avoid:** Cinematic night-shot grading, underexposed scenes, pure-darkness interiors, no chrome or silver hardware.
-
----
-
 ### `ftue_nature_retreat.jpg` — Nature Retreat
 
 **Emotional target:** Architecture that disappears into the forest. A room that feels like a clearing in the woods. Organic, grounded, alive.
@@ -392,11 +360,10 @@ Generate in this order to establish same-space consistency early:
 1. `ftue_warm_modern.jpg` — most neutral atmosphere; establishes baseline room clearly
 2. `ftue_japandi_calm.jpg` — minimal transformation; validates camera/geometry
 3. `ftue_soft_luxury.jpg` — cream marble version; tests light handling
-5. `ftue_nordic_warmth.jpg` — warm fire variant; tests artificial light
-6. `ftue_penthouse_contemporary.jpg` — premium material contrast; tests editorial daylight range
-7. `ftue_nature_retreat.jpg` — forest view; tests window-view replacement
-8. `ftue_desert_luxe.jpg` — clay/terracotta; tests material range
-9. `ftue_tropical_escape.jpg` — open-air extreme; tests indoor/outdoor dissolution
+4. `ftue_nordic_warmth.jpg` — warm fire variant; tests artificial light
+5. `ftue_nature_retreat.jpg` — forest view; tests window-view replacement
+6. `ftue_desert_luxe.jpg` — clay/terracotta; tests material range
+7. `ftue_tropical_escape.jpg` — open-air extreme; tests indoor/outdoor dissolution
 
 ---
 
@@ -427,7 +394,7 @@ Run this comparison matrix before finalizing. Each pair should feel clearly diff
 |---|---|
 | Warm Modern vs Soft Luxury | Residential warmth vs hotel refinement; travertine vs marble |
 | Nordic Warmth vs Nature Retreat | Firelight cozy vs forest daylight; winter vs green |
-| Penthouse Contemporary vs Desert Luxe | Urban editorial mineral vs artisanal earthen; cool penthouse vs warm sand |
+| Desert Luxe vs Tropical Escape | Dry artisanal earthen vs humid open-air resort; clay vs teak/rattan |
 
 ---
 
@@ -450,7 +417,6 @@ ftue_warm_modern.jpg
 ftue_japandi_calm.jpg
 ftue_soft_luxury.jpg
 ftue_nordic_warmth.jpg
-ftue_penthouse_contemporary.jpg
 ftue_nature_retreat.jpg
 ftue_desert_luxe.jpg
 ```
