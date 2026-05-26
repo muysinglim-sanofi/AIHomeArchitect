@@ -900,17 +900,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
           'reveal_after=$afterUrl');
 
       if (_project.id != 'new') {
-        _svc.insertMessage(
-          sessionId: _project.id,
-          role: 'ai',
-          content: aiText,
-          messageType: 'image_result',
-          // Persist the exact per-step source so the reveal survives reloads
-          // and continued sessions identically to the in-session pair.
-          beforeImageUrl: generationSource,
-          afterImageUrl: afterUrl,
-          styleLabel: styleLabel,
-        );
+        // Wave 5.6 — backend now writes the AI image_result message to
+        // Supabase before returning the HTTP response. Frontend only
+        // inserts as a FALLBACK when the backend write failed (server-side
+        // Supabase write error). The message_persisted flag in the
+        // response tells us which path to take.
+        final backendPersisted =
+            (result['message_persisted'] as bool?) ?? false;
+        if (!backendPersisted) {
+          debugPrint('[Wave 5.6] backend message write failed — frontend fallback inserting');
+          _svc.insertMessage(
+            sessionId: _project.id,
+            role: 'ai',
+            content: aiText,
+            messageType: 'image_result',
+            beforeImageUrl: generationSource,
+            afterImageUrl: afterUrl,
+            styleLabel: styleLabel,
+          );
+        }
         ref.read(sessionProvider.notifier).updateLatestPreview(_project.id, afterUrl);
       }
     } on GenerationException catch (e) {
