@@ -29,7 +29,12 @@ for _d in [
         # "single clear focal wall — <option 1>, <option 2>, or a television,
         # not multiple". TV anchor now explicit + unconditional.
         room_specific_constraints=["layered rugs permitted — wool flatweave under pile", "single clear focal wall — fireplace, wood stove, or a television, not multiple"],
-        visible_transition_logic="pine floor and warm white plaster continue into kitchen; wool palette echoes through visible bedroom door",
+        # Wave 5.5.34b — dropped "visible bedroom door" reference. Bench
+        # 2026-05-25 showed the model literally invented a bedroom zone +
+        # glass partition when the photo had no bedroom. Replaced with the
+        # neutral "adjacent rooms" + a conditional kitchen mention so the
+        # kitchen-visibility signal stays without inventing new spaces.
+        visible_transition_logic="pine floor and warm white plaster continue into adjacent rooms; wool palette echoes through visible kitchen if present",
         negative_rules=["no sleek dark furniture", "no chrome accents", "no minimalist floating shelves", "no cold grey palette"],
     ),
     RoomAdaptationDNA(

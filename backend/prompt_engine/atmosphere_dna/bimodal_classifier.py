@@ -332,12 +332,17 @@ _STRIPS: dict[str, list[tuple[str, str]]] = {
             "natural material deck palette",
         ),
     ],
-    # 10. Nordic Warmth — rank 10, LOW (the HIGH-bias content is in the
-    # never-shipped architectural_language field; benchmark will say if
-    # "human-scaled" in emotional_intent needs touching).
+    # 10. Nordic Warmth — Wave 5.5.34b upgraded to MEDIUM bias after
+    # bench 2026-05-25 showed partition wall + bedroom invention in
+    # preserve mode. Root cause: "human-scaled" in emotional_intent
+    # implies room subdivision into intimate volumes.
     "nordic_warmth": [
-        # 🟨 left as-is for now — Wave 5.5.14e benchmark candidate.
-        # (", human-scaled", ""),
+        # emotional_intent: 🔴 "human-scaled" pushes the model to subdivide
+        # a larger living area into smaller "human-scaled" rooms. Bench
+        # 2026-05-25 confirmed: model added a glass partition + invented
+        # a bedroom zone on the right side.
+        (", human-scaled", ""),
+        ("human-scaled, ", ""),
     ],
 }
 
