@@ -34,7 +34,10 @@ for _d in [
         # which already mandates tadelakt walls. No fix on kitchen
         # continuity or material override this wave (Desert kept minimal-
         # investment per user direction 2026-05-25 pending Phase 2 review).
-        room_specific_constraints=["single clear focal wall — sandstone niche, artwork, or a television, not multiple", "maximum 2 decorative objects in room"],
+        # Wave 5.5.43 — TV-first reorder. Bench 2026-05-25 showed the
+        # model picking "sandstone niche" (matching Desert's mineral
+        # identity) instead of TV. New wording puts "a television" FIRST.
+        room_specific_constraints=["single clear focal wall — a television, sandstone niche, or artwork, not multiple", "maximum 2 decorative objects in room"],
         visible_transition_logic="tadelakt floor and plaster walls continue into adjacent rooms; warm sand palette unbroken through visible spaces",
         negative_rules=["no arabesque tile pattern", "no cold marble", "no bright orange", "no maximalist Moroccan styling"],
     ),

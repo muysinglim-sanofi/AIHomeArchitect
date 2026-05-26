@@ -25,10 +25,13 @@ for _d in [
         # Originally "fireplace or wood stove as focal point" excluded TV.
         # Wave 5.5.34 — WM-parity rewrite: dropped "if present" qualifier
         # (model was interpreting as "skip if not photographed") and added
-        # "not multiple" cap matching WM pattern. Standardized wording:
-        # "single clear focal wall — <option 1>, <option 2>, or a television,
-        # not multiple". TV anchor now explicit + unconditional.
-        room_specific_constraints=["layered rugs permitted — wool flatweave under pile", "single clear focal wall — fireplace, wood stove, or a television, not multiple"],
+        # "not multiple" cap matching WM pattern.
+        # Wave 5.5.43 — TV-first reorder. Previous wording put TV at the
+        # END of the option list, and bench showed the model picking the
+        # FIRST atmosphere-coherent option (wood stove for Nordic) instead
+        # of TV. New wording puts "a television" FIRST so the model has a
+        # clear primary anchor; fireplace/wood stove remain as alternatives.
+        room_specific_constraints=["layered rugs permitted — wool flatweave under pile", "single clear focal wall — a television, fireplace, or wood stove, not multiple"],
         # Wave 5.5.34b — dropped "visible bedroom door" reference. Bench
         # 2026-05-25 showed the model literally invented a bedroom zone +
         # glass partition when the photo had no bedroom. Replaced with the
