@@ -1455,7 +1455,7 @@ const _atmosphereFlavor = <String, String>{
   'bali': 'Weaving organic texture and sanctuary calm…',
   'nordic': 'Softening with pale wood and hygge warmth…',
   'desert': 'Layering sand tones and sculpted shade…',
-  'dark contemporary': 'Deepening contrast and refined shadow…',
+  'penthouse contemporary': 'Composing premium material contrast in daylight…',
   'nature retreat': 'Drawing in raw nature and grounded calm…',
 };
 

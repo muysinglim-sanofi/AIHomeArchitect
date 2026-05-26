@@ -91,10 +91,10 @@ Scandinavian cozy living room. Stone or brick fireplace as focal point with warm
 
 ---
 
-### `dark_contemporary.jpg`
-Dark contemporary luxury living room or suite. Black marble fireplace surround. Charcoal velvet sofa. Aged brass floor lamp. Parisian ceiling moulding. Low-key cinematic directional lighting.
+### `penthouse_contemporary.jpg`
+Penthouse contemporary luxury living room. Mineral plaster walls. Honed marble accents. Smoked oak floor. Bronze sculptural floor lamp. Rich velvet sofa. Natural daylight from floor-to-ceiling windows. Editorial daylight interior photography.
 
-**AI prompt:** `dark contemporary luxury living room, black marble fireplace, charcoal velvet sofa, aged brass floor lamp, Parisian moulding ceiling, cinematic directional lighting, high contrast, no people, architectural interior photography, ultra-detailed`
+**AI prompt:** `penthouse contemporary luxury living room, mineral plaster walls, honed marble accents, smoked oak floor, bronze floor lamp, rich velvet sofa, natural daylight from windows, editorial daylight interior photography, no people, architectural photography, ultra-detailed`
 
 **Avoid:** gaming rooms, nightclubs, cyberpunk neon
 
@@ -156,7 +156,7 @@ Style: Minimal line icon or flat symbol. No text. No humans.
 | `warm_modern_icon.png` | Rounded armchair + pendant lamp |
 | `japandi_calm_icon.png` | Shoji screen grid + low table silhouette |
 | `nordic_warmth_icon.png` | Fireplace arch + small flame |
-| `dark_contemporary_icon.png` | Townhouse facade with chandelier in window |
+| `penthouse_contemporary_icon.png` | Penthouse silhouette with editorial daylight window |
 | `nature_retreat_icon.png` | Cabin outline + pine tree |
 | `desert_luxe_icon.png` | Pointed arch + cactus + sun arc |
 | `soft_luxury_icon.png` | Elegant doorway arch + sconce lamp |
@@ -174,7 +174,7 @@ assets/atmospheres/
 ├── japandi_calm.jpg
 ├── soft_luxury.jpg
 ├── nordic_warmth.jpg
-├── dark_contemporary.jpg
+├── penthouse_contemporary.jpg
 ├── nature_retreat.jpg
 ├── desert_luxe.jpg
 │
@@ -185,7 +185,7 @@ assets/atmospheres/
 ├── ftue/ftue_japandi_calm.jpg
 ├── ftue/ftue_soft_luxury.jpg
 ├── ftue/ftue_nordic_warmth.jpg
-├── ftue/ftue_dark_contemporary.jpg
+├── ftue/ftue_penthouse_contemporary.jpg
 ├── ftue/ftue_nature_retreat.jpg
 └── ftue/ftue_desert_luxe.jpg
 │
@@ -195,7 +195,7 @@ assets/atmospheres/
 ├── japandi_calm_icon.png
 ├── soft_luxury_icon.png
 ├── nordic_warmth_icon.png
-├── dark_contemporary_icon.png
+├── penthouse_contemporary_icon.png
 ├── nature_retreat_icon.png
 └── desert_luxe_icon.png
 ```

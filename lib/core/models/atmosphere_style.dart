@@ -117,16 +117,16 @@ const kAtmospheres = <AtmosphereStyle>[
     ftueHeroImagePath: 'assets/atmospheres/ftue/ftue_nordic_warmth.jpg',
   ),
   AtmosphereStyle(
-    id: 'dark_contemporary',
-    name: 'Dark Contemporary',
+    id: 'penthouse_contemporary',
+    name: 'Penthouse Contemporary',
     tagline: 'Bold tones with sharp architectural lines',
-    heroImagePath: 'assets/atmospheres/dark_contemporary.jpg',
-    iconImagePath: 'assets/atmospheres/dark_contemporary_icon.png',
+    heroImagePath: 'assets/atmospheres/penthouse_contemporary.jpg',
+    iconImagePath: 'assets/atmospheres/penthouse_contemporary_icon.png',
     showcaseAsset: null,
     fallbackImageUrl:
         'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400&fit=crop&crop=center',
-    iconData: Icons.nights_stay,
-    ftueHeroImagePath: 'assets/atmospheres/ftue/ftue_dark_contemporary.jpg',
+    iconData: Icons.apartment,
+    ftueHeroImagePath: 'assets/atmospheres/ftue/ftue_penthouse_contemporary.jpg',
   ),
   AtmosphereStyle(
     id: 'nature_retreat',
