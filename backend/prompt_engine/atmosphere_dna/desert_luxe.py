@@ -39,9 +39,10 @@ for _d in [
         # identity) instead of TV.
         # Wave 5.5.46 — TV baseline pattern. Wave 5.5.43 TV-first reorder
         # still didn't emit TV (Desert mineral identity too dominant).
-        # New pattern makes TV the SUBJECT of the constraint, not an
-        # option in a list.
-        room_specific_constraints=["television positioned on a single clear focal wall — not multiple competing focal walls", "maximum 2 decorative objects in room"],
+        # Wave 5.5.48 — TV media console flex (same fix as Soft Luxury
+        # and Nature). Allow TV on existing wall OR media console;
+        # explicitly forbid creating a new wall.
+        room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "maximum 2 decorative objects in room"],
         visible_transition_logic="tadelakt floor and plaster walls continue into adjacent rooms; warm sand palette unbroken through visible spaces",
         negative_rules=["no arabesque tile pattern", "no cold marble", "no bright orange", "no maximalist Moroccan styling"],
     ),

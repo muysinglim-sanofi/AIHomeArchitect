@@ -49,9 +49,13 @@ for _d in [
         # instead of TV.
         # Wave 5.5.46 — TV baseline pattern. Wave 5.5.44 TV-first reorder
         # still didn't emit TV (model insists on stone/timber matching
-        # Nature material identity). New pattern makes TV the SUBJECT
-        # of the constraint, not an option in a list.
-        room_specific_constraints=["television positioned on a single clear focal wall — not multiple competing focal walls", "planting: maximum 2 large statement plants"],
+        # Nature material identity).
+        # Wave 5.5.48 — TV media console flex. Bench 2026-05-25 (round 3)
+        # confirmed TV appeared but the model REMOVED the back window to
+        # create a stone accent wall for mounting the TV. "Focal wall"
+        # requirement was the driver. New wording allows TV on existing
+        # wall OR media console; explicitly forbids new wall creation.
+        room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "planting: maximum 2 large statement plants"],
         # Wave 5.5.37 — added "visible kitchen" continuity matching WM
         # pattern. Previous wording mentioned only "visible dining area".
         # Softened "stone and plant accents" → "natural accents" (don't

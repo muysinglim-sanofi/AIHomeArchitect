@@ -74,10 +74,13 @@ _CASES: list[tuple[str, str, list[str], list[str]]] = [
         "dark_contemporary",
         "living_room",
         ["Architectural sophistication", "architecturally confident"],
-        # Wave 5.5.47 softened "dark charcoal" → "warm charcoal" so the
-        # must_keep keyword updated accordingly. "Sophistication" +
-        # "smoked oak" still load-bearing for atmosphere identity.
-        ["Sophistication", "warm charcoal plaster", "smoked oak"],
+        # Wave 5.5.47 softened "dark charcoal" → "warm charcoal".
+        # Wave 5.5.48 softened room.material_palette floor from "smoked
+        # oak or deep stone" to "warm walnut or honed stone". "smoked
+        # oak" now lives only in core fields (not emitted in build_dna_
+        # block). must_keep updated to use floor materials present in
+        # the rendered ROOM block.
+        ["Sophistication", "warm charcoal plaster", "warm walnut"],
     ),
     (
         "nature_retreat",

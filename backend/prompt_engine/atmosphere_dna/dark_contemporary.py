@@ -13,7 +13,13 @@ register_core(AtmosphereCoreDNA(
     # "dark charcoal" -> "warm charcoal", "black or dark grey" -> "deep
     # grey or smoked". Mood preserved (charcoal + smoked still convey
     # depth), readability gained.
-    material_palette=["warm charcoal plaster", "deep grey or smoked marble", "smoked oak or wenge", "brushed bronze or gunmetal", "concrete"],
+    # Wave 5.5.48 Path 2 — surgical floor/accent softening. User feedback
+    # round 3: "l'intérieur a l'air bien sauf que c'est trop sombre".
+    # Walls keep charcoal (mood identity preserved). Floor softened:
+    # "smoked oak or wenge" -> "warm walnut or smoked oak" (drop "wenge"
+    # which is the darkest wood). Wenge alone was driving floor-level
+    # darkness on top of charcoal walls.
+    material_palette=["warm charcoal plaster", "deep grey or smoked marble", "warm walnut or smoked oak", "brushed bronze or gunmetal", "concrete"],
     # Wave 5.5.38 — dropped "darkness as design element". The phrase
     # licensed pure-darkness renders (bench 2026-05-25 showed "trop sombre,
     # on voit quasiment rien"). Replaced with "cinematic warmth with
@@ -47,8 +53,13 @@ for _d in [
         # appeared in positive descriptors. Mood preserved via "warm
         # charcoal", "deep marble", "smoked", "rich velvet" — all still
         # convey moody luxury depth without the over-dark cue.
+        # Wave 5.5.48 Path 2 — floor softening at room level (mirror
+        # of core change). "smoked oak or deep stone floor" -> "warm
+        # walnut or honed stone floor". Lighter floor reflects more
+        # ambient light, reducing overall darkness while keeping walls
+        # charcoal for mood.
         furniture_language=["warm charcoal bouclé or leather — deep low tactile richness", "deep marble or stone — sculptural surface depth", "rich velvet — high-contrast atmospheric depth"],
-        material_palette=["warm charcoal plaster walls", "smoked oak or deep stone floor", "deep marble or bronze accent surfaces"],
+        material_palette=["warm charcoal plaster walls", "warm walnut or honed stone floor", "deep marble or bronze accent surfaces"],
         # Wave 5.5.38 — dropped "room lit by glow, not flood". The "not
         # flood" framing was too aggressive — the model interpreted it as
         # "minimize all light sources" → underexposed renders. Replaced
@@ -99,7 +110,15 @@ for _d in [
         # [3] "no grey rather than charcoal — must be warm dark" → "no
         # neutral grey — warm charcoal tones only" (drops "dark").
         # Slots [1] + [2] unchanged.
-        negative_rules=["no monochrome saturation", "no neon or coloured accent light", "no chrome or silver hardware", "no neutral grey — warm charcoal tones only"],
+        # Wave 5.5.48 Path 1 — daylight photography stylistic directive
+        # added at slot [0] (most-emitted position). The model was treating
+        # the photo as a "cinematic night shot of a dark luxury space"
+        # instead of "daytime modern living room with dark luxury
+        # aesthetic". Explicit "architectural daylight photography" tag
+        # blocks the cinematic-mood-shot interpretation. Trade-off : "no
+        # chrome or silver hardware" demoted to slot [3] (not emitted in
+        # AVOID line). Daylight readability is the higher product priority.
+        negative_rules=["render as architectural daylight photography — NOT cinematic night or evening mood shot — preserve photographic exposure level", "no monochrome saturation", "no neon or coloured accent light", "no chrome or silver hardware", "no neutral grey — warm charcoal tones only"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="dark_contemporary",

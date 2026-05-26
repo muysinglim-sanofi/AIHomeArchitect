@@ -50,12 +50,14 @@ for _d in [
         # function while removing the wall-mirroring interpretation pressure.
         # Wave 5.5.46 — TV baseline pattern (TV-first reorder in Wave
         # 5.5.43 wasn't enough for Soft Luxury — model still defaulted
-        # to fireplace-centric). New pattern makes TV the SUBJECT of the
-        # constraint, not an option in a list: "television positioned on
-        # a single clear focal wall — not multiple competing focal walls".
-        # Atmosphere-specific decor (fireplace, art wall) now comes through
-        # naturally from material_palette / furniture_language / decor_language.
-        room_specific_constraints=["television positioned on a single clear focal wall — not multiple competing focal walls", "balanced furniture placement — not haphazard"],
+        # to fireplace-centric).
+        # Wave 5.5.48 — TV media console flex. Wave 5.5.46's "positioned
+        # on a single clear focal wall" wording caused wall invention as
+        # a side effect on Nature bench (model removed back window to
+        # create a wall for the TV). New wording allows TV on existing
+        # wall OR media console and explicitly forbids creating a new
+        # wall. TV remains mandatory ("visible in living area").
+        room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "balanced furniture placement — not haphazard"],
         # Wave 5.5.36 — added "visible kitchen" continuity matching the WM
         # pattern. Previous wording mentioned dining + hallway but never
         # kitchen, contributing to "coin cuisine perdu" in bench 2026-05-25.
