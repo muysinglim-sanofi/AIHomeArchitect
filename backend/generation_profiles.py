@@ -53,6 +53,11 @@ class GenerationProfile:
     compact_prompts: bool
     use_mask: bool = True
     vision_analysis_fv: bool = True
+    # Wave 5.13n (2026-05-28) — hybrid per-atmosphere quality overrides.
+    # Maps atmosphere_id -> quality string. Atmospheres NOT in this dict
+    # use `quality` field above. Empty dict = no overrides, identical to
+    # pre-5.13n behaviour. Use frozenset trick for hashability under frozen dataclass.
+    quality_overrides: tuple[tuple[str, str], ...] = ()
 
 
 # ── Profile registry ──────────────────────────────────────────────────────────
@@ -103,7 +108,18 @@ _PROFILES: dict[str, GenerationProfile] = {
     # compact_realism, structural preservation wording. Prompt is NOT touched.
     "mobile_mvp_baseline": GenerationProfile(
         name="MOBILE_MVP_BASELINE",
+        # Wave 5.13n hybrid quality (2026-05-28): MEDIUM by default,
+        # LOW for atmospheres with strong natural texture identity
+        # (validated visually per 16-photo bench: WM/Desert win in low,
+        # SL/Japandi/Nordic/Nature/Tropical win in medium).
         quality="medium",
+        quality_overrides=(
+            ("warm_modern", "low"),
+            ("desert_luxe", "low"),
+        ),
+        # Wave 5.13n preserve override (in main.py call site): input_fidelity="high"
+        # injected for preserve mode regardless of this default. Creative mode
+        # (dormant V1) keeps profile.input_fidelity unchanged.
         input_fidelity=None,         # omitted entirely from the API call
         size_override=None,          # Step 1B: aspect-matched (was forced 1024x1024)
         max_attempts=1,

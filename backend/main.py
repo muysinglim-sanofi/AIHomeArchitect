@@ -1242,21 +1242,42 @@ async def generate(
                 mask_file = io.BytesIO(mask_bytes)
                 mask_file.name = "mask.png"
 
+            # Wave 5.13n (2026-05-28) — hybrid quality + fidelity overrides
+            # for preserve mode. Quality: per-atmosphere override from
+            # profile.quality_overrides (e.g. WM/Desert use low, others use
+            # the profile default). Fidelity: input_fidelity=high in preserve
+            # mode for source-photo anchored architectural preservation.
+            # Creative mode (dormant V1) keeps profile defaults for both, so
+            # V2 activation is unaffected. Revert = remove these 2 lines.
+            _qo_dict = dict(profile.quality_overrides)
+            _quality_override = _qo_dict.get(atmosphere_id, profile.quality)
+            _fidelity_override = "high" if generation_mode == "preserve" else profile.input_fidelity
             edit_kwargs: dict = dict(
                 model="gpt-image-1",
                 image=img_file,
                 prompt=design_prompt,
                 n=1,
                 size=output_size,
-                quality=profile.quality,
-                input_fidelity=profile.input_fidelity,
+                quality=_quality_override,
+                input_fidelity=_fidelity_override,
             )
             # Wave 4.7.0 Step 1: mobile_mvp_baseline sets input_fidelity=None —
             # omit the parameter entirely from the API call (absent, not "low").
             if edit_kwargs.get("input_fidelity") is None:
                 edit_kwargs.pop("input_fidelity", None)
                 if _attempt == 1:
-                    log.info("  input_fidelity: OMITTED from API call (profile=%s)", profile.name)
+                    log.info(
+                        "  [Wave 5.13n] quality=%s (atmo=%s, override=%s) input_fidelity: OMITTED from API call",
+                        _quality_override, atmosphere_id,
+                        "yes" if atmosphere_id in _qo_dict else "no",
+                    )
+            elif _attempt == 1:
+                log.info(
+                    "  [Wave 5.13n] quality=%s (atmo=%s, override=%s) input_fidelity=%s (preserve override active)",
+                    _quality_override, atmosphere_id,
+                    "yes" if atmosphere_id in _qo_dict else "no",
+                    _fidelity_override,
+                )
             if mask_file is not None:
                 edit_kwargs["mask"] = mask_file
 
