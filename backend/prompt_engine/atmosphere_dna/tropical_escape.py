@@ -5,7 +5,7 @@ register_core(AtmosphereCoreDNA(
     philosophy="Open-air tropical living with relaxed contemporary luxury.",
     emotional_intent="Breezy, alive, relaxed-luxurious, sun-soaked, carefree but refined, vibrant-calm.",
     architectural_language="Open-plan volumes dissolving into landscape, tropical timber and whitewash, with a contemporary residential ease.",
-    material_palette=["whitewashed or white render walls", "tropical hardwood or louvred timber", "concrete or stone floor", "natural rattan or cane", "linen and cotton in white and sage"],
+    material_palette=["whitewashed or white render finish on existing walls", "tropical hardwood or louvred timber", "concrete or stone floor", "natural rattan or cane", "linen and cotton in white and sage"],
     lighting_behavior="Warm natural ambient — daytime brightness, warm concealed evening coves, rattan pendant lanterns.",
     luxury_level="Contemporary tropical villa",
     forbidden_elements=["Beach clichés", "fake resort styling", "overdecorated tropical kitsch", "bamboo overuse", "nautical or coastal motifs"],
@@ -47,18 +47,25 @@ for _d in [
         # Wave 5.5.49 — adopting universal media console flex pattern
         # (standardization across all atmospheres). Allows TV on existing
         # wall OR media console; explicitly forbids creating a new wall.
-        room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "where the photographed apartment shows an open side to terrace or garden, preserve and emphasize that opening"],
+        room_specific_constraints=["television on existing wall surface or media console — never on a new wall", "where the photographed apartment shows an open side to terrace or garden, preserve and emphasize that opening"],
         # Wave 5.5.35 — drop hard "into terrace" (assumed terrace exists,
         # leak source on indoor apartments). Add explicit "visible kitchen"
         # continuity matching the WM pattern. Terrace kept as conditional.
         visible_transition_logic="white walls and concrete floor continue into adjacent rooms; rattan accents echo through visible kitchen or terrace if present",
+        # Wave 5.12c — universal wall-preservation rule INSERTED at slot
+        # [0]. Tropical had no defensive rule before — wall-invention
+        # risk identified in audit. Trade-off : "no shell or driftwood
+        # decor" demoted out of shipped [:3] AVOID (was [2], now [3]).
+        # The room_specific_constraints already protect terrace openings
+        # conditionally ; this rule adds the wall preservation half.
+        # Wave 5.14c — softened wall rule (see WM for rationale).
         negative_rules=["no dark tropical furniture", "no nautical motifs", "no shell or driftwood decor", "no overly lush plant collection"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="tropical_escape",
         room_type="master_bedroom",
         furniture_language=["timber or rattan with white linen — tropical tactile warmth", "cane or timber — natural surface warmth at low level", "louvred timber — warm shutter surface quality"],
-        material_palette=["polished concrete or pale stone floor", "white render walls", "white and sage linen bedding"],
+        material_palette=["polished concrete or pale stone floor", "white render finish on existing walls", "white and sage linen bedding"],
         lighting_behavior="Concealed warm ceiling slot above headboard + rattan pendant or warm table lamp at bedside.",
         # Wave 5.5.27 — REPLACED tropical leaf vase with bedside rug. Leaf
         # cosmetic ; rug essential.
@@ -126,7 +133,7 @@ for _d in [
         atmosphere_id="tropical_escape",
         room_type="dining_room",
         furniture_language=["solid timber or concrete dining table", "rattan or cane dining chairs with white cushions", "open timber or concrete sideboard"],
-        material_palette=["polished concrete or pale stone floor", "white render walls", "rattan or cane chair structure with white upholstery"],
+        material_palette=["polished concrete or pale stone floor", "white render finish on existing walls", "rattan or cane chair structure with white upholstery"],
         lighting_behavior="Single rattan or ceramic pendant low over table; warm casual dining tone.",
         decor_language=["low centrepiece of tropical flowers in white ceramic", "woven rattan table runner or tray"],
         realism_constraints=["pendant at correct height — 70–75 cm above table", "chairs at correct height for table"],
@@ -174,7 +181,7 @@ for _d in [
         atmosphere_id="tropical_escape",
         room_type="entrance_hall",
         furniture_language=["white render console table or simple timber bench", "round mirror in rattan or white-painted timber frame", "single large tropical plant in concrete pot"],
-        material_palette=["pale concrete or stone floor", "white render walls", "rattan or timber mirror frame"],
+        material_palette=["pale concrete or stone floor", "white render finish on existing walls", "rattan or timber mirror frame"],
         lighting_behavior="Warm rattan or brass pendant + warm ambient; bright welcoming tropical arrival.",
         decor_language=["single large-leaf tropical plant as entry accent", "woven rattan tray with simple objects on console"],
         realism_constraints=["console at correct 80–85 cm height", "plant at correct scale for hall — not too small"],
@@ -186,7 +193,7 @@ for _d in [
         atmosphere_id="tropical_escape",
         room_type="home_office",
         furniture_language=["simple timber or concrete desk", "rattan or cane chair with linen seat pad", "open timber shelf with books and single plant"],
-        material_palette=["pale concrete or stone floor", "white render walls", "timber desk and natural linen"],
+        material_palette=["pale concrete or stone floor", "white render finish on existing walls", "timber desk and natural linen"],
         lighting_behavior="Single rattan or ceramic desk lamp + bright natural window light; tropical daytime workspace.",
         decor_language=["small tropical plant on desk corner", "single framed artwork — botanical print or landscape"],
         realism_constraints=["desk at correct 72–75 cm working height", "chair at correct seat height"],

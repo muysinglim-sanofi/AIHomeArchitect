@@ -49,15 +49,21 @@ for _d in [
         # Wave 5.5.48 — TV media console flex (same fix as Soft Luxury
         # and Nature). Allow TV on existing wall OR media console;
         # explicitly forbid creating a new wall.
-        room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "maximum 2 decorative objects in room"],
-        visible_transition_logic="tadelakt floor and plaster walls continue into adjacent rooms; warm sand palette unbroken through visible spaces",
+        room_specific_constraints=["television on existing wall surface or media console — never on a new wall", "maximum 2 decorative objects in room"],
+        # Wave 5.14c — dropped "plaster walls" plural noun (see Japandi
+        # for rationale).
+        visible_transition_logic="tadelakt floor and warm plaster continue into adjacent rooms; warm sand palette unbroken through visible spaces",
         # Wave 5.5.51 — added defensive wall-preservation rule at slot
         # [0] (same as Soft Luxury 5.5.49). Even with media console
         # flex pattern (Wave 5.5.48), Desert's strong tadelakt-on-walls
         # material identity still pushed wall invention. Trade-off :
         # "no bright orange" demoted to slot [3] (not emitted in AVOID).
         # Wall-invention risk > orange-cliché risk.
-        negative_rules=["preserve existing wall layout and partitions exactly — no new walls or wall extensions", "no arabesque tile pattern", "no cold marble", "no bright orange", "no maximalist Moroccan styling"],
+        # Wave 5.12c — universal wall-preservation rule, replacing the
+        # Wave 5.5.51 standard wording. Now consistent across all 7
+        # atmospheres, with explicit coverage of openings + windows.
+        # Wave 5.14c — softened wall rule (see WM for rationale).
+        negative_rules=["no arabesque tile pattern", "no cold marble", "no bright orange", "no maximalist Moroccan styling"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="desert_luxe",
@@ -68,7 +74,7 @@ for _d in [
         # Wave 5.5.27 — REPLACED carved wooden object with bedside rug.
         # Decor object → essential rug for bedroom inhabitation realism.
         decor_language=["layered raw cotton and natural linen bedding in sand tones", "woven cotton rug at the bedside in sand tones"],
-        realism_constraints=["platform bed at correct low height — 35–40 cm", "tadelakt walls with correct reflective polish — not flat"],
+        realism_constraints=["platform bed at correct low height — 35–40 cm", "tadelakt finish with correct reflective polish — not flat"],
         room_specific_constraints=["monochrome sand-toned palette for all bedding", "no artwork — wall left as plaster composition"],
         visible_transition_logic="tadelakt floor and warm plaster flow into ensuite; sand-toned palette continuous",
         negative_rules=["no patterned bedding", "no chrome hardware", "no cold-toned palette", "no ornate headboard"],
@@ -89,7 +95,7 @@ for _d in [
         atmosphere_id="desert_luxe",
         room_type="bathroom",
         furniture_language=["full tadelakt wet room — walls and floor continuous", "freestanding stone soaking tub — sandstone or terracotta composite", "single hammered brass basin on stone slab"],
-        material_palette=["tadelakt walls and floor in warm sand or terracotta", "sandstone or stone slab vanity", "hammered brass fixtures throughout"],
+        material_palette=["tadelakt finish on existing walls and floor in warm sand or terracotta", "sandstone or stone slab vanity", "hammered brass fixtures throughout"],
         lighting_behavior="Single concealed warm slot at ceiling perimeter; room lit by raking warm glow — hammam-adjacent.",
         # Wave 5.5.27 Phase 3b — REPLACED carved wooden stool (decorative
         # accent) with mirror. Anchored to "the basin" — existing hammered
@@ -128,7 +134,7 @@ for _d in [
         atmosphere_id="desert_luxe",
         room_type="dining_room",
         furniture_language=["large sandstone or warm timber dining table — solid monolithic slab", "upholstered chairs in raw cotton or camel leather", "carved timber or tadelakt sideboard"],
-        material_palette=["polished tadelakt floor", "tadelakt walls in warm sand", "raw cotton or leather upholstery"],
+        material_palette=["polished tadelakt floor", "tadelakt finish on existing walls in warm sand", "raw cotton or leather upholstery"],
         lighting_behavior="Single hammered brass pendant hung low over table; warm focused glow — dining as ceremony.",
         decor_language=["single carved stone or ceramic centrepiece — empty vessel", "two hammered brass candleholders flanking centrepiece"],
         realism_constraints=["pendant at correct height — 70–80 cm above table", "chairs at correct seat height for table"],
@@ -188,7 +194,7 @@ for _d in [
         atmosphere_id="desert_luxe",
         room_type="home_office",
         furniture_language=["solid sandstone slab desk on warm timber trestle", "upholstered chair in raw cotton or camel leather", "floating cedar or walnut shelf"],
-        material_palette=["polished tadelakt floor", "tadelakt walls in warm sand", "cedar or walnut desk and shelf"],
+        material_palette=["polished tadelakt floor", "tadelakt finish on existing walls in warm sand", "cedar or walnut desk and shelf"],
         lighting_behavior="Single warm hammered brass desk lamp + concealed warm cove; no cold task light.",
         decor_language=["single clay vessel as pen holder", "one smooth river stone as paperweight — nothing more"],
         realism_constraints=["desk at correct 72–75 cm working height", "shelf with maximum 5 items — restraint enforced"],

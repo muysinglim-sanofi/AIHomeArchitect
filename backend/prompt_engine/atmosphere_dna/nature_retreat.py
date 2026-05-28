@@ -68,7 +68,7 @@ for _d in [
         # create a stone accent wall for mounting the TV. "Focal wall"
         # requirement was the driver. New wording allows TV on existing
         # wall OR media console; explicitly forbids new wall creation.
-        room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "planting: maximum 2 large statement plants"],
+        room_specific_constraints=["television on existing wall surface or media console — never on a new wall", "planting: maximum 2 large statement plants"],
         # Wave 5.5.37 — added "visible kitchen" continuity matching WM
         # pattern. Previous wording mentioned only "visible dining area".
         # Softened "stone and plant accents" → "natural accents" (don't
@@ -82,7 +82,13 @@ for _d in [
         # wasn't imperative enough. New wording uses capital "DO NOT" +
         # explicit "modify, narrow, or remove" verb list + "exactly"
         # quantifier.
-        negative_rules=["DO NOT modify, narrow, or remove existing windows and openings — preserve all photographed window dimensions exactly", "no plastic or synthetic pot", "no plant collection overload", "no polished surfaces", "no cold grey palette"],
+        # Wave 5.12c — universal wall-preservation rule, replacing the
+        # Wave 5.5.46 window-only rule. The new universal mentions walls
+        # + openings + windows so window preservation is preserved AND
+        # the wall-invention failure mode now has an explicit guard.
+        # Saves ~38 chars vs the 5.5.46 verbose wording.
+        # Wave 5.14c — softened wall rule (see WM for rationale).
+        negative_rules=["no plastic or synthetic pot", "no plant collection overload", "no polished surfaces", "no cold grey palette"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="nature_retreat",

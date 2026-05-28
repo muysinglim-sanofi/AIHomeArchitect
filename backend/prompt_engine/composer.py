@@ -248,6 +248,7 @@ from .preservation import (
     build_structural_evolution_contract,
     build_atmosphere_switch_contract,
     build_simplified_fv_contract,
+    build_mode_contract,  # Wave 5.13f — single MODE_CONTRACT replaces 6 layers in FIRST_VISION
 )
 from .anchor_detector import detect_anchors
 from .dream_scene_completion import (
@@ -323,6 +324,7 @@ _SECTION_PRIORITY: dict[str, int] = {
     "task": 1,
     "header": 1,
     "edit_block": 1,
+    "mode_contract": 1,         # Wave 5.13f — single authoritative MODE_CONTRACT (FIRST_VISION)
     "full_contract": 1,
     "continuation_contract": 1,
     "atmosphere_contract": 1,   # Wave 4.3.0 — replaces continuation_contract in SR path
@@ -455,6 +457,62 @@ def _design_intelligence_block(
         )
         return block, True
     return _style_block(style_dna, style_label), False
+
+
+# ── Wave 5.13f — compact structural_identity wrapper (FIRST_VISION only) ─────
+#
+# render_clause() (structural_identity.py) ships the same verbose wrapper to
+# V1/V2/V3 paths: "STRUCTURAL IDENTITY — this apartment already contains
+# these architectural facts; reproduce them exactly, do not normalize,
+# narrow, or restyle them: [facts]. These are existing structural truths,
+# not design choices." MODE_CONTRACT now states that intent authoritatively,
+# so for FIRST_VISION the wrapper is rewrapped inline as a 30-char header.
+# V2/V3 paths keep the verbose form unchanged.
+
+_PRESERVE_IDENTITY_PREFIX = (
+    "STRUCTURAL IDENTITY — this apartment already contains these "
+    "architectural facts; reproduce them exactly, do not normalize, "
+    "narrow, or restyle them: "
+)
+_PRESERVE_IDENTITY_SUFFIXES = (
+    ". These are existing structural truths, not design choices. "
+    "Only the explicitly requested structural change may alter them.",
+    ". These are existing structural truths, not design choices.",
+)
+_CREATIVE_IDENTITY_PREFIX = (
+    "ARCHITECTURAL MEMORY — this space contains these photographed "
+    "architectural facts as creative starting points; they may be "
+    "reinterpreted to express the atmosphere's character: "
+)
+_CREATIVE_IDENTITY_SUFFIX = (
+    ". Use them as an architectural reference, not as constraints."
+)
+
+
+def _compact_structural_identity_wrapper(verbose_clause: str) -> str:
+    """
+    Wave 5.13f — rewrap render_clause output for FIRST_VISION compactness.
+
+    Preserve "STRUCTURAL IDENTITY — ..." → "PHOTO FACTS TO RESPECT: [facts]."
+    Creative "ARCHITECTURAL MEMORY — ..." → "PHOTO CONTEXT: [facts]."
+    Unrecognised wrapper returned unchanged (defensive — never silently
+    swallow content). Empty input returns "".
+    """
+    if not verbose_clause:
+        return ""
+    if verbose_clause.startswith(_PRESERVE_IDENTITY_PREFIX):
+        body = verbose_clause[len(_PRESERVE_IDENTITY_PREFIX):]
+        for sfx in _PRESERVE_IDENTITY_SUFFIXES:
+            if body.endswith(sfx):
+                body = body[: -len(sfx)]
+                break
+        return f"PHOTO FACTS TO RESPECT: {body}."
+    if verbose_clause.startswith(_CREATIVE_IDENTITY_PREFIX):
+        body = verbose_clause[len(_CREATIVE_IDENTITY_PREFIX):]
+        if body.endswith(_CREATIVE_IDENTITY_SUFFIX):
+            body = body[: -len(_CREATIVE_IDENTITY_SUFFIX)]
+        return f"PHOTO CONTEXT: {body}."
+    return verbose_clause
 
 
 def _audit(
@@ -662,20 +720,25 @@ def compose_generation_prompt(
         return prompt
 
     # ── Path D: FIRST VISION (full redesign) ──────────────────────────────────
-    # Wave 4.3.3: reconstruction-first task framing via fidelity_layer.
-    # Replaces "REDESIGN —" (Wave 4.3.1) with "SAME APARTMENT — reconstruct then transform".
-    # Establishes spatial truth from the input photo before any atmosphere instruction.
-    # Wave 4.5.0: uses build_simplified_fv_contract() (Tier 1.5, ~820 chars) instead
-    # of build_structural_contract() (Tier 1, ~1550 chars). All required vocabulary
-    # preserved; redundant defensive prose removed. Saves ~730 chars per prompt.
-    room_ctx = f" {room_type}" if room_type else ""
-    # Wave 5.5.14f — task suffix (voice #1) trims in preserve mode when
-    # BIMODAL_ENABLED is on. Default + creative paths emit the full string
-    # → byte-identical to pre-5.5.14f.
-    task = build_first_vision_task(dna.name, room_ctx, generation_mode)
+    # Wave 5.13f — single MODE_CONTRACT replaces 6 overlapping structural sections:
+    #   task / full_contract / openings_anchor / structural_negative_anchors /
+    #   wow_directive / natural_enrichment.
+    # The mode contract authoritatively states what is locked (preserve) or
+    # flexible (creative). STRUCTURAL_IDENTITY (vision-captured facts) remains
+    # injected separately as PHOTO FACTS TO RESPECT. Scope: FIRST_VISION only —
+    # STYLE_REFINEMENT and STRUCTURAL_TRANSFORMATION paths are untouched.
+    mode_contract = build_mode_contract(generation_mode)
 
-    contract = build_simplified_fv_contract(room_type, generation_mode)  # Wave 4.5.0 / 5.5.14d
-    openings_anchor = build_openings_anchor(generation_mode)  # Wave 4.6.2 / 5.5.14d
+    # Wave 5.13f — compact STRUCTURAL_IDENTITY wrapper for FIRST_VISION only.
+    # render_clause emits "STRUCTURAL IDENTITY — this apartment already contains
+    # these architectural facts; reproduce them exactly, do not normalize,
+    # narrow, or restyle them: [facts]. These are existing structural truths,
+    # not design choices." (V1/V2/V3 paths shared). For FV the MODE_CONTRACT
+    # already covers the "reproduce exactly / do not modify" intent, so the
+    # verbose wrapper is replaced inline by "PHOTO FACTS TO RESPECT: [facts]".
+    # Saves ~150 chars per prompt. V2/V3 paths keep the original wording.
+    structural_identity_fv = _compact_structural_identity_wrapper(structural_identity)
+
     # Wave 4.7.1 R1: concrete image-specific structural anchors for FIRST_VISION.
     # detect_anchors() is deterministic text matching (no ML, no latency, no vision
     # reintroduction) over room_description. Output is descriptive-only,
@@ -693,70 +756,32 @@ def compose_generation_prompt(
     intel_block, used_dna = _design_intelligence_block(atmosphere_id, room_type, dna, style_label, generation_mode)
 
     # DEV compact mode: skip all P4 enrichments, use compact realism.
-    # PROD mode: wow_directive replaces dream_micro/addendum (Wave 4.3.1).
+    # Wave 5.13f: wow_directive (TRANSFORMATION AMBITION) and natural_enrichment
+    # were redundant with the new MODE_CONTRACT — removed from FIRST_VISION.
+    # scene_completion stays only for the non-DNA fallback path (rare in
+    # production where all 7 atmospheres have full DNA).
     if compact_prompts:
         completion_block = ""
-        wow_block = ""
-        natural_enrichment = ""  # Wave 4.6.2: skip P4 enrichments in compact mode
         completeness = ""
         realism = build_compact_realism_block()
     elif used_dna:
-        # DNA path: wow_directive replaces dream_micro — expresses transformation
-        # ambition that dream_micro's richness note did not carry.
-        # Wave 4.4.1: compact realism (133 chars) frees budget for wow_directive vs medium (325 chars).
-        # Wave 4.5.1: restyling_wow_directive — photo-first framing, no "editorial redesign".
-        # Wave 4.6.0: completeness="" — DNA handles furnishing richness; "never sparse/empty"
-        # contradicts photo-first when uploaded room is intentionally minimal.
-        # Wave 4.6.1: build_photo_edit_wow_directive() — "photo edit" framing, no "furniture styling".
-        # Wave 4.6.2: natural_enrichment added (P4) — light accessory layering, no composition.
         completion_block = ""
-        wow_block = build_photo_edit_wow_directive(generation_mode)
-        natural_enrichment = build_natural_enrichment()
         completeness = ""  # Wave 4.6.0: DNA handles richness; empty string filtered by budget system
         realism = build_compact_realism_block()
     else:
-        # Non-DNA path: scene_completion provides the element checklist;
-        # wow_directive adds the transformation ambition layer (was absent before 4.3.1).
-        # Wave 4.4.1: compact realism — same budget saving as DNA path.
-        # Wave 4.6.1: build_photo_edit_wow_directive() — consistent photo-edit framing.
-        # Wave 4.6.2: natural_enrichment added (P4) — light accessory layering.
-        # Wave 4.7.1 R2: completeness="" — unify with the DNA path. The non-DNA
-        # fallback previously injected INTERIOR COMPLETENESS ("never sparse...
-        # every major functional zone completed"), composition-authoritative
-        # spatial-completion pressure absent from the DNA path. Same image + same
-        # atmosphere must not yield different structural behaviour. Premium
-        # richness now comes from material/lighting/atmosphere, not spatial
-        # completion. build_interior_completeness_rule stays imported (still used
-        # by validator harnesses); only the FIRST_VISION usage is removed.
+        # Non-DNA fallback path: scene_completion provides the element checklist
+        # (kept because the fallback lacks DNA's furnishing language).
         completion_block = build_scene_completion(room_type, atmosphere_id)
-        wow_block = build_photo_edit_wow_directive(generation_mode)
-        natural_enrichment = build_natural_enrichment()
-        completeness = ""  # Wave 4.7.1 R2: unified with DNA path (was build_interior_completeness_rule())
+        completeness = ""  # Wave 4.7.1 R2: unified with DNA path
         realism = build_compact_realism_block()
 
     vs_block = ""
     if secondary_visible_spaces:
         vs_block = build_visible_spaces_block(atmosphere_id, secondary_visible_spaces) or ""
 
-    direction = f"DESIGN DIRECTION: {user_instruction.strip()[:300]}" if user_instruction.strip() else ""
-
-    # Wave 5.5.14f / Wave 5.5.14i — voice #3 (atmosphere DNA boundary) is
-    # the middle counter-signal that arbitrates DNA-vs-photo conflict.
-    #
-    # - Preserve mode (5.5.14f): DNA architectural tokens stripped → section
-    #   becomes defensive prose against a non-existent threat → drop.
-    # - Creative mode (5.5.14i): section says "Preserve the photographed
-    #   apartment's geometry exactly" which DIRECTLY CONTRADICTS the
-    #   SAME SPACE REIMAGINED + ARCHITECTURAL MEMORY blocks earlier in the
-    #   prompt. Was ankylosing creative outputs → drop.
-    #
-    # Default (BIMODAL_ENABLED unset): section emits in full → byte-
-    # identical baseline.
-    from .atmosphere_dna.bimodal_classifier import is_preserve_mode_active
-    dna_boundary = (
-        "" if is_preserve_mode_active(generation_mode)
-        else build_atmosphere_dna_boundary()
-    )
+    # Wave 5.13f — design_direction was a placeholder ("Generate the first
+    # architectural vision for this space.") on iteration=1. Removed entirely
+    # from FIRST_VISION since the MODE_CONTRACT already states intent.
 
     # Wave 5.5.18 — revive dormant DNA fields (room_specific_constraints +
     # visible_transition_logic). Bimodal-gated to creative-mode only in v1.
@@ -767,36 +792,33 @@ def compose_generation_prompt(
     dna_context_fv = build_dna_room_context_signal(fv_room_dna, generation_mode)
     dna_context_fv = apply_bimodal(dna_context_fv, atmosphere_id, generation_mode)
 
+    # Wave 5.13f — FIRST_VISION assembly:
+    # MODE_CONTRACT (single authoritative preserve/creative contract) +
+    # STRUCTURAL_IDENTITY (vision-captured facts, compact wrapper) +
+    # design_intel (atmosphere DNA) + dna_room_context (TV anchor + visible
+    # continuity merged into ROOM DESIGN) + realism + P5 enrichments.
+    #
+    # Removed from FIRST_VISION (now subsumed by MODE_CONTRACT):
+    #   task, full_contract, openings_anchor, structural_negative_anchors,
+    #   wow_directive (TRANSFORMATION AMBITION), natural_enrichment,
+    #   atmosphere_dna_boundary, design_direction (placeholder filler).
+    # STYLE_REFINEMENT and STRUCTURAL_TRANSFORMATION paths are untouched
+    # in this wave.
     raw_sections = [
-        ("task", task),
-        ("full_contract", contract),
-        ("openings_anchor", openings_anchor),      # P1 — Wave 4.6.2: openings fidelity
-        ("structural_identity", structural_identity),  # P1 — Wave 4.7.2: persistent concrete apartment identity
-        ("structural_negative_anchors", structural_negative_anchors),  # P1 — Wave 4.7.4: no-new-wall topology
+        ("mode_contract", mode_contract),         # P1 — Wave 5.13f: single authoritative MODE_CONTRACT
+        ("structural_identity", structural_identity_fv),  # P1 — Wave 4.7.2 facts + Wave 5.13f compact wrapper
         ("architectural_anchors", fv_anchor_clause),  # P1 — Wave 4.7.1 R1: concrete image anchors (text-derived)
         ("source_space", source),                  # P1 — source="" in FV (Wave 4.6.1)
         ("design_intel", intel_block),
-        ("dna_room_context", dna_context_fv),     # P3 — Wave 5.5.18 dormant fields revival
-        ("atmosphere_dna_boundary", dna_boundary),  # P1 — Wave 5.5.3 / dropped by Wave 5.5.14f in preserve mode
+        ("dna_room_context", dna_context_fv),     # P3 — Wave 5.5.18 dormant fields revival (TV anchor + visible continuity)
         ("interior_completeness", completeness),   # P5 — drops first (Wave 4.4.1: was P4)
-        ("scene_completion", completion_block),    # P4 — drops before wow_directive
-        ("wow_directive", wow_block),              # P4 — most protected of the P4 group
-        ("natural_enrichment", natural_enrichment),  # P4 — Wave 4.6.2: light natural decor
+        ("scene_completion", completion_block),    # P4 — non-DNA fallback path only
         ("visible_spaces", vs_block),
-        ("design_direction", direction),
-        # Wave 5.5.15c — per-atmosphere creative emotional signal.
-        # P5 priority → drops first under budget pressure (creative mode on
-        # tight atmospheres can overflow; silent no-op preferred over
-        # forcing higher-priority sections out). BIMODAL_ENABLED gate +
-        # preserve-mode silence inside build_emotional_realism_signal →
-        # byte-identical default + preserve paths.
+        # Wave 5.5.15c — per-atmosphere creative emotional signal (P5, BIMODAL-gated).
         ("emotional_realism", build_emotional_realism_signal(generation_mode, atmosphere_id)),
-        # Wave 5.5.16 — geometry-attached furnishing semantics (5 rooms × 2
-        # modes). Empty string for unmapped rooms or flag-off paths → section
-        # filtered out via the standard budget pipeline. Replaces the Wave
-        # 5.5.15g safe_furnishing wiring.
+        # Wave 5.5.16 — geometry-attached furnishing semantics (P5, BIMODAL-gated).
         ("geometry_attached_furnishing", build_furnishing_signal(generation_mode, room_type)),
-        ("compact_realism", realism),              # P3 — compact block (Wave 4.4.1: was full_realism/medium)
+        ("compact_realism", realism),              # P3 — compact realism block
     ]
     _audit("FIRST_VISION", raw_sections)
     prompt, dropped = _assemble_with_budget("FIRST_VISION", raw_sections)

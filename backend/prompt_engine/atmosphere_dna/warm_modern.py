@@ -17,7 +17,12 @@ for _d in [
         atmosphere_id="warm_modern",
         room_type="living_room",
         furniture_language=["bouclé in oat or camel — warm curved tactile richness", "travertine — warm stone surface depth with brass or oak accent", "warm linen — oak-toned textural warmth"],
-        material_palette=["wide-plank European oak floor", "warm sand plaster walls", "travertine slab surfaces"],
+        # Wave 5.12c — anchored "warm sand plaster walls" → "warm sand
+        # plaster finish on existing walls" (mirror of Wave 5.7e SL and
+        # 5.7f Nature). Removes the plural-noun directive that competed
+        # with the wall-preservation negative_rule and pushed the model
+        # to materialize new walls to satisfy the atmosphere identity.
+        material_palette=["wide-plank European oak floor", "warm sand plaster finish on existing walls", "travertine slab surfaces"],
         lighting_behavior="Concealed ceiling cove + tungsten-glow table lamps; warm evening tone.",
         # Wave 5.5.21 fix A2 — dropped "oversized ceramic vessel on floating
         # oak shelf" from decor_language. This decor element was occupying
@@ -41,17 +46,9 @@ for _d in [
         # pattern as Soft Luxury / Nature / Desert (5.5.48): allow TV
         # placement on EXISTING wall OR media console, never on a
         # newly created wall. Canonical reference profile updated.
-        room_specific_constraints=["seating in conversation grouping", "television visible in living area on existing wall surface or media console — never on a newly created wall"],
+        room_specific_constraints=["seating in conversation grouping", "television on existing wall surface or media console — never on a new wall"],
         visible_transition_logic="oak floor and warm plaster continue into adjacent rooms; brass accents echo through visible kitchen or hallway",
-        # Wave 5.7d — defensive wall-preservation parity with SL (5.5.49)
-        # and Desert (5.5.51). Bench 2026-05-26 showed WM still invented a
-        # wall on the right side to anchor TV + media console, EVEN WITH
-        # the media console flex wording in room_specific_constraints. WM
-        # had been missed in the 5.5.49 / 5.5.51 propagation wave.
-        # Trade-off : "no matching 3-piece suite" demoted to slot [3]
-        # (not emitted in AVOID since build_dna_block ships [:3]); wall
-        # preservation > stylistic furniture matching.
-        negative_rules=["preserve existing wall layout and partitions exactly — no new walls or wall extensions", "no cold grey palette", "no chrome hardware", "no matching 3-piece suite", "no floating furniture without visible support"],
+        negative_rules=["no cold grey palette", "no chrome hardware", "no matching 3-piece suite", "no floating furniture without visible support"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="warm_modern",
@@ -185,7 +182,7 @@ for _d in [
         decor_language=["single warm ceramic pen holder", "trailing plant on corner shelf"],
         realism_constraints=["desk at correct 72–75 cm working height", "chair at correct seat height relative to desk"],
         room_specific_constraints=["cable management — no visible cable tangle", "shelves with edited display — not overloaded"],
-        visible_transition_logic="oak desk palette echoes hallway or living room flooring; warm plaster walls continuous",
+        visible_transition_logic="oak desk palette echoes hallway or living room flooring; warm plaster continuous",
         negative_rules=["no cold grey office aesthetic", "no aggressive ergonomic furniture styling", "no cable clutter", "no tech-showroom feel"],
     ),
     RoomAdaptationDNA(

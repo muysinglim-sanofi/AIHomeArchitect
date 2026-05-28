@@ -17,8 +17,19 @@ for _d in [
         atmosphere_id="nordic_warmth",
         room_type="living_room",
         furniture_language=["natural wool in oat or undyed — deep hygge tactile warmth", "birch or pine timber — warm natural surface depth", "sheepskin — natural undyed tactile softness"],
-        material_palette=["wide-plank pine or birch floor", "warm white plaster walls", "natural wool upholstery in oat or undyed tones"],
-        lighting_behavior="Amber floor lamp behind sofa + hanging filament bulb pendant; candle-warm, no ceiling wash.",
+        # Wave 5.12c — anchored "warm white plaster walls" → "warm white
+        # plaster finish on existing walls" (mirror of WM / SL / Nature
+        # anchor pattern). Resolves the prompt-internal tension where
+        # the plural-noun material directive pushed the model to invent
+        # new walls to satisfy the Nordic identity.
+        material_palette=["wide-plank pine or birch floor", "warm white plaster finish on existing walls", "natural wool upholstery in oat or undyed tones"],
+        # Wave 5.12c — lighting_behavior trimmed for budget. Nordic creative
+        # was at +2 margin after adding the defensive wall-preservation
+        # rule + material_palette anchor. Original wording mentioned
+        # "behind sofa" and "hanging filament bulb pendant" — the
+        # positioning detail and the "bulb" qualifier are cuttable
+        # without losing the Nordic candle-warm character.
+        lighting_behavior="Amber floor lamp + filament pendant; candle-warm, no ceiling wash.",
         decor_language=["cluster of amber or clear glass candle holders on coffee table", "woven basket with wool throw at sofa end"],
         realism_constraints=["sofa at normal residential height — 45 cm", "candleholders at varied heights — not matching set"],
         # Wave 5.5.22 — added "a television" as third focal option.
@@ -29,13 +40,20 @@ for _d in [
         # Allows TV placement on existing wall OR media console; explicitly
         # forbids creating a new wall. Standardized across all atmospheres
         # to prevent wall-invention side effects.
-        room_specific_constraints=["layered rugs permitted — wool flatweave under pile", "television visible in living area on existing wall surface or media console — never on a newly created wall"],
+        room_specific_constraints=["layered rugs permitted — wool flatweave under pile", "television on existing wall surface or media console — never on a new wall"],
         # Wave 5.5.34b — dropped "visible bedroom door" reference. Bench
         # 2026-05-25 showed the model literally invented a bedroom zone +
         # glass partition when the photo had no bedroom. Replaced with the
         # neutral "adjacent rooms" + a conditional kitchen mention so the
         # kitchen-visibility signal stays without inventing new spaces.
         visible_transition_logic="pine floor and warm white plaster continue into adjacent rooms; wool palette echoes through visible kitchen if present",
+        # Wave 5.12c — universal wall-preservation rule INSERTED at slot
+        # [0]. Nordic had no defensive rule before — wall-invention
+        # observed in bench (TV mounted on invented right-wall, kitchen
+        # opening masked). Trade-off : "no minimalist floating shelves"
+        # demoted out of shipped [:3] AVOID (was [2], now [3]). Wall
+        # preservation > shelf-style policing.
+        # Wave 5.14c — softened wall rule (see WM for rationale).
         negative_rules=["no sleek dark furniture", "no chrome accents", "no minimalist floating shelves", "no cold grey palette"],
     ),
     RoomAdaptationDNA(

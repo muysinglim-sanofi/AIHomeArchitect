@@ -109,8 +109,17 @@ def extract_from_description(room_description: str) -> ApartmentStructuralIdenti
     low = text.lower()
 
     # Dominant opening — prefer the strongest, most identity-defining opening.
+    # Wave 5.13g+ (2026-05-27) — added "sliding glass door" and "patio door"
+    # to the recognised vocabulary. gpt-4o correctly classifies the benchmark
+    # apartment's primary opening as a sliding glass door (verified via raw
+    # capture log), but the previous whitelist dropped that classification →
+    # dominant_opening was missing from PHOTO FACTS for every preserve-mode
+    # session, leaving the model without a back-wall anchor and triggering
+    # wall invention on strong-identity atmospheres (SL/Nordic/Desert).
+    # Door types listed FIRST so they win over "glass" sub-matches.
     dominant = ""
     for key in (
+        "sliding glass door", "patio door",
         "bay window", "panoramic window", "floor-to-ceiling window",
         "corner window", "glazed wall", "glazed facade", "picture window",
     ):

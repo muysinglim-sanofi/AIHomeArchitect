@@ -265,39 +265,86 @@ _STRIPS: dict[str, list[tuple[str, str]]] = {
         # whole-facade redesign.
         (" — facade identity", ""),
     ],
-    # 2. Desert Luxe — rank 2, MEDIUM bias
+    # 2. Desert Luxe — Wave 5.13j + 5.13k semantic cleanup (preserve-only) + pre-existing.
     "desert_luxe": [
-        # emotional_intent: 🔴 "sculptural" and "monumental" are spatial words.
+        # Wave 5.13k philosophy: drop "desert architecture" + "sculptural calm" mass cues.
+        ("desert architecture and sculptural calm", "open desert light and luminous mineral calm"),
+        # Wave 5.13k emotional_intent: soften "timelessly opulent".
+        ("timelessly opulent", "warm luminous elegance"),
+        # Wave 5.13j LR furniture_language: drop "solid sandstone" mass cue.
+        ("solid sandstone or terracotta — sun-drenched surface warmth", "warm sand-toned tactile layers — sun-drenched warmth"),
+        # Wave 5.13k LR visible_transition_logic: drop "unbroken" enclosure cue.
+        ("warm sand palette unbroken through visible spaces", "flowing warm mineral palette through visible spaces"),
+        # Pre-existing: emotional_intent 🔴 "sculptural" and "monumental" are spatial words.
         ("Sculptural, ", ""),
         (", sculptural", ""),
         ("monumental, ", ""),
         (", monumental", ""),
-        # philosophy: 🟨 "desert architecture and sculptural calm" — leave for
-        # now; "desert architecture" is identity-defining; "sculptural calm"
-        # is mostly emotional. Benchmark will decide.
         # Bathroom furniture_language: 🔴 wet-room topology.
         (
             "full tadelakt wet room — walls and floor continuous",
             "tadelakt wet room finish — walls and floor",
         ),
     ],
-    # 5. Japandi Calm — rank 5, MEDIUM bias
+    # 5. Japandi Calm — Wave 5.13k semantic cleanup (preserve-only).
+    # Order matters: ", unhurried" replacement must happen before any
+    # generic "unhurried" matching to avoid double-application.
     "japandi_calm": [
-        # emotional_intent: 🟨 "breathable" — mild spatial cue.
+        # Wave 5.13k emotional_intent — softens enclosure/mass cues.
+        ("Still,", "Light-filled calm,"),
+        (", grounded,", ", airy calm,"),
+        (", unhurried.", " serenity."),
+        # Wave 5.13k LR furniture_language
+        ("unhurried tactile calm", "breathable serenity"),
+        ("raw surface honesty", "tactile natural finish"),
+        # Wave 5.13k core + LR material_palette: drop wabi-sabi mass cue.
+        # Side-effect: applies to ALL Japandi rooms (LR bench only verified;
+        # non-LR rooms also receive softer wording in preserve mode).
+        ("wabi-sabi plaster finish on existing walls", "soft mineral finish on existing walls"),
+        # Existing strips — preserve-mode pre-5.13:
+        # emotional_intent "breathable" mild spatial cue.
         (", breathable", ""),
         ("breathable, ", ""),
-        # Living realism_constraints: 🔴 main offender — "empty floor space
-        # is deliberate, not absent" pushes openness on cramped apartments.
+        # Living realism_constraints "empty floor space is deliberate, not absent"
+        # pushes openness on cramped apartments.
         ("; empty floor space is deliberate, not absent", ""),
         ("empty floor space is deliberate, not absent; ", ""),
     ],
-    # 6. Warm Modern — rank 6, LOW bias (no strips needed in shipped fields).
-    "warm_modern": [],
-    # 7. Soft Luxury — rank 7, LOW (matrix reference — DO NOT DILUTE; no
-    # shipping-field strips needed).
-    "soft_luxury": [],
-    # 8. Nature Retreat — rank 8, LOW
+    # 6. Warm Modern — Wave 5.13k semantic cleanup (preserve-only).
+    # "travertine slab" was reading as architectural mass cue. Replaced with
+    # "travertine tonal" in preserve to reduce wall-mass implication.
+    # Creative mode keeps original "travertine slab" identity.
+    "warm_modern": [
+        ("travertine slab surfaces", "travertine tonal surfaces"),
+    ],
+    # 7. Soft Luxury — Wave 5.13j + 5.13k semantic cleanup (preserve-only).
+    # Calibration matrix exception logged 2026-05-28 (see wave_5_5a_calibration_matrix.md):
+    # "fluted" → "refined ivory textured" because fluted's vertical-grooves implication
+    # triggered feature-wall invention. Other terms similarly softened. Creative mode
+    # retains full Aman/Rosewood identity vocabulary.
+    "soft_luxury": [
+        # Wave 5.13k philosophy
+        ("Refined hospitality luxury emphasizing", "Refined breathable hospitality calm emphasizing"),
+        # Wave 5.13k emotional_intent
+        ("quietly opulent", "elegant luminous luxury"),
+        ("sensorially rich", "refined tactile elegance"),
+        # Wave 5.13k LR furniture_language
+        ("layered textile softness", "soft layered textures"),
+        # Wave 5.13j LR material_palette
+        ("fluted ivory plaster finish on existing walls", "refined ivory textured finish on existing walls"),
+    ],
+    # 8. Nature Retreat — Wave 5.13k semantic cleanup (preserve-only) + pre-existing.
     "nature_retreat": [
+        # Wave 5.13k philosophy: drop "earthy luxury" mass cue.
+        ("earthy luxury.", "organic airy luxury."),
+        # Wave 5.13k emotional_intent: soften "restorative" enclosure.
+        ("restorative, earthy", "restorative open retreat, earthy"),
+        # Wave 5.13k LR furniture_language: soften "rough-cut stone" mass cue.
+        ("rough-cut stone or slate", "natural mineral texture or slate"),
+        # Wave 5.13k LR material_palette: soften "rammed earth" + "rough-cut stone".
+        ("rammed earth or clay plaster finish on existing walls", "earth-toned natural finish on existing walls"),
+        ("rough-cut stone accents on existing surfaces", "natural mineral texture accents on existing surfaces"),
+        # Pre-existing strips:
         # philosophy: 🟨 "architectural realism" borderline. Source text reads
         # "Biophilic calm integrated with architectural realism and earthy
         # luxury" — drop the "architectural realism and " segment.
@@ -327,9 +374,21 @@ _STRIPS: dict[str, list[tuple[str, str]]] = {
     # preserve mode. Root cause: "human-scaled" in emotional_intent
     # implies room subdivision into intimate volumes.
     "nordic_warmth": [
-        # emotional_intent: 🔴 "human-scaled" pushes the model to subdivide
-        # a larger living area into smaller "human-scaled" rooms. Bench
-        # 2026-05-25 confirmed: model added a glass partition + invented
+        # Wave 5.13j drop "intimate" (enclosure cue).
+        (", intimate", ""),
+        # Wave 5.13k emotional_intent: replace cocoon-implying vocabulary.
+        ("Cozy,", "Airy cozy calm,"),
+        ("hygge,", "airy Nordic comfort,"),
+        ("reassuring,", "calming daylight warmth,"),
+        # Wave 5.13k LR furniture_language: drop hygge as wall-cue trigger.
+        ("deep hygge tactile warmth", "airy Nordic tactile warmth"),
+        # Wave 5.13k LR lighting_behavior: drop candle-warm enclosure cue.
+        ("candle-warm,", "soft Nordic daylight warmth,"),
+        # Wave 5.13k LR room_specific_constraints: soften layering density cue.
+        ("layered rugs permitted", "light Scandinavian layering"),
+        # Pre-existing: emotional_intent "human-scaled" pushes the model to
+        # subdivide a larger living area into smaller "human-scaled" rooms.
+        # Bench 2026-05-25 confirmed: model added a glass partition + invented
         # a bedroom zone on the right side.
         (", human-scaled", ""),
         ("human-scaled, ", ""),

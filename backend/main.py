@@ -132,7 +132,19 @@ logging.basicConfig(
     format="%(asctime)s  %(levelname)-8s  %(message)s",
     datefmt="%H:%M:%S",
 )
+# Wave 5.13c perf diag — mirror everything to a log file so latency
+# analysis is possible without a visible uvicorn terminal. Append mode
+# (one continuous file across reloads); rotation deferred — file stays
+# small in normal use and is meant for short diagnostic sessions only.
+_log_path = os.path.join(os.path.dirname(__file__), "logs", "backend.log")
+os.makedirs(os.path.dirname(_log_path), exist_ok=True)
+_file_handler = logging.FileHandler(_log_path, mode="a", encoding="utf-8")
+_file_handler.setFormatter(
+    logging.Formatter("%(asctime)s  %(levelname)-8s  %(message)s", datefmt="%H:%M:%S")
+)
+logging.getLogger().addHandler(_file_handler)
 log = logging.getLogger("aih")
+log.info("[PerfDiag] file logging active -> %s", _log_path)
 
 # Emit active profile at import time so the running mode is visible immediately.
 _startup_profile = get_active_profile()
@@ -317,25 +329,29 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
     checklist scoped to the EXACT 5 dataclass fields (dominant opening,
     glass partition, spatial depth, kitchen visibility, secondary
     opening), max_tokens raised 90→150 to give room for coverage.
-    Explicit edge-case nudges: kitchen "even if partially visible at the
-    image edge" — addresses right-edge partial kitchens that the legacy
-    prompt missed. NOT a Wave 5.5.9 revival: no ceiling/floor/decor
-    bullets (those weren't in the StructuralIdentity dataclass anyway).
-    Parser contract unchanged; window-only keyword list still in place
-    (door variants fall through to the _OPENING regex fallback — fact
-    still captured, slightly different format). V2+ pure-switch
-    byte-identity preserved because the token captured at V1 round-trips
-    unchanged. Rollback = revert this docstring + prompt + max_tokens.
+
+    Wave 5.13g (Structural Identity Reliability, 2026-05-27): bench
+    showed WM + Nature Retreat sessions captured the apartment with
+    facts=3 (missing dominant_opening), while other 5 sessions captured
+    facts=4 on the SAME photo. Root cause confirmed by precedent memory
+    [mini_door_classification_resistance]: gpt-4o-mini is empirically
+    unreliable on opening classification. Fix: model upgrade
+    gpt-4o-mini → gpt-4o + detail "low" → "high". Cost delta ~$0.0025
+    per session (V1 only — captured once, reused via token forever) =
+    ~3% of one gpt-image-1 generation. Latency +0.5–2s once per session.
+    Aligns with Wave 5.13f principle "fewer but stronger" — single point
+    upgrade, no fallback heuristic, no retry logic. Rollback = revert
+    model + detail.
     """
     try:
         b64 = base64.b64encode(image_bytes).decode()
         resp = await openai.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[{
                 "role": "user",
                 "content": [
                     {"type": "image_url",
-                     "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "low"}},
+                     "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"}},
                     {"type": "text", "text": (
                         "Analyze this room photograph for architectural identity. "
                         "State each architectural fact below when present in the "
@@ -367,7 +383,13 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
             }],
             max_tokens=150,
         )
-        return (resp.choices[0].message.content or "").strip()
+        _raw = (resp.choices[0].message.content or "").strip()
+        # Wave 5.13g+ debug — log raw gpt-4o output so we can audit which
+        # facts the model returned vs which ones the deterministic parser
+        # caught. Helps decide whether to relax parser vocab or tighten the
+        # capture prompt when downstream PHOTO FACTS shrink unexpectedly.
+        log.info("[StructuralCapture] raw_text=%r", _raw)
+        return _raw
     except Exception as exc:  # non-fatal: identity simply stays absent
         log.warning("  structural capture failed (non-fatal): %s: %s",
                     type(exc).__name__, exc)
@@ -1337,6 +1359,49 @@ async def generate(
             request_id=request_id,
             status_code=502,
             session_id=session_id,
+        )
+
+    # ── Step 6b: re-encode to JPEG q=85 before upload (Wave 5.13c perf) ──────
+    # gpt-image-1 returns PNG bytes (typically 2-3 MB at 1536×1024). Uploading
+    # that raw payload through Supabase Storage + serving it back to mobile
+    # over Cloudflare CDN was costing 5-7 s in each direction on bandwidth-
+    # constrained connections. Re-encoding to JPEG q=85 with `optimize=True`
+    # shrinks the payload ~3× (target ~600-800 KB) with no perceptible
+    # quality loss on architectural renders. Net saving: ~8 s end-to-end.
+    # Done synchronously here because PIL JPEG encode of a 1536×1024 image is
+    # ~80-150 ms — negligible vs the upload/download savings.
+    _t_compress = time.monotonic()
+    _orig_size = len(generated_bytes)
+    try:
+        with PilImage.open(io.BytesIO(generated_bytes)) as _src_img:
+            # JPEG can't carry alpha; flatten to RGB on a white background
+            # so PNGs with transparency don't blow up encoding.
+            if _src_img.mode in ("RGBA", "LA", "P"):
+                _flat = PilImage.new("RGB", _src_img.size, (255, 255, 255))
+                _flat.paste(_src_img.convert("RGBA"), mask=_src_img.convert("RGBA").split()[-1])
+                _src_img = _flat
+            elif _src_img.mode != "RGB":
+                _src_img = _src_img.convert("RGB")
+            _buf = io.BytesIO()
+            _src_img.save(_buf, format="JPEG", quality=85, optimize=True, progressive=True)
+            generated_bytes = _buf.getvalue()
+        _compress_s = time.monotonic() - _t_compress
+        _ratio = _orig_size / max(len(generated_bytes), 1)
+        log.info(
+            "[PERF] stage=image_compression  duration_ms=%.0f  "
+            "in_bytes=%d  out_bytes=%d  ratio=%.2fx  quality=85",
+            _compress_s * 1000, _orig_size, len(generated_bytes), _ratio,
+        )
+        _timer.record(
+            "image_compression", _compress_s,
+            in_bytes=_orig_size, out_bytes=len(generated_bytes),
+        )
+    except Exception as exc:
+        # Non-fatal: if compression fails for any reason, upload the original
+        # PNG bytes so the user still gets their image. Safety net only.
+        log.warning(
+            "  image compression FAILED (non-fatal, uploading original): "
+            "%s: %s", type(exc).__name__, exc,
         )
 
     # ── Step 7: upload to Supabase Storage ────────────────────────────────────

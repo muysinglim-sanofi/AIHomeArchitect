@@ -65,11 +65,13 @@ for _d in [
         # create a wall for the TV). New wording allows TV on existing
         # wall OR media console and explicitly forbids creating a new
         # wall. TV remains mandatory ("visible in living area").
-        room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "balanced furniture placement — not haphazard"],
+        room_specific_constraints=["television on existing wall surface or media console — never on a new wall", "balanced furniture placement — not haphazard"],
         # Wave 5.5.36 — added "visible kitchen" continuity matching the WM
         # pattern. Previous wording mentioned dining + hallway but never
         # kitchen, contributing to "coin cuisine perdu" in bench 2026-05-25.
-        visible_transition_logic="ivory plaster walls and marble floor flow continuously into adjacent rooms; brass accents echo through visible kitchen, dining or hallway if present",
+        # Wave 5.14c — dropped "plaster walls" plural noun (see Japandi
+        # for rationale).
+        visible_transition_logic="ivory plaster and marble floor flow continuously into adjacent rooms; brass accents echo through visible kitchen, dining or hallway if present",
         # Wave 5.5.22 — dropped "no visible TV above fireplace" negative rule.
         # It explicitly forbade the most natural TV placement (the wall focal),
         # making TV nearly impossible to introduce. Other negative rules
@@ -95,7 +97,14 @@ for _d in [
         # voids / window zones / circulation spaces exactly as
         # photographed. Slot [0] stays defensive (build_dna_block ships
         # [:3]).
-        negative_rules=["preserve all photographed walls, open sides, voids, window zones, and circulation spaces exactly — no new walls or partitions, including for furniture or TV anchoring", "no jewel-tone colour pops", "no gold leaf or metallic wallpaper", "no asymmetric art gallery wall"],
+        # Wave 5.12c — adopt the universal wall-preservation rule. The
+        # bespoke Wave 5.7e wording was the most defensive but verbose
+        # (~175 chars, custom for SL only). Universalising reduces
+        # cognitive load, frees ~96 chars of budget for SL creative, and
+        # keeps the same protective intent. SL's fluted-plaster identity
+        # remains the hardest test of this rule — bench-validate post-ship.
+        # Wave 5.14c — softened wall rule (see WM for rationale).
+        negative_rules=["no jewel-tone colour pops", "no gold leaf or metallic wallpaper", "no asymmetric art gallery wall"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="soft_luxury",
@@ -220,7 +229,7 @@ for _d in [
         decor_language=["single large floral arrangement in sculptural vessel", "single oversized framed artwork at end of hall"],
         realism_constraints=["console at correct 80–85 cm height", "mirror height 150 cm minimum for proportion"],
         room_specific_constraints=["clear view to focal artwork from entrance door", "single console — not paired"],
-        visible_transition_logic="marble floor and plaster walls flow unbroken into living room; brass hardware echoes through all doors",
+        visible_transition_logic="marble floor and ivory plaster flow unbroken into living room; brass hardware echoes through all doors",
         negative_rules=["no coat rack visible", "no cluttered side table", "no crystal bowl or ornament collection", "no cold grey stone floor"],
     ),
     RoomAdaptationDNA(

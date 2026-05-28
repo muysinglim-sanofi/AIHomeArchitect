@@ -41,8 +41,13 @@ for _d in [
         # Wave 5.5.49 — adopting universal media console flex pattern
         # (standardization across all atmospheres). Allows TV on existing
         # wall OR media console; explicitly forbids creating a new wall.
-        room_specific_constraints=["television visible in living area on existing wall surface or media console — never on a newly created wall", "maximum 3 decorative objects in room", "solid neutral rug or no rug — no pattern"],
-        visible_transition_logic="pale ash floor and plaster walls extend into adjacent rooms; ceramic palette echoes through visible kitchen",
+        room_specific_constraints=["television on existing wall surface or media console — never on a new wall", "maximum 3 decorative objects in room", "solid neutral rug or no rug — no pattern"],
+        # Wave 5.14c — dropped the "plaster walls" plural noun (mirror
+        # of the Wave 5.5.39 material_palette fix that missed this
+        # field). The noun was being read as wall entities to
+        # materialize, triggering wall invention. Verb-based phrasing
+        # ("plaster continue") matches WM's working pattern.
+        visible_transition_logic="pale ash floor and soft mineral finish continue into adjacent rooms; ceramic palette echoes through visible kitchen",
         # Wave 5.5.39 — added defensive anti-wall-replacement rule
         # ("preserve existing windows and glass openings as photographed").
         # Defense in depth against the "wabi-sabi plaster walls" leak
@@ -52,7 +57,12 @@ for _d in [
         # only; the defensive rule must be in the first 3 slots to ship.
         # Trade-off : "no warm-orange wood tones" demoted to slot [3]
         # (not emitted in DNA block but kept for documentation).
-        negative_rules=["preserve existing windows and glass openings as photographed", "no cluttered surfaces", "no patterned textiles", "no warm-orange wood tones", "no cold grey minimalism"],
+        # Wave 5.12c — universal wall-preservation rule, replacing the
+        # Wave 5.5.39 window-only rule. The new universal covers both
+        # walls AND windows so Japandi gets wall-invention protection
+        # for the first time without losing window preservation.
+        # Wave 5.14c — softened wall rule (see WM for rationale).
+        negative_rules=["no cluttered surfaces", "no patterned textiles", "no warm-orange wood tones", "no cold grey minimalism"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="japandi_calm",
@@ -63,7 +73,7 @@ for _d in [
         decor_language=["folded linen throw at bed foot", "single ikebana branch in ceramic on bedside shelf"],
         realism_constraints=["platform bed at correct low height — 35–40 cm", "bedding folded with natural weight, not starched flat"],
         room_specific_constraints=["no TV in bedroom", "single artwork or none — wall left deliberately spare"],
-        visible_transition_logic="ash floor and plaster walls flow into visible ensuite; linen tones echo in towel display",
+        visible_transition_logic="ash floor and wabi-sabi plaster flow into visible ensuite; linen tones echo in towel display",
         negative_rules=["no upholstered headboard", "no patterned bedding", "no chrome bedside lamps", "no hotel turndown aesthetic"],
     ),
     RoomAdaptationDNA(
@@ -87,7 +97,7 @@ for _d in [
         decor_language=["single ceramic soap dish", "folded natural linen towels on wall peg"],
         realism_constraints=["vanity at correct height — 80–85 cm", "stone floor with correct grout joint width"],
         room_specific_constraints=["matte black fixtures throughout — no finish mixing", "countertop with soap and single plant only"],
-        visible_transition_logic="stone floor and plaster walls continue into dressing area; matte black fixtures echo door hardware",
+        visible_transition_logic="stone floor and wabi-sabi plaster continue into dressing area; matte black fixtures echo door hardware",
         negative_rules=["no glossy white tiles", "no chrome fixtures", "no mirrored vanity cabinet", "no over-accessorised countertop"],
     ),
     RoomAdaptationDNA(
@@ -183,7 +193,7 @@ for _d in [
         decor_language=["single ceramic pen pot", "one small moss ball or air plant in ceramic"],
         realism_constraints=["floating desk correctly wall-anchored — no visible cantilever sag", "chair at correct desk height"],
         room_specific_constraints=["zero cable visibility — all routed inside wall", "shelf with maximum 5 items total"],
-        visible_transition_logic="ash desk and plaster walls flow into adjacent hallway; matte black accents echo door hardware",
+        visible_transition_logic="ash desk and wabi-sabi plaster flow into adjacent hallway; matte black accents echo door hardware",
         negative_rules=["no standard desk with legs", "no ergonomic chair styling", "no monitor stand clutter", "no pin board or sticky notes"],
     ),
     RoomAdaptationDNA(

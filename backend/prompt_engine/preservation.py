@@ -314,3 +314,52 @@ def build_simplified_fv_contract(
     if is_creative_mode_active(generation_mode):
         return _SAME_APARTMENT_CREATIVE
     return _SAME_APARTMENT_V2
+
+
+# ── Wave 5.13f — single MODE_CONTRACT (FIRST_VISION) ─────────────────────────
+#
+# Replaces 6 overlapping structural sections (task + full_contract +
+# openings_anchor + structural_negative_anchors + wow_directive +
+# natural_enrichment) with ONE authoritative contract selected by mode.
+#
+# Preserve: architecture locked, change only surfaces/furniture/light/decor.
+# Creative: architecture flexible, keep result believable + photorealistic.
+# V1 ships preserve only (creative dormant — gated by frontend, but contract
+# is present in the architecture for V2).
+
+_PRESERVE_MODE_CONTRACT = (
+    "PRESERVE MODE — SAME APARTMENT CONTRACT:\n"
+    "Preserve the exact photographed architecture and the full proportions "
+    "of every photographed opening — windows, glass facades, sliding doors, "
+    "glazed partitions — none may be narrowed, compressed, shortened, blocked, "
+    "replaced by a wall surface, or covered by material treatments. "
+    "Walls, doors, ceiling height, floor boundaries, circulation, spatial "
+    "depth, camera angle, and perspective stay exact. "
+    "Do not add, remove, resize, relocate, reinterpret, or redesign "
+    "architectural elements. Material finishes wrap around existing openings, "
+    "they never substitute for them. Redesign only through materials, "
+    "furniture, lighting, decor, textiles, colours, and atmosphere styling."
+)
+
+_CREATIVE_MODE_CONTRACT = (
+    "CREATIVE MODE — ARCHITECTURAL REDESIGN CONTRACT:\n"
+    "You may reinterpret the architecture, including walls, openings, "
+    "windows, layout, and spatial organization. Keep the result believable, "
+    "structurally plausible, photorealistic, and coherent with the original "
+    "camera perspective."
+)
+
+
+def build_mode_contract(generation_mode: str = "preserve") -> str:
+    """
+    Wave 5.13f — single authoritative MODE_CONTRACT for FIRST_VISION.
+
+    Returns the preserve contract by default. Returns the creative contract
+    only when BIMODAL_ENABLED=1 AND generation_mode == "creative". Frontend
+    V1 exposes preserve only; the creative branch is dormant infrastructure
+    prepared for V2.
+    """
+    from .atmosphere_dna.bimodal_classifier import is_creative_mode_active
+    if is_creative_mode_active(generation_mode):
+        return _CREATIVE_MODE_CONTRACT
+    return _PRESERVE_MODE_CONTRACT
