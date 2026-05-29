@@ -74,6 +74,20 @@ from prompt_engine.refinement_authority import (
     build_authorized_changes_clause,
     accumulate_refinements,
 )
+# Wave 4.11a — Architect Intelligence Upgrade
+from prompt_engine.product_knowledge import (
+    detect_product_help,
+    get_product_answer,
+)
+from prompt_engine.ambiguity_detector import detect_ambiguity
+from prompt_engine.trade_off_library import get_trade_off
+from prompt_engine.constraint_acknowledgment import (
+    should_emit_acknowledgment,
+    build_acknowledgment,
+)
+from prompt_engine.design_alternatives import get_alternative_directions
+# Wave 4.11b — Architectural memory
+from prompt_engine.architectural_memory import get_memory_reference
 from version_state import (
     VersionRecord,
     parse_versions,
@@ -496,8 +510,72 @@ async def chat(
             "session_language": meta.target_language,
         }
 
+    # ── Wave 4.11a: ambiguity check — V2+ messages with truly ambiguous
+    # standalone adjectives ("make it bigger") trigger a clarification
+    # instead of guessing. Returns early when fired ; clear directional
+    # intents ("warmer", "more wood", "more luxury") pass through to the
+    # standard classifier untouched.
+    _lang_for_4_11a = (
+        "km" if _early_session_memory.session_language == "km" else "en"
+    )
+    _clarification = detect_ambiguity(
+        message, iteration, language=_lang_for_4_11a,
+        room_type=room_type or None,  # Wave 4.11b — room-aware clarifications
+    )
+    if _clarification is not None:
+        log.info(
+            "  ambiguity: id=%s confidence=%.2f language=%s",
+            _clarification.ambiguity_id,
+            _clarification.confidence,
+            _clarification.language,
+        )
+        log.info("=== /chat AMBIGUITY CLARIFY SUCCESS ===")
+        return {
+            "ai_message": _clarification.clarification_text,
+            "suggestions": [],
+            "should_generate": False,
+            "intent": "design_discussion",
+            "sub_intent": "design_discussion",
+            "session_language": _early_session_memory.session_language,
+        }
+
     # ── Wave 2.5: design intent routing ───────────────────────────────────────
     intent_class = classify_intent(message, iteration)
+
+    # ── Wave 4.11a: PRODUCT_HELP / SUPPORT direct routing — the pre-filter
+    # inside classify_intent returns one of these when the user is asking
+    # about the product rather than asking for a design change. Look up the
+    # specific topic answer in product_knowledge and return it ; never
+    # trigger a generation on these paths.
+    if intent_class.intent in (
+        ConversationIntent.PRODUCT_HELP,
+        ConversationIntent.SUPPORT,
+    ):
+        topic_id = detect_product_help(message, language=_lang_for_4_11a)
+        if topic_id is not None:
+            ai_message = get_product_answer(topic_id, language=_lang_for_4_11a)
+        else:
+            # Pre-filter matched a generic shape but no specific topic
+            # resolved — fall back to the contact_support answer rather
+            # than emit silence.
+            ai_message = get_product_answer(
+                "support_contact", language=_lang_for_4_11a
+            )
+        log.info(
+            "  product_knowledge: intent=%s topic=%s lang=%s",
+            intent_class.intent.value,
+            topic_id or "(generic_fallback)",
+            _lang_for_4_11a,
+        )
+        log.info("=== /chat PRODUCT_HELP / SUPPORT SUCCESS ===")
+        return {
+            "ai_message": ai_message,
+            "suggestions": [],
+            "should_generate": False,
+            "intent": intent_class.intent.value,
+            "sub_intent": intent_class.sub_intent.value,
+            "session_language": _early_session_memory.session_language,
+        }
 
     # ── Wave 4.7.7: gated conversational generate confirmation ───────────────
     # Runs AFTER classify_meta_intent (so STOP_GENERATION / THANKS / reflection
@@ -1475,7 +1553,78 @@ async def generate(
         language=session_lang,
     )
 
-    # Generate the full architect response (includes follow-up question)
+    # ── Wave 4.11a: compute architect enrichments (strict orchestration) ─
+    # Each helper returns "" / [] / False when the conditions aren't met.
+    # generate_architect_response() then picks AT MOST one main enrichment
+    # + AT MOST one CONFIDENT opening before applying the brevity cap.
+    _wave411_transformation = (
+        transformation_type.value
+        if hasattr(transformation_type, "value")
+        else (transformation_type or "")
+    )
+    _trade_off = get_trade_off(
+        user_message=prompt,
+        transformation_type=_wave411_transformation,
+        atmosphere_id=atmosphere_id,
+        room_type=room_type,
+        iteration=iteration,
+    )
+    _emit_ack = should_emit_acknowledgment(
+        iteration=iteration,
+        transformation_type=_wave411_transformation,
+        refinement_state=refinement_state,
+        history_messages=history_messages,
+    )
+    _constraint_ack = (
+        build_acknowledgment(
+            structural_identity=structural_id_obj,
+            refinement_state=refinement_state,
+            atmosphere_id=atmosphere_id,
+            transformation_type=_wave411_transformation,
+        )
+        if _emit_ack
+        else ""
+    )
+    _alternatives = get_alternative_directions(
+        atmosphere_id=atmosphere_id,
+        room_type=room_type,
+        refinement_state=refinement_state,
+        iteration=iteration,
+        count=3,
+    )
+    # Wave 4.11b — architectural memory injection. Returns "" when the
+    # iteration is too early (< V3), the keep list has no recognised
+    # architectural anchor, or the user just mentioned the only kept
+    # anchor in this turn. architect_response then decides whether to
+    # actually surface it (suppressed when main enrichment is
+    # constraint_ack or alternatives).
+    _memory_ref = get_memory_reference(
+        refinement_state=refinement_state,
+        iteration=iteration,
+        user_message=prompt,
+    )
+    _wave411_emotional = detect_emotional_context(prompt)
+    _wave411_tone = select_tone_mode(
+        meta_intent=MetaIntent.NONE,
+        sub_intent=intent_class.sub_intent,
+        confidence=intent_class.confidence,
+        session_memory=_gen_session_memory,
+        emotional_context=_wave411_emotional,
+        iteration=iteration,
+        recent_meta_intents=[],
+    )
+    log.info(
+        "[Wave4.11a] tone=%s trade_off=%d ack=%d alternatives=%d memory=%d",
+        _wave411_tone.value,
+        len(_trade_off),
+        len(_constraint_ack),
+        len(_alternatives),
+        len(_memory_ref),
+    )
+
+    # Generate the full architect response (includes follow-up question).
+    # Wave 4.11a passes the enrichment inputs ; generate_architect_response
+    # handles selection + brevity internally.
     arch_response = generate_architect_response(
         atmosphere_id=atmosphere_id,
         room_type=room_type,
@@ -1485,6 +1634,13 @@ async def generate(
         sub_intent=intent_class.sub_intent,
         secondary_spaces=secondary_visible_spaces,
         user_message=prompt,
+        # Wave 4.11a + 4.11b enrichments
+        tone_mode=_wave411_tone,
+        transformation_type=_wave411_transformation,
+        constraint_ack=_constraint_ack,
+        trade_off_clause=_trade_off,
+        alternatives=_alternatives,
+        memory_reference=_memory_ref,
     )
 
     # For Vision 1, the architect response is the primary message.

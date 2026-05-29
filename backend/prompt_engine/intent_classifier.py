@@ -22,6 +22,13 @@ class ConversationIntent(str, Enum):
     CONVERSATION = "conversation"   # answer only — no image generation
     GENERATE = "generate"           # trigger image generation
     MIXED = "mixed"                 # architect answers first, then offers generation direction
+    # Wave 4.11a additions — surfaced when the pre-filter matches BEFORE
+    # the design-routing logic runs. Each carries should_generate=False
+    # downstream in main.py so the product / support / discussion paths
+    # never accidentally trigger an image generation.
+    PRODUCT_HELP = "product_help"           # user asks about a feature ("how do I…")
+    DESIGN_DISCUSSION = "design_discussion" # open-ended design question, V2+
+    SUPPORT = "support"                     # error / bug / help request
 
 
 class SubIntent(str, Enum):
@@ -33,6 +40,16 @@ class SubIntent(str, Enum):
     QUESTION = "question"                     # user asking a design question
     PRAISE = "praise"                         # user expressing satisfaction
     GENERAL = "general"                       # unclassified fallback
+    # Wave 4.11a SubIntent variants — paired with the new top-level intents.
+    PRODUCT_HELP = "product_help"
+    DESIGN_DISCUSSION = "design_discussion"
+    SUPPORT = "support"
+    # Wave 4.11b — negative feedback is a special case of DESIGN_DISCUSSION
+    # (top-level intent stays DESIGN_DISCUSSION, should_generate=False). The
+    # dedicated sub_intent lets generate_chat_response surface a calm,
+    # diagnostic-oriented response pool instead of falling through to the
+    # generic chat templates.
+    NEGATIVE_FEEDBACK = "negative_feedback"
 
 
 @dataclass
@@ -231,6 +248,227 @@ def pending_design_sub_intent(history: list[dict]) -> SubIntent | None:
     return None
 
 
+# ── Wave 4.11a — Product Help / Support / Design Discussion pre-filters ─────
+#
+# These run BEFORE the existing design-routing logic in classify_intent().
+# Patterns are deliberately conservative — when there is ambiguity between
+# "how do I X" (design verb) and "how do I X" (product feature), the
+# anti-pattern guard pushes the decision back to the standard classifier
+# so legitimate design intents still reach generation.
+#
+# Each pattern set carries an `_ANTI` guard whose match suppresses the
+# pre-filter route (design verbs and atmosphere DNA keywords that always
+# belong to the generation path).
+
+_PRODUCT_HELP_PATTERNS = re.compile(
+    r"\b("
+    # "how do I X" / "how can I X" / "how do you X"
+    r"how\s+(do|can|would|should)\s+i\s+(continue|share|save|export|"
+    r"delete|rename|restore|find|see|compare|undo|revert|switch)|"
+    r"how\s+do(es)?\s+(branching|preserve|atmosphere|the\s+reveal|"
+    r"voice|the\s+app|session\s+restore)|"
+    # "what is/does X" + product feature
+    r"what\s+(is|does|do)\s+(preserve\s+mode|the\s+atmosphere\s+system|"
+    r"branching|the\s+reveal|continue\s+this\s+vision|the\s+vision)|"
+    # "explain X" / "tell me about X"
+    r"(explain|tell\s+me\s+about|what\s+about)\s+(preserve|atmosphere|"
+    r"branching|reveal|voice|session)|"
+    # Direct product nouns / verbs
+    r"\bcontinue\s+this\s+vision|preserve\s+mode|how\s+(does\s+)?branching|"
+    r"reveal\s+screen|share\s+(a|the|my|this)\s+(design|vision|image)|"
+    r"save\s+(a|the|my|this)\s+(image|vision|design)|"
+    r"delete\s+(this\s+|a\s+|my\s+)?(session|project|design)|"
+    r"rename\s+(this\s+|a\s+|my\s+)?(project|session)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Khmer PRODUCT_HELP patterns — separate regex without \b anchors
+# (Python's \b only recognises ASCII word chars, so it never matches at
+# the boundary of a Khmer-script run).
+_PRODUCT_HELP_PATTERNS_KM = re.compile(
+    r"តើ\s*ខ្ញុំ.*(បន្ត|ចែករំលែក|លុប|ប្តូរ\s*ឈ្មោះ|រក្សា)"
+    r"|តើ.*ដំណើរ\s*ការ"
+    r"|អ្វី\s*ទៅ\s*ជា\s*(បរិយាកាស|preserve)",
+)
+
+# Anti-patterns : if these design verbs/nouns are present anywhere in the
+# message, the PRODUCT_HELP route is suppressed. Catches "how do I make
+# it warmer" — that's a generation request, not a product question.
+_PRODUCT_HELP_ANTI = re.compile(
+    r"\b("
+    r"warmer|cooler|darker|lighter|brighter|bigger|smaller|softer|"
+    r"more\s+(luxury|wood|stone|marble|brass|texture|plants|decor)|"
+    r"add\s+(a|the|some)|remove\s+(a|the)|change\s+(the\s+)?(sofa|wall|"
+    r"window|color|colour|material)|open\s+(the\s+)?(wall|partition)|"
+    r"japandi|warm\s*modern|soft\s*luxury|nordic|tropical|desert|nature"
+    r")\b",
+    re.IGNORECASE,
+)
+
+_SUPPORT_PATTERNS = re.compile(
+    r"\b("
+    r"(generation|render|image|photo|app)\s+(failed|fail|"
+    r"didn'?t\s+(work|load|generate))|"
+    r"failed\s+to\s+(generate|load|render|open)|"
+    r"(not|isn'?t)\s+(loading|working|responding|generating)|"
+    r"can'?t\s+(see|open|find|load|generate|render)\s+(the\s+|my\s+|a\s+)?(image|"
+    r"vision|design|render|photo)|"
+    r"(crash|crashed|frozen|froze|hang|hangs|stuck)|"
+    r"report\s+(a\s+)?(bug|issue|problem)|found\s+(a\s+)?bug|"
+    r"something\s+is\s+(wrong|broken|off)|"
+    r"contact\s+(support|the\s+team|customer\s+service)|"
+    r"send\s+feedback|leave\s+feedback|give\s+feedback"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Khmer SUPPORT patterns — separate regex (no \b for Khmer scripts).
+_SUPPORT_PATTERNS_KM = re.compile(
+    r"បរាជ័យ|កំហុស|បញ្ហា|គាំទ្រ|កម្មវិធី.*គាំង"
+)
+
+_DESIGN_DISCUSSION_PATTERNS = re.compile(
+    r"\b("
+    r"what\s+do\s+you\s+think|what'?s?\s+your\s+(take|opinion|view)|"
+    r"your\s+opinion|how\s+do\s+you\s+see\s+(this|it|the\s+room)|"
+    r"should\s+i\s+(keep|change|remove|add|consider|go)|"
+    # "would X work" / "would X read" / "would X fit" / "would X look better"
+    # — broadened to catch "Would darker floors work?", "Would a stone wall fit?",
+    # not just the narrow "would it/that/this" pronouns.
+    r"would\s+(?:\w+\s+){0,5}(work|look\s+better|be\s+better|fit|read)|"
+    r"is\s+it\s+better\s+to|is\s+this\s+(too\s+much|too\s+little|right)|"
+    r"would\s+you\s+(recommend|suggest|prefer|advise)|"
+    r"do\s+you\s+(think|see|recommend|suggest)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Khmer DESIGN_DISCUSSION patterns — separate regex (no \b for Khmer).
+_DESIGN_DISCUSSION_PATTERNS_KM = re.compile(
+    r"តើ\s*អ្នក\s*គិត|ជ្រើស\s*យក|អ្នក\s*យល់\s*ដូច\s*ម្តេច"
+)
+
+
+# ── Wave 4.11b — Negative-sentiment patterns ─────────────────────────────────
+# Catches explicit user dissatisfaction. Routes to DESIGN_DISCUSSION with the
+# new NEGATIVE_FEEDBACK sub-intent so generate_chat_response can surface a
+# calm, diagnostic response instead of accidentally classifying the message
+# as PRAISE (the legacy _PRAISE regex doesn't handle negation and matches
+# "like this" inside "I don't like this" — see Wave 4.11a validation report).
+#
+# Conservative on purpose : only fires on explicit negative phrasings.
+# "Too dark" or "too bright" are ambiguous (could be design intent) and
+# are NOT included here ; they continue to flow through the existing
+# refinement / classifier paths.
+_NEGATIVE_FEEDBACK_PATTERNS = re.compile(
+    r"\b("
+    # "I don't like X" / "I do not like X" / "I dislike X" / "I hate X"
+    r"i\s+don'?t\s+(like|love|want|enjoy)|"
+    r"i\s+do\s+not\s+(like|love|want|enjoy)|"
+    r"i\s+(dislike|hate)\b|"
+    r"i\s+can'?t\s+stand|"
+    # "not a fan of …" / "not happy with …"
+    r"not\s+(a\s+fan|happy|satisfied)\s+(of|with)?|"
+    # "X doesn't work" / "X isn't working" / "X is not right"
+    r"(this|it|that|the\s+\w+)\s+(doesn'?t|does\s+not|isn'?t|is\s+not)\s+"
+    r"(work|right|landing|coming\s+together|fit|read\s+well)|"
+    # "feels/reads/looks wrong" / "feels off" / "feels forced"
+    r"(feels|reads|looks)\s+(wrong|off|bad|forced|sterile|cold|flat|"
+    r"weird|cluttered|empty|over\s*(done|crowded))|"
+    # "this is worse" / "this is worse than the previous"
+    r"(this|it|that)\s+is\s+worse|"
+    # "preferred the previous / older version"
+    r"preferred\s+(the\s+)?(previous|older|earlier|first|last|old)\b|"
+    r"liked\s+(the\s+)?(previous|older|earlier|first|last|old)\s+"
+    r"(version|one|render|generation)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Anti-pattern : suppress DESIGN_DISCUSSION when the message OPENS with
+# an imperative generation verb. A question form like "Would darker
+# floors work?" or "Should I keep the rug?" must STILL route to
+# DESIGN_DISCUSSION even though it contains design adjectives — the
+# question wrapping is the discriminator. We use `^\s*` to anchor so
+# only the message's opening verb counts, not vocabulary mid-sentence.
+_DESIGN_DISCUSSION_ANTI = re.compile(
+    r"^\s*("
+    r"add|remove|change|move|swap|replace|put|take\s+out|edit|"
+    r"redo|redesign|render|generate|show\s+me|try\s+a|"
+    r"make\s+(it|me|the)|i\s+want\s+to|let'?s?\s+(do|try|change|add|go)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _route_wave_411a(
+    message: str, iteration: int
+) -> "IntentClassification | None":
+    """
+    Wave 4.11a pre-filter — return a PRODUCT_HELP / SUPPORT /
+    DESIGN_DISCUSSION classification if patterns clearly indicate one
+    of these intents. Returns None to let the standard classifier run.
+
+    Conservative by design : when a generation verb is present, the
+    pre-filter steps aside. The fallback chain in main.py also runs the
+    product_knowledge.detect_product_help() for true product topics — so
+    if this returns PRODUCT_HELP but no topic resolves, main.py drops
+    back to the standard CONVERSATION/GENERATE path.
+
+    V1 (iteration == 1) is NEVER pre-filtered — the first render is law.
+    """
+    if iteration <= 1 or not message:
+        return None
+
+    # SUPPORT — strongest signal, runs first. Errors / bugs always win.
+    # Both EN and KM regex are tested ; KM uses a separate compiled
+    # pattern because Python's \b word boundary does not register at
+    # the edge of a Khmer-script run.
+    if _SUPPORT_PATTERNS.search(message) or _SUPPORT_PATTERNS_KM.search(message):
+        return IntentClassification(
+            intent=ConversationIntent.SUPPORT,
+            sub_intent=SubIntent.SUPPORT,
+            confidence=0.90,
+            reasoning="Wave 4.11a — support pattern matched",
+        )
+
+    # Wave 4.11b — NEGATIVE_FEEDBACK runs BEFORE PRODUCT_HELP /
+    # DESIGN_DISCUSSION so explicit dissatisfaction never gets classified
+    # as PRAISE by the legacy classifier downstream. Top-level intent is
+    # DESIGN_DISCUSSION (no generation) ; the dedicated NEGATIVE_FEEDBACK
+    # sub-intent drives the calm response pool in architect_response.
+    if _NEGATIVE_FEEDBACK_PATTERNS.search(message):
+        return IntentClassification(
+            intent=ConversationIntent.DESIGN_DISCUSSION,
+            sub_intent=SubIntent.NEGATIVE_FEEDBACK,
+            confidence=0.85,
+            reasoning="Wave 4.11b — negative sentiment detected",
+        )
+
+    # PRODUCT_HELP — second, guarded by design-verb anti-patterns.
+    if _PRODUCT_HELP_PATTERNS.search(message) or _PRODUCT_HELP_PATTERNS_KM.search(message):
+        if not _PRODUCT_HELP_ANTI.search(message):
+            return IntentClassification(
+                intent=ConversationIntent.PRODUCT_HELP,
+                sub_intent=SubIntent.PRODUCT_HELP,
+                confidence=0.85,
+                reasoning="Wave 4.11a — product help pattern matched",
+            )
+
+    # DESIGN_DISCUSSION — third, guarded by generation-verb anti-patterns.
+    if _DESIGN_DISCUSSION_PATTERNS.search(message) or _DESIGN_DISCUSSION_PATTERNS_KM.search(message):
+        if not _DESIGN_DISCUSSION_ANTI.search(message):
+            return IntentClassification(
+                intent=ConversationIntent.DESIGN_DISCUSSION,
+                sub_intent=SubIntent.DESIGN_DISCUSSION,
+                confidence=0.80,
+                reasoning="Wave 4.11a — design discussion pattern matched",
+            )
+
+    return None
+
+
 def resolve_confirmation(message: str, history: list[dict]) -> IntentClassification | None:
     """
     Wave 4.7.7 single entry point. Returns a GENERATE classification ONLY when
@@ -268,6 +506,13 @@ def classify_intent(user_message: str, iteration: int) -> IntentClassification:
         )
 
     msg = user_message.strip()
+
+    # Wave 4.11a pre-filter — PRODUCT_HELP / SUPPORT / DESIGN_DISCUSSION.
+    # Conservative by design : when a generation verb is present, the
+    # pre-filter returns None and the standard classifier runs.
+    _early = _route_wave_411a(msg, iteration)
+    if _early is not None:
+        return _early
 
     if not msg:
         return IntentClassification(

@@ -1,5 +1,6 @@
 """
-architect_response.py — Wave 2.5 architect personality layer.
+architect_response.py — Wave 2.5 architect personality layer +
+                         Wave 4.11a orchestration + brevity guard.
 
 Generates short, architect-voiced AI companion messages and chat responses.
 Reads from the frozen DNA system for atmosphere-specific vocabulary.
@@ -9,6 +10,18 @@ Design principle: responses must feel considered, not generated.
 The AI sounds like a senior interior architect — specific, restrained, confident.
 It references actual design decisions (materials, atmosphere character, spatial logic).
 It never exposes the prompt system, DNA structure, or generation mechanics.
+
+Wave 4.11a additions :
+  • Orchestration of OPTIONAL enrichments — constraint acknowledgment,
+    trade-off clause, design alternatives, CONFIDENT-mode opening. Strict
+    rule : AT MOST one main enrichment + AT MOST one CONFIDENT opening
+    on top of the base response. NEVER stack ack + trade-off +
+    alternatives together — pick the most relevant ONE.
+  • Brevity guardrail : 60-120 word target, 150 hard cap. When the cap
+    is approached, segments are cut by reverse priority — alternatives
+    bullets first, trade-off second, ack details third, opening last.
+  • Backward-compatible signature : the new enrichment params all
+    default to empty so existing callers keep their pre-4.11a behaviour.
 
 Response length target: 2–5 sentences. Never a paragraph.
 """
@@ -21,6 +34,7 @@ from .edit_intent import EditMode
 from .refinement_memory import RefinementState
 from .intent_classifier import SubIntent
 from .atmosphere_dna import get_core, get_room_dna
+from .tone_calibration import ToneMode, generate_confident_opening
 
 
 # ── Atmosphere personality layer ───────────────────────────────────────────────
@@ -199,6 +213,259 @@ def _secondary_space_note(
 
 # ── Generation response (post-render message) ─────────────────────────────────
 
+# ── Wave 4.11a — Brevity guardrail ───────────────────────────────────────────
+# Target window 60–120 words ; hard cap 150. Word counting is whitespace-
+# split (good enough for EN ; KM falls back to character count below). On
+# overflow, we trim segments in reverse-priority order — the LATEST added
+# segments go first so the base response always survives. The architect's
+# fallback is always : "say less, say it well".
+
+_BREVITY_TARGET_LOW = 60
+_BREVITY_TARGET_HIGH = 120
+_BREVITY_HARD_CAP = 150
+
+
+def _word_count(text: str) -> int:
+    """Whitespace-split word count. For mixed EN/KM, undercounts KM by
+    a factor (no separators) — we err on the side of LESS aggressive
+    truncation when Khmer is detected (it's already concise)."""
+    if not text:
+        return 0
+    return len(text.split())
+
+
+def _enforce_brevity(
+    base_response: str,
+    confident_opening: str,
+    enrichment: str,
+    transformation_type: Optional[str] = None,
+) -> str:
+    """
+    Compose final response in this fixed order and trim if it exceeds
+    the hard cap :
+        [confident_opening] [base_response] [enrichment]
+
+    Truncation order (last-in, first-out) :
+      1. Drop the enrichment entirely  (alternatives / trade-off / ack)
+      2. Drop the confident opening
+      3. Keep base response only
+
+    Inside an enrichment that has bullet points (ack or alternatives),
+    callers should already cap those at 3 bullets — we don't try to
+    sub-edit bullets here, we just drop the whole block if needed.
+
+    Returns a single string ready to ship to the user.
+    """
+    parts: list[str] = []
+    if confident_opening:
+        parts.append(confident_opening.strip())
+    if base_response:
+        parts.append(base_response.strip())
+    if enrichment:
+        parts.append(enrichment.strip())
+
+    full = "\n\n".join(p for p in parts if p)
+    if _word_count(full) <= _BREVITY_HARD_CAP:
+        return full
+
+    # Over cap — drop the enrichment first.
+    parts_no_enrichment = [
+        p for i, p in enumerate(parts)
+        if not (i == len(parts) - 1 and enrichment and p == enrichment.strip())
+    ]
+    candidate = "\n\n".join(p for p in parts_no_enrichment if p)
+    if _word_count(candidate) <= _BREVITY_HARD_CAP:
+        return candidate
+
+    # Still over — drop the opening.
+    return base_response.strip()
+
+
+# ── Wave 4.11a — Enrichment orchestration ────────────────────────────────────
+# Strict rule per user (Day 6) : max 1 main enrichment + max 1 secondary.
+# Main enrichment is exactly ONE of {ack, trade_off, alternatives_block}.
+# Secondary is the CONFIDENT opening (only when tone_mode says so).
+# All four NEVER stack together. Priority below resolves the pick.
+
+def _build_alternatives_block(alternatives: list[str]) -> str:
+    """Format up to 3 directions as a tight numbered list."""
+    if not alternatives:
+        return ""
+    capped = alternatives[:3]
+    lines = "\n".join(f"{i}. {a}" for i, a in enumerate(capped, 1))
+    return "Three directions worth considering :\n" + lines
+
+
+def _select_main_enrichment(
+    iteration: int,
+    edit_mode: EditMode,
+    transformation_type: Optional[str],
+    sub_intent: SubIntent,
+    constraint_ack: str,
+    trade_off_clause: str,
+    alternatives: list[str],
+) -> str:
+    """
+    Pick exactly ONE main enrichment string, or "" when none applies.
+
+    Priority order (mode-aware) :
+
+      V1 / FIRST_VISION                          → "" (base response speaks)
+      LOCAL_EDIT                                 → "" (brevity is the value)
+
+      STRUCTURAL_TRANSFORMATION                  → constraint_ack (reassurance)
+      ATMOSPHERE_SWITCH                          → constraint_ack
+      iteration == 2 (first V2 message)          → constraint_ack
+      trade_off_clause present                   → trade-off (user just hit
+                                                    a known consequence)
+      else V2+ STYLE_REFINEMENT                  → alternatives block
+
+    Returns "" gracefully when the chosen source happens to be empty.
+    """
+    if iteration <= 1 or edit_mode == EditMode.FIRST_VISION:
+        return ""
+    if edit_mode == EditMode.LOCAL_EDIT:
+        return ""
+
+    if edit_mode == EditMode.STRUCTURAL_TRANSFORMATION:
+        return constraint_ack or ""
+
+    if transformation_type == "atmosphere_switch" and constraint_ack:
+        return constraint_ack
+
+    if iteration == 2 and constraint_ack:
+        return constraint_ack
+
+    if trade_off_clause:
+        return trade_off_clause
+
+    if alternatives:
+        return _build_alternatives_block(alternatives)
+
+    return ""
+
+
+def _maybe_confident_opening(
+    tone_mode: ToneMode,
+    seed_extra: str,
+    main_enrichment: str,
+) -> str:
+    """
+    Emit a CONFIDENT opening ONLY when :
+      • tone_mode == CONFIDENT_RECOMMENDATION
+      • the main enrichment is a trade_off OR an alternatives block —
+        the opening makes sense when the architect is taking a position
+        on a direction the user requested. It would feel odd above a
+        constraint_ack (reassurance is already opinion-free).
+
+    Returns "" when the opening would not add value.
+    """
+    if tone_mode != ToneMode.CONFIDENT_RECOMMENDATION:
+        return ""
+    # Suppress over an ack — both apostrophe ("I'll preserve") and expanded
+    # ("I will preserve") forms are matched so a non-canonical caller
+    # never accidentally stacks an opening on top of reassurance.
+    head = main_enrichment[:35].lower()
+    if "preserve" in head and ("i'll" in head or "i will" in head):
+        return ""
+    if not main_enrichment:
+        return ""
+    return generate_confident_opening(seed_extra)
+
+
+def _select_opening(
+    tone_mode: ToneMode,
+    seed_extra: str,
+    main_enrichment: str,
+    memory_reference: str,
+) -> str:
+    """
+    Wave 4.11b — pick ONE opening line that goes ABOVE the base response.
+
+    Priority order :
+      1. memory_reference (architectural narrative continuity wins over
+         generic confidence)
+      2. CONFIDENT opening (legacy Wave 4.11a behaviour)
+
+    Both are suppressed when the main enrichment would make them
+    redundant or visually heavy :
+      • Above a constraint_ack — the ack already talks about preservation,
+        a memory reference about the same anchor would be a duplicate.
+        Confidence opening on top of an ack also feels off.
+      • Above an alternatives block — already 3 bullets ; adding a
+        memory sentence would push the response past target length and
+        crowd the reading.
+
+    Returns "" when no opening should fire.
+    """
+    if not main_enrichment:
+        # No main enrichment → base response is short ; memory reference
+        # is a valuable addition. CONFIDENT opening alone (no main) was
+        # already suppressed in Wave 4.11a — keep that behaviour.
+        if memory_reference:
+            return memory_reference
+        return ""
+
+    head = main_enrichment[:35].lower()
+    is_ack = "preserve" in head and ("i'll" in head or "i will" in head)
+    is_alts = "directions worth considering" in main_enrichment.lower()
+
+    if is_ack or is_alts:
+        # Suppress both opening kinds — the main enrichment carries enough.
+        return ""
+
+    # Main is a trade-off (or some other short clause) — memory wins over
+    # CONFIDENT when both available.
+    if memory_reference:
+        return memory_reference
+    return _maybe_confident_opening(tone_mode, seed_extra, main_enrichment)
+
+
+def _orchestrate_response(
+    base_response: str,
+    iteration: int,
+    edit_mode: EditMode,
+    transformation_type: Optional[str],
+    sub_intent: SubIntent,
+    tone_mode: ToneMode,
+    constraint_ack: str,
+    trade_off_clause: str,
+    alternatives: list[str],
+    seed_extra: str,
+    memory_reference: str = "",  # Wave 4.11b
+) -> str:
+    """
+    Compose the final architect response under the strict orchestration
+    rules. Returns a ready-to-ship string.
+
+    Wave 4.11b — adds `memory_reference` as an additional optional
+    opening source. _select_opening picks ONE between memory_reference
+    and the legacy CONFIDENT opening, suppressing both when the main
+    enrichment would make them redundant.
+    """
+    main_enrichment = _select_main_enrichment(
+        iteration=iteration,
+        edit_mode=edit_mode,
+        transformation_type=transformation_type,
+        sub_intent=sub_intent,
+        constraint_ack=constraint_ack,
+        trade_off_clause=trade_off_clause,
+        alternatives=alternatives,
+    )
+    opening = _select_opening(
+        tone_mode=tone_mode,
+        seed_extra=seed_extra,
+        main_enrichment=main_enrichment,
+        memory_reference=memory_reference,
+    )
+    return _enforce_brevity(
+        base_response=base_response,
+        confident_opening=opening,
+        enrichment=main_enrichment,
+        transformation_type=transformation_type,
+    )
+
+
 def generate_architect_response(
     atmosphere_id: str,
     room_type: str,
@@ -208,12 +475,25 @@ def generate_architect_response(
     sub_intent: SubIntent,
     secondary_spaces: list[str],
     user_message: str,
+    # Wave 4.11a enrichment params — all optional, backward-compatible.
+    tone_mode: ToneMode = ToneMode.ARCHITECT_ACTIVE,
+    transformation_type: Optional[str] = None,
+    constraint_ack: str = "",
+    trade_off_clause: str = "",
+    alternatives: Optional[list[str]] = None,
+    memory_reference: str = "",  # Wave 4.11b — architectural memory injection
 ) -> str:
     """
     Generate the architect companion message shown after image generation.
 
     Replaces the generic compose_result_message(). References actual DNA vocabulary.
     Returns a short, architect-voiced response — never more than 4 sentences.
+
+    Wave 4.11a — orchestrates AT MOST 1 main enrichment + 1 secondary
+    opening, brevity-capped at 150 words. The base architect response
+    (existing template) is preserved verbatim ; enrichments are
+    appended only when the conditions are met (see
+    _select_main_enrichment for the priority order).
     """
     tone = _tone(atmosphere_id)
     atm = _atm_name(atmosphere_id)
@@ -222,6 +502,10 @@ def generate_architect_response(
     furniture = _furniture_hint(atmosphere_id, room_type)
     lighting = _lighting_hint(atmosphere_id, room_type)
     seed = f"{atmosphere_id}{room_type}{iteration}{sub_intent}"
+
+    # Wave 4.11a — assemble the base response per existing rules, then hand
+    # off to _orchestrate_response() at the end for enrichment + brevity.
+    base_response = ""
 
     # ── Vision 1 — first render ───────────────────────────────────────────────
     if iteration == 1 or edit_mode == EditMode.FIRST_VISION:
@@ -237,32 +521,54 @@ def generate_architect_response(
         if space_note:
             lines.append(space_note)
         lines.append(follow_q)
-        return " ".join(lines)
+        base_response = " ".join(lines)
 
     # ── Local edit ────────────────────────────────────────────────────────────
-    if edit_mode == EditMode.LOCAL_EDIT:
+    elif edit_mode == EditMode.LOCAL_EDIT:
         follow_q = _pick(tone["follow_q"], seed + "local")
-        return f"Done — the {atm} atmosphere is still intact. {follow_q}"
+        # Wave 4.11i — "atmosphere is still intact" → "character holds"
+        # (less mechanical phrasing, same meaning).
+        base_response = (
+            f"Done — the {atm} character holds. {follow_q}"
+        )
 
     # ── Structural transformation ─────────────────────────────────────────────
-    if edit_mode == EditMode.STRUCTURAL_TRANSFORMATION:
+    elif edit_mode == EditMode.STRUCTURAL_TRANSFORMATION:
         follow_q = _pick(tone["follow_q"], seed + "struct")
-        return (
+        base_response = (
             f"The architectural change is in — the {room} reads differently now. "
             f"{follow_q}"
         )
 
     # ── Style refinement — with specific what-changed awareness ──────────────
-    follow_q = _pick(tone["follow_q"], seed + "refine")
+    else:
+        follow_q = _pick(tone["follow_q"], seed + "refine")
+        if refinement_state.latest:
+            direction = _clean_for_caption(refinement_state.latest, 55)
+            if direction:
+                base_response = f"This version reads more balanced. {follow_q}"
+            else:
+                base_response = (
+                    f"The {atm} direction is coming together. {follow_q}"
+                )
+        else:
+            base_response = (
+                f"The {atm} direction is coming together. {follow_q}"
+            )
 
-    if refinement_state.latest:
-        # Use short cleaned summary, not raw truncation
-        direction = _clean_for_caption(refinement_state.latest, 55)
-        if direction:
-            return f"This version feels calmer. {follow_q}"
-
-    return (
-        f"The {atm} direction is coming together. {follow_q}"
+    # ── Wave 4.11a + 4.11b orchestration : enrichments + brevity ──────────
+    return _orchestrate_response(
+        base_response=base_response,
+        iteration=iteration,
+        edit_mode=edit_mode,
+        transformation_type=transformation_type,
+        sub_intent=sub_intent,
+        tone_mode=tone_mode,
+        constraint_ack=constraint_ack or "",
+        trade_off_clause=trade_off_clause or "",
+        alternatives=alternatives or [],
+        seed_extra=seed,
+        memory_reference=memory_reference or "",
     )
 
 
@@ -398,6 +704,32 @@ _GENERIC_STRUCTURAL_RESPONSES = [
 ]
 
 
+# ── Wave 4.11b — Negative feedback responses ─────────────────────────────────
+# Triggered when sub_intent == SubIntent.NEGATIVE_FEEDBACK. Goal :
+# professional, calm, diagnostic. Never defensive, never sycophantic,
+# never instantly offering a new direction without first locating the
+# problem. The user said something isn't landing — the architect's first
+# move is to invite specifics so the next iteration targets the right
+# layer instead of guessing.
+
+_NEGATIVE_FEEDBACK_RESPONSES = [
+    "I see what you mean. Let's identify what feels off before changing "
+    "direction — is it the materials, the lighting, the composition, or "
+    "the room function?",
+    "Which part feels least successful to you — layout, materials, "
+    "lighting, or atmosphere ? Naming the layer lets the next iteration "
+    "target it instead of guessing.",
+    "We can adjust it. I'd first isolate whether the issue is style, "
+    "composition, or how the room reads spatially — that determines "
+    "where to push next.",
+    "Understood. Tell me what isn't landing — a specific element, the "
+    "overall feeling, or a missing quality — and we'll reset the next "
+    "iteration from there.",
+    "Noted. Before we change tack, what would you keep from this version "
+    "and what should genuinely move ? That gives us a clean brief.",
+]
+
+
 def generate_chat_response(
     user_message: str,
     atmosphere_id: str,
@@ -416,6 +748,14 @@ def generate_chat_response(
     tone = _tone(atmosphere_id)
     material = _material_hint(atmosphere_id, room_type)
     seed = f"{atmosphere_id}{room_type}{sub_intent}{user_message[:20]}"
+
+    # Wave 4.11b — negative feedback gets a calm, diagnostic response.
+    # Runs BEFORE PRAISE so a message that the upstream regex might
+    # mistakenly mark PRAISE (e.g. "I don't like this") never lands here
+    # if it was properly tagged NEGATIVE_FEEDBACK by the Wave 4.11b
+    # pre-filter in intent_classifier.
+    if sub_intent == SubIntent.NEGATIVE_FEEDBACK:
+        return _pick(_NEGATIVE_FEEDBACK_RESPONSES, seed + "negfb")
 
     if sub_intent == SubIntent.PRAISE:
         options = _PRAISE_RESPONSES.get(atmosphere_id, _GENERIC_PRAISE)
