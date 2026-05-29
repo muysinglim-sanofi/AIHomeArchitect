@@ -116,7 +116,11 @@ _STRUCTURAL = re.compile(
 )
 
 _REFINE = re.compile(
-    r"\b(more|less|darker|lighter|warmer|cooler|softer|harder|bolder|subtler|"
+    # Wave 4.11c — added brighter / daylight / airier (validation gap : a bare
+    # "Make it brighter." fell through to CONVERSATION because the brightness
+    # axis wasn't in the refinement vocabulary, even though darker/lighter were.
+    r"\b(more|less|darker|lighter|brighter|warmer|cooler|softer|harder|bolder|subtler|"
+    r"more\s+daylight|brighter\s+lighting|lighter\s+feeling|airier|"
     r"minimal(ist)?|maximalist|luxurious|hotel(-like)?|push\s*(it|further|more)?|"
     r"deepen|increase|reduce|intensif|tone\s*(it|down|up)|"
     r"stronger|richer|quieter|calmer|even\s*more|a\s*bit\s*more|"
@@ -137,6 +141,27 @@ _LOCAL_EDIT = re.compile(
     r"d[eé]place|d[eé]placer|pose\s+(un|une)|mets\s+(un|une)|"
     r"montre-moi\s+(avec|sans|un|une|le|la|les)|essaie\s+(un|une|avec|le|la)|"
     r"utilise\s+(un|une)|diff[eé]rent(e)?\s+(canap[eé]|tapis|tissu|mati[eè]re|finition|texture))\b",
+    re.IGNORECASE,
+)
+
+# Wave 4.11c — object-scoped size requests bypass ambiguity detection.
+# "Make the sofa bigger" carries an explicit target (sofa) so it's NOT
+# unscoped — the ambiguity detector correctly stays silent. But without
+# this signal it falls through to CONVERSATION/general because "bigger"
+# was deliberately excluded from _REFINE (reserved for the unscoped form).
+# The pattern requires : a size verb OR "make/keep X (bigger|smaller|...)"
+# applied to a definite/possessive object phrase. No bare "bigger" matches.
+_SCOPED_SIZE = re.compile(
+    r"\b("
+    # "make / leave / keep the X bigger/smaller/wider/..."
+    r"(make|leave|keep|render|let'?s?\s+make)\s+(the|a|an|that|this|my|our)\s+\w+(\s+\w+){0,2}"
+    r"\s+(bigger|smaller|larger|wider|taller|shorter|narrower|deeper|"
+    r"higher|lower|longer|broader)"
+    r"|"
+    # "enlarge / shrink / widen / raise the X"
+    r"(enlarge|shrink|widen|narrow|raise|lower(?!\s+the\s+temperature)|deepen|"
+    r"extend|shorten|elongate)\s+(the|a|an|that|this|my|our)\s+\w+"
+    r")\b",
     re.IGNORECASE,
 )
 
@@ -286,10 +311,14 @@ _PRODUCT_HELP_PATTERNS = re.compile(
 # Khmer PRODUCT_HELP patterns — separate regex without \b anchors
 # (Python's \b only recognises ASCII word chars, so it never matches at
 # the boundary of a Khmer-script run).
+# Wave 4.11c — broadened to cover the reveal-compare verb ប្រៀបធៀប
+# and bare KM interrogatives that don't open with "តើ ខ្ញុំ".
 _PRODUCT_HELP_PATTERNS_KM = re.compile(
-    r"តើ\s*ខ្ញុំ.*(បន្ត|ចែករំលែក|លុប|ប្តូរ\s*ឈ្មោះ|រក្សា)"
+    r"តើ\s*ខ្ញុំ.*(បន្ត|ចែករំលែក|លុប|ប្តូរ\s*ឈ្មោះ|រក្សា|ប្រៀបធៀប)"
     r"|តើ.*ដំណើរ\s*ការ"
-    r"|អ្វី\s*ទៅ\s*ជា\s*(បរិយាកាស|preserve)",
+    r"|អ្វី\s*ទៅ\s*ជា\s*(បរិយាកាស|preserve)"
+    r"|ប្រៀបធៀប.*(មុន|បន្ទាប់|ក្រោយ)"
+    r"|តើ\s*អាច\s*(បន្ត|ចែករំលែក|ប្រៀបធៀប|លុប|ប្តូរ)",
 )
 
 # Anti-patterns : if these design verbs/nouns are present anywhere in the
@@ -324,8 +353,16 @@ _SUPPORT_PATTERNS = re.compile(
 )
 
 # Khmer SUPPORT patterns — separate regex (no \b for Khmer scripts).
+# Wave 4.11c — broadened to cover "image / Generate / Share not working"
+# in both pure-KM and mixed EN+KM forms. The មិន (not) particle followed
+# by a verb-of-state is the strongest KM signal for "broken / missing".
 _SUPPORT_PATTERNS_KM = re.compile(
     r"បរាជ័យ|កំហុស|បញ្ហា|គាំទ្រ|កម្មវិធី.*គាំង"
+    r"|មិន\s*(បង្ហាញ|ដំណើរការ|ផ្ទុក|ដំណើរ|ដើរ|ឃើញ)"
+    r"|(រូបភាព|រូប|បង្ហាញ|ផ្ទុក|ការបង្កើត).*(មិន|បរាជ័យ)"
+    # Mixed EN+KM : English noun/verb + KM មិនដំណើរការ etc.
+    r"|(generate|render|share|continue|upload|chat|app|image|photo|"
+    r"design|vision)\s*មិន\s*(ដំណើរការ|បង្ហាញ|ផ្ទុក|ដំណើរ)",
 )
 
 _DESIGN_DISCUSSION_PATTERNS = re.compile(
@@ -338,6 +375,13 @@ _DESIGN_DISCUSSION_PATTERNS = re.compile(
     # not just the narrow "would it/that/this" pronouns.
     r"would\s+(?:\w+\s+){0,5}(work|look\s+better|be\s+better|fit|read)|"
     r"is\s+it\s+better\s+to|is\s+this\s+(too\s+much|too\s+little|right)|"
+    # Wave 4.11c — "Is this/it/the atmosphere too dark/bright/luxurious/...?".
+    # Architectural opinion-seeking, not generation. Restricted to "is/are this/
+    # it/that/the X too ADJ" so a constraint statement ("it's too dark in here
+    # at night") doesn't accidentally route here. The (?:\w+\s+)? optional
+    # noun slot covers "is this atmosphere too dark", "is the room too bright".
+    r"is\s+(this|it|that|the)\s+(?:\w+\s+)?too\s+\w+|"
+    r"are\s+(these|those|the)\s+(?:\w+\s+)?too\s+\w+|"
     r"would\s+you\s+(recommend|suggest|prefer|advise)|"
     r"do\s+you\s+(think|see|recommend|suggest)"
     r")\b",
@@ -370,19 +414,40 @@ _NEGATIVE_FEEDBACK_PATTERNS = re.compile(
     r"i\s+can'?t\s+stand|"
     # "not a fan of …" / "not happy with …"
     r"not\s+(a\s+fan|happy|satisfied)\s+(of|with)?|"
+    # Wave 4.11c — "I'm not happy / sold / loving / convinced" — explicit
+    # subject anchors so we never match "this is not good for the kitchen"
+    # (which is a constraint statement, not feedback about the design).
+    r"i'?m\s+not\s+(happy|sold|loving|convinced|crazy\s+about)|"
     # "X doesn't work" / "X isn't working" / "X is not right"
     r"(this|it|that|the\s+\w+)\s+(doesn'?t|does\s+not|isn'?t|is\s+not)\s+"
-    r"(work|right|landing|coming\s+together|fit|read\s+well)|"
+    r"(work|right|landing|coming\s+together|fit|read\s+well|great|good)|"
     # "feels/reads/looks wrong" / "feels off" / "feels forced"
     r"(feels|reads|looks)\s+(wrong|off|bad|forced|sterile|cold|flat|"
     r"weird|cluttered|empty|over\s*(done|crowded))|"
+    # Wave 4.11c — "looks worse" / "this looks worse than before"
+    r"(looks|feels|reads)\s+worse|"
     # "this is worse" / "this is worse than the previous"
     r"(this|it|that)\s+is\s+worse|"
+    # Wave 4.11c — "worse than the previous / before / earlier" — anchored
+    # to the comparative so "worse" alone in a benign sentence is ignored.
+    r"worse\s+than\s+(the\s+)?(previous|before|earlier|first|last|old|"
+    r"original|prior)|"
     # "preferred the previous / older version"
     r"preferred\s+(the\s+)?(previous|older|earlier|first|last|old)\b|"
     r"liked\s+(the\s+)?(previous|older|earlier|first|last|old)\s+"
     r"(version|one|render|generation)"
     r")\b",
+    re.IGNORECASE,
+)
+
+# Wave 4.11c — message-initial negative shapes ("Not good.", "Not great.",
+# "Not what I wanted."). Anchored to "^\s*not …" so embedded uses inside a
+# longer constraint sentence ("the dark wood is not great for this kitchen
+# because …") never match — that needs a real subject not a sentence-initial
+# elision.
+_NEGATIVE_FEEDBACK_INIT = re.compile(
+    r"^\s*not\s+(good|great|right|working|landing|loving\s+it|"
+    r"what\s+i\s+(wanted|expected|asked))\b",
     re.IGNORECASE,
 )
 
@@ -438,12 +503,13 @@ def _route_wave_411a(
     # as PRAISE by the legacy classifier downstream. Top-level intent is
     # DESIGN_DISCUSSION (no generation) ; the dedicated NEGATIVE_FEEDBACK
     # sub-intent drives the calm response pool in architect_response.
-    if _NEGATIVE_FEEDBACK_PATTERNS.search(message):
+    if (_NEGATIVE_FEEDBACK_PATTERNS.search(message)
+            or _NEGATIVE_FEEDBACK_INIT.match(message)):
         return IntentClassification(
             intent=ConversationIntent.DESIGN_DISCUSSION,
             sub_intent=SubIntent.NEGATIVE_FEEDBACK,
             confidence=0.85,
-            reasoning="Wave 4.11b — negative sentiment detected",
+            reasoning="Wave 4.11b/c — negative sentiment detected",
         )
 
     # PRODUCT_HELP — second, guarded by design-verb anti-patterns.
@@ -602,6 +668,18 @@ def classify_intent(user_message: str, iteration: int) -> IntentClassification:
             sub_intent=SubIntent.REFINE_ATMOSPHERE,
             confidence=0.90,
             reasoning="Explicit generation command or approval phrase",
+        )
+
+    # Wave 4.11c — scoped size request : "make the sofa bigger", "enlarge
+    # the island". The target object is explicit so the ambiguity detector
+    # correctly stayed silent ; we promote it to GENERATE/LOCAL_EDIT here
+    # rather than letting it fall through to short-unclassified CONVERSATION.
+    if _SCOPED_SIZE.search(msg):
+        return IntentClassification(
+            intent=ConversationIntent.GENERATE,
+            sub_intent=SubIntent.LOCAL_EDIT,
+            confidence=0.80,
+            reasoning="Object-scoped size refinement",
         )
 
     # Short unclassified messages lean conversation; longer lean mixed

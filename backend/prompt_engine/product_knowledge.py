@@ -169,9 +169,12 @@ _FEATURE_TOPICS: dict[str, dict] = {
             r"\bswipe\s+(to\s+)?compare\b",
         ],
         "patterns_km": [
-            r"ប្រៀបធៀប\s*(មុន|បន្ទាប់)",
+            # Wave 4.11c — added ក្រោយ (after) variant and a bare verb form
+            # for natural KM phrasings like "តើខ្ញុំប្រៀបធៀបមុននិងក្រោយ…".
+            r"ប្រៀបធៀប\s*(មុន|បន្ទាប់|ក្រោយ)",
             r"ឃើញ\s*រូបភាព\s*ដើម",
             r"swipe",
+            r"តើ\s*ខ្ញុំ.*ប្រៀបធៀប",
         ],
         "answer_en": (
             "Tap any generated vision and you land on the reveal screen. "
@@ -661,6 +664,10 @@ _SUPPORT_TOPICS: dict[str, dict] = {
         "patterns_km": [
             r"ការ\s*បង្កើត\s*បរាជ័យ",
             r"មិន\s*អាច\s*បង្កើត",
+            # Wave 4.11c — mixed EN+KM "Generate មិនដំណើរការ" and pure-KM
+            # generation-broken phrasings.
+            r"(generate|render|create)\s*មិន\s*(ដំណើរការ|ដំណើរ)",
+            r"បង្កើត.*មិន\s*(ដំណើរការ|បាន|សម្រេច)",
         ],
         "answer_en": (
             "Try Generate once more — most failures resolve on a single retry "
@@ -689,6 +696,9 @@ _SUPPORT_TOPICS: dict[str, dict] = {
         "patterns_km": [
             r"រូប\s*ភាព\s*មិន\s*ដំណើរ",
             r"មិន\s*ឃើញ\s*រូប",
+            # Wave 4.11c — "image / picture not showing/loading/appearing".
+            r"រូប(ភាព)?\s*មិន\s*(បង្ហាញ|ផ្ទុក|ដំណើរ|ដើរ|ចេញ)",
+            r"(image|photo|picture|vision)\s*មិន\s*(បង្ហាញ|ផ្ទុក|ដំណើរ)",
         ],
         "answer_en": (
             "Pull down on the chat screen to refresh, or close and reopen the "

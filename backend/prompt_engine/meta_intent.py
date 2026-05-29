@@ -59,9 +59,16 @@ _FR_MARKERS = {
     'voulais', 'coucou', 'allô', 'allo', 'bien',
 }
 
+# Khmer Unicode range : U+1780–U+17FF (Khmer block) and U+19E0–U+19FF
+# (Khmer Symbols). Two or more Khmer codepoints → KM. We require ≥2 so a
+# stray punctuation symbol in an EN message can't flip the language.
+_KM_CHARS = re.compile(r'[ក-៿᧠-᧿]')
+
 
 def _detect_language(text: str) -> str:
-    """Stateless heuristic: French accent characters or French marker words → 'fr', else 'en'."""
+    """Detect 'km' (≥2 Khmer chars), 'fr' (French markers), else 'en'."""
+    if len(_KM_CHARS.findall(text)) >= 2:
+        return "km"
     if _FR_ACCENTS.search(text):
         return "fr"
     words = set(re.findall(r'\b\w+\b', text.lower()))

@@ -325,6 +325,14 @@ def _select_main_enrichment(
     if iteration <= 1 or edit_mode == EditMode.FIRST_VISION:
         return ""
     if edit_mode == EditMode.LOCAL_EDIT:
+        # Wave 4.11c — narrow exception : a V2-first message that ALREADY
+        # produced a constraint_ack (i.e. the user explicitly said "preserve
+        # X") must surface the reassurance even when the edit mode reads as
+        # LOCAL_EDIT. The ack is the user's request, not enrichment, so the
+        # brevity discipline does not apply. All other LOCAL_EDIT cases stay
+        # silent.
+        if iteration == 2 and constraint_ack:
+            return constraint_ack
         return ""
 
     if edit_mode == EditMode.STRUCTURAL_TRANSFORMATION:
