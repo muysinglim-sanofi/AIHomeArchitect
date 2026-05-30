@@ -516,11 +516,28 @@ _GENERATION_DEMAND = re.compile(
     r"just\s+(do|make|render|generate|show)\s+it|"
     r"make\s+it(\s+(now|please|already))?|"
     r"why\s+(don'?t|aren'?t|won'?t|can'?t)\s+you\s+"
-    r"(just\s+)?(generate|render|show|create|make|do\s+it)|"
+    r"(just\s+)?(generat\w*|render\w*|show\w*|creat\w*|mak\w*|do\s+it)|"
+    # Wave 4.11d.1 — also catch the French-influenced "why you don't / why
+    # you aren't" word order observed in production (backend.log
+    # 2026-05-30 09:07:02). Meta_intent now suppresses STOP_GENERATION
+    # on this pattern ; Wave 4.11d completes the fix by routing it
+    # to GENERATE. Verb tail \w* catches gerund "generating".
+    r"why\s+you\s+(don'?t|aren'?t|won'?t|can'?t|cannot)\s+"
+    r"(just\s+)?(generat\w*|render\w*|show\w*|creat\w*|mak\w*|do\s+it)|"
+    r"how\s+come\s+you\s+(don'?t|aren'?t|won'?t|cannot)\s+"
+    r"(generat\w*|render\w*|show\w*|creat\w*|mak\w*|do\s+it)|"
+    # Wave 4.11d.1 — "are you (not) going to generate?"
+    r"(are|were|weren'?t|aren'?t)\s+you\s+(not\s+)?(going\s+to\s+)?"
+    r"(generat\w*|render\w*|show\w*|creat\w*|mak\w*|produc\w*|build\w*)|"
     r"can\s+you\s+(just\s+)?(generate|render|show\s+me|make\s+it|do\s+it)|"
     r"please\s+(generate|render|show\s+me|just\s+do\s+it)|"
     r"go\s+(for\s+it|ahead(\s+(and\s+)?(generate|render))?)|"
-    r"do\s+it(\s+now)?"
+    r"do\s+it(\s+now)?|"
+    # Wave 4.11d.1 — French explicit demand : "pourquoi tu ne génères pas",
+    # "pourquoi tu génères pas", "génère", "rends-le".
+    r"pourquoi\s+(tu\s+)?(ne\s+)?(g[eé]n[eè]res?|rends?|cr[eé]es?|fais)\s*(pas)?|"
+    r"g[eé]n[eè]re(-le|-moi|\s+maintenant)?|"
+    r"vas-y\s+g[eé]n[eè]re|fais-le\s+maintenant"
     r")\s*[!.?]*\s*$",
     re.IGNORECASE,
 )

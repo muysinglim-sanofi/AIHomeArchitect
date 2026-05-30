@@ -132,6 +132,48 @@ _STOP_GENERATION = re.compile(
     re.IGNORECASE,
 )
 
+# Wave 4.11d.1 — interrogative generation-demand anti-pattern.
+#
+# Real production log (backend.log 2026-05-30 09:07:02) caught a French-
+# influenced phrasing : "why you don't generate?". The substring
+# "don't generate" matches _STOP_GENERATION above, so the system replied
+# "let's discuss first" — the OPPOSITE of what the user meant (frustrated
+# demand for generation).
+#
+# This anti-pattern recognises interrogative shapes that contain the
+# stop-generation tokens but actually MEAN "why aren't you generating?".
+# When this matches, _STOP_GENERATION is suppressed and the chain
+# continues to Wave 4.11d's detect_generation_demand which routes to
+# GENERATE.
+#
+# Anchored to message-initial position with ^\s* so a real stop-generation
+# instruction that happens to mention "why" elsewhere ("the reason I
+# don't generate yet is why I keep asking") is not affected.
+#
+# Covers EN word orders : "why don't you", "why you don't" (FR/KM-
+# influenced), "why aren't you", "why won't you", "why can't you",
+# "how come you don't", "are you not going to", and FR : "pourquoi tu
+# (ne) génères pas", "pourquoi tu génères pas".
+_INTERROGATIVE_GENERATION_DEMAND = re.compile(
+    r"^\s*("
+    # EN — "why [you] don't/aren't/won't/can't [you] generate/generating/render/..."
+    # Verbs use \w* tail to catch gerunds : "why aren't you generating?"
+    r"why\s+(you\s+)?(don'?t|aren'?t|won'?t|can'?t|cannot|will\s+(you\s+)?not)\s+"
+    r"(you\s+)?(generat\w*|render\w*|show\w*|creat\w*|mak\w*|"
+    r"produc\w*|build\w*|do\s+it)|"
+    # EN — "how come you don't/aren't generate/render..."
+    r"how\s+come\s+(you\s+)?(don'?t|aren'?t|won'?t|cannot|can'?t)\s+"
+    r"(you\s+)?(generat\w*|render\w*|show\w*|creat\w*|mak\w*|produc\w*|build\w*|do\s+it)|"
+    # EN — "are/aren't/were you not going to generate..."
+    r"(are|were|weren'?t|aren'?t)\s+you\s+(not\s+)?(going\s+to\s+)?"
+    r"(generat\w*|render\w*|show\w*|creat\w*|mak\w*|produc\w*|build\w*)|"
+    # FR — "pourquoi (tu) (ne) génères/rends/crées (pas)"
+    r"pourquoi\s+(tu\s+)?(ne\s+)?(g[eé]n[eè]res?|rends?|cr[eé]es?|fais)\s*(pas)?|"
+    r"pourquoi\s+(tu\s+)?(ne\s+)?(g[eé]n[eè]res|rends|cr[eé]es|fais)\s+pas"
+    r")\b",
+    re.IGNORECASE,
+)
+
 _CORRECTION = re.compile(
     r"\b(that'?s?\s*not\s*what\s*i\s*(meant|asked|wanted|said)|"
     r"not\s*what\s*i\s*(asked|wanted|meant)|"
@@ -250,8 +292,15 @@ def classify_meta_intent(user_message: str) -> MetaClassification:
     if not msg:
         return MetaClassification(MetaIntent.NONE, lang, lang, 0.0)
 
-    # STOP_GENERATION — highest safety priority
-    if _STOP_GENERATION.search(msg):
+    # STOP_GENERATION — highest safety priority.
+    # Wave 4.11d.1 — but never fire on an interrogative form that contains
+    # the stop-generation tokens while meaning the OPPOSITE intent
+    # ("why you don't generate?" = frustrated demand, NOT a stop request).
+    # When the anti-pattern matches, the rest of meta classification
+    # continues — if no other meta intent fires, control falls to Wave
+    # 4.11d detect_generation_demand which correctly routes to GENERATE.
+    if (_STOP_GENERATION.search(msg)
+            and not _INTERROGATIVE_GENERATION_DEMAND.search(msg)):
         return MetaClassification(MetaIntent.STOP_GENERATION, lang, lang, 0.90)
 
     # LANGUAGE_SWITCH — before greeting so "bonjour, parle en français" classifies correctly
