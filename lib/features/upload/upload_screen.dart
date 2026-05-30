@@ -14,18 +14,24 @@ import '../../shared/widgets/room_type_card.dart';
 import '../../shared/widgets/sticky_action_bar.dart';
 import '../chat/widgets/chat_input_bar.dart' show MicButton;
 
-// ── Wave 5.8 — New Design Screen Redesign (Step-by-step architectural journey)
-// Reframes the upload flow as 5 explicit, persistent steps with a guided
-// stepper roadmap. Goals:
-//   1. Clearer journey — Upload → Room → Atmosphere → Redesign Options → Vision
-//   2. Premium editorial feeling (calm, architect-like, not a settings form)
-//   3. Replaces confusing Preserve/Create with Preserve My Space / Reimagine
-//      Freely, plus bullets so the choice is unambiguous
-//   4. Persistent left vertical stepper on tablet/desktop; compact horizontal
-//      top stepper on phones — scroll-driven highlight + click-to-scroll
-// Backend contract unchanged: room_type / style_label / generation_mode flow
-// exactly as before. AI Decide and Surprise Me remain real cards inside their
-// respective selectors (one editorial selection language).
+// ── Wave 5.8 → 5.16 — New Design Screen Redesign (4-step architectural journey)
+// 5.8 reframed the upload flow as 5 explicit, persistent steps with a guided
+// stepper roadmap. 5.16 — FTUE Simplification & V1 Focus — drops the
+// "Redesign Options" step (Preserve vs Reimagine chooser) from FTUE for V1
+// product clarity. The flow becomes:
+//   1. Upload  →  2. Room Type  →  3. Atmosphere  →  4. Your Vision (optional)
+// Generation always uses preserve mode at this entry point. The advanced
+// creative-mode flip remains accessible later via the chat-screen Design
+// Direction sheet (_SheetModeToggle), per the V1 product positioning :
+// preserve onboarding, creative refinement-time.
+// Premium editorial feeling preserved (calm, architect-like, not a settings
+// form). Persistent left vertical stepper on tablet/desktop; compact
+// horizontal top stepper on phones — scroll-driven highlight +
+// click-to-scroll.
+// Backend contract unchanged : room_type / style_label / generation_mode
+// flow as before ; generation_mode now simply takes its server-side default
+// ("preserve") since the FTUE no longer sends the param. AI Decide and
+// Surprise Me remain real cards inside their respective selectors.
 
 class UploadScreen extends StatefulWidget {
   const UploadScreen({super.key});
@@ -43,8 +49,9 @@ class _UploadScreenState extends State<UploadScreen>
   // Me ⇄ explicit atmosphere likewise. Carried as flags, never fake strings.
   bool _aiDecideRoom = false;
   bool _surpriseStyle = false;
-  // Wave 5.5.14b.2 — bimodal intent. Preserve preselected per design decision.
-  String _selectedMode = 'preserve';
+  // Wave 5.16 — `_selectedMode` field removed. FTUE always launches in
+  // preserve mode (backend default). The chat Design Direction sheet still
+  // exposes the toggle for refinement-time creative flips.
   final _descController = TextEditingController();
   final _picker = ImagePicker();
 
@@ -52,8 +59,9 @@ class _UploadScreenState extends State<UploadScreen>
   // click-to-scroll (Scrollable.ensureVisible) and a scroll listener that
   // updates [_currentStep] based on which section's top has crossed the
   // viewport's reading line.
+  // Wave 5.16 — stepKey count drops 5 → 4 (Redesign Options removed).
   final ScrollController _scrollController = ScrollController();
-  final List<GlobalKey> _stepKeys = List.generate(5, (_) => GlobalKey());
+  final List<GlobalKey> _stepKeys = List.generate(4, (_) => GlobalKey());
   int _currentStep = 1;
 
   late final AnimationController _entryController;
@@ -212,7 +220,10 @@ class _UploadScreenState extends State<UploadScreen>
     }
     final desc = _descController.text.trim();
     if (desc.isNotEmpty) params['desc'] = desc;
-    if (_selectedMode == 'creative') params['mode'] = 'creative';
+    // Wave 5.16 — `mode` query param dropped from FTUE. Backend default
+    // ("preserve") + ChatScreen.initialMode default ("preserve") both
+    // pick it up implicitly. Chat-screen Design Direction sheet still
+    // owns refinement-time creative flips.
 
     final uri = Uri(path: '/chat/new', queryParameters: params);
     context.pushReplacement(uri.toString(), extra: _image);
@@ -367,24 +378,13 @@ class _UploadScreenState extends State<UploadScreen>
           ),
           const SizedBox(height: AppSpacing.xxl),
 
-          // ── STEP 4 — Redesign options ─────────────────────────────────────
+          // ── STEP 4 — Your vision (was STEP 5 pre-5.16) ────────────────────
+          // Wave 5.16 — STEP 4 (Redesign Options / _ModeChooser) removed.
+          // Describe your vision renumbered 5 → 4 ; uses _stepKeys[3]
+          // (was _stepKeys[4]).
           _StepSection(
             anchorKey: _stepKeys[3],
             stepNumber: 4,
-            title: 'How should AI redesign your space?',
-            subtitle: 'Choose the level of freedom for the redesign.',
-            child: _ModeChooser(
-              selectedMode: _selectedMode,
-              onSelected: (m) => setState(() => _selectedMode = m),
-              stackVertically: !isWide,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xxl),
-
-          // ── STEP 5 — Your vision ──────────────────────────────────────────
-          _StepSection(
-            anchorKey: _stepKeys[4],
-            stepNumber: 5,
             title: 'Describe your vision',
             titleTrailing: const _OptionalBadge(),
             subtitle: 'Brief the architect in your own words. '
@@ -463,7 +463,7 @@ class _StepSection extends StatelessWidget {
   }
 }
 
-// Small dark pill: "STEP N OF 5".
+// Small dark pill: "STEP N OF 4". (Wave 5.16 — 5 → 4 after Redesign Options drop.)
 class _StepBadge extends StatelessWidget {
   final int stepNumber;
   const _StepBadge({required this.stepNumber});
@@ -477,7 +477,7 @@ class _StepBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        'STEP $stepNumber OF 5',
+        'STEP $stepNumber OF 4',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: AppColors.surface,
               fontWeight: FontWeight.w600,
@@ -514,9 +514,9 @@ class _OptionalBadge extends StatelessWidget {
 }
 
 // ── Vertical stepper sidebar (tablet/desktop) ────────────────────────────────
-// Persistent left-rail roadmap. 5 numbered nodes connected by a thin line.
-// The current step glows with the accent colour; completed steps look
-// quietly resolved; future steps are subdued.
+// Persistent left-rail roadmap. Wave 5.16 — 4 numbered nodes (was 5 ;
+// "Redesign Options" dropped). The current step glows with the accent
+// colour ; completed steps look quietly resolved ; future steps are subdued.
 
 class _StepperSide extends StatelessWidget {
   final int currentStep;
@@ -526,7 +526,6 @@ class _StepperSide extends StatelessWidget {
     'Upload',
     'Room Type',
     'Atmosphere',
-    'Redesign Options',
     'Your Vision',
   ];
 
@@ -561,8 +560,8 @@ class _StepperSide extends StatelessWidget {
 }
 
 // ── Horizontal stepper (phones) ──────────────────────────────────────────────
-// 5 numbered dots in a horizontal row connected by hairlines. Labels are
-// hidden to save vertical real estate; current step glows.
+// 4 numbered dots in a horizontal row connected by hairlines (Wave 5.16 —
+// was 5). Labels are hidden to save vertical real estate ; current step glows.
 
 class _StepperTop extends StatelessWidget {
   final int currentStep;
@@ -586,11 +585,11 @@ class _StepperTop extends StatelessWidget {
         ),
       ),
       child: Row(
-        children: List.generate(5, (i) {
+        children: List.generate(4, (i) {
           final step = i + 1;
           final isCurrent = step == currentStep;
           final isPast = step < currentStep;
-          final isLast = i == 4;
+          final isLast = i == 3;
           return Expanded(
             child: _StepperNode(
               stepNumber: step,
@@ -1096,218 +1095,12 @@ class _AtmosphereScroller extends StatelessWidget {
   }
 }
 
-// ── Mode chooser (Wave 5.8 — Preserve My Space / Reimagine Freely) ───────────
-// Two large cards with descriptive copy + bullets. Preserve is the default
-// and carries a RECOMMENDED tag. Backend mode values unchanged: 'preserve' |
-// 'creative'. Cards lay side-by-side on tablet/desktop, stack vertically on
-// phones (taller cards with full bullet visibility).
-
-class _ModeChooser extends StatelessWidget {
-  final String selectedMode; // 'preserve' | 'creative'
-  final ValueChanged<String> onSelected;
-  final bool stackVertically;
-  const _ModeChooser({
-    required this.selectedMode,
-    required this.onSelected,
-    this.stackVertically = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final preserve = _ModeCard(
-      icon: Icons.architecture_outlined,
-      title: 'Preserve My Space',
-      recommended: true,
-      description:
-          'Keep the same architecture, walls, windows and layout. '
-          'Change only the styling and decoration.',
-      bullets: const [
-        'Same layout',
-        'Same openings',
-        'Same structure',
-      ],
-      selected: selectedMode == 'preserve',
-      onTap: () => onSelected('preserve'),
-    );
-    final reimagine = _ModeCard(
-      icon: Icons.auto_awesome_outlined,
-      title: 'Reimagine Freely',
-      recommended: false,
-      description:
-          'Allow AI to redesign freely with new layout options '
-          'and possibilities.',
-      bullets: const [
-        'New layout',
-        'New perspectives',
-        'New designs',
-      ],
-      selected: selectedMode == 'creative',
-      onTap: () => onSelected('creative'),
-    );
-
-    if (stackVertically) {
-      return Column(
-        children: [
-          preserve,
-          const SizedBox(height: 12),
-          reimagine,
-        ],
-      );
-    }
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: preserve),
-          const SizedBox(width: 12),
-          Expanded(child: reimagine),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModeCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final bool recommended;
-  final String description;
-  final List<String> bullets;
-  final bool selected;
-  final VoidCallback onTap;
-  const _ModeCard({
-    required this.icon,
-    required this.title,
-    required this.recommended,
-    required this.description,
-    required this.bullets,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = AppColors.accent;
-    final borderColor = selected ? accent : AppColors.border;
-    final bg = selected ? accent.withValues(alpha: 0.06) : AppColors.surface;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-            border: Border.all(
-              color: borderColor,
-              width: selected ? 1.6 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    icon,
-                    size: 22,
-                    color: selected ? accent : AppColors.textSecondary,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: AppTheme.displayEditorial(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w500,
-                        height: 1.18,
-                        letterSpacing: -0.1,
-                      ),
-                    ),
-                  ),
-                  if (recommended) ...[
-                    const SizedBox(width: 8),
-                    _RecommendedBadge(active: selected),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                description,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.textSecondary,
-                      height: 1.45,
-                      fontSize: 12.5,
-                    ),
-              ),
-              const SizedBox(height: 12),
-              ...bullets.map(
-                (b) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.check_circle_outline,
-                        size: 14,
-                        color: selected ? accent : AppColors.textTertiary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          b,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AppColors.textSecondary,
-                                fontSize: 12,
-                                height: 1.3,
-                              ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RecommendedBadge extends StatelessWidget {
-  final bool active;
-  const _RecommendedBadge({required this.active});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: active
-            ? AppColors.accent.withValues(alpha: 0.14)
-            : AppColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: active
-              ? AppColors.accent.withValues(alpha: 0.55)
-              : AppColors.border,
-        ),
-      ),
-      child: Text(
-        'RECOMMENDED',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: active ? AppColors.accent : AppColors.textTertiary,
-              fontWeight: FontWeight.w700,
-              fontSize: 9.5,
-              letterSpacing: 0.6,
-            ),
-      ),
-    );
-  }
-}
+// ── Wave 5.16 — FTUE Simplification & V1 Focus ────────────────────────────────
+// The _ModeChooser, _ModeCard and _RecommendedBadge widgets that previously
+// powered Step 4 ("How should AI redesign your space?" — Preserve vs Reimagine)
+// were removed in this wave. Rationale : V1 onboarding now always launches
+// in preserve mode (backend default). The advanced creative flip survives
+// in the chat Design Direction sheet (`_SheetModeToggle`) for refinement
+// time, per the V1 positioning : preserve onboarding, creative refinement.
+// Backend `generation_mode` contract untouched ; the FTUE simply omits the
+// `mode` query param so the server-side default ("preserve") applies.
