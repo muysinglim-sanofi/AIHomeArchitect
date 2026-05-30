@@ -1,5 +1,7 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Structured error returned by the /generate endpoint.
 class GenerationException implements Exception {
@@ -34,6 +36,27 @@ class GenerationService {
       connectTimeout: const Duration(seconds: 180),
       receiveTimeout: const Duration(seconds: 180),
       sendTimeout: const Duration(seconds: 180),
+    ));
+
+    // Wave 5.17a — JWT propagation. Inject the active Supabase access
+    // token (anonymous OR signed-in) on every backend request. The
+    // backend's `get_current_user` dependency verifies the JWT signature
+    // and extracts `user_id` (sub claim) for session-ownership checks
+    // before the OpenAI call. Without this header, the backend returns
+    // 401 on /chat and /generate.
+    //
+    // The token is read at request-time (not interceptor-construction
+    // time) so a freshly-upgraded session — e.g. immediately after the
+    // Gen #2 sign-in — carries the NEW user's JWT, not the stale
+    // anonymous one.
+    _dio.interceptors.add(InterceptorsWrapper(
+      onRequest: (options, handler) {
+        final token = Supabase.instance.client.auth.currentSession?.accessToken;
+        if (token != null && token.isNotEmpty) {
+          options.headers['Authorization'] = 'Bearer $token';
+        }
+        handler.next(options);
+      },
     ));
   }
 
@@ -99,6 +122,16 @@ class GenerationService {
     String versions = '',
     String generationMode = 'preserve', // Wave 5.5.14c — bimodal intent
   }) async {
+    // Wave 5.13c perf diag — measure client-side click→response latency.
+    // Pairs with the backend `[PERF SUMMARY] request_id=...` line via
+    // clientRequestId, and with the frontend `[Wave 5.12d] image card
+    // loaded in Xms` log (post-response image decode). Together they
+    // give the full click→pixel timeline.
+    final sw = Stopwatch()..start();
+    debugPrint(
+      '[PerfGen] click→POST /generate  request_id=$clientRequestId  '
+      'iteration=$iteration  style=$styleLabel  mode=$generationMode',
+    );
     try {
       final res = await _dio.post<Map<String, dynamic>>(
         '/generate',
@@ -119,15 +152,32 @@ class GenerationService {
           'generation_mode': generationMode,
         }),
       );
+      sw.stop();
+      debugPrint(
+        '[PerfGen] response OK in ${sw.elapsedMilliseconds}ms  '
+        'request_id=$clientRequestId',
+      );
       return res.data!;
     } on DioException catch (e) {
+      sw.stop();
+      debugPrint(
+        '[PerfGen] response ERROR in ${sw.elapsedMilliseconds}ms  '
+        'request_id=$clientRequestId  type=${e.type.name}  '
+        'status=${e.response?.statusCode}',
+      );
       final data = e.response?.data;
       if (data is Map) {
-        final errorCode = (data['error_code'] as String?) ?? 'UNKNOWN';
-        final userMessage = (data['user_message'] as String?) ?? 'Generation failed.';
-        final retryable = (data['retryable'] as bool?) ?? true;
-        final requestId = (data['request_id'] as String?) ?? '';
-        final messagePersisted = (data['message_persisted'] as bool?) ?? false;
+        // Wave 5.17a — FastAPI HTTPException (e.g. 403 SESSION_OWNERSHIP_DENIED)
+        // nests keys under `detail`, while the legacy GenerationError handler
+        // keeps them flat. Normalise to a single payload map.
+        final Map payload = (data['detail'] is Map)
+            ? data['detail'] as Map
+            : data;
+        final errorCode = (payload['error_code'] as String?) ?? 'UNKNOWN';
+        final userMessage = (payload['user_message'] as String?) ?? 'Generation failed.';
+        final retryable = (payload['retryable'] as bool?) ?? true;
+        final requestId = (payload['request_id'] as String?) ?? '';
+        final messagePersisted = (payload['message_persisted'] as bool?) ?? false;
         throw GenerationException(
           errorCode: errorCode,
           userMessage: userMessage,

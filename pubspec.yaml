@@ -43,6 +43,16 @@ dependencies:
   supabase_flutter: ^2.8.4
   shared_preferences: ^2.3.5
 
+  # Wave 5.17a — Identity Foundation. Apple Sign-In (mandated by App Store
+  # Guideline 5.1.1(v) when offering third-party login) + Google Sign-In.
+  # Both feed into Supabase Auth's anonymous-user-upgrade flow via
+  # `auth.linkIdentity(OAuthProvider.apple/google)` so the existing anon
+  # session (and its associated project/messages/images) is preserved
+  # across sign-in.
+  sign_in_with_apple: ^6.1.4
+  google_sign_in: ^6.2.2
+  crypto: ^3.0.3   # SHA-256 nonce for Apple Sign-In replay protection
+
   # Utils
   intl: ^0.20.2
 

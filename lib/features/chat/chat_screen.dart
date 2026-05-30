@@ -9,7 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart' show Share;
 import 'widgets/chat_input_bar.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
@@ -18,8 +17,10 @@ import '../../core/providers/pending_generations_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/services/session_persistence_service.dart';
 import '../../data/mock/mock_projects.dart';
+import '../../data/services/auth_service.dart';
 import '../../data/services/generation_service.dart';
 import '../../data/services/supabase_service.dart';
+import '../auth/sign_in_screen.dart';
 import '../../data/models/message_model.dart';
 import '../../data/models/project_model.dart';
 import '../../data/models/session_state.dart';
@@ -513,14 +514,126 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     _generate(overridePrompt: 'Redesign this space in the $style style.');
   }
 
+  // Wave 5.12 — type-discriminating reveal return contract. The reveal
+  // can now pop with three distinct outcomes :
+  //   GeneratedResult → "Continue this vision" : make THIS vision the
+  //     active refinement baseline (even if older than the latest). The
+  //     next refinement will evolve from this vision's afterUrl, not
+  //     from the linear-latest. First emotional branching foundation —
+  //     the backend still chains linearly (V4 follows V3 in iteration
+  //     count) but the user-controlled refinement baseline is real.
+  //   String         → "Explore another direction" (existing) : trigger
+  //     a new generation in the selected atmosphere.
+  //   null           → back navigation (existing) : no state change.
   Future<void> _openReveal(GeneratedResult result) async {
-    final selectedStyle = await context.push<String?>(
+    final returned = await context.push<Object?>(
       '/result/${result.projectId}',
       extra: result,
     );
-    if (selectedStyle != null && mounted) {
-      _exploreDirection(selectedStyle);
+    if (!mounted) return;
+    if (returned is GeneratedResult) {
+      _continueFromVision(returned);
+    } else if (returned is String) {
+      _exploreDirection(returned);
     }
+    // else: null → back navigation, no change.
+  }
+
+  // Wave 5.12b — the sticky "active state" model is replaced by an
+  // explicit branching narrative event in the conversation. When the
+  // user taps "Continue this vision" on an older render :
+  //   1. _generationSourceUrl is set to that vision's afterUrl (so the
+  //      next refinement actually evolves from it — F5 source-sync)
+  //   2. A branchEvent message is inserted into the chat AND persisted
+  //      to Supabase, so the decision survives restart and reads as a
+  //      first-class narrative beat in the timeline
+  //   3. Future branching waves can derive a vision graph from the
+  //      stored branchEvents without touching the backend schema —
+  //      these events ARE the graph foundation.
+  //
+  // Wave 5.12b refinement (post-validation) — the branchEvent is ONLY
+  // inserted when the user continues from an OLDER vision. If the
+  // selected vision is the latest imageResult in the timeline, the
+  // conversation is already naturally continuing from it ; inserting a
+  // card would be redundant and would falsely suggest a branch where
+  // none occurred. _generationSourceUrl is still updated in both cases
+  // so the next refinement evolves from the selected source.
+  void _continueFromVision(GeneratedResult result) {
+    final afterUrl = result.afterImageUrl;
+    if (afterUrl.isEmpty) return;
+
+    // Determine whether the user selected the LATEST imageResult in the
+    // chat timeline (natural continuation) or an OLDER one (real branch).
+    MessageModel? latestImageResult;
+    for (final m in _messages.reversed) {
+      if (m.type == MessageType.imageResult && m.result != null) {
+        latestImageResult = m;
+        break;
+      }
+    }
+    final isLatestVision =
+        latestImageResult?.result?.afterImageUrl == afterUrl;
+
+    final branchMessage = isLatestVision
+        ? null
+        : MessageModel(
+            id: 'branch_${DateTime.now().millisecondsSinceEpoch}',
+            content: "We're now evolving from this earlier direction.",
+            isAi: false,
+            type: MessageType.branchEvent,
+            result: GeneratedResult(
+              beforeImageUrl: '',
+              afterImageUrl: afterUrl,
+              styleLabel: result.styleLabel,
+              projectId: _project.id,
+            ),
+            createdAt: DateTime.now(),
+          );
+
+    setState(() {
+      _generationSourceUrl = afterUrl;
+      if (branchMessage != null) _messages.add(branchMessage);
+    });
+    _persistSession();
+
+    if (branchMessage == null) return; // latest-vision path : silent state update
+
+    _scrollToBottom();
+    if (_project.id != 'new') {
+      _svc.insertMessage(
+        sessionId: _project.id,
+        role: 'system',
+        content: branchMessage.content,
+        messageType: 'branch_event',
+        afterImageUrl: afterUrl,
+        styleLabel: result.styleLabel,
+      );
+    } else {
+      _pendingMessages.add(branchMessage);
+    }
+  }
+
+  // Wave 5.12b — F6 lineage cue. Walks the chat backward from a given
+  // _listItems position : if the most recent event before this image is
+  // a branchEvent (with no intervening imageResult), this vision was
+  // directly branched from that earlier vision — return the source's
+  // "Vision N" tag so the eyebrow can append "(FROM VISION N)".
+  // Returns null for normal forward-chain refinements.
+  String? _findBranchSourceVisionTag(int listItemIndex) {
+    for (var i = listItemIndex - 1; i >= 0; i--) {
+      final item = _listItems[i];
+      if (item is! MessageModel) continue;
+      if (item.type == MessageType.imageResult) return null;
+      if (item.type == MessageType.branchEvent) {
+        final label = item.result?.styleLabel ?? '';
+        if (label.contains('·')) {
+          final parts = label.split('·').map((s) => s.trim()).toList();
+          if (parts.length == 2 && parts[1].isNotEmpty) return parts[1];
+        }
+        return label.isEmpty ? null : label;
+      }
+    }
+    return null;
   }
 
   /// Fetches full message history from Supabase for an existing session.
@@ -533,10 +646,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       final msgs = rows.map(_rowToMessage).toList();
       final imageCount = msgs.where((m) => m.type == MessageType.imageResult).length;
 
-      // Restore the editing chain so refinements continue from the last output,
-      // not from the original upload.
-      final resultMsgs = msgs.where((m) => m.type == MessageType.imageResult && m.result != null).toList();
-      final lastGeneratedUrl = resultMsgs.isNotEmpty ? resultMsgs.last.result!.afterImageUrl : null;
+      // Wave 5.12b — walk the message stream backward and pick the FIRST
+      // imageResult OR branchEvent as the refinement baseline. This
+      // correctly handles the "user branched then closed the app before
+      // refining" case : without this, the inferred source would always
+      // be the linear-latest imageResult, silently undoing the user's
+      // explicit branching decision on restore.
+      String? lastGeneratedUrl;
+      for (final m in msgs.reversed) {
+        if (m.result == null) continue;
+        if (m.type == MessageType.imageResult ||
+            m.type == MessageType.branchEvent) {
+          lastGeneratedUrl = m.result!.afterImageUrl;
+          break;
+        }
+      }
 
       setState(() {
         _messages = msgs;
@@ -560,23 +684,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   MessageModel _rowToMessage(Map<String, dynamic> row) {
     final typeStr = (row['message_type'] as String?) ?? 'text';
     final isImageResult = typeStr == 'image_result';
+    // Wave 5.12b — branchEvent rows are persisted with the SOURCE vision's
+    // afterImageUrl + styleLabel so the card can render the thumbnail and
+    // "Continuing from Vision N" header without re-resolving the source.
+    final isBranchEvent = typeStr == 'branch_event';
+    final type = isImageResult
+        ? MessageType.imageResult
+        : isBranchEvent
+            ? MessageType.branchEvent
+            : typeStr == 'system'
+                ? MessageType.system
+                : MessageType.text;
+    final result = (isImageResult || isBranchEvent)
+        ? GeneratedResult(
+            beforeImageUrl: (row['before_image_url'] as String?) ?? '',
+            afterImageUrl: (row['after_image_url'] as String?) ?? '',
+            styleLabel: (row['style_label'] as String?) ?? '',
+            projectId: _project.id,
+          )
+        : null;
     return MessageModel(
       id: row['id'] as String,
       content: row['content'] as String,
       isAi: (row['role'] as String) == 'ai',
-      type: isImageResult
-          ? MessageType.imageResult
-          : typeStr == 'system'
-              ? MessageType.system
-              : MessageType.text,
-      result: isImageResult
-          ? GeneratedResult(
-              beforeImageUrl: (row['before_image_url'] as String?) ?? '',
-              afterImageUrl: (row['after_image_url'] as String?) ?? '',
-              styleLabel: (row['style_label'] as String?) ?? '',
-              projectId: _project.id,
-            )
-          : null,
+      type: type,
+      result: result,
       createdAt: DateTime.parse(row['created_at'] as String),
     );
   }
@@ -720,6 +852,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     final originalUrl = _project.beforeImageUrl;
     final generationSource = _generationSourceUrl ?? originalUrl;
 
+    // Wave 5.12b — F5 diagnostic. Surfaces the exact source URL the
+    // backend will receive as before_image_url, so any desync between
+    // the user's branching intent and the real generation baseline
+    // becomes visible in logs.
+    debugPrint(
+      '[Wave 5.12b] _generate '
+      'using generationSource=$generationSource '
+      '(_generationSourceUrl=$_generationSourceUrl, originalUrl=$originalUrl)',
+    );
+
     if (generationSource == null || generationSource.isEmpty) {
       // Don't show snackbar for auto-generation (no user action triggered it).
       if (overridePrompt == null) {
@@ -836,6 +978,48 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     // outlives the widget's dispose().
     final pendingNotifier = ref.read(pendingGenerationsProvider.notifier);
     final sessionIdForLifecycle = _project.id;
+
+    // ── Wave 5.17a — Generation #2 sign-in gate ───────────────────────────
+    // Gen #1 (newCount == 1) is intentionally frictionless : the user
+    // experiences the WOW moment without any account creation step
+    // (Decision 1 — first WOW must remain frictionless).
+    //
+    // Gen #2+ requires the user to sign in via Apple or Google so the
+    // existing anonymous project can be upgraded in place (Decision 4 —
+    // anonymous-user upgrade preserves session, messages, images). The
+    // sign-in screen is shown as a modal. On success, the same anonymous
+    // UUID is preserved (via `auth.signInWithIdToken`) and we resume the
+    // /generate flow with the now-non-anonymous JWT. On cancel, the
+    // /generate call is aborted ; the loading bubble is cleared.
+    //
+    // No backend quota enforcement in 5.17a — Gen #3+ paywall arrives
+    // with Wave 5.17b/c.
+    final auth = AuthService();
+    if (newCount >= 2 && auth.isAnonymous) {
+      _longGenerationTimer?.cancel();
+      _longGenerationTimer = null;
+      final signedIn = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => const SignInScreen(),
+          fullscreenDialog: true,
+        ),
+      );
+      if (!mounted) return;
+      if (signedIn != true) {
+        // User cancelled sign-in. Drop the loading bubble we added above
+        // (the one with id 'loading_…') so the chat returns to its
+        // pre-attempt state. The user can retry by sending another message.
+        setState(() {
+          _messages.removeWhere((m) => m.id.startsWith('loading_'));
+          _isGenerating = false;
+        });
+        return;
+      }
+      // Sign-in succeeded ; fall through to /generate with the upgraded
+      // session. The new JWT (non-anonymous) will be injected by
+      // GenerationService into the Authorization header.
+    }
+
     pendingNotifier.markInFlight(sessionIdForLifecycle);
 
     try {
@@ -878,6 +1062,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       pendingNotifier.clear(sessionIdForLifecycle);
 
       final afterUrl = result['after_image_url'] as String;
+      // Wave 5.13c perf #3 — fire-and-forget image precache. The
+      // post-response ~6 s "blank shimmer" window was 100 % CDN download
+      // + decode of the 1536×1024 result. Kicking precache off here, in
+      // parallel with setState / persistSession / scroll, means the
+      // bytes are already in the ImageCache when _GeneratedImageCard
+      // mounts and asks for the same CachedNetworkImageProvider — the
+      // card renders from cache on first frame instead of waiting on
+      // the network. Logs let us measure the realized saving via the
+      // existing [Wave 5.12d] "image card loaded in Xms" counter.
+      if (afterUrl.isNotEmpty && mounted) {
+        final preSw = Stopwatch()..start();
+        debugPrint('[PerfPreload] precache start  url=${afterUrl.split('/').last.split('?').first}');
+        precacheImage(CachedNetworkImageProvider(afterUrl), context).then((_) {
+          debugPrint('[PerfPreload] precache done in ${preSw.elapsedMilliseconds}ms');
+        }).catchError((e) {
+          debugPrint('[PerfPreload] precache failed in ${preSw.elapsedMilliseconds}ms: $e');
+        });
+      }
       final aiText = result['ai_message'] as String;
       final rawChips = result['suggestions'] as List<dynamic>?;
       // Wave 4.7.2 / 4.7.3 — capture the backend's persisted protocol fields
@@ -1154,14 +1356,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
           // Wave 4.10g — room/atmosphere selection survives restart.
           _persistSession();
         },
-        // Wave 5.5.14b.2 — per-generation mode flip surface. Sheet only
-        // mutates UI state through this callback; persistence + log live
-        // here so the source-of-truth stays in the parent.
-        initialMode: _generationMode,
-        onModeChanged: (mode) {
-          setState(() => _generationMode = mode);
-          _persistSession();
-        },
+        // Wave 5.16b — initialMode + onModeChanged callsite dropped with
+        // the sheet's MODE toggle. _generationMode still wired to the
+        // backend on the next /generate call, just no longer mutated
+        // from this surface.
       ),
     );
   }
@@ -1319,10 +1517,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
                             backdropUrl: _generationSourceUrl ??
                                 _project.beforeImageUrl,
                           ),
+                    MessageType.branchEvent => _BranchEventCard(
+                        key: ValueKey(msg.id),
+                        message: msg,
+                      ),
                     MessageType.imageResult => _ImageResultBubble(
                         key: ValueKey(msg.id),
                         message: msg,
                         index: index,
+                        // Wave 5.12b — F6 lineage cue. Non-null when this
+                        // vision was directly branched from an earlier
+                        // vision via a branchEvent immediately preceding
+                        // it (no intervening imageResult). Renders as
+                        // "(FROM VISION N)" appended to the eyebrow.
+                        sourceVisionTag: _findBranchSourceVisionTag(index),
                         onRevealTap: () => _openReveal(msg.result!),
                       ),
                     MessageType.system => _SystemMessageBubble(
@@ -1343,6 +1551,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
               onTap: _send,
               enabled: !_isGenerating && !_isChatting,
             ),
+            // Wave 5.12b — the sticky "CONTINUING • VISION X" context
+            // line shipped in Wave 5.12 was removed : it competed with
+            // the natural narrative model (users perceive the active
+            // direction as the latest visible step in the conversation
+            // story, not as a global persistent state). The branching
+            // event card now lives INSIDE the timeline at the moment
+            // the decision happened — see _BranchEventCard.
             ChatInputBar(
               controller: _inputController,
               onSend: _send,
@@ -1374,24 +1589,21 @@ class _DaySeparator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Wave 5.11 — drop the flanking dividers. Centered text alone is a
+    // calmer chronology cue ; the divider lines were the strongest
+    // "chat-app block" rhythm in the stream.
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Row(
-        children: [
-          Expanded(child: Divider(color: AppColors.border, thickness: 0.5)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              _label(context),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textTertiary,
-                    fontSize: 11,
-                    letterSpacing: 0.4,
-                  ),
-            ),
-          ),
-          Expanded(child: Divider(color: AppColors.border, thickness: 0.5)),
-        ],
+      padding: const EdgeInsets.fromLTRB(0, 16, 0, 12),
+      child: Center(
+        child: Text(
+          _label(context).toUpperCase(),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textTertiary,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.2,
+              ),
+        ),
       ),
     );
   }
@@ -1408,22 +1620,23 @@ class _TextBubble extends StatefulWidget {
   State<_TextBubble> createState() => _TextBubbleState();
 }
 
-class _TextBubbleState extends State<_TextBubble> with SingleTickerProviderStateMixin {
+class _TextBubbleState extends State<_TextBubble>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
-  late final Animation<Offset> _slide;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 350));
+    // Wave 5.11 — fade only. The horizontal slide + 30ms-per-index
+    // stagger felt mechanical on long conversations ; a calm fade
+    // reads as architectural narrative entering, not a messenger
+    // bubble landing. The render-result bubble keeps its full
+    // scale+slide+fade entry (emotional climax, separate widget).
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 280));
     _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
-    final dx = widget.message.isAi ? -0.05 : 0.05;
-    _slide = Tween<Offset>(begin: Offset(dx, 0.02), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic));
-    Future.delayed(Duration(milliseconds: 30 * widget.index.clamp(0, 8)), () {
-      if (mounted) _ctrl.forward();
-    });
+    _ctrl.forward();
   }
 
   @override
@@ -1437,44 +1650,63 @@ class _TextBubbleState extends State<_TextBubble> with SingleTickerProviderState
     final isAi = widget.message.isAi;
     return FadeTransition(
       opacity: _fade,
-      child: SlideTransition(
-        position: _slide,
-        child: Align(
-          alignment: isAi ? Alignment.centerLeft : Alignment.centerRight,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              if (isAi) ...[
-                _AiAvatar(),
-                const SizedBox(width: 8),
-              ],
-              Flexible(
-                child: Container(
-                  constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: isAi ? AppColors.surface : AppColors.textPrimary,
-                    borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(18),
-                      topRight: const Radius.circular(18),
-                      bottomLeft: Radius.circular(isAi ? 4 : 18),
-                      bottomRight: Radius.circular(isAi ? 18 : 4),
-                    ),
-                    border: isAi ? Border.all(color: AppColors.border) : null,
-                  ),
-                  child: Text(
-                    widget.message.content,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: isAi ? AppColors.textPrimary : AppColors.surface,
-                          height: 1.6,
-                        ),
-                  ),
-                ),
+      child: isAi ? _buildAiEditorial(context) : _buildUserBubble(context),
+    );
+  }
+
+  // Wave 5.11 — AI prose becomes editorial architectural guidance, not a
+  // messenger bubble. No avatar, no border, no fill, no asymmetric tail.
+  // Wider reading column (85% of screen, vs 72% when constrained by the
+  // old avatar + bubble), softer color (textSecondary), 1.55 line-height
+  // for editorial breathing. Reads as a quiet caption around the render.
+  Widget _buildAiEditorial(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.85,
+        ),
+        margin: const EdgeInsets.fromLTRB(2, 2, 0, 12),
+        padding: EdgeInsets.zero,
+        child: Text(
+          widget.message.content,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.55,
+                fontSize: 14.5,
               ),
-            ],
+        ),
+      ),
+    );
+  }
+
+  // The user's voice keeps its weight — right-aligned dark bubble with
+  // the asymmetric bottom-right tail. The user's intent is the anchor of
+  // the conversation ; the AI prose softens around it.
+  Widget _buildUserBubble(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.72,
+        ),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: const BoxDecoration(
+          color: AppColors.textPrimary,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomLeft: Radius.circular(18),
+            bottomRight: Radius.circular(4),
           ),
+        ),
+        child: Text(
+          widget.message.content,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.surface,
+                height: 1.6,
+              ),
         ),
       ),
     );
@@ -1806,30 +2038,15 @@ class _ThinkingBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Wave 5.11 — match the new editorial AI voice : no avatar, no bubble
+    // chrome, just the pulsing dots quietly left-aligned. Reads as
+    // "waiting for the next architectural sentence", not a messenger
+    // typing indicator.
     return Align(
       alignment: Alignment.centerLeft,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          _AiAvatar(),
-          const SizedBox(width: 8),
-          Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(18),
-                topRight: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-                bottomLeft: Radius.circular(4),
-              ),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: _DotsIndicator(),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(2, 6, 0, 14),
+        child: _DotsIndicator(),
       ),
     );
   }
@@ -1840,11 +2057,16 @@ class _ThinkingBubble extends StatelessWidget {
 class _ImageResultBubble extends StatefulWidget {
   final MessageModel message;
   final int index;
+  // Wave 5.12b — F6 lineage cue. Non-null = this vision was branched
+  // from an earlier one via a branchEvent immediately before it ; the
+  // eyebrow appends "(FROM <tag>)" so the lineage reads inline.
+  final String? sourceVisionTag;
   final VoidCallback onRevealTap;
   const _ImageResultBubble({
     super.key,
     required this.message,
     required this.index,
+    this.sourceVisionTag,
     required this.onRevealTap,
   });
 
@@ -1898,7 +2120,6 @@ class _ImageResultBubbleState extends State<_ImageResultBubble>
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     final result = widget.message.result!;
     final narration = widget.message.content;
     return FadeTransition(
@@ -1909,12 +2130,15 @@ class _ImageResultBubbleState extends State<_ImageResultBubble>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Editorial eyebrow ─────────────────────────────────────────
-            // Lightweight orientation : "VISION N · STYLE" in uppercase
-            // tracking. No badge, no border — typography-first.
+            // Wave 5.11 — leading "•" bullet acts as a subtle timeline node.
+            // Wave 5.12b — when this vision was branched from an earlier
+            // one, append "(FROM VISION N)" inline so the lineage reads
+            // at-a-glance without a separate widget.
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
               child: Text(
-                _eyebrowLabel(result.styleLabel).toUpperCase(),
+                '•  ${_eyebrowLabel(result.styleLabel).toUpperCase()}'
+                '${widget.sourceVisionTag != null ? '  (FROM ${widget.sourceVisionTag!.toUpperCase()})' : ''}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppColors.textTertiary,
                       fontWeight: FontWeight.w600,
@@ -1923,10 +2147,74 @@ class _ImageResultBubbleState extends State<_ImageResultBubble>
                     ),
               ),
             ),
-            // ── Narration (2-line cap, tap-to-expand) ─────────────────────
+            // ── The render (image-as-interface, Wave 5.13d.2) ─────────────
+            // Restores the RevealCanvas ambient-backdrop pattern : the
+            // image displays at its NATIVE 3:2 ratio centred vertically
+            // inside a 0.52-of-screen-height portrait card. The card's
+            // empty space above/below the focal image is filled with a
+            // BLURRED + DARKENED ambient version of the image itself,
+            // which reads as a cinematic atmospheric fade rather than
+            // dead space. Zero crop on the focal — full architectural
+            // composition preserved. 12dp inset breakout keeps the
+            // premium framing visible. Card height matches the
+            // _LoadingBubble formula (screen_h * 0.52, clamped 280-560)
+            // so the shape doesn't jump between generating and
+            // generated. Tap anywhere opens the fullscreen reveal.
+            LayoutBuilder(
+              builder: (ctx, constraints) {
+                // Wave 5.13d.4 — full-screen-width breakout. The parent
+                // ListView has horizontal AppSpacing.pagePadding on each
+                // side ; extending the OverflowBox by 2 × pagePadding
+                // makes the card reach the actual screen edges, matching
+                // the reveal screen's edge-to-edge image (galleria, not
+                // chat bubble). The eyebrow + narration above/below stay
+                // at their small inset for caption-style legibility.
+                final breakoutWidth =
+                    constraints.maxWidth + AppSpacing.pagePadding * 2;
+                final h = (MediaQuery.sizeOf(context).height * 0.52)
+                    .clamp(280.0, 560.0);
+                return SizedBox(
+                  height: h,
+                  child: OverflowBox(
+                    alignment: Alignment.center,
+                    minWidth: breakoutWidth,
+                    maxWidth: breakoutWidth,
+                    minHeight: h,
+                    maxHeight: h,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                            spreadRadius: -4,
+                          ),
+                        ],
+                      ),
+                      child: ScaleTransition(
+                        scale: _scale,
+                        child: _GeneratedImageCard(
+                          result: result,
+                          onRevealTap: widget.onRevealTap,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            // ── Narration BELOW image (Wave 5.13d.3 image-first refinement) ──
+            // Narration moved from above to below the image so the
+            // sequence the user reads is : minimal eyebrow → render →
+            // (optional) supporting prose. The image is the first
+            // emotional object, the text becomes secondary support that
+            // the user can engage with after observing the render.
+            // 2-line cap with tap-to-expand preserved : full AI message
+            // remains accessible on demand. Lossless ; perception only.
             if (narration.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),
+                padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => setState(
@@ -1949,82 +2237,12 @@ class _ImageResultBubbleState extends State<_ImageResultBubble>
                   ),
                 ),
               ),
-            // ── The render (architectural vision artifact) ────────────────
-            // The image breaks out of the ListView's 24dp page padding to a
-            // 12dp screen-inset via OverflowBox on the horizontal axis. The
-            // outer SizedBox locks the height to the image-card height so
-            // OverflowBox has finite vertical bounds (otherwise it would
-            // inherit infinite height from the surrounding Column and
-            // throw a layout assertion). Premium framing : soft ambient
-            // shadow + 1px hairline border (border lives inside the card).
-            LayoutBuilder(
-              builder: (ctx, constraints) {
-                final breakoutWidth = constraints.maxWidth + 24;
-                final h = (MediaQuery.sizeOf(context).height * 0.52)
-                    .clamp(280.0, 560.0);
-                return SizedBox(
-                  height: h,
-                  child: OverflowBox(
-                    alignment: Alignment.center,
-                    minWidth: breakoutWidth,
-                    maxWidth: breakoutWidth,
-                    minHeight: h,
-                    maxHeight: h,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius:
-                            BorderRadius.circular(AppSpacing.radiusCard),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.08),
-                            blurRadius: 24,
-                            offset: const Offset(0, 8),
-                            spreadRadius: -4,
-                          ),
-                        ],
-                      ),
-                      child: ScaleTransition(
-                        scale: _scale,
-                        child: _GeneratedImageCard(
-                          result: result,
-                          onRevealTap: widget.onRevealTap,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-            // ── Action row (View Full Reveal · Share) ─────────────────────
-            // Moved OUT of the image overlay so the render stays
-            // uninterrupted. "View Full Reveal" is the clear primary
-            // action ; Share keeps its secondary pill weight.
-            const SizedBox(height: 14),
+            // Wave 5.13 — action row removed. The image itself is now
+            // the primary interaction (tap = reveal). Share migrated
+            // entirely to the fullscreen reveal screen where exploration
+            // + share emotionally belong together.
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: AppButton(
-                      label: l10n.viewBeforeAfter,
-                      icon: Icons.compare,
-                      onPressed: widget.onRevealTap,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  AppPill(
-                    text: l10n.shareDesign,
-                    icon: Icons.ios_share,
-                    onTap: () => Share.share(
-                      'Check out my AI home transformation — '
-                      '${result.styleLabel}!',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 10, 4, 6),
+              padding: const EdgeInsets.fromLTRB(4, 6, 4, 4),
               child: Text(
                 '${context.l10n.visionCreated} '
                 '${_timeAgo(widget.message.createdAt)}',
@@ -2054,10 +2272,13 @@ class _GeneratedImageCard extends StatefulWidget {
 }
 
 class _GeneratedImageCardState extends State<_GeneratedImageCard> {
-  // Wave 4.10b (#4): one shared provider for the focal image, the ambient
-  // backdrop AND the ratio probe → a single decode (RevealCanvas guidance),
-  // and the intrinsic aspect ratio resolves reliably so a landscape render
-  // is no longer cropped to the card's portrait box.
+  // Wave 5.13d.2 — restored the shared provider pattern : one
+  // CachedNetworkImageProvider drives the focal image, the ambient
+  // backdrop, AND the intrinsic-ratio probe. Single decode (RevealCanvas
+  // guidance from Wave 4.10b) so a landscape render is no longer cropped
+  // to the card's portrait box — it centres at its true ratio over the
+  // ambient blur. The [Wave 5.12d] diagnostic timing log piggybacks on
+  // the same listener.
   late final ImageProvider _provider =
       CachedNetworkImageProvider(widget.result.afterImageUrl);
   double? _aspectRatio;
@@ -2067,7 +2288,13 @@ class _GeneratedImageCardState extends State<_GeneratedImageCard> {
   @override
   void initState() {
     super.initState();
+    final stopwatch = Stopwatch()..start();
     _sizeListener = ImageStreamListener((info, _) {
+      stopwatch.stop();
+      debugPrint(
+        '[Wave 5.12d] image card loaded in ${stopwatch.elapsedMilliseconds}ms '
+        '(${info.image.width}x${info.image.height}, url=${widget.result.afterImageUrl.split('?').first.split('/').last})',
+      );
       if (mounted) {
         setState(
             () => _aspectRatio = info.image.width / info.image.height);
@@ -2088,60 +2315,212 @@ class _GeneratedImageCardState extends State<_GeneratedImageCard> {
   Widget build(BuildContext context) {
     final result = widget.result;
     final onRevealTap = widget.onRevealTap;
-    final h =
-        (MediaQuery.sizeOf(context).height * 0.52).clamp(280.0, 560.0);
-    // Wave 5.9 — image becomes a pure architectural vision artifact :
-    // overlays removed (styleLabel + CTAs migrated to _ImageResultBubble
-    // around it), 1px hairline border framing the rounded clip. Less
-    // "chat attachment", more "editorial render". RevealCanvas still
-    // resolves focal aspect ratio from the same shared provider.
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-        border: Border.all(
-          color: AppColors.border.withValues(alpha: 0.5),
-          width: 1,
-        ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-        child: SizedBox(
-          height: h,
-          width: double.infinity,
-          child: RevealCanvas(
-            ambientImage: _provider,
-            focalAspectRatio: _aspectRatio,
-            bottomScrim: false,
-            child: GestureDetector(
-              onTap: onRevealTap,
-              child: CachedNetworkImage(
-                imageUrl: result.afterImageUrl,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-                placeholder: (_, _) =>
-                    const ColoredBox(color: AppColors.shimmerBase),
-                errorWidget: (_, _, _) =>
-                    const ColoredBox(color: AppColors.shimmerBase),
+    // Wave 5.13d.2 — RevealCanvas restored. Image centres at its native
+    // 3:2 ratio over an ambient blurred backdrop of itself. Full
+    // architectural composition visible (zero crop), atmospheric depth
+    // around it reads cinematic without being sci-fi (it's the image's
+    // own light/colour blurred — feels architectural, not synthetic).
+    // GestureDetector wraps the whole surface : tap anywhere opens
+    // reveal. The top-right open_in_full affordance is preserved.
+    return GestureDetector(
+      onTap: onRevealTap,
+      // Wave 5.13d.4 — rounded card border dropped. The card now extends
+      // edge-to-edge with the screen ; a rounded clip would just create
+      // little corner notches at the screen edges. Plain ClipRect keeps
+      // the focal/ambient layers contained while preserving the
+      // full-bleed magazine look.
+      child: ClipRect(
+        child: Stack(
+            fit: StackFit.expand,
+            children: [
+              RevealCanvas(
+                ambientImage: _provider,
+                focalAspectRatio: _aspectRatio,
+                bottomScrim: false,
+                child: CachedNetworkImage(
+                  imageUrl: result.afterImageUrl,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  placeholder: (_, _) => const _ShimmerPlaceholder(),
+                  errorWidget: (_, _, _) =>
+                      const ColoredBox(color: AppColors.shimmerBase),
+                ),
               ),
-            ),
+              // Subtle interactivity affordance — top-right corner,
+              // ignores its own pointer so taps go through to the
+              // GestureDetector above.
+              Positioned(
+                top: 12,
+                right: 12,
+                child: IgnorePointer(
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.32),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.open_in_full,
+                      size: 14,
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-      ),
     );
   }
 }
 
 // ── Shared small widgets ──────────────────────────────────────────────────────
+// Wave 5.11 — _AiAvatar removed entirely. The AI voice is now editorial
+// (caption-style around the render), not a messenger participant. The
+// thinking indicator dropped its avatar too ; both states stay consistent.
 
-class _AiAvatar extends StatelessWidget {
+// ── Branch event card — Option C (Wave 5.12b) ────────────────────────────────
+// Full-width stacked narrative card inserted into the chat timeline when
+// the user taps "Continue this vision" on an older render. Reads as an
+// architectural design decision, not a system alert.
+//
+// Visual : editorial header (CONTINUING FROM VISION N + timestamp) + body
+// row (source thumbnail + style label + human explanation). Subtle 1px
+// stroke at low alpha + soft tinted background ≠ pill / badge / system
+// banner. Persists in Supabase as message_type='branch_event' (role
+// 'system') so the decision survives session restart and reads as a
+// first-class chronological beat in the conversation story.
+class _BranchEventCard extends StatelessWidget {
+  final MessageModel message;
+  const _BranchEventCard({super.key, required this.message});
+
+  // Backend label format is "Style · Vision N" ; extract the version number
+  // for the editorial header and the bare style for the inline label.
+  ({String visionTag, String styleName}) _splitLabel(String styleLabel) {
+    if (styleLabel.contains('·')) {
+      final parts = styleLabel.split('·').map((s) => s.trim()).toList();
+      if (parts.length == 2 && parts.every((p) => p.isNotEmpty)) {
+        return (visionTag: parts[1], styleName: parts[0]);
+      }
+    }
+    return (visionTag: '', styleName: styleLabel);
+  }
+
+  String _formatTime(DateTime dt) {
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '$h:$m';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 28,
-      height: 28,
-      decoration: const BoxDecoration(color: AppColors.textPrimary, shape: BoxShape.circle),
-      child: const Icon(Icons.architecture, color: AppColors.background, size: 14),
+    final result = message.result;
+    final styleLabel = result?.styleLabel ?? '';
+    final split = _splitLabel(styleLabel);
+    final headerSuffix = split.visionTag.isEmpty
+        ? 'EARLIER VISION'
+        : split.visionTag.toUpperCase();
+    final accent = AppColors.accent;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+          border: Border.all(
+            color: accent.withValues(alpha: 0.28),
+            width: 1,
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Editorial header row : "CONTINUING FROM <VISION TAG>" + time.
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'CONTINUING FROM $headerSuffix',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: accent,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                          fontSize: 10,
+                        ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _formatTime(message.createdAt),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textTertiary,
+                        fontSize: 10,
+                        letterSpacing: 0.4,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            // Body row : source thumbnail + style label + human narration.
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: SizedBox(
+                    width: 64,
+                    height: 64,
+                    child: result == null || result.afterImageUrl.isEmpty
+                        ? const ColoredBox(color: AppColors.shimmerBase)
+                        : CachedNetworkImage(
+                            imageUrl: result.afterImageUrl,
+                            fit: BoxFit.cover,
+                            placeholder: (_, _) =>
+                                const ColoredBox(color: AppColors.shimmerBase),
+                            errorWidget: (_, _, _) =>
+                                const ColoredBox(color: AppColors.shimmerBase),
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (split.styleName.isNotEmpty)
+                        Text(
+                          split.styleName,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            height: 1.2,
+                            letterSpacing: -0.1,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                      if (split.styleName.isNotEmpty)
+                        const SizedBox(height: 4),
+                      Text(
+                        message.content,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                              height: 1.4,
+                              fontSize: 12.5,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2170,25 +2549,23 @@ class _SuggestionBar extends StatelessWidget {
             child: AnimatedOpacity(
               opacity: enabled ? 1.0 : 0.4,
               duration: const Duration(milliseconds: 200),
-              // Wave 5.9 — lighter editorial chip : transparent fill, hairline
-              // border, tighter padding. Less form-control / dashboard feeling,
-              // more refining-a-vision feeling. Chips are a refinement palette,
-              // not primary controls.
+              // Wave 5.11 — chips lose their border entirely and adopt a
+              // 4% alpha ink fill. Reads as "architectural suggestion",
+              // not "button" : typography-first, calmer, more inline with
+              // the editorial conversation flow.
               child: Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.transparent,
+                  color: AppColors.textPrimary.withValues(alpha: 0.04),
                   borderRadius: BorderRadius.circular(50),
-                  border: Border.all(
-                    color: AppColors.border.withValues(alpha: 0.6),
-                  ),
                 ),
                 child: Text(
                   suggestions[index],
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppColors.textSecondary,
                         fontWeight: FontWeight.w500,
+                        fontSize: 11,
                       ),
                 ),
               ),
@@ -2306,12 +2683,9 @@ class _SourcePhotoSheet extends StatefulWidget {
   final String initialStyle;
   final VoidCallback onReplace;
   final void Function(String roomType, String style) onDirectionChanged;
-  // Wave 5.5.14b.2 — per-generation bimodal intent. The sheet displays a
-  // compact Preserve/Create toggle in the direction controls; flipping calls
-  // [onModeChanged] which the parent persists. [initialMode] seeds the
-  // toggle so reopening the sheet reflects the last-used choice.
-  final String initialMode;
-  final ValueChanged<String> onModeChanged;
+  // Wave 5.16b — bimodal toggle removed (preserve-only UI in V1).
+  // `initialMode` + `onModeChanged` params dropped ; parent no longer
+  // needs to seed the sheet or react to a flip.
 
   const _SourcePhotoSheet({
     required this.project,
@@ -2323,8 +2697,6 @@ class _SourcePhotoSheet extends StatefulWidget {
     required this.initialStyle,
     required this.onReplace,
     required this.onDirectionChanged,
-    required this.initialMode,
-    required this.onModeChanged,
   });
 
   @override
@@ -2334,17 +2706,13 @@ class _SourcePhotoSheet extends StatefulWidget {
 class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
   late String _selectedRoomType;
   late String _selectedStyle;
-  // Wave 5.5.14b.2 — local mirror of bimodal intent. Sheet drives the
-  // parent through [onModeChanged]; this field is just for the UI toggle's
-  // selected state inside the sheet's lifetime.
-  late String _selectedMode;
+  // Wave 5.16b — `_selectedMode` field removed with the MODE toggle.
 
   @override
   void initState() {
     super.initState();
     _selectedRoomType = widget.initialRoomType;
     _selectedStyle = widget.initialStyle;
-    _selectedMode = widget.initialMode;
   }
 
   void _apply() {
@@ -2549,20 +2917,15 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
                       },
                     ),
                   ),
-                  const SizedBox(height: 22),
-
-                  // Wave 5.5.14b.2 — compact bimodal toggle. Flipping here
-                  // changes the NEXT generation only (per-generation binding);
-                  // parent persists the choice via [widget.onModeChanged].
-                  const _SheetEyebrow(label: 'MODE'),
-                  const SizedBox(height: 10),
-                  _SheetModeToggle(
-                    selectedMode: _selectedMode,
-                    onChanged: (m) {
-                      setState(() => _selectedMode = m);
-                      widget.onModeChanged(m);
-                    },
-                  ),
+                  // Wave 5.16b — MODE eyebrow + Preserve/Create toggle
+                  // removed from the Design Direction sheet. V1 product
+                  // positioning : preserve onboarding AND preserve
+                  // refinement (no creative UI exposed). Backend still
+                  // accepts generation_mode ; _ChatScreenState's
+                  // _generationMode now stays at its default
+                  // ("preserve") forever from the UI side. Session
+                  // restore of legacy "creative" values stays
+                  // coherent — it's just no longer flippable.
                 ],
               ),
             ),
@@ -2787,107 +3150,15 @@ class _SheetRoomLabel extends StatelessWidget {
   }
 }
 
-// ── Bimodal toggle (Wave 5.5.14b.2) ──────────────────────────────────────────
-//
-// Compact segmented control for flipping between Preserve and Create modes
-// mid-session. Lives inside the source-photo sheet — adjacent to the room +
-// atmosphere selectors so "generation parameters" stay grouped. Per-generation
-// binding: changing here affects the NEXT /generate only; previous visions are
-// unaffected. Visuals match `_SheetEyebrow` weight + AtmosphereCard selection
-// language (accent border on selected segment).
-class _SheetModeToggle extends StatelessWidget {
-  final String selectedMode; // 'preserve' | 'creative'
-  final ValueChanged<String> onChanged;
-  const _SheetModeToggle({
-    required this.selectedMode,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return Row(
-      children: [
-        Expanded(
-          child: _SheetModeSegment(
-            icon: Icons.lock_outline,
-            label: l10n.modePreserve,
-            selected: selectedMode == 'preserve',
-            onTap: () => onChanged('preserve'),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _SheetModeSegment(
-            icon: Icons.auto_awesome_outlined,
-            label: l10n.modeCreate,
-            selected: selectedMode == 'creative',
-            onTap: () => onChanged('creative'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SheetModeSegment extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _SheetModeSegment({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = AppColors.accent;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-          decoration: BoxDecoration(
-            color: selected
-                ? accent.withValues(alpha: 0.06)
-                : AppColors.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: selected ? accent : AppColors.border,
-              width: selected ? 1.4 : 1,
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: selected ? accent : AppColors.textSecondary,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                      color: selected ? accent : AppColors.textPrimary,
-                      fontSize: 13,
-                    ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+// ── Wave 5.16b — Bimodal toggle removed ──────────────────────────────────────
+// _SheetModeToggle + _SheetModeSegment widgets dropped together with the
+// MODE eyebrow in the Design Direction sheet. V1 product positioning :
+// preserve onboarding AND preserve refinement, no creative UI exposed.
+// _generationMode state survives in _ChatScreenState and ships to the
+// backend on every /generate (always "preserve" from the UI side, may be
+// "creative" if restored from a legacy session). Orphaned l10n keys
+// (modePreserve / modePreserveSub / modeCreate / modeCreateSub) dropped
+// from app_localizations.dart + translations/{en,km}.dart in this wave.
 
 // Wave 4.10h: `_SheetRoomRow` (text pills) removed — the chat re-upload
 // sheet now uses the SAME shared `RoomTypeRow` as the upload screen (one
@@ -2903,25 +3174,84 @@ class _SystemMessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Wave 5.11 — drop the flanking dividers (same rationale as
+    // _DaySeparator). A quiet italic line of supporting copy reads
+    // as architectural narration, not a chat-app system event.
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Expanded(child: Divider(color: AppColors.border, thickness: 0.5)),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              message.content,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textTertiary,
-                    fontSize: 11,
-                    fontStyle: FontStyle.italic,
-                  ),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Center(
+        child: Text(
+          message.content,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: AppColors.textTertiary,
+                fontSize: 11,
+                fontStyle: FontStyle.italic,
+              ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Animated shimmer placeholder (Wave 5.12d) ────────────────────────────────
+// Soft linear sweep across the surface during image download + decode. Reads
+// as "actively loading" instead of "frozen blank". Calm timing (1.4s cycle),
+// no scale or motion-noise, just a subtle diagonal highlight passing across.
+// Used in place of the flat ColoredBox(shimmerBase) for the generated-image
+// card placeholder ; error states stay static so they don't false-signal a
+// loading animation when the image actually failed.
+class _ShimmerPlaceholder extends StatefulWidget {
+  const _ShimmerPlaceholder();
+
+  @override
+  State<_ShimmerPlaceholder> createState() => _ShimmerPlaceholderState();
+}
+
+class _ShimmerPlaceholderState extends State<_ShimmerPlaceholder>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) {
+        // Sweep travels from -1.0 → 2.0 of the gradient axis so the
+        // highlight enters from the left edge and exits past the right.
+        final t = _ctrl.value;
+        final shift = -1.0 + 3.0 * t;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment(shift - 0.25, -0.4),
+              end: Alignment(shift + 0.25, 0.4),
+              colors: const [
+                AppColors.shimmerBase,
+                AppColors.shimmerHighlight,
+                AppColors.shimmerBase,
+              ],
+              stops: const [0.35, 0.5, 0.65],
             ),
           ),
-          Expanded(child: Divider(color: AppColors.border, thickness: 0.5)),
-        ],
-      ),
+          child: const SizedBox.expand(),
+        );
+      },
     );
   }
 }

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Wave 5.17a — Identity Foundation.
+
+	     com.apple.developer.applesignin enables "Sign in with Apple"
+	     on this app. Required by App Store Review Guideline §5.1.1(v)
+	     when the app offers any third-party login (here: Google).
+
+	     This entitlement is paired with:
+	       - sign_in_with_apple package in pubspec.yaml
+	       - "Sign in with Apple" capability added to the App ID in
+	         the Apple Developer console (Prerequisite B)
+	       - The same App ID/bundle is selected in Xcode under
+	         Runner → Signing & Capabilities → +Capability → Sign in
+	         with Apple (Xcode writes this entitlement automatically
+	         when the developer adds the capability ; we ship it here
+	         so the project builds out of the box on first checkout).
+
+	     "Default" is the standard scope for individual app entitlements ;
+	     "Default with Sandbox" is only for app-extension contexts. -->
+	<key>com.apple.developer.applesignin</key>
+	<array>
+		<string>Default</string>
+	</array>
+</dict>
+</plist>

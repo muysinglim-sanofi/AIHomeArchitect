@@ -30,6 +30,48 @@
 	<string>AI Home Architect uses your microphone so you can describe your design vision by voice — speak naturally to your AI architect.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>AI Home Architect transcribes your spoken design ideas into the chat so you can express yourself naturally.</string>
+
+	<!-- ───────────────────────────────────────────────────────────────────
+	     Wave 5.17a — Identity Foundation.
+
+	     CFBundleURLTypes registers two URL schemes:
+	       1. The Google Sign-In OAuth callback. The actual value is the
+	          REVERSED CLIENT ID of the iOS OAuth client from Google Cloud
+	          Console (format: com.googleusercontent.apps.XXXXX). Replace
+	          the placeholder below once Prerequisite C delivers it. With
+	          the placeholder in place the build still succeeds ; the
+	          Google sign-in just fails at runtime with "redirect URI
+	          mismatch" until the real value lands.
+
+	       2. The Supabase Auth deep-link callback. Used by
+	          signInWithIdToken on iOS so the Supabase auth flow can
+	          return control to the app. Same allowlist must contain
+	          this URL in the Supabase dashboard (Prerequisite A).
+	     ─────────────────────────────────────────────────────────────────── -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>google-sign-in</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- TODO Prerequisite C — replace with real reversed iOS client ID from Google Cloud Console -->
+				<string>com.googleusercontent.apps.YOUR_GOOGLE_IOS_CLIENT_ID</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>aihomearchitect-auth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>aihomearchitect</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

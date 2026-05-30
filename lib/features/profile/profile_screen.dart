@@ -6,6 +6,7 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/locale_provider.dart';
 import '../../core/providers/session_provider.dart';
+import '../../data/services/auth_service.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -139,7 +140,34 @@ class ProfileScreen extends ConsumerWidget {
                     _SettingItem(
                       icon: Icons.logout,
                       label: l10n.signOut,
-                      onTap: () => context.go('/onboarding'),
+                      // Wave 5.17a — sign-out is intentionally standard.
+                      // No device-level lock is applied (per product
+                      // decision 2026-05-30) — the abuse path
+                      // (sign-out → fresh anon → free Gen #1) is
+                      // documented and will be addressed by server-side
+                      // quota enforcement in Wave 5.17b. After clearing
+                      // the Supabase session we recreate an anonymous
+                      // user so the app remains usable without a forced
+                      // sign-in wall.
+                      onTap: () async {
+                        final auth = AuthService();
+                        await auth.signOut();
+                        try {
+                          // Restore anonymous mode so the rest of the
+                          // app (chat / generate / history) can keep
+                          // making authenticated calls. Without this,
+                          // currentSession would be null and every
+                          // subsequent backend call would fail with 401.
+                          await auth.signInAnonymouslyIfNeeded();
+                        } catch (_) {
+                          // Best-effort — if the anon sign-in fails the
+                          // user lands on /onboarding which will retry
+                          // on next launch via main.dart.
+                        }
+                        if (context.mounted) {
+                          context.go('/onboarding');
+                        }
+                      },
                       destructive: true,
                     ),
                   ],

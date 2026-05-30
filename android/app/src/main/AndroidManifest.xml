@@ -25,6 +25,23 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Wave 5.17a — Identity Foundation.
+                 OAuth deep-link callback for Supabase auth flow. The
+                 Supabase dashboard must register this URL in its
+                 redirect-allowlist (Prerequisite A) :
+                     aihomearchitect://login-callback
+                 Apple sign-in uses the native iOS flow ; Google sign-in
+                 on Android is handled by the native Google Sign-In SDK
+                 which does NOT require this intent filter — but Supabase's
+                 OAuth-redirect path does, so it's wired here for both
+                 anonymous-upgrade and signed-in flows. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="aihomearchitect"
+                      android:host="login-callback"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
