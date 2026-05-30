@@ -119,8 +119,12 @@ _REFINE = re.compile(
     # Wave 4.11c — added brighter / daylight / airier (validation gap : a bare
     # "Make it brighter." fell through to CONVERSATION because the brightness
     # axis wasn't in the refinement vocabulary, even though darker/lighter were.
+    # Wave 4.11d — added cozy / elegant / modern / premium / sleek /
+    # sophisticated / spacious — single-adjective design directives that
+    # should bias toward GENERATE rather than fall through to discussion.
     r"\b(more|less|darker|lighter|brighter|warmer|cooler|softer|harder|bolder|subtler|"
     r"more\s+daylight|brighter\s+lighting|lighter\s+feeling|airier|"
+    r"cozy|elegant|modern|premium|sleek|sophisticated|spacious|"
     r"minimal(ist)?|maximalist|luxurious|hotel(-like)?|push\s*(it|further|more)?|"
     r"deepen|increase|reduce|intensif|tone\s*(it|down|up)|"
     r"stronger|richer|quieter|calmer|even\s*more|a\s*bit\s*more|"
@@ -382,6 +386,18 @@ _DESIGN_DISCUSSION_PATTERNS = re.compile(
     # noun slot covers "is this atmosphere too dark", "is the room too bright".
     r"is\s+(this|it|that|the)\s+(?:\w+\s+)?too\s+\w+|"
     r"are\s+(these|those|the)\s+(?:\w+\s+)?too\s+\w+|"
+    # Wave 4.11d — "Compare these two designs / atmospheres / options" is
+    # architectural analysis, not an edit instruction. Also matches the
+    # "can you compare X vs Y" question form.
+    r"compare\s+(these|those|the|both)\s+(?:\w+\s+){0,2}"
+    r"(designs?|atmospheres?|versions?|visions?|options?|directions?|"
+    r"approaches?|renders?|generations?)|"
+    r"(can|could|would|will)\s+you\s+compare\b|"
+    r"compare\s+(?:the\s+|these\s+|those\s+)?\w+(\s+\w+){0,3}\s+"
+    r"(vs\.?|versus|and|against|or)\s+\w+|"
+    # Wave 4.11d — "pros and cons", "what are the trade-offs" — architectural
+    # weighing without an edit imperative.
+    r"(pros\s+and\s+cons|trade[-\s]?offs?|advantages?\s+and\s+disadvantages)|"
     r"would\s+you\s+(recommend|suggest|prefer|advise)|"
     r"do\s+you\s+(think|see|recommend|suggest)"
     r")\b",
@@ -465,6 +481,162 @@ _DESIGN_DISCUSSION_ANTI = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+
+
+# ── Wave 4.11d — Generation Intent Dominance ─────────────────────────────────
+#
+# After Wave 4.11a/b/c the architect became too clarification-happy : users
+# answered a clarification but got asked another one instead of seeing the
+# next vision. This layer adds two stateless detectors that sit BEFORE
+# detect_ambiguity in main.py /chat :
+#
+#   1. detect_generation_demand    — explicit user demand ("generate",
+#                                    "just do it", "why don't you generate")
+#                                    → immediate GENERATE, bypass ambiguity.
+#   2. is_clarification_answer     — previous assistant turn was a
+#                                    clarification AND user gave a short
+#                                    direct answer → resolve ambiguity,
+#                                    route as GENERATE/REFINE_ATMOSPHERE.
+#
+# Both layers preserve Wave 4.11a/b/c behaviour : first-time ambiguous
+# messages still clarify (Principle 1), genuine architectural questions
+# still route to DESIGN_DISCUSSION (Principle 5), negative-feedback still
+# routes through NEGATIVE_FEEDBACK (Wave 4.11b/c).
+
+# Anchored : the WHOLE message must be a bare demand. "let me know how to
+# generate" or "why don't you generate AND change the sofa" do NOT match —
+# the latter carries a separate edit instruction and goes through the
+# standard chain. Trailing punctuation / "now" / "please" are absorbed.
+_GENERATION_DEMAND = re.compile(
+    r"^\s*("
+    r"generate(\s+(it|now|please|already|the\s+image|the\s+vision))?|"
+    r"render(\s+(it|now|please))?|create\s+(it|now)|"
+    r"show\s+me(\s+(it|now|please|the\s+(result|vision|image)))?|"
+    r"try\s+it(\s+now)?|let'?s?\s+see(\s+(it|the\s+(result|vision)))?|"
+    r"just\s+(do|make|render|generate|show)\s+it|"
+    r"make\s+it(\s+(now|please|already))?|"
+    r"why\s+(don'?t|aren'?t|won'?t|can'?t)\s+you\s+"
+    r"(just\s+)?(generate|render|show|create|make|do\s+it)|"
+    r"can\s+you\s+(just\s+)?(generate|render|show\s+me|make\s+it|do\s+it)|"
+    r"please\s+(generate|render|show\s+me|just\s+do\s+it)|"
+    r"go\s+(for\s+it|ahead(\s+(and\s+)?(generate|render))?)|"
+    r"do\s+it(\s+now)?"
+    r")\s*[!.?]*\s*$",
+    re.IGNORECASE,
+)
+
+# Markers detected in the LAST assistant message indicating it was a
+# clarification dialog. These mirror the templates in
+# ambiguity_detector._RULES — if the clarification copy changes
+# substantially, this list needs a paired update. The patterns are
+# deliberately phrase-fragments, not full strings, so minor wording
+# tweaks don't break detection.
+_ASSISTANT_CLARIFICATION_MARKERS = re.compile(
+    r"(are\s+you\s+thinking|"
+    r"in\s+which\s+(direction|sense|layer)|"
+    r"of\s+which\s+layer|of\s+which\s*[—\-]|"
+    r"tell\s+me\s+which|pick\s+the\s+(angle|layer)|"
+    r"what\s+kind\s+of\s+(impact|change)|"
+    r"name\s+the\s+layer|sketch\s+the\s+route|"
+    r"i'?ll\s+calibrate\s+the\s+next\s+vision|"
+    r"open\s+in\s+which\s+sense|"
+    # KM clarification markers
+    r"ប្រាប់\s*ខ្ញុំ|"
+    r"ជ្រើស\s*យក"
+    r")",
+    re.IGNORECASE,
+)
+
+# Discriminators for "is this message a direct clarification answer?".
+# A direct answer is short, declarative, on-topic. These reject patterns
+# catch the cases where the user redirected the conversation, asked a
+# question back, or expressed dissatisfaction — none of which should be
+# auto-promoted to GENERATE.
+_NOT_AN_ANSWER = re.compile(
+    r"^\s*("
+    r"actually|wait|hmm+|instead|nope|no\s+no|"
+    r"compare|discuss|talk|explain|tell\s+me|why|"
+    r"what\s+(about|do|if|are|is)|how\s+(about|do|can)|"
+    r"can\s+(we|you|i)|could\s+(we|you|i)|would\s+(we|you|i)|"
+    r"let'?s?\s+(do|change|talk|discuss|try\s+something)|"
+    r"i\s+(don'?t|do\s+not|am\s+not|'m\s+not)\s+(know|understand|sure|loving)|"
+    r"none\s+of|neither"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def detect_generation_demand(message: str) -> bool:
+    """Wave 4.11d — explicit generation override.
+
+    Returns True when the user message is a bare demand for the next
+    vision — "generate", "why don't you generate", "just do it",
+    "show me", "let's see", "make it" (alone), etc. Callers in
+    main.py should bypass detect_ambiguity and route directly to
+    GENERATE when this returns True.
+    """
+    if not message:
+        return False
+    return bool(_GENERATION_DEMAND.match(message.strip()))
+
+
+def _last_assistant_text(history) -> str:
+    """Return the content of the most recent assistant turn in history,
+    or '' if the last turn was the user / history is empty."""
+    if not history:
+        return ""
+    for msg in reversed(history):
+        if not isinstance(msg, dict):
+            continue
+        role = str(msg.get("role", "")).lower()
+        if role in ("ai", "assistant"):
+            return str(msg.get("content", "") or "")
+        if role == "user":
+            # User turn encountered before any assistant turn — return ''
+            return ""
+    return ""
+
+
+def last_assistant_was_clarification(history) -> bool:
+    """Wave 4.11d — True if the most recent assistant turn looks like a
+    clarification dialog emitted by detect_ambiguity. Detected via the
+    canonical clarification markers ; copy changes in
+    ambiguity_detector require a paired update here."""
+    text = _last_assistant_text(history)
+    if not text:
+        return False
+    return bool(_ASSISTANT_CLARIFICATION_MARKERS.search(text))
+
+
+def is_clarification_answer(message: str, history) -> bool:
+    """Wave 4.11d — True if `message` is a short direct answer to a
+    clarification the assistant just emitted. Rejects redirects,
+    questions, expressions of confusion or dissatisfaction.
+
+    Caller (main.py) should bypass detect_ambiguity and route as
+    GENERATE / REFINE_ATMOSPHERE when this returns True. The
+    clarification dialog has been "spent" — the user gets the next
+    vision instead of another clarification round.
+    """
+    if not last_assistant_was_clarification(history):
+        return False
+    msg = (message or "").strip()
+    if not msg:
+        return False
+    # Reject long replies — direct answers are tight by nature.
+    if len(msg.split()) > 10:
+        return False
+    # Reject question shapes — user is asking, not answering.
+    if "?" in msg:
+        return False
+    # Reject redirects / confusion / discussion verbs.
+    if _NOT_AN_ANSWER.match(msg):
+        return False
+    # Reject explicit dissatisfaction — that's negative feedback, not
+    # a clarification answer.
+    if _NEGATIVE_FEEDBACK_PATTERNS.search(msg) or _NEGATIVE_FEEDBACK_INIT.match(msg):
+        return False
+    return True
 
 
 def _route_wave_411a(

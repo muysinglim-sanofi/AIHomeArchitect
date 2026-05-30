@@ -57,6 +57,10 @@ from prompt_engine.intent_classifier import (
     SubIntent,
     is_confirmation,
     resolve_confirmation,
+    # Wave 4.11d — Generation Intent Dominance
+    detect_generation_demand,
+    is_clarification_answer,
+    IntentClassification,
 )
 from prompt_engine.edit_intent import EditMode
 from prompt_engine.mask_generator import build_structural_mask
@@ -510,14 +514,64 @@ async def chat(
             "session_language": meta.target_language,
         }
 
+    _lang_for_4_11a = (
+        "km" if _early_session_memory.session_language == "km" else "en"
+    )
+
+    # ── Wave 4.11d: Generation Intent Dominance ────────────────────────────
+    # Two stateless detectors that sit BEFORE detect_ambiguity. When either
+    # fires, the user gets the next vision instead of another clarification.
+    # Preserves Wave 4.11a/b/c : first-time ambiguous messages still clarify ;
+    # genuine architectural questions still route to DESIGN_DISCUSSION ;
+    # negative-feedback still flows through NEGATIVE_FEEDBACK.
+    _wave411d_reason = None
+    if iteration > 1 and detect_generation_demand(message):
+        _wave411d_reason = "generation_demand"
+    elif iteration > 1 and is_clarification_answer(message, history_messages):
+        _wave411d_reason = "clarification_resolved"
+
+    if _wave411d_reason is not None:
+        log.info("  [Wave 4.11d] generation dominance fired : %s", _wave411d_reason)
+        intent_class = IntentClassification(
+            intent=ConversationIntent.GENERATE,
+            sub_intent=SubIntent.REFINE_ATMOSPHERE,
+            confidence=0.90 if _wave411d_reason == "generation_demand" else 0.85,
+            reasoning=f"Wave 4.11d — {_wave411d_reason}",
+        )
+        # Skip ambiguity check entirely — the user has shown they want a
+        # vision. Fall straight to the standard generate flow below.
+        session_memory = _early_session_memory
+        ai_message = generate_chat_response(
+            user_message=message,
+            atmosphere_id=atmosphere_id,
+            room_type=room_type,
+            sub_intent=intent_class.sub_intent,
+            secondary_spaces=secondary_visible_spaces,
+            refinement_state=refinement_state,
+        )
+        suggestions = get_suggestion_chips(
+            atmosphere_id=atmosphere_id,
+            room_type=room_type,
+            iteration=iteration,
+            edit_mode=EditMode.STYLE_REFINEMENT,
+            sub_intent=intent_class.sub_intent,
+        )
+        log.info("=== /chat WAVE 4.11d GENERATE DOMINANCE (%s) ===",
+                 _wave411d_reason)
+        return {
+            "ai_message": ai_message,
+            "suggestions": suggestions,
+            "should_generate": True,
+            "intent": intent_class.intent.value,
+            "sub_intent": intent_class.sub_intent.value,
+            "session_language": session_memory.session_language,
+        }
+
     # ── Wave 4.11a: ambiguity check — V2+ messages with truly ambiguous
     # standalone adjectives ("make it bigger") trigger a clarification
     # instead of guessing. Returns early when fired ; clear directional
     # intents ("warmer", "more wood", "more luxury") pass through to the
     # standard classifier untouched.
-    _lang_for_4_11a = (
-        "km" if _early_session_memory.session_language == "km" else "en"
-    )
     _clarification = detect_ambiguity(
         message, iteration, language=_lang_for_4_11a,
         room_type=room_type or None,  # Wave 4.11b — room-aware clarifications
