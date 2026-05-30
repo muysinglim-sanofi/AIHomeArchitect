@@ -13,11 +13,14 @@ from PIL import Image as PilImage
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI, BadRequestError
 from supabase import create_client
+
+# Wave 5.17a — Identity foundation
+from auth import CurrentUser, get_current_user
 
 from prompt_engine import (
     compose_generation_prompt,
@@ -301,6 +304,78 @@ supa = create_client(
 )
 
 
+# ── Wave 5.17a — session ownership validation ───────────────────────────────
+
+# Sentinel for the chat-screen pattern where the very first request uses
+# session_id "new" before any row has been persisted. The chat screen
+# later replaces this with a real UUID once the project lands in the
+# sessions table. We allow these through unconditionally — the JWT-
+# verified user_id will be attached to the new row when persistence
+# happens, and any subsequent /generate against a real UUID will be
+# validated normally.
+_NEW_SESSION_SENTINELS = {"new", ""}
+
+
+async def _validate_session_ownership(
+    *, session_id: str, user_id: str
+) -> bool:
+    """
+    Wave 5.17a — verify the authenticated user owns `session_id`.
+
+    Returns True iff:
+      - session_id is a "new" sentinel (no row exists yet, ownership
+        is established at insert time — handled by the frontend's
+        supabase client which writes user_id from auth.uid()), OR
+      - The sessions row exists AND sessions.user_id == user_id.
+
+    Returns False iff:
+      - The sessions row exists AND sessions.user_id != user_id (a
+        third party trying to drive cost against someone else's
+        session — refuse before the OpenAI call).
+
+    On unexpected errors (network, supabase down) we ALLOW the request
+    through. The historical behaviour was no-ownership-check at all ;
+    failing closed here would create a hard outage for every user the
+    moment supabase has a hiccup. Better to log + continue than to
+    take the whole product down for a defensive check.
+    """
+    if (session_id or "").strip().lower() in _NEW_SESSION_SENTINELS:
+        return True
+
+    try:
+        # Use the service-role supabase client so we can read any session
+        # regardless of RLS. The point is to ENFORCE ownership at the
+        # backend layer ; the RLS policy on `sessions` is a second line
+        # of defence for direct DB access, not a substitute.
+        result = await asyncio.to_thread(
+            lambda: supa.table("sessions")
+            .select("user_id")
+            .eq("id", session_id)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(result, "data", None) or []
+        if not rows:
+            # Row not yet in the table — treat as "new" : either the
+            # frontend hasn't persisted it yet, or this is a stale
+            # session_id. Allow the call ; if the frontend later
+            # creates the row, it does so under the authenticated user.
+            return True
+        owner_id = rows[0].get("user_id")
+        if not owner_id:
+            # Row exists but has no owner — unusual but not a refusal
+            # case ; the next sessions write will attach the current user.
+            return True
+        return str(owner_id) == str(user_id)
+    except Exception as exc:
+        log.warning(
+            "[Wave 5.17a] session ownership check failed open — "
+            "session=%s user=%s error=%s",
+            session_id, user_id, exc,
+        )
+        return True
+
+
 # ── Image utilities ───────────────────────────────────────────────────────────
 
 def _detect_output_size(image_bytes: bytes) -> str:
@@ -435,6 +510,7 @@ async def chat(
     iteration: int = Form(1),
     history: str = Form(""),           # JSON-encoded list of {role, content} messages
     secondary_spaces: str = Form(""),  # JSON-encoded list of secondary room type keys
+    current_user: CurrentUser = Depends(get_current_user),  # Wave 5.17a
 ):
     """
     Conversation-only endpoint — no image generation.
@@ -847,9 +923,43 @@ async def generate(
     source_version_id: str = Form(""),    # Wave 4.7.3 — target version id when source_mode=SPECIFIC_VERSION
     versions: str = Form(""),             # Wave 4.7.3 — JSON ledger of prior versions (client round-trip)
     generation_mode: str = Form("preserve"),  # Wave 5.5.14b.1 — bimodal intent: "preserve" | "creative". Default matches today's behaviour. NOT YET ROUTED — read & logged only; composer wiring lands in Wave 5.5.14c.
+    current_user: CurrentUser = Depends(get_current_user),  # Wave 5.17a
 ):
     # ── Step 0: resolve generation profile ───────────────────────────────────
     profile = get_active_profile()
+
+    # ── Wave 5.17a: session ownership validation ─────────────────────────────
+    # Before paying for the gpt-image-1 call, verify the authenticated
+    # user actually owns the session_id they're targeting. The MVP
+    # backend previously trusted any session_id from the client ; that
+    # opens a session-id-forgery vector that becomes a quota-bypass
+    # vector as soon as Wave 5.17b's quota gate lands. Closing the gap
+    # here is the precondition.
+    #
+    # New sessions (those with no row yet in the `sessions` table — e.g.
+    # the very first /generate call where the frontend has not yet
+    # created the session row) are ALLOWED through with a log line. The
+    # frontend's supabase RLS still scopes any subsequent reads. This
+    # mirrors the legacy "session_id == 'new'" pattern used by the chat
+    # screen for in-memory project starts.
+    _ownership_ok = await _validate_session_ownership(
+        session_id=session_id, user_id=current_user.user_id
+    )
+    if not _ownership_ok:
+        log.warning(
+            "[Wave 5.17a] session ownership rejected — "
+            "session=%s claimed_user=%s",
+            session_id, current_user.user_id,
+        )
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "SESSION_OWNERSHIP_DENIED",
+                "user_message": "This project belongs to a different account.",
+                "retryable": False,
+                "request_id": "",
+            },
+        )
 
     # ── Step 1: log request ───────────────────────────────────────────────────
     request_id = client_request_id.strip() or uuid.uuid4().hex
