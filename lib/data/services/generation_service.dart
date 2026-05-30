@@ -15,12 +15,22 @@ class GenerationException implements Exception {
   /// so older backends without the flag fall through to client-side write.
   final bool messagePersisted;
 
+  /// Wave 5.17b — true iff the backend returned HTTP 402 QUOTA_EXHAUSTED.
+  /// Callers (chat_screen) should branch on this : open the paywall sheet
+  /// instead of showing a generic error toast.
+  final bool quotaExhausted;
+  final int? quotaUsed;
+  final int? quotaLimit;
+
   const GenerationException({
     required this.errorCode,
     required this.userMessage,
     required this.retryable,
     this.requestId = '',
     this.messagePersisted = false,
+    this.quotaExhausted = false,
+    this.quotaUsed,
+    this.quotaLimit,
   });
 
   @override
@@ -167,9 +177,13 @@ class GenerationService {
       );
       final data = e.response?.data;
       if (data is Map) {
-        // Wave 5.17a — FastAPI HTTPException (e.g. 403 SESSION_OWNERSHIP_DENIED)
-        // nests keys under `detail`, while the legacy GenerationError handler
-        // keeps them flat. Normalise to a single payload map.
+        // Two response shapes co-exist :
+        //   1. Legacy `GenerationError` handler — flat keys at top level
+        //      ({ error_code, user_message, retryable, request_id, ... }).
+        //   2. FastAPI HTTPException (Wave 5.17a 403, Wave 5.17b 402) —
+        //      keys nested under `detail`
+        //      ({ detail: { error_code, user_message, ... } }).
+        // Normalise to a single payload map.
         final Map payload = (data['detail'] is Map)
             ? data['detail'] as Map
             : data;
@@ -178,12 +192,20 @@ class GenerationService {
         final retryable = (payload['retryable'] as bool?) ?? true;
         final requestId = (payload['request_id'] as String?) ?? '';
         final messagePersisted = (payload['message_persisted'] as bool?) ?? false;
+        // Wave 5.17b — propagate quota fields for the paywall handler.
+        final quotaExhausted = errorCode == 'QUOTA_EXHAUSTED'
+            || e.response?.statusCode == 402;
+        final quotaUsed = (payload['quota_used'] as int?);
+        final quotaLimit = (payload['quota_limit'] as int?);
         throw GenerationException(
           errorCode: errorCode,
           userMessage: userMessage,
           retryable: retryable,
           requestId: requestId,
           messagePersisted: messagePersisted,
+          quotaExhausted: quotaExhausted,
+          quotaUsed: quotaUsed,
+          quotaLimit: quotaLimit,
         );
       }
       rethrow;

@@ -17,10 +17,9 @@ import '../../core/providers/pending_generations_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/services/session_persistence_service.dart';
 import '../../data/mock/mock_projects.dart';
-import '../../data/services/auth_service.dart';
 import '../../data/services/generation_service.dart';
 import '../../data/services/supabase_service.dart';
-import '../auth/sign_in_screen.dart';
+import '../paywall/paywall_sheet.dart';
 import '../../data/models/message_model.dart';
 import '../../data/models/project_model.dart';
 import '../../data/models/session_state.dart';
@@ -979,46 +978,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     final pendingNotifier = ref.read(pendingGenerationsProvider.notifier);
     final sessionIdForLifecycle = _project.id;
 
-    // ── Wave 5.17a — Generation #2 sign-in gate ───────────────────────────
-    // Gen #1 (newCount == 1) is intentionally frictionless : the user
-    // experiences the WOW moment without any account creation step
-    // (Decision 1 — first WOW must remain frictionless).
-    //
-    // Gen #2+ requires the user to sign in via Apple or Google so the
-    // existing anonymous project can be upgraded in place (Decision 4 —
-    // anonymous-user upgrade preserves session, messages, images). The
-    // sign-in screen is shown as a modal. On success, the same anonymous
-    // UUID is preserved (via `auth.signInWithIdToken`) and we resume the
-    // /generate flow with the now-non-anonymous JWT. On cancel, the
-    // /generate call is aborted ; the loading bubble is cleared.
-    //
-    // No backend quota enforcement in 5.17a — Gen #3+ paywall arrives
-    // with Wave 5.17b/c.
-    final auth = AuthService();
-    if (newCount >= 2 && auth.isAnonymous) {
-      _longGenerationTimer?.cancel();
-      _longGenerationTimer = null;
-      final signedIn = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(
-          builder: (_) => const SignInScreen(),
-          fullscreenDialog: true,
-        ),
-      );
-      if (!mounted) return;
-      if (signedIn != true) {
-        // User cancelled sign-in. Drop the loading bubble we added above
-        // (the one with id 'loading_…') so the chat returns to its
-        // pre-attempt state. The user can retry by sending another message.
-        setState(() {
-          _messages.removeWhere((m) => m.id.startsWith('loading_'));
-          _isGenerating = false;
-        });
-        return;
-      }
-      // Sign-in succeeded ; fall through to /generate with the upgraded
-      // session. The new JWT (non-anonymous) will be injected by
-      // GenerationService into the Authorization header.
-    }
+    // ── Wave 5.17b — Gen #2 sign-in gate REMOVED ──────────────────────────
+    // Per the locked Option B funnel (2026-05-30) : Gen #1, #2, #3 are
+    // ALL anonymous and free. Sign-in is offered only at the paywall
+    // (Gen #4) and from the profile screen. The Wave 5.17a Gen #2 gate
+    // is intentionally deleted here. Authentication continues to flow
+    // through `AuthService` (still imported above for the paywall sign-in
+    // flow + profile screen). Backend quota enforcement at /generate
+    // returns HTTP 402 on Gen #4 attempts — caught below.
 
     pendingNotifier.markInFlight(sessionIdForLifecycle);
 
@@ -1171,6 +1138,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       }
       // Wave 5.6c — failure shown inline; clear pending state.
       pendingNotifier.clear(sessionIdForLifecycle);
+
+      // ── Wave 5.17b — Paywall branch (HTTP 402 QUOTA_EXHAUSTED) ─────
+      // Anonymous user has used their 3 free generations. Instead of
+      // an error toast, open the paywall sheet (placeholder in 5.17b ;
+      // RevenueCat-rendered in 5.17c). The failure message is NOT
+      // persisted to the messages table — this is a product gate, not
+      // an architect failure.
+      if (e.quotaExhausted) {
+        setState(() {
+          _isGenerating = false;
+          _messages.removeWhere((m) => m.type == MessageType.loading);
+        });
+        await showModalBottomSheet<bool>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: AppColors.surface,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (_) => const PaywallSheet(),
+        );
+        // Wave 5.17b — sign-in via paywall does not unlock more free
+        // generations. Wave 5.17c will retry /generate on successful
+        // subscription purchase.
+        return;
+      }
 
       final failureMessage = e.userMessage;
       final errMsg = MessageModel(

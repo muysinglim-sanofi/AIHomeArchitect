@@ -7,6 +7,7 @@ import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/locale_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../data/services/auth_service.dart';
+import '../auth/sign_in_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -131,6 +132,46 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            // ── Wave 5.17b — Voluntary sign-in entry ──────────────────────
+            // Shown ONLY when the user is anonymous. Lets existing
+            // subscribers sign in to restore their subscription on a new
+            // device without having to hit the paywall first. After
+            // sign-in, navigation refreshes via /home so any downstream
+            // state (subscription tier, profile chip, etc.) re-reads.
+            if (AuthService().isAnonymous) ...[
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
+                  child: _SettingsCard(
+                    items: [
+                      _SettingItem(
+                        icon: Icons.login,
+                        label: 'Sign In',
+                        onTap: () async {
+                          final result = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute(
+                              builder: (_) => const SignInScreen(
+                                headline: 'Continue with your AI architect',
+                                subhead:
+                                    'Sign in to restore your subscription or '
+                                    'continue your design exploration.',
+                              ),
+                              fullscreenDialog: true,
+                            ),
+                          );
+                          if (result == true && context.mounted) {
+                            // Force a refresh by routing to /home — downstream
+                            // widgets re-read auth state on next build.
+                            context.go('/home');
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
             SliverToBoxAdapter(
               child: Padding(
