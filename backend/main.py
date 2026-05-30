@@ -21,6 +21,15 @@ from supabase import create_client
 
 # Wave 5.17a — Identity foundation
 from auth import CurrentUser, get_current_user
+# Wave 5.17b — Quota enforcement + IP rate limit
+from quota import (
+    get_quota_status,
+    reserve_generation,
+    confirm_generation,
+    fail_generation,
+    FREE_TIER_LIMIT,
+)
+from rate_limit import check_ip_rate_limit
 
 from prompt_engine import (
     compose_generation_prompt,
@@ -906,6 +915,7 @@ async def chat(
 
 @app.post("/generate")
 async def generate(
+    request: Request,                     # Wave 5.17b — needed for IP rate limit (request.client.host)
     session_id: str = Form(...),
     prompt: str = Form(...),
     before_image_url: str = Form(...),
@@ -961,8 +971,60 @@ async def generate(
             },
         )
 
+    # ── Wave 5.17b — IP rate limit (defensive ceiling, anon-only) ────────────
+    # 10 generations / IP / 24h. Signed-in users bypass (account-bound quota
+    # below governs them). Raises HTTPException(429) on threshold breach.
+    check_ip_rate_limit(
+        ip=getattr(getattr(request, "client", None), "host", None),
+        is_anonymous=current_user.is_anonymous,
+    )
+
+    # ── Wave 5.17b — Free-tier quota check ────────────────────────────────────
+    # Counts usage_log rows for user_id where status != 'failed'. Admin + future
+    # premium roles bypass. On exhaustion, returns 402 with paywall payload.
+    _quota = await get_quota_status(current_user.user_id)
+    if not _quota.allowed:
+        log.info(
+            "[Wave 5.17b] quota exhausted — user=%s used=%d limit=%d",
+            current_user.user_id, _quota.used, _quota.limit,
+        )
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error_code": "QUOTA_EXHAUSTED",
+                "user_message": (
+                    "Your free architectural explorations are complete. "
+                    "Unlock unlimited redesigns and continue working with "
+                    "your AI Architect."
+                ),
+                "quota_used": _quota.used,
+                "quota_limit": _quota.limit,
+                "retryable": False,
+                "request_id": "",
+            },
+        )
+    log.info(
+        "[Wave 5.17b] quota OK — user=%s used=%d/%d reason=%s",
+        current_user.user_id, _quota.used, _quota.limit, _quota.reason,
+    )
+
     # ── Step 1: log request ───────────────────────────────────────────────────
     request_id = client_request_id.strip() or uuid.uuid4().hex
+
+    # ── Wave 5.17b — Reserve quota slot BEFORE the OpenAI call ──────────────
+    # INSERTs a 'in_progress' usage_log row. Counts immediately against the
+    # user's quota — closes the parallel-request race. Confirmed on OpenAI
+    # success (status='success'), refunded on every error path
+    # (status='failed' — quota slot returned to the user).
+    _reservation_id = None
+    if _quota.reason != "admin_bypass":
+        # Admin / premium users do not consume quota — skip the reservation
+        # roundtrip for them. Their usage is implicitly unlimited.
+        _reservation_id = await reserve_generation(
+            user_id=current_user.user_id,
+            session_id=session_id,
+            request_id=request_id,
+        )
     _req_start = time.monotonic()
     _timer = PipelineTimer(request_id)
     _payload_bytes_est = 0
@@ -1579,6 +1641,11 @@ async def generate(
             b64 = response.data[0].b64_json
             if not b64:
                 log.error("  b64_json is empty — data_count=%d", len(response.data))
+                # Wave 5.17b — refund the reserved quota slot. OpenAI returned
+                # but with no content : the user got nothing of value.
+                if _reservation_id is not None:
+                    await fail_generation(_reservation_id)
+                    _reservation_id = None
                 raise GenerationError(
                     error_code="EMPTY_IMAGE",
                     user_message="The generation returned an empty result. Please try again.",
@@ -1590,6 +1657,16 @@ async def generate(
 
             generated_bytes = base64.b64decode(b64)
             log.info("  generated: %d bytes (%.1f KB)", len(generated_bytes), len(generated_bytes) / 1024)
+
+            # Wave 5.17b — quota CONFIRM. OpenAI succeeded → cost incurred →
+            # the reservation is committed. From this point on, any
+            # downstream failure (persistence, etc.) does NOT refund the
+            # quota slot : the user got their image, even if it was lost
+            # to a storage error. Skipped when _reservation_id is None
+            # (admin / premium bypass).
+            if _reservation_id is not None:
+                await confirm_generation(_reservation_id, cost_usd_estimate=0.0)
+                _reservation_id = None  # mark as committed — fail() path won't fire
             break  # success — exit retry loop
 
         except BadRequestError as exc:
@@ -1600,6 +1677,11 @@ async def generate(
                 "status=%s  code=%s  verdict=NON_TRANSIENT  reason=content-policy  — not retrying",
                 _attempt, _MAX_ATTEMPTS, _elapsed, exc.status_code, exc.code,
             )
+            # Wave 5.17b — content-policy rejections are pre-API in spirit
+            # (no successful image generated). Refund the quota slot.
+            if _reservation_id is not None:
+                await fail_generation(_reservation_id)
+                _reservation_id = None
             raise GenerationError(
                 error_code="OPENAI_REJECTED",
                 user_message="The design request was rejected. Try rephrasing or using a different photo.",
@@ -1627,6 +1709,10 @@ async def generate(
                     _attempt, _MAX_ATTEMPTS, _elapsed, _exc_type, exc,
                     decision.verdict.value, decision.reason, _remaining,
                 )
+                # Wave 5.17b — refund quota on non-transient failures.
+                if _reservation_id is not None:
+                    await fail_generation(_reservation_id)
+                    _reservation_id = None
                 raise GenerationError(
                     error_code="OPENAI_FAILED",
                     user_message="Generation could not be completed. Please try again.",
@@ -1663,6 +1749,11 @@ async def generate(
 
     if generated_bytes is None:
         # All attempts exhausted
+        # Wave 5.17b — refund quota when every retry failed. The user
+        # got no image ; they should not lose a free generation slot.
+        if _reservation_id is not None:
+            await fail_generation(_reservation_id)
+            _reservation_id = None
         raise GenerationError(
             error_code="OPENAI_FAILED",
             user_message="Generation failed due to a service issue. Please try again.",
@@ -1735,6 +1826,14 @@ async def generate(
     except Exception as exc:
         log.error("  Supabase upload FAILED: %s: %s", type(exc).__name__, exc)
         log.error(traceback.format_exc())
+        # Wave 5.17b — STORAGE_FAILED occurs AFTER the OpenAI cost was
+        # incurred and AFTER confirm_generation was called at the `break`,
+        # so _reservation_id is normally None here. This guard is defensive :
+        # if storage fails before the confirm (extremely unusual control
+        # flow), refund the slot. Otherwise it's a no-op.
+        if _reservation_id is not None:
+            await fail_generation(_reservation_id)
+            _reservation_id = None
         raise GenerationError(
             error_code="STORAGE_FAILED",
             user_message="Your design was generated but couldn't be saved. Please try again.",
