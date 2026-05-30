@@ -108,6 +108,29 @@ create policy "user_roles: owner read"
   using (auth.uid() = user_id);
 
 
+-- ── Table-level privilege grants ─────────────────────────────
+--
+-- Supabase's RLS policies filter rows but they do NOT grant the
+-- table-level privilege required for any access at all. New tables
+-- in `public` schema default to NO privileges for the `service_role`,
+-- `authenticated`, and `anon` roles unless explicitly granted.
+--
+-- - service_role (backend, FastAPI) — needs SELECT/INSERT/UPDATE on
+--   usage_log to enforce the reserve-then-confirm quota pattern, and
+--   SELECT on user_roles for the admin-bypass check.
+-- - authenticated (client, RLS-filtered) — needs SELECT to read
+--   "owner-read" rows scoped by `auth.uid() = user_id`.
+--
+-- We do NOT grant anything to the `anon` role : unauthenticated
+-- callers must not see usage data or role assignments.
+
+grant select, insert, update on public.usage_log  to service_role;
+grant select                  on public.user_roles to service_role;
+
+grant select on public.usage_log  to authenticated;
+grant select on public.user_roles to authenticated;
+
+
 -- ── Founder admin grant ──────────────────────────────────────
 --
 -- IMPORTANT — manual step required.
