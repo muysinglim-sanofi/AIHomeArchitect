@@ -50,6 +50,12 @@ class SubIntent(str, Enum):
     # diagnostic-oriented response pool instead of falling through to the
     # generic chat templates.
     NEGATIVE_FEEDBACK = "negative_feedback"
+    # Wave 4.11e — design brief summarization. User asks "summarize what
+    # I want" / "recap" / "what do you understand?". Routes to a dedicated
+    # handler in main.py that emits a bulleted summary derived from
+    # refinement_state, NEVER triggers generation. The user follows up
+    # with "yes / generate" → Wave 4.11d generation_demand catches it.
+    SUMMARIZE_DESIGN_BRIEF = "summarize_design_brief"
 
 
 @dataclass
@@ -434,9 +440,25 @@ _NEGATIVE_FEEDBACK_PATTERNS = re.compile(
     # subject anchors so we never match "this is not good for the kitchen"
     # (which is a constraint statement, not feedback about the design).
     r"i'?m\s+not\s+(happy|sold|loving|convinced|crazy\s+about)|"
-    # "X doesn't work" / "X isn't working" / "X is not right"
-    r"(this|it|that|the\s+\w+)\s+(doesn'?t|does\s+not|isn'?t|is\s+not)\s+"
-    r"(work|right|landing|coming\s+together|fit|read\s+well|great|good)|"
+    # "X doesn't work" / "X isn't working" / "X is not right".
+    # Wave 4.11e (sanity-check follow-up) — broadened to cover plural
+    # subjects ("the colors are not good", "these tones aren't right",
+    # "those materials are not good") and an optional 0-3 word noun slot
+    # between determiner and aux verb ("the colors in this room are not
+    # good"). The previous singular-only form mis-routed plural
+    # complaints to conversation/general — drove a real beta-test
+    # observation surfaced in the Wave 4.11 sanity check.
+    r"(this|it|that|these|those|the\s+\w+)(\s+\w+){0,3}\s+"
+    r"(doesn'?t|does\s+not|isn'?t|is\s+not|"
+    r"aren'?t|are\s+not|weren'?t|were\s+not|don'?t|do\s+not)\s+"
+    r"(work|right|landing|coming\s+together|fit|read\s+well|"
+    r"great|good|working|fitting|enough)|"
+    # Wave 4.11e (sanity-check follow-up) — bare plural noun complaints
+    # ("colors are not good", "materials aren't right") anchored at
+    # message start to avoid false positives in long sentences.
+    r"^\s*\w+s\s+(aren'?t|are\s+not|weren'?t|were\s+not|"
+    r"don'?t|do\s+not)\s+(good|right|working|landing|fit|"
+    r"read\s+well|great|enough)|"
     # "feels/reads/looks wrong" / "feels off" / "feels forced"
     r"(feels|reads|looks)\s+(wrong|off|bad|forced|sterile|cold|flat|"
     r"weird|cluttered|empty|over\s*(done|crowded))|"
@@ -466,6 +488,72 @@ _NEGATIVE_FEEDBACK_INIT = re.compile(
     r"what\s+i\s+(wanted|expected|asked))\b",
     re.IGNORECASE,
 )
+
+# ── Wave 4.11e — SUMMARIZE_DESIGN_BRIEF patterns ─────────────────────────────
+#
+# User asks the architect to recap / summarize the current direction. This
+# is a validation step, not a request for new discussion or generation.
+# The handler in main.py emits a bulleted summary derived from
+# refinement_state and asks "Ready to generate?". Generation NEVER fires
+# directly from this intent — the user follows up with "yes / generate"
+# which Wave 4.11d's detect_generation_demand catches.
+#
+# Patterns anchored at message start where possible (avoid false positives
+# inside longer discussions like "tell me what you understand by the term
+# 'Japandi'"). EN + FR + KM coverage ; imperfect English variants
+# ("summarize what i wanted", "recap please") included.
+_SUMMARIZE_BRIEF_EN = re.compile(
+    r"^\s*("
+    r"(can\s+you\s+|could\s+you\s+|please\s+)?"
+    r"(summari[sz]e|recap|sum\s+up|tldr|tl;dr|re[\-\s]?cap)\b"
+    r"(\s+(what|the|my|our|this|that|me|us|design|brief|"
+    r"requirements?|direction|plan|conversation|discussion))?"
+    r"|"
+    # "what do you understand?", "what do you understand by ..."
+    r"what\s+do\s+you\s+understand\b"
+    r"|"
+    # "what is my brief?", "what's my brief?", "what's the brief?"
+    # Note: in the contracted form "what's", the apostrophe-s attaches
+    # directly to "what" (no space), so we treat it as either
+    # "what is" (whitespace between) OR "what's" (no whitespace).
+    r"what(\s+is|'s)\s+(the|my|our)\s+brief\b"
+    r"|"
+    # "what are we trying to achieve?", "what are we doing?"
+    r"what\s+are\s+we\s+(trying\s+to\s+(achieve|build|create|design)|doing|aiming\s+for)\b"
+    r"|"
+    # "give me a recap", "give us a summary"
+    r"give\s+(me|us)\s+(a\s+)?(recap|summary|summari[sz]ation)\b"
+    r"|"
+    # "remind me what I said", "remind me what we agreed"
+    r"remind\s+me\s+what\s+(i|we)\s+(said|wanted|asked|agreed)"
+    r")",
+    re.IGNORECASE,
+)
+
+_SUMMARIZE_BRIEF_FR = re.compile(
+    r"^\s*("
+    r"(peux[-\s]?tu\s+|pouvez[-\s]?vous\s+|s'?il\s+te\s+pla[iî]t\s+|stp\s+)?"
+    r"(r[eé]sume[zr]?|r[eé]capitule[zr]?|fais\s+(un|le)\s+r[eé]sum[eé]|"
+    r"recap|rappelle[-\s]?moi)\b"
+    r"|"
+    r"qu'?est[-\s]ce\s+que\s+tu\s+(comprends|as\s+compris)\b"
+    r"|"
+    r"qu'?est[-\s]ce\s+(qu'?on|que\s+nous|on)\s+(essaie\s+de\s+faire|veut\s+faire|cherche)\b"
+    r"|"
+    r"quel\s+(est|'s)\s+(mon|le|notre)\s+brief\b"
+    r")",
+    re.IGNORECASE,
+)
+
+# Khmer — no \b for Khmer scripts. Minimal initial coverage ; expand based
+# on real KM usage logs.
+_SUMMARIZE_BRIEF_KM = re.compile(
+    r"សង្ខេប|សារសំខាន់|"
+    r"តើ\s*អ្នក\s*យល់\s*(ដឹង|អ្វី)|"
+    r"និយាយ\s*សង្ខេប|"
+    r"រំលឹក\s*ខ្ញុំ"
+)
+
 
 # Anti-pattern : suppress DESIGN_DISCUSSION when the message OPENS with
 # an imperative generation verb. A question form like "Would darker
@@ -674,6 +762,22 @@ def _route_wave_411a(
     """
     if iteration <= 1 or not message:
         return None
+
+    # Wave 4.11e — SUMMARIZE_DESIGN_BRIEF runs FIRST (before SUPPORT) because
+    # its triggers are tightly anchored and the user's intent is opt-in :
+    # they explicitly asked for a recap. Routing this to SUMMARIZE prevents
+    # mis-classifying messages like "recap please" as conversation/general.
+    # Top-level intent stays DESIGN_DISCUSSION (no generation fires from
+    # here) ; main.py's dedicated handler emits the bulleted summary text.
+    if (_SUMMARIZE_BRIEF_EN.search(message)
+            or _SUMMARIZE_BRIEF_FR.search(message)
+            or _SUMMARIZE_BRIEF_KM.search(message)):
+        return IntentClassification(
+            intent=ConversationIntent.DESIGN_DISCUSSION,
+            sub_intent=SubIntent.SUMMARIZE_DESIGN_BRIEF,
+            confidence=0.90,
+            reasoning="Wave 4.11e — summarize design brief pattern matched",
+        )
 
     # SUPPORT — strongest signal, runs first. Errors / bugs always win.
     # Both EN and KM regex are tested ; KM uses a separate compiled

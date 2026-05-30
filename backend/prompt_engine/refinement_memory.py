@@ -56,9 +56,73 @@ _REMOVE_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+# Wave 4.11e (sanity-check follow-up) — negative-feedback guard.
+#
+# `_KEEP_PATTERNS` includes the word `good`, which causes complaints like
+# "the colors are not good" to score as a keep signal — the "good" token
+# matches, and `_classify` returns "keep", and the bullet "Preserve: The
+# colors are not good" surfaces in the design brief summary (Scenario 4
+# turn 5 of the pre-commit sanity check : 2026-05-30).
+#
+# A user complaint must never be reformulated as something to preserve.
+# This guard runs FIRST in `_classify` ; when it matches, the clause is
+# returned as "skip" and `parse_history` drops it from every bucket.
+#
+# Minimal redundancy with `intent_classifier._NEGATIVE_FEEDBACK_PATTERNS`
+# is intentional (avoids a circular import) ; both must stay aligned in
+# any future wave that touches negative-feedback detection.
+_NEGATIVE_FEEDBACK_GUARD = re.compile(
+    r"\b("
+    # "I don't like / dislike / hate"
+    r"i\s+don'?t\s+(like|love|want|enjoy)|"
+    r"i\s+do\s+not\s+(like|love|want|enjoy)|"
+    r"i\s+(dislike|hate)|i\s+can'?t\s+stand|"
+    r"i'?m\s+not\s+(happy|sold|loving|convinced)|"
+    # Singular and plural negation : "the X is not good", "the X are not good",
+    # "these aren't good", "this doesn't work"
+    r"(this|it|that|these|those|the\s+\w+)(\s+\w+){0,3}\s+"
+    r"(doesn'?t|does\s+not|isn'?t|is\s+not|aren'?t|are\s+not|"
+    r"weren'?t|were\s+not|don'?t|do\s+not)\s+"
+    r"(work|working|right|good|great|landing|coming\s+together|"
+    r"fit|fitting|read\s+well|enough)|"
+    # "feels wrong / off / bad / worse"
+    r"(feels|reads|looks)\s+(wrong|off|bad|flat|forced|worse|sterile)|"
+    # "this is worse" / "worse than"
+    r"(this|it|that)\s+is\s+worse|worse\s+than|"
+    # "preferred / liked the previous"
+    r"preferred\s+(the\s+)?(previous|older|earlier|first|last|old)|"
+    r"liked\s+(the\s+)?(previous|older|earlier|first|last|old)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Bare plural-noun complaints anchored at clause start ("colors are not
+# good", "materials aren't right"). Separate from the main guard so the
+# anchor is enforced per clause not per message — `parse_history` splits
+# on punctuation BEFORE calling `_classify`, so each clause stands alone.
+_NEGATIVE_FEEDBACK_GUARD_BARE = re.compile(
+    r"^\s*\w+s\s+(aren'?t|are\s+not|isn'?t|is\s+not|"
+    r"weren'?t|were\s+not|don'?t|do\s+not)\s+"
+    r"(good|right|working|enough|fitting|great)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_negative_feedback(text: str) -> bool:
+    """Wave 4.11e (sanity-check follow-up) — True if the clause expresses
+    a user complaint that must NOT be reformulated as a refinement."""
+    return bool(_NEGATIVE_FEEDBACK_GUARD.search(text)
+                or _NEGATIVE_FEEDBACK_GUARD_BARE.match(text.lstrip()))
+
 
 def _classify(text: str) -> str:
     """Return the dominant refinement category for a user message."""
+    # Wave 4.11e (sanity-check follow-up) — short-circuit on complaints
+    # so the `good` token in _KEEP_PATTERNS can't reformulate "the colors
+    # are not good" as a preservation directive.
+    if _is_negative_feedback(text):
+        return "skip"
+
     keep_score = len(_KEEP_PATTERNS.findall(text))
     enhance_score = len(_ENHANCE_PATTERNS.findall(text))
     add_score = len(_ADD_PATTERNS.findall(text))
@@ -116,6 +180,12 @@ def parse_history(history: list[dict], iteration: int) -> RefinementState:
 
         for clause in clauses:
             category = _classify(clause)
+            # Wave 4.11e (sanity-check follow-up) — negative feedback
+            # must NOT pollute any refinement bucket. The complaint is a
+            # signal to the architect ("user is unhappy") but it does NOT
+            # describe what to preserve, push, add, remove, or pursue.
+            if category == "skip":
+                continue
             truncated = clause[:100]
 
             if category == "keep" and truncated not in state.keep:

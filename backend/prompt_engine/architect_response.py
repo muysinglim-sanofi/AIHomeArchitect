@@ -836,3 +836,270 @@ def generate_mixed_response(
         f"I can take it further if you want to see it — "
         "or we can refine the idea first."
     )
+
+
+# ── Wave 4.11e — Clarification Exit Strategy + Design Brief Summary ──────────
+
+_CLARIFICATION_EXIT_TEMPLATES_EN = [
+    "Got it — {answer}. On it.",
+    "Locked in: {answer}. Generating now.",
+    "Understood — {answer}. Coming right up.",
+    "Noted — {answer}. Working on the next vision.",
+]
+
+_CLARIFICATION_EXIT_TEMPLATES_FR = [
+    "Compris — {answer}. C'est parti.",
+    "Noté : {answer}. Je lance la génération.",
+    "D'accord — {answer}. Je m'en occupe.",
+]
+
+_CLARIFICATION_EXIT_TEMPLATES_KM = [
+    "យល់ហើយ — {answer}។ កំពុងបង្កើត។",
+    "បានទទួល : {answer}។ កំពុងធ្វើ។",
+]
+
+
+# Wave 4.11e (sanity-check follow-up) — generation_demand exit templates.
+# Same family as CLARIFICATION_EXIT but the trigger is an EXPLICIT user
+# demand ("generate", "why don't you generate?", "just do it"), not the
+# resolution of a prior clarification. The user did not narrate WHAT they
+# want — they only demanded ACTION. So we acknowledge the action without
+# echoing user content (there's no clarification answer to echo) and
+# bridge straight to the vision.
+_GENERATION_DEMAND_TEMPLATES_EN = [
+    "Got it — generating the next vision now.",
+    "On it. Generating now.",
+    "Coming right up.",
+    "Working on the next vision.",
+]
+
+_GENERATION_DEMAND_TEMPLATES_FR = [
+    "Compris — je lance la prochaine vision.",
+    "C'est parti. Je génère maintenant.",
+    "Je m'en occupe — la prochaine vision arrive.",
+]
+
+_GENERATION_DEMAND_TEMPLATES_KM = [
+    "យល់ហើយ — កំពុងបង្កើតទស្សនៈបន្ទាប់។",
+    "កំពុងធ្វើ។ កំពុងបង្កើតឥឡូវ។",
+]
+
+
+def generate_generation_demand_response(
+    atmosphere_id: str,
+    room_type: str,
+    language: str = "en",
+    seed_extra: str = "",
+) -> str:
+    """
+    Wave 4.11e (sanity-check follow-up) — explicit GENERATION_DEMAND exit.
+
+    Called from main.py /chat when Wave 4.11d fires because the user
+    explicitly demanded generation ("generate", "why don't you generate?",
+    "just do it"). Returns a brief action-oriented commit string. No
+    follow-up question. No "what would you change next?" — that's the
+    very phrasing the user demanded the system stop doing.
+
+    Args:
+        atmosphere_id, room_type : reserved for future per-atmosphere
+            voice colouring ; currently unused.
+        language : "en" | "fr" | "km".
+        seed_extra : deterministic pick seed.
+    """
+    if language == "fr":
+        pool = _GENERATION_DEMAND_TEMPLATES_FR
+    elif language == "km":
+        pool = _GENERATION_DEMAND_TEMPLATES_KM
+    else:
+        pool = _GENERATION_DEMAND_TEMPLATES_EN
+    seed = f"gendemand{atmosphere_id}{room_type}{seed_extra}"
+    return _pick(pool, seed)
+
+
+def generate_clarification_exit_response(
+    user_answer: str,
+    atmosphere_id: str,
+    room_type: str,
+    language: str = "en",
+    seed_extra: str = "",
+) -> str:
+    """
+    Wave 4.11e — CLARIFICATION_EXIT.
+
+    Emit a brief acknowledgement of the user's clarification answer that does
+    NOT open a new discussion branch. Used when Wave 4.11d's
+    is_clarification_answer fires — the user has resolved the ambiguity,
+    the system is about to generate, and the chat text should bridge to
+    generation without asking a follow-up question.
+
+    Path A in the Wave 4.11e brief : acknowledge + bridge to generation.
+    The frontend will trigger /generate immediately after this message is
+    rendered (caller sets should_generate=True).
+
+    No question marks. No open-ended follow-ups. No "what would you change
+    next?". The architect commits and moves to the vision.
+
+    Args:
+        user_answer : The clarification-resolving user message ("overall
+            room feeling", "warmer lighting", "the floor", etc.).
+            Used verbatim — truncated to first ~30 chars if longer.
+        atmosphere_id, room_type : Reserved for future per-atmosphere voice
+            colouring ; currently unused but kept in the signature so the
+            template can grow without breaking callers.
+        language : "en" | "fr" | "km".
+        seed_extra : Deterministic pick seed.
+    """
+    # Trim and lower-case the user answer ; we'll inject it as the noun phrase
+    # in the acknowledgement template. Keep punctuation in case the user
+    # added an exclamation.
+    ans = (user_answer or "").strip().rstrip(".,;:!?").lower()
+    if len(ans) > 40:
+        ans = ans[:40].rsplit(" ", 1)[0]  # break on word boundary
+    if not ans:
+        ans = "going with that direction"
+
+    if language == "fr":
+        pool = _CLARIFICATION_EXIT_TEMPLATES_FR
+    elif language == "km":
+        pool = _CLARIFICATION_EXIT_TEMPLATES_KM
+    else:
+        pool = _CLARIFICATION_EXIT_TEMPLATES_EN
+
+    seed = f"exit{atmosphere_id}{room_type}{ans[:15]}{seed_extra}"
+    template = _pick(pool, seed)
+    return template.format(answer=ans)
+
+
+# ── Wave 4.11e — Design Brief Summarization ──────────────────────────────────
+
+_SUMMARY_HEADER_EN = "Here is my understanding:"
+_SUMMARY_FOOTER_EN = "Ready to generate the next vision?"
+_SUMMARY_HEADER_FR = "Voici ce que je comprends :"
+_SUMMARY_FOOTER_FR = "Prêt à générer la prochaine vision ?"
+_SUMMARY_HEADER_KM = "នេះជាការយល់ដឹងរបស់ខ្ញុំ៖"
+_SUMMARY_FOOTER_KM = "ត្រៀមបង្កើតទស្សនៈបន្ទាប់ឬ?"
+
+
+def generate_brief_summary(
+    refinement_state: RefinementState,
+    atmosphere_id: str,
+    room_type: str,
+    language: str = "en",
+    last_user_message: str = "",
+) -> str:
+    """
+    Wave 4.11e — SUMMARIZE_DESIGN_BRIEF.
+
+    Produce a bulleted summary of the current design direction from the
+    refinement state (parsed from history by main.py earlier). Output:
+
+        Here is my understanding:
+        ✓ Keep the strongest architectural features
+        ✓ Improve the material quality
+        ✓ Make the room feel more open
+        Ready to generate the next vision?
+
+    No new LLM call ; pure template + data emission from the existing
+    refinement_state. When the state is sparse (early in the conversation),
+    falls back to a minimal "Here's what I've heard so far" form that still
+    bridges toward generation.
+
+    Returns plain text. The frontend renders newlines normally.
+    """
+    atm_name = _atm_name(atmosphere_id)
+
+    if language == "fr":
+        header = _SUMMARY_HEADER_FR
+        footer = _SUMMARY_FOOTER_FR
+        bullets_prefix = "✓"
+        atm_template = "Conserver l'identité {atm} actuelle"
+        sparse_template = "Tu cherches à faire évoluer la direction {atm}"
+    elif language == "km":
+        header = _SUMMARY_HEADER_KM
+        footer = _SUMMARY_FOOTER_KM
+        bullets_prefix = "✓"
+        atm_template = "រក្សា {atm} បរិយាកាស"
+        sparse_template = "ការអភិវឌ្ឍន៍ {atm} បរិយាកាស"
+    else:
+        header = _SUMMARY_HEADER_EN
+        footer = _SUMMARY_FOOTER_EN
+        bullets_prefix = "✓"
+        atm_template = "Keep the {atm} character of the current vision"
+        sparse_template = "You're refining the {atm} direction"
+
+    bullets: list[str] = []
+
+    # Always anchor in the atmosphere — this is the spine of the brief.
+    bullets.append(atm_template.format(atm=atm_name))
+
+    # Pull preservation commitments from refinement_state.keep
+    if refinement_state.keep:
+        for item in refinement_state.keep[:3]:
+            cleaned = (item or "").strip().rstrip(".,;:!?")
+            if cleaned:
+                if language == "fr":
+                    bullets.append(f"Préserver : {cleaned}")
+                elif language == "km":
+                    bullets.append(f"រក្សា : {cleaned}")
+                else:
+                    bullets.append(f"Preserve: {cleaned}")
+
+    # Pull active refinements / directions
+    refinement_sources = [
+        getattr(refinement_state, "directions", []),
+        getattr(refinement_state, "enhance", []),
+        getattr(refinement_state, "add", []),
+    ]
+    refinements_seen: set[str] = set()
+    for src in refinement_sources:
+        for item in (src or [])[:3]:
+            cleaned = (item or "").strip().rstrip(".,;:!?")
+            if cleaned and cleaned.lower() not in refinements_seen:
+                refinements_seen.add(cleaned.lower())
+                if language == "fr":
+                    bullets.append(f"Pousser : {cleaned}")
+                elif language == "km":
+                    bullets.append(f"ពង្រឹង : {cleaned}")
+                else:
+                    bullets.append(f"Push: {cleaned}")
+                if len(bullets) >= 6:  # hard cap
+                    break
+        if len(bullets) >= 6:
+            break
+
+    # Pull active removals
+    if refinement_state.remove:
+        for item in refinement_state.remove[:2]:
+            cleaned = (item or "").strip().rstrip(".,;:!?")
+            if cleaned:
+                if language == "fr":
+                    bullets.append(f"Retirer : {cleaned}")
+                elif language == "km":
+                    bullets.append(f"ដក : {cleaned}")
+                else:
+                    bullets.append(f"Remove: {cleaned}")
+
+    # Sparse fallback : if we only have the atmosphere anchor and a latest
+    # user message, paraphrase it as a "you said:" line. This protects the
+    # very early conversations (V2 first refinement) where parse_history
+    # produces no buckets.
+    if len(bullets) <= 1:
+        last_ui = (last_user_message or refinement_state.latest or "").strip()
+        if last_ui:
+            short = last_ui.rstrip(".,;:!?")
+            if len(short) > 70:
+                short = short[:70].rsplit(" ", 1)[0]
+            if language == "fr":
+                bullets.append(f"Direction la plus récente : « {short} »")
+            elif language == "km":
+                bullets.append(f"ការណែនាំចុងក្រោយ : « {short} »")
+            else:
+                bullets.append(f"Latest direction: \"{short}\"")
+        else:
+            # Truly empty — keep just the atmosphere anchor + footer
+            pass
+
+    body_lines = [f"{bullets_prefix} {b}" for b in bullets]
+    return (
+        header + "\n\n" + "\n".join(body_lines) + "\n\n" + footer
+    )

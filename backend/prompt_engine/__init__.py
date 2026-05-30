@@ -4,7 +4,13 @@ from .edit_intent import EditMode, classify_edit_mode
 from .room_classifier import classify_room, RoomClassification
 from .atmosphere_recommender import rank_atmospheres, surprise_me
 from .intent_classifier import classify_intent, ConversationIntent, SubIntent, IntentClassification
-from .architect_response import generate_architect_response, generate_chat_response, generate_mixed_response
+from .architect_response import (
+    generate_architect_response, generate_chat_response, generate_mixed_response,
+    # Wave 4.11e
+    generate_clarification_exit_response, generate_brief_summary,
+    # Wave 4.11e (sanity-check follow-up)
+    generate_generation_demand_response,
+)
 from .suggestion_engine import get_suggestion_chips
 from .meta_intent import classify_meta_intent, MetaIntent, MetaClassification
 from .meta_response import generate_meta_response

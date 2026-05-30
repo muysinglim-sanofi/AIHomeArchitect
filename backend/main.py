@@ -29,6 +29,11 @@ from prompt_engine import (
     generate_architect_response,
     generate_chat_response,
     generate_mixed_response,
+    # Wave 4.11e
+    generate_clarification_exit_response,
+    generate_brief_summary,
+    # Wave 4.11e (sanity-check follow-up)
+    generate_generation_demand_response,
     get_suggestion_chips,
     classify_meta_intent,
     MetaIntent,
@@ -541,14 +546,33 @@ async def chat(
         # Skip ambiguity check entirely — the user has shown they want a
         # vision. Fall straight to the standard generate flow below.
         session_memory = _early_session_memory
-        ai_message = generate_chat_response(
-            user_message=message,
-            atmosphere_id=atmosphere_id,
-            room_type=room_type,
-            sub_intent=intent_class.sub_intent,
-            secondary_spaces=secondary_visible_spaces,
-            refinement_state=refinement_state,
-        )
+        # Wave 4.11e — both Wave 4.11d dominance branches need an action-
+        # oriented chat response that does NOT open a new discussion topic.
+        # clarification_resolved   → echo the user's clarification answer
+        #                            ("Got it — overall room feeling. On it.")
+        # generation_demand        → bare commit ("Got it — generating the
+        #                            next vision now.") since the user did
+        #                            not narrate anything to echo back.
+        # Both branches set should_generate=True so /generate fires next.
+        if _wave411d_reason == "clarification_resolved":
+            ai_message = generate_clarification_exit_response(
+                user_answer=message,
+                atmosphere_id=atmosphere_id,
+                room_type=room_type,
+                language=session_memory.session_language,
+                seed_extra=session_id[:8],
+            )
+        else:
+            # Wave 4.11e (sanity-check follow-up) — generation_demand
+            # MUST NOT use the generic chat response which would ask
+            # "what would you change next?" — the very phrasing the
+            # demand was meant to silence.
+            ai_message = generate_generation_demand_response(
+                atmosphere_id=atmosphere_id,
+                room_type=room_type,
+                language=session_memory.session_language,
+                seed_extra=session_id[:8],
+            )
         suggestions = get_suggestion_chips(
             atmosphere_id=atmosphere_id,
             room_type=room_type,
@@ -622,6 +646,30 @@ async def chat(
             _lang_for_4_11a,
         )
         log.info("=== /chat PRODUCT_HELP / SUPPORT SUCCESS ===")
+        return {
+            "ai_message": ai_message,
+            "suggestions": [],
+            "should_generate": False,
+            "intent": intent_class.intent.value,
+            "sub_intent": intent_class.sub_intent.value,
+            "session_language": _early_session_memory.session_language,
+        }
+
+    # ── Wave 4.11e: SUMMARIZE_DESIGN_BRIEF handler ────────────────────────────
+    # User explicitly asked "summarize what I want / recap / what do you
+    # understand". Emit a bulleted summary derived from refinement_state +
+    # "Ready to generate?" footer. Never generates from this branch — the
+    # user follows up with "yes / generate" which Wave 4.11d catches.
+    if intent_class.sub_intent == SubIntent.SUMMARIZE_DESIGN_BRIEF:
+        ai_message = generate_brief_summary(
+            refinement_state=refinement_state,
+            atmosphere_id=atmosphere_id,
+            room_type=room_type or "",
+            language=_early_session_memory.session_language,
+            last_user_message=message,
+        )
+        log.info("  [Wave 4.11e] design brief summary emitted")
+        log.info("=== /chat WAVE 4.11e SUMMARIZE_DESIGN_BRIEF SUCCESS ===")
         return {
             "ai_message": ai_message,
             "suggestions": [],
