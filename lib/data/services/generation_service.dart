@@ -22,6 +22,16 @@ class GenerationException implements Exception {
   final int? quotaUsed;
   final int? quotaLimit;
 
+  /// Wave 5.17d — true iff the backend returned HTTP 402 FREE_TIER_RESTRICTED.
+  /// Distinct from quotaExhausted (which means "you used all 2 free gens") :
+  /// the user picked an out-of-scope room/atmosphere or delegated the choice
+  /// (let_ai_decide / surprise_me) without being premium. Same paywall sheet,
+  /// different subhead copy.
+  final bool freeTierRestricted;
+  /// One of 'room', 'atmosphere', 'delegated_choice', or '' when not set.
+  /// Drives the paywall subhead copy in chat_screen.
+  final String restrictedField;
+
   const GenerationException({
     required this.errorCode,
     required this.userMessage,
@@ -31,6 +41,8 @@ class GenerationException implements Exception {
     this.quotaExhausted = false,
     this.quotaUsed,
     this.quotaLimit,
+    this.freeTierRestricted = false,
+    this.restrictedField = '',
   });
 
   @override
@@ -122,6 +134,12 @@ class GenerationService {
     required String beforeImageUrl,
     required String styleLabel,
     String roomType = '',
+    // Wave 5.17d — canonical (locale-stable) ids for the backend free-tier
+    // scope check. Default empty for callers that don't provide them ; the
+    // backend then treats the request as out-of-scope and returns 402
+    // unless the user is premium.
+    String roomTypeId = '',
+    String atmosphereId = '',
     int iteration = 1,
     String history = '',
     String originalImageUrl = '',
@@ -151,6 +169,9 @@ class GenerationService {
           'before_image_url': beforeImageUrl,
           'style_label': styleLabel,
           'room_type': roomType,
+          // Wave 5.17d — canonical ids drive the free-tier scope check.
+          'room_type_id': roomTypeId,
+          'atmosphere_id': atmosphereId,
           'iteration': iteration.toString(),
           'history': history,
           'original_image_url': originalImageUrl,
@@ -192,11 +213,16 @@ class GenerationService {
         final retryable = (payload['retryable'] as bool?) ?? true;
         final requestId = (payload['request_id'] as String?) ?? '';
         final messagePersisted = (payload['message_persisted'] as bool?) ?? false;
-        // Wave 5.17b — propagate quota fields for the paywall handler.
-        final quotaExhausted = errorCode == 'QUOTA_EXHAUSTED'
-            || e.response?.statusCode == 402;
+        // Wave 5.17b — quota exhaustion flag (used all N free gens).
+        final quotaExhausted = errorCode == 'QUOTA_EXHAUSTED';
+        // Wave 5.17d — free-tier scope rejection (out-of-scope room /
+        // atmosphere / delegated choice). Both error codes map to a 402,
+        // both open the same paywall sheet ; the subhead differs.
+        final freeTierRestricted = errorCode == 'FREE_TIER_RESTRICTED';
         final quotaUsed = (payload['quota_used'] as int?);
         final quotaLimit = (payload['quota_limit'] as int?);
+        final restrictedField =
+            (payload['restricted_field'] as String?) ?? '';
         throw GenerationException(
           errorCode: errorCode,
           userMessage: userMessage,
@@ -206,6 +232,8 @@ class GenerationService {
           quotaExhausted: quotaExhausted,
           quotaUsed: quotaUsed,
           quotaLimit: quotaLimit,
+          freeTierRestricted: freeTierRestricted,
+          restrictedField: restrictedField,
         );
       }
       rethrow;

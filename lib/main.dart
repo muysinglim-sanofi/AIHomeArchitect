@@ -7,6 +7,7 @@ import 'core/l10n/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'data/services/revenuecat_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,6 +39,21 @@ Future<void> main() async {
 
   final userId = auth.currentUser?.id;
   debugPrint('[DB] Active user_id at app start: $userId');
+
+  // Wave 5.17d — Configure RevenueCat with the Supabase UUID as the App
+  // User ID (Decision D6). configure() is fail-fast in dev — see
+  // FeatureFlags.revenuecatGracefulDegradation for the production
+  // fallback. We only configure when we have a userId ; an absent UUID
+  // means anon sign-in failed above and the app is already in a
+  // degraded state where the paywall won't be reachable anyway.
+  if (userId != null) {
+    try {
+      await RevenuecatService.instance.configure(userId: userId);
+    } catch (e) {
+      debugPrint('[RevenuecatService] configure() failed at boot: $e');
+      rethrow;
+    }
+  }
 
   runApp(const ProviderScope(child: App()));
 }

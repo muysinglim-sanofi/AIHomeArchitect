@@ -12,7 +12,9 @@ import 'package:intl/intl.dart';
 import 'widgets/chat_input_bar.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/room_type_images.dart';
 import '../../core/l10n/app_localizations.dart';
+import '../../core/models/atmosphere_style.dart';
 import '../../core/providers/pending_generations_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/services/session_persistence_service.dart';
@@ -1000,6 +1002,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         beforeImageUrl: generationSource,      // editing chain for display/reveal
         styleLabel: styleLabel,
         roomType: _currentRoomType,
+        // Wave 5.17d — canonical ids for the free-tier scope check.
+        // Backend rejects non-premium calls when these don't map to
+        // FREE_ROOMS / FREE_ATMOSPHERES (Living Room + Nordic/Soft Luxury).
+        roomTypeId: RoomTypeImages.idForLabel(context.l10n, _currentRoomType) ?? '',
+        atmosphereId: atmosphereIdFromLabel(styleLabel) ?? '',
         iteration: newCount,
         history: history,
         originalImageUrl: originalUrl ?? '',   // structural anchor — keeps geometry stable
@@ -1139,13 +1146,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       // Wave 5.6c — failure shown inline; clear pending state.
       pendingNotifier.clear(sessionIdForLifecycle);
 
-      // ── Wave 5.17b — Paywall branch (HTTP 402 QUOTA_EXHAUSTED) ─────
-      // Anonymous user has used their 3 free generations. Instead of
-      // an error toast, open the paywall sheet (placeholder in 5.17b ;
-      // RevenueCat-rendered in 5.17c). The failure message is NOT
-      // persisted to the messages table — this is a product gate, not
-      // an architect failure.
-      if (e.quotaExhausted) {
+      // ── Wave 5.17b/d — Paywall branch (HTTP 402) ───────────────────
+      // Two distinct triggers map to the same paywall sheet, different
+      // subhead copy :
+      //   QUOTA_EXHAUSTED      → "Your free explorations are complete."
+      //   FREE_TIER_RESTRICTED → "Premium unlocks every room/atmosphere."
+      // The failure message is NOT persisted to messages — this is a
+      // product gate, not an architect failure.
+      if (e.quotaExhausted || e.freeTierRestricted) {
         setState(() {
           _isGenerating = false;
           _messages.removeWhere((m) => m.type == MessageType.loading);
@@ -1157,11 +1165,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
-          builder: (_) => const PaywallSheet(),
+          builder: (_) => PaywallSheet(
+            trigger: e.freeTierRestricted
+                ? PaywallTrigger.freeTier
+                : PaywallTrigger.quota,
+            restrictedField: e.restrictedField,
+          ),
         );
-        // Wave 5.17b — sign-in via paywall does not unlock more free
-        // generations. Wave 5.17c will retry /generate on successful
-        // subscription purchase.
         return;
       }
 

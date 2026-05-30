@@ -53,6 +53,12 @@ dependencies:
   google_sign_in: ^6.2.2
   crypto: ^3.0.3   # SHA-256 nonce for Apple Sign-In replay protection
 
+  # Wave 5.17d — RevenueCat purchases SDK (subscriptions, restore,
+  # entitlement state). App User ID is bound to the Supabase anonymous
+  # UUID ; webhook → backend updates the user_roles.role='premium' row
+  # that the quota module consults.
+  purchases_flutter: ^8.0.0
+
   # Utils
   intl: ^0.20.2
 

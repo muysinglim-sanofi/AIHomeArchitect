@@ -104,4 +104,18 @@ class RoomTypeImages {
     }
     return null;
   }
+
+  /// Wave 5.17d — canonical id (locale-stable) for a LOCALIZED room
+  /// label. Used to populate the `room_type_id` form param on /generate,
+  /// which drives the free-tier scope check server-side. Returns null
+  /// when the label doesn't match any known room (free user → backend
+  /// will reject with 402 FREE_TIER_RESTRICTED, which is the correct
+  /// behaviour for an out-of-catalogue label).
+  static String? idForLabel(AppLocalizations l10n, String label) {
+    if (label.isEmpty) return null;
+    for (final entry in _labelOf.entries) {
+      if (entry.value(l10n) == label) return entry.key;
+    }
+    return null;
+  }
 }

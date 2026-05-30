@@ -35,11 +35,17 @@ class RoomTypeCard extends StatelessWidget {
   final bool aiDecide;
   final String? aiSublabel;
 
+  /// Wave 5.17d — When true, the card renders dimmed with a small 🔒
+  /// chip in the top-right corner. Purely visual ; the PARENT decides
+  /// what onTap does (typically open the PaywallSheet).
+  final bool locked;
+
   const RoomTypeCard({
     super.key,
     required this.label,
     required this.selected,
     required this.onTap,
+    this.locked = false,
   })  : aiDecide = false,
         aiSublabel = null;
 
@@ -53,6 +59,7 @@ class RoomTypeCard extends StatelessWidget {
     String? sublabel,
     required this.selected,
     required this.onTap,
+    this.locked = false,
   })  : aiDecide = true,
         aiSublabel = sublabel;
 
@@ -73,7 +80,10 @@ class RoomTypeCard extends StatelessWidget {
           final borderColor =
               selected ? AppColors.accent : AppColors.border;
 
-          return AnimatedContainer(
+          return Opacity(
+            // Wave 5.17d — locked cards are muted (0.55) but legible.
+            opacity: locked ? 0.55 : 1.0,
+            child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
             decoration: BoxDecoration(
@@ -214,10 +224,45 @@ class RoomTypeCard extends StatelessWidget {
                           size: 13, color: AppColors.surface),
                     ),
                   ),
+                // Wave 5.17d — lock chip overlay. Sits in the same
+                // top-right slot as `selected` ; both visible only matter
+                // when a free-tier card is selected, which is allowed
+                // (Living Room is both free and selectable). Stack ordering
+                // puts the lock UNDER the check so the check stays visible.
+                if (locked && !selected)
+                  const Positioned(
+                    top: 8,
+                    right: 8,
+                    child: _RoomLockChip(),
+                  ),
               ],
             ),
+          ),
           );
         },
+      ),
+    );
+  }
+}
+
+// ── Lock chip (Wave 5.17d) ────────────────────────────────────────────────────
+
+class _RoomLockChip extends StatelessWidget {
+  const _RoomLockChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(
+        color: AppColors.textPrimary.withValues(alpha: 0.78),
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(
+        Icons.lock_outline,
+        size: 12,
+        color: AppColors.surface,
       ),
     );
   }
@@ -283,6 +328,15 @@ class RoomTypeRow extends StatelessWidget {
   final String? aiSublabel;
   final VoidCallback? onAiDecide;
 
+  /// Wave 5.17d — when non-null, returns true iff the given room label
+  /// is OUT-OF-SCOPE for the free tier (lock chip + dimmed). Null →
+  /// no card is locked (premium user or pre-monetization screens).
+  final bool Function(String roomLabel)? isLocked;
+  /// Wave 5.17d — when non-null, AI Decide tile is locked when this
+  /// returns true. Independent of `isLocked` because AI Decide is
+  /// always premium regardless of the selected room.
+  final bool Function()? isAiLocked;
+
   /// Calm, modest footprint — deliberately smaller than the atmosphere
   /// strip so room selection never competes with mood selection.
   static const double rowHeight = 104;
@@ -297,6 +351,8 @@ class RoomTypeRow extends StatelessWidget {
     this.aiLabel,
     this.aiSublabel,
     this.onAiDecide,
+    this.isLocked,
+    this.isAiLocked,
   });
 
   bool get _hasAi => onAiDecide != null && aiLabel != null;
@@ -321,6 +377,7 @@ class RoomTypeRow extends StatelessWidget {
                 sublabel: aiSublabel,
                 selected: aiDecideSelected,
                 onTap: onAiDecide!,
+                locked: isAiLocked?.call() ?? false,
               ),
             );
           }
@@ -331,6 +388,7 @@ class RoomTypeRow extends StatelessWidget {
               label: r,
               selected: selected == r,
               onTap: () => onSelected(r),
+              locked: isLocked?.call(r) ?? false,
             ),
           );
         },

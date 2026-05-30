@@ -1,10 +1,14 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/free_tier.dart';
+import '../../core/constants/room_type_images.dart';
 import '../../core/l10n/app_localizations.dart';
+import '../../core/providers/premium_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_pill.dart';
@@ -13,6 +17,7 @@ import '../../shared/widgets/atmosphere_card.dart';
 import '../../shared/widgets/room_type_card.dart';
 import '../../shared/widgets/sticky_action_bar.dart';
 import '../chat/widgets/chat_input_bar.dart' show MicButton;
+import '../paywall/paywall_sheet.dart';
 
 // ── Wave 5.8 → 5.16 — New Design Screen Redesign (4-step architectural journey)
 // 5.8 reframed the upload flow as 5 explicit, persistent steps with a guided
@@ -968,7 +973,7 @@ class _UploadZone extends StatelessWidget {
 
 // ── Room-type — premium horizontal scroller (exact l10n strings kept) ────────
 
-class _RoomScroller extends StatelessWidget {
+class _RoomScroller extends ConsumerWidget {
   final String? selected;
   final ValueChanged<String> onSelected;
   final bool aiDecideSelected;
@@ -981,8 +986,37 @@ class _RoomScroller extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
+    final isPremium = ref.watch(premiumProvider);
+
+    // Wave 5.17d — locked predicates. A room is locked when the user is
+    // non-premium AND its canonical id is not in the free set. The "AI
+    // Decide" tile is always premium-only — non-premium users cannot
+    // delegate the choice (mirrors the backend free_tier policy).
+    bool roomLocked(String label) {
+      if (isPremium) return false;
+      final id = RoomTypeImages.idForLabel(l10n, label);
+      return id == null || !kFreeRoomIds.contains(id);
+    }
+    bool aiLocked() => !isPremium;
+
+    // Tap router : locked → paywall, else → original onSelected/onAiDecide.
+    void onRoomTap(String label) {
+      if (roomLocked(label)) {
+        _openLockedPaywall(context, restrictedField: 'room');
+        return;
+      }
+      onSelected(label);
+    }
+    VoidCallback? onAi = onAiDecide == null ? null : () {
+      if (aiLocked()) {
+        _openLockedPaywall(context, restrictedField: 'delegated_choice');
+        return;
+      }
+      onAiDecide!();
+    };
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -991,12 +1025,14 @@ class _RoomScroller extends StatelessWidget {
         RoomTypeRow(
           rooms: l10n.interiorRooms,
           selected: selected,
-          onSelected: onSelected,
+          onSelected: onRoomTap,
           aiDecideSelected: aiDecideSelected,
-          aiLabel: onAiDecide != null ? 'AI Decide' : null,
+          aiLabel: onAi != null ? 'AI Decide' : null,
           aiSublabel:
-              onAiDecide != null ? 'Let AI detect the space for me' : null,
-          onAiDecide: onAiDecide,
+              onAi != null ? 'Let AI detect the space for me' : null,
+          onAiDecide: onAi,
+          isLocked: roomLocked,
+          isAiLocked: aiLocked,
         ),
         const SizedBox(height: 16),
         _RoomGroupLabel(label: l10n.exteriorSection),
@@ -1004,11 +1040,34 @@ class _RoomScroller extends StatelessWidget {
         RoomTypeRow(
           rooms: l10n.exteriorRooms,
           selected: selected,
-          onSelected: onSelected,
+          onSelected: onRoomTap,
+          isLocked: roomLocked,
         ),
       ],
     );
   }
+}
+
+// Wave 5.17d — single entry point so the locked-tap path can never
+// drift across the room + atmosphere scrollers. Returns true iff the
+// purchase completed (we don't act on it here — the home rebuild on
+// premiumProvider state change handles the visual refresh).
+Future<void> _openLockedPaywall(
+  BuildContext context, {
+  required String restrictedField,
+}) async {
+  await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppColors.surface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (_) => PaywallSheet(
+      trigger: PaywallTrigger.locked,
+      restrictedField: restrictedField,
+    ),
+  );
 }
 
 class _RoomGroupLabel extends StatelessWidget {
@@ -1030,7 +1089,7 @@ class _RoomGroupLabel extends StatelessWidget {
 
 // ── Atmosphere — shared AtmosphereCard V2 horizontal scroller + custom fold ──
 
-class _AtmosphereScroller extends StatelessWidget {
+class _AtmosphereScroller extends ConsumerWidget {
   final String? selected;
   final ValueChanged<String> onSelected;
   final bool surpriseSelected;
@@ -1045,7 +1104,8 @@ class _AtmosphereScroller extends StatelessWidget {
   static const _customLabel = 'Describe Your Dream Space';
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isPremium = ref.watch(premiumProvider);
     final atmospheres = AppLocalizations.atmospheres;
     final hasSurprise = onSurprise != null;
     final leading = hasSurprise ? 1 : 0;
@@ -1058,35 +1118,60 @@ class _AtmosphereScroller extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
           if (hasSurprise && index == 0) {
+            // Wave 5.17d — Surprise Me is delegated-choice, premium-only.
+            final locked = !isPremium;
             return SizedBox(
               width: 150,
               child: AtmosphereCard.surprise(
                 label: 'Surprise Me',
                 sublabel: 'Let the AI choose a fitting atmosphere',
                 selected: surpriseSelected,
-                onTap: onSurprise!,
+                locked: locked,
+                onTap: locked
+                    ? () => _openLockedPaywall(
+                          context,
+                          restrictedField: 'delegated_choice',
+                        )
+                    : onSurprise!,
               ),
             );
           }
           final atmosphereIndex = index - leading;
           if (atmosphereIndex < atmospheres.length) {
             final a = atmospheres[atmosphereIndex];
+            // Wave 5.17d — non-free atmosphere is locked for non-premium.
+            final locked = !isPremium && !kFreeAtmosphereIds.contains(a.id);
             return SizedBox(
               width: 150,
               child: AtmosphereCard(
                 atmosphere: a,
                 selected: selected == a.name,
-                onTap: () => onSelected(a.name),
+                locked: locked,
+                onTap: locked
+                    ? () => _openLockedPaywall(
+                          context,
+                          restrictedField: 'atmosphere',
+                        )
+                    : () => onSelected(a.name),
               ),
             );
           }
+          // Custom tile = free-text direction, premium-only (out of free
+          // scope by definition — the user is asking the AI to interpret).
+          final customLocked = !isPremium;
           return SizedBox(
             width: 150,
             child: AtmosphereCard.custom(
               label: _customLabel,
               sublabel: 'Tell us in your own words',
               selected: selected == _customLabel,
-              onTap: () => onSelected(_customLabel),
+              locked: customLocked,
+              onTap: customLocked
+                  ? () => _openLockedPaywall(
+                        context,
+                        restrictedField: 'atmosphere',
+                      )
+                  : () => onSelected(_customLabel),
             ),
           );
         },

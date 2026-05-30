@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/feature_flags.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/locale_provider.dart';
 import '../../core/providers/session_provider.dart';
@@ -132,13 +133,12 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            // ── Wave 5.17b — Voluntary sign-in entry ──────────────────────
-            // Shown ONLY when the user is anonymous. Lets existing
-            // subscribers sign in to restore their subscription on a new
-            // device without having to hit the paywall first. After
-            // sign-in, navigation refreshes via /home so any downstream
-            // state (subscription tier, profile chip, etc.) re-reads.
-            if (AuthService().isAnonymous) ...[
+            // ── Voluntary sign-in entry (Wave 5.17b, hidden in 5.17d) ─────
+            // The funnel no longer requires sign-in (Decision Wave 5.17d).
+            // Restore Purchases lives on the paywall sheet (D7). To
+            // re-enable a sign-in entry here in a future wave, flip
+            // FeatureFlags.signInEnabled — no other change required.
+            if (FeatureFlags.signInEnabled && AuthService().isAnonymous) ...[
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
               SliverToBoxAdapter(
                 child: Padding(
@@ -161,8 +161,6 @@ class ProfileScreen extends ConsumerWidget {
                             ),
                           );
                           if (result == true && context.mounted) {
-                            // Force a refresh by routing to /home — downstream
-                            // widgets re-read auth state on next build.
                             context.go('/home');
                           }
                         },
@@ -172,49 +170,40 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
             ],
-            const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
-                child: _SettingsCard(
-                  items: [
-                    _SettingItem(
-                      icon: Icons.logout,
-                      label: l10n.signOut,
-                      // Wave 5.17a — sign-out is intentionally standard.
-                      // No device-level lock is applied (per product
-                      // decision 2026-05-30) — the abuse path
-                      // (sign-out → fresh anon → free Gen #1) is
-                      // documented and will be addressed by server-side
-                      // quota enforcement in Wave 5.17b. After clearing
-                      // the Supabase session we recreate an anonymous
-                      // user so the app remains usable without a forced
-                      // sign-in wall.
-                      onTap: () async {
-                        final auth = AuthService();
-                        await auth.signOut();
-                        try {
-                          // Restore anonymous mode so the rest of the
-                          // app (chat / generate / history) can keep
-                          // making authenticated calls. Without this,
-                          // currentSession would be null and every
-                          // subsequent backend call would fail with 401.
-                          await auth.signInAnonymouslyIfNeeded();
-                        } catch (_) {
-                          // Best-effort — if the anon sign-in fails the
-                          // user lands on /onboarding which will retry
-                          // on next launch via main.dart.
-                        }
-                        if (context.mounted) {
-                          context.go('/onboarding');
-                        }
-                      },
-                      destructive: true,
-                    ),
-                  ],
+            // ── Sign-out (Wave 5.17a, hidden in 5.17d) ────────────────────
+            // With sign-in hidden, there is nothing to sign out of. Also
+            // closes the quota-reset abuse path (sign-out → fresh anon
+            // UUID → 2 fresh free gens). To re-enable, flip the same flag.
+            if (FeatureFlags.signInEnabled) ...[
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
+                  child: _SettingsCard(
+                    items: [
+                      _SettingItem(
+                        icon: Icons.logout,
+                        label: l10n.signOut,
+                        onTap: () async {
+                          final auth = AuthService();
+                          await auth.signOut();
+                          try {
+                            await auth.signInAnonymouslyIfNeeded();
+                          } catch (_) {
+                            // Best-effort — onboarding will retry on
+                            // next launch via main.dart.
+                          }
+                          if (context.mounted) {
+                            context.go('/onboarding');
+                          }
+                        },
+                        destructive: true,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
+            ],
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxxl)),
           ],
         ),

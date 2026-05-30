@@ -141,3 +141,17 @@ const kAtmospheres = <AtmosphereStyle>[
     ftueHeroImagePath: 'assets/atmospheres/ftue/ftue_desert_luxe.jpg',
   ),
 ];
+
+/// Wave 5.17d — canonical atmosphere id from a possibly-decorated label
+/// like "Nordic Warmth" or "Nordic Warmth · Vision 1". Used to populate
+/// the `atmosphere_id` form param on /generate which drives the free-
+/// tier scope check server-side. Returns null when the label doesn't
+/// match any known atmosphere (free user → backend rejects with 402).
+String? atmosphereIdFromLabel(String? label) {
+  if (label == null || label.isEmpty) return null;
+  final base = label.split('·').first.trim().toLowerCase();
+  for (final a in kAtmospheres) {
+    if (a.name.toLowerCase() == base) return a.id;
+  }
+  return null;
+}

@@ -46,6 +46,12 @@ class AtmosphereCard extends StatelessWidget {
   final bool dark;
   final AtmosphereCardVariant variant;
 
+  /// Wave 5.17d — When true, the card renders dimmed with a small 🔒
+  /// chip in the corner. The card still calls onTap on tap ; the
+  /// PARENT decides what to do (typically open the PaywallSheet
+  /// instead of selecting). Keeps the widget purely visual.
+  final bool locked;
+
   // Custom-tile payload (null for normal atmosphere cards).
   final String? _customLabel;
   final String? _customSublabel;
@@ -61,6 +67,7 @@ class AtmosphereCard extends StatelessWidget {
     required this.onTap,
     this.dark = false,
     this.variant = AtmosphereCardVariant.auto,
+    this.locked = false,
   })  : _customLabel = null,
         _customSublabel = null,
         _isSurprise = false;
@@ -77,6 +84,7 @@ class AtmosphereCard extends StatelessWidget {
     required this.onTap,
     this.dark = true,
     this.variant = AtmosphereCardVariant.auto,
+    this.locked = false,
   })  : atmosphere = null,
         _customLabel = label,
         _customSublabel = sublabel,
@@ -95,6 +103,7 @@ class AtmosphereCard extends StatelessWidget {
     required this.onTap,
     this.dark = true,
     this.variant = AtmosphereCardVariant.auto,
+    this.locked = false,
   })  : atmosphere = null,
         _customLabel = label,
         _customSublabel = sublabel,
@@ -198,7 +207,12 @@ class AtmosphereCard extends StatelessWidget {
                 )
               : const ColoredBox(color: AppColors.textPrimary);
 
-          return AnimatedContainer(
+          return Opacity(
+            // Wave 5.17d — locked cards read as muted but not invisible.
+            // 0.55 keeps the imagery legible enough to motivate the
+            // upsell, never enough to look unavailable in the OS sense.
+            opacity: locked ? 0.55 : 1.0,
+            child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
             decoration: BoxDecoration(
@@ -254,10 +268,44 @@ class AtmosphereCard extends StatelessWidget {
                   alignment: Alignment.bottomLeft,
                   child: textColumn(),
                 ),
+                // Wave 5.17d — lock chip overlay. Restrained editorial
+                // treatment : a small dark pill with the lock glyph in the
+                // top-right, never a full-card tint. Matches the visual
+                // weight of the `selected` check chip.
+                if (locked)
+                  const Positioned(
+                    top: 8,
+                    right: 8,
+                    child: _LockChip(),
+                  ),
               ],
             ),
+          ),
           );
         },
+      ),
+    );
+  }
+}
+
+// ── Lock chip (Wave 5.17d) ────────────────────────────────────────────────────
+
+class _LockChip extends StatelessWidget {
+  const _LockChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 22,
+      height: 22,
+      decoration: BoxDecoration(
+        color: AppColors.textPrimary.withValues(alpha: 0.78),
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(
+        Icons.lock_outline,
+        size: 13,
+        color: AppColors.surface,
       ),
     );
   }
