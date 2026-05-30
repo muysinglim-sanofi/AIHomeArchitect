@@ -12,10 +12,12 @@ import 'package:intl/intl.dart';
 import 'widgets/chat_input_bar.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/free_tier.dart';
 import '../../core/constants/room_type_images.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/models/atmosphere_style.dart';
 import '../../core/providers/pending_generations_provider.dart';
+import '../../core/providers/premium_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/services/session_persistence_service.dart';
 import '../../data/mock/mock_projects.dart';
@@ -2671,7 +2673,7 @@ class _SourceContextStrip extends StatelessWidget {
 
 // ── Source photo / design direction sheet ─────────────────────────────────────
 
-class _SourcePhotoSheet extends StatefulWidget {
+class _SourcePhotoSheet extends ConsumerStatefulWidget {
   final ProjectModel project;
   final File? sourceFile;
   // Wave 4.6: latest generated vision (continuity header). Null => fall back
@@ -2703,10 +2705,10 @@ class _SourcePhotoSheet extends StatefulWidget {
   });
 
   @override
-  State<_SourcePhotoSheet> createState() => _SourcePhotoSheetState();
+  ConsumerState<_SourcePhotoSheet> createState() => _SourcePhotoSheetState();
 }
 
-class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
+class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
   late String _selectedRoomType;
   late String _selectedStyle;
   // Wave 5.16b — `_selectedMode` field removed with the MODE toggle.
@@ -2723,6 +2725,40 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
     // sheet pops.
     widget.onDirectionChanged(_selectedRoomType, _selectedStyle);
     Navigator.of(context).pop();
+  }
+
+  // Wave 5.17d — lock policy for the re-upload / direction sheet. Mirrors
+  // the upload-screen rules so room + atmosphere restrictions are uniform
+  // across every selection surface in the app. Premium users bypass all
+  // locks (predicates return false).
+  bool _roomLocked(String label) {
+    final isPremium = ref.read(premiumProvider);
+    if (isPremium) return false;
+    final id = RoomTypeImages.idForLabel(context.l10n, label);
+    return id == null || !kFreeRoomIds.contains(id);
+  }
+
+  void _onRoomTap(String label) {
+    if (_roomLocked(label)) {
+      _openSheetPaywall('room');
+      return;
+    }
+    setState(() => _selectedRoomType = label);
+  }
+
+  Future<void> _openSheetPaywall(String restrictedField) async {
+    await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => PaywallSheet(
+        trigger: PaywallTrigger.locked,
+        restrictedField: restrictedField,
+      ),
+    );
   }
 
   @override
@@ -2874,6 +2910,11 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
                   ],
 
                   // Space type — Wave-4.3 room language (shared l10n rooms).
+                  // Wave 5.17d — lock predicates mirror the upload-screen
+                  // policy so the sheet's selection rules are identical :
+                  // non-premium users see Living Room tappable, every
+                  // other room dimmed with a 🔒 chip ; locked tap opens
+                  // the paywall sheet (PaywallTrigger.locked).
                   const _SheetEyebrow(label: 'SPACE TYPE'),
                   const SizedBox(height: 10),
                   _SheetRoomLabel(label: l10n.interiorSection),
@@ -2881,8 +2922,8 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
                   RoomTypeRow(
                     rooms: l10n.interiorRooms,
                     selected: _selectedRoomType,
-                    onSelected: (r) =>
-                        setState(() => _selectedRoomType = r),
+                    onSelected: _onRoomTap,
+                    isLocked: _roomLocked,
                   ),
                   const SizedBox(height: 14),
                   _SheetRoomLabel(label: l10n.exteriorSection),
@@ -2890,8 +2931,8 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
                   RoomTypeRow(
                     rooms: l10n.exteriorRooms,
                     selected: _selectedRoomType,
-                    onSelected: (r) =>
-                        setState(() => _selectedRoomType = r),
+                    onSelected: _onRoomTap,
+                    isLocked: _roomLocked,
                   ),
                   const SizedBox(height: 22),
 
@@ -2908,13 +2949,20 @@ class _SourcePhotoSheetState extends State<_SourcePhotoSheet> {
                       separatorBuilder: (_, _) => const SizedBox(width: 10),
                       itemBuilder: (context, i) {
                         final a = AppLocalizations.atmospheres[i];
+                        // Wave 5.17d — atmosphere lock + paywall-on-tap
+                        // mirroring upload-screen and full-reveal carousel.
+                        final isPremium = ref.watch(premiumProvider);
+                        final locked = !isPremium
+                            && !kFreeAtmosphereIds.contains(a.id);
                         return SizedBox(
                           width: 150,
                           child: AtmosphereCard(
                             atmosphere: a,
                             selected: a.name == _selectedStyle,
-                            onTap: () =>
-                                setState(() => _selectedStyle = a.name),
+                            locked: locked,
+                            onTap: locked
+                                ? () => _openSheetPaywall('atmosphere')
+                                : () => setState(() => _selectedStyle = a.name),
                           ),
                         );
                       },

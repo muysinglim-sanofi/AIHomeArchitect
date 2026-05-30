@@ -27,8 +27,9 @@
 ///   - `REVENUECAT_PUBLIC_API_KEY_ANDROID` in .env
 ///   - Apple/Google products created in App Store Connect + Play
 ///     Console (operational ; not code).
-///   - Entitlement `premium` defined in the RC dashboard with both
-///     monthly + annual products attached.
+///   - Entitlement `premium` defined in the RC dashboard with a single
+///     weekly product attached (Wave 5.17d alignment ; supersedes the
+///     earlier D2 monthly + annual plan).
 library;
 
 import 'dart:async';
@@ -43,6 +44,18 @@ import '../../core/feature_flags.dart';
 /// Premium entitlement identifier. Must match the entitlement defined
 /// in the RevenueCat dashboard.
 const String kPremiumEntitlement = 'premium';
+
+/// Thrown by purchase / restore actions when the SDK is not configured
+/// (typically because `revenuecatGracefulDegradation = true` skipped
+/// `Purchases.configure()` at boot due to missing API keys). The
+/// PaywallSheet catches this and renders a clean message — instead of
+/// the raw native "Singleton not initialised" stacktrace that bubbles
+/// up otherwise.
+class RevenuecatNotConfiguredException implements Exception {
+  const RevenuecatNotConfiguredException();
+  @override
+  String toString() => 'RevenueCat SDK is not configured on this device.';
+}
 
 class RevenuecatService {
   RevenuecatService._();
@@ -63,6 +76,12 @@ class RevenuecatService {
   /// Current premium status. Re-checked on every CustomerInfo update
   /// from the SDK ; cached locally so callers don't have to await.
   bool get isPremium => _premiumActive;
+
+  /// True iff `Purchases.configure()` has completed successfully. False
+  /// when the SDK is in degraded mode (missing API key + graceful flag).
+  /// Callers should consult this before showing "Subscribe" / "Restore"
+  /// affordances as enabled.
+  bool get isConfigured => _configured;
 
   /// Cached offerings from the last fetch. Use `loadOfferings()` to
   /// refresh ; widgets typically call it on paywall mount.
@@ -156,8 +175,13 @@ class RevenuecatService {
   /// /generate call sees the new premium row.
   ///
   /// Returns true iff the purchase completed (entitlement active).
-  /// Returns false for user-cancel ; throws on actual error.
+  /// Returns false for user-cancel ; throws on actual error. Throws
+  /// [RevenuecatNotConfiguredException] when the SDK was never
+  /// configured (degraded mode) — caller renders a clean message.
   Future<bool> purchasePackage(Package pkg) async {
+    if (!_configured) {
+      throw const RevenuecatNotConfiguredException();
+    }
     final result = await Purchases.purchasePackage(pkg);
     final active = result.entitlements.active[kPremiumEntitlement];
     return active != null;
@@ -168,8 +192,14 @@ class RevenuecatService {
   ///
   /// Returns true iff a premium entitlement was restored. Throws on
   /// network or store errors ; never throws on "no purchases found"
-  /// (that just returns false).
+  /// (that just returns false). Throws
+  /// [RevenuecatNotConfiguredException] when the SDK was never
+  /// configured (degraded mode) — caller renders a clean message
+  /// instead of the native "Singleton not initialised" stacktrace.
   Future<bool> restorePurchases() async {
+    if (!_configured) {
+      throw const RevenuecatNotConfiguredException();
+    }
     final info = await Purchases.restorePurchases();
     final active = info.entitlements.active[kPremiumEntitlement];
     return active != null;

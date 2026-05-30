@@ -2,15 +2,24 @@
 ///
 /// Surfaced on backend HTTP 402 (QUOTA_EXHAUSTED or FREE_TIER_RESTRICTED)
 /// and on tap of any locked room/atmosphere card on the upload screen.
-/// The sheet's job is to convert : Subscribe (Monthly or Annual) or
+/// The sheet's job is to convert : Subscribe (Weekly Premium) or
 /// Restore a prior purchase.
 ///
-/// Pricing (Decision D2)
-///   Monthly  $7.99
-///   Annual   $49.99   (best-value badge — D2)
-/// The actual amounts come from RevenueCat offerings at runtime ; the
-/// constants above are the dashboard intent. If RC returns different
-/// prices, the prices on the cards follow RC (single source of truth).
+/// Pricing (Wave 5.17d alignment — supersedes earlier D2)
+///   Weekly Premium  — price set in the RevenueCat dashboard
+/// The displayed price comes from RevenueCat offerings at runtime ; RC
+/// is the single source of truth. The placeholder card renders only in
+/// degraded mode (RC not configured) ; in production the real package
+/// price is shown via `_OfferCard`. The earlier D2 Monthly + Annual
+/// decision is OBSOLETE.
+///
+/// Offerings shape (V1 target)
+///   One weekly package per offering. `_selectWeeklyPackage` picks the
+///   `PackageType.weekly` package ; if multiple packages exist, weekly
+///   wins ; if no weekly is present, the first package is used as a
+///   graceful fallback so the sheet doesn't go blank on a misconfigured
+///   dashboard. V2 may introduce additional tiers — extend the selector
+///   then, not before.
 ///
 /// Subhead variants
 ///   QUOTA_EXHAUSTED        → "Your free architectural explorations are complete."
@@ -94,6 +103,12 @@ class _PaywallSheetState extends State<PaywallSheet> {
           _errorMessage = 'Purchase did not complete. Please try again.';
         });
       }
+    } on RevenuecatNotConfiguredException {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _errorMessage = 'Purchases are not available in this test build yet.';
+      });
     } on PlatformException catch (e) {
       if (!mounted) return;
       final errorCode = PurchasesErrorHelper.getErrorCode(e);
@@ -110,7 +125,7 @@ class _PaywallSheetState extends State<PaywallSheet> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _errorMessage = 'Purchase failed: $e';
+        _errorMessage = 'Purchase failed. Please try again.';
       });
     }
   }
@@ -131,11 +146,20 @@ class _PaywallSheetState extends State<PaywallSheet> {
           _errorMessage = 'No prior purchases found on this device.';
         });
       }
+    } on RevenuecatNotConfiguredException {
+      // Degraded mode — RC SDK not configured. Show the canonical clean
+      // message instead of the native "Singleton not initialised"
+      // stacktrace bubbling up unwrapped.
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _errorMessage = 'Purchases are not available in this test build yet.';
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _errorMessage = 'Restore failed: $e';
+        _errorMessage = 'Restore failed. Please try again.';
       });
     }
   }
@@ -278,60 +302,58 @@ class _OfferingsBlock extends StatelessWidget {
     required this.onPurchase,
   });
 
-  /// Annual is the "best value" — D2. RC exposes the annual package via
-  /// `PackageType.annual` ; monthly via `PackageType.monthly`. Order
-  /// is annual-first so the highlighted card lands above.
-  ({Package? annual, Package? monthly}) _splitPackages(Offering off) {
-    Package? annual;
-    Package? monthly;
+  /// V1 target : one weekly package. Picks `PackageType.weekly` when
+  /// present ; otherwise falls back to the first available package so
+  /// the sheet stays functional if the RC dashboard is mis-typed (e.g.
+  /// a monthly product mis-tagged as weekly). Returns null when the
+  /// offering has zero packages — caller renders the degraded
+  /// placeholder.
+  Package? _selectWeeklyPackage(Offering off) {
+    if (off.availablePackages.isEmpty) return null;
     for (final p in off.availablePackages) {
-      if (p.packageType == PackageType.annual) annual ??= p;
-      if (p.packageType == PackageType.monthly) monthly ??= p;
+      if (p.packageType == PackageType.weekly) return p;
     }
-    return (annual: annual, monthly: monthly);
+    return off.availablePackages.first;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (offering == null) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        child: Text(
-          'Subscription temporarily unavailable. Please try again later '
-          'or restore a prior purchase below.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: AppColors.textSecondary,
-              ),
-          textAlign: TextAlign.center,
-        ),
+    final weekly = offering == null ? null : _selectWeeklyPackage(offering!);
+
+    if (weekly == null) {
+      // Degraded mode — RC offerings unavailable OR empty. Render a
+      // placeholder plan card so the paywall still reads as a purchase
+      // surface (Subscribe is the intent ; Restore Purchases stays
+      // secondary). The disabled Subscribe button signals the temporary
+      // state without hiding the funnel structure. When Phase 4 wires
+      // real offerings, this branch is dead and the real `_OfferCard`
+      // renders below.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _PlaceholderPlanCard(),
+          const SizedBox(height: AppSpacing.sm),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            child: Text(
+              'Subscriptions are temporarily unavailable in this build.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
       );
     }
 
-    final split = _splitPackages(offering!);
-    final annual = split.annual;
-    final monthly = split.monthly;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (annual != null) ...[
-          _OfferCard(
-            package: annual,
-            highlighted: true,
-            badgeLabel: 'Best value',
-            enabled: !busy,
-            onTap: () => onPurchase(annual),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-        ],
-        if (monthly != null)
-          _OfferCard(
-            package: monthly,
-            highlighted: false,
-            enabled: !busy,
-            onTap: () => onPurchase(monthly),
-          ),
-      ],
+    // V1 — single weekly card (no "Best value" badge with only one
+    // offer ; the highlighted accent border is sufficient).
+    return _OfferCard(
+      package: weekly,
+      highlighted: true,
+      enabled: !busy,
+      onTap: () => onPurchase(weekly),
     );
   }
 }
@@ -339,7 +361,6 @@ class _OfferingsBlock extends StatelessWidget {
 class _OfferCard extends StatelessWidget {
   final Package package;
   final bool highlighted;
-  final String? badgeLabel;
   final bool enabled;
   final VoidCallback onTap;
 
@@ -348,16 +369,16 @@ class _OfferCard extends StatelessWidget {
     required this.highlighted,
     required this.enabled,
     required this.onTap,
-    this.badgeLabel,
   });
 
   String get _title {
     switch (package.packageType) {
-      case PackageType.annual:
-        return 'Annual';
-      case PackageType.monthly:
-        return 'Monthly';
+      case PackageType.weekly:
+        return 'Weekly Premium';
       default:
+        // Graceful fallback for a misconfigured RC dashboard where the
+        // package isn't tagged as weekly. Renders the RC identifier so
+        // the operator can spot the misconfiguration in the UI.
         return package.identifier;
     }
   }
@@ -365,15 +386,8 @@ class _OfferCard extends StatelessWidget {
   String get _price => package.storeProduct.priceString;
 
   String? get _sublabel {
-    if (package.packageType == PackageType.annual) {
-      // Approximate per-month text for context. Uses the dashboard
-      // pricing from D2 (USD 49.99 / 12 ≈ 4.17). The real value lives
-      // on the StoreProduct ; for V1 we keep a static caption since
-      // RC's per-period breakdown isn't always populated cross-store.
-      return 'billed yearly';
-    }
-    if (package.packageType == PackageType.monthly) {
-      return 'billed monthly';
+    if (package.packageType == PackageType.weekly) {
+      return 'billed weekly';
     }
     return null;
   }
@@ -405,34 +419,11 @@ class _OfferCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          _title,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
-                        ),
-                        if (badgeLabel != null) ...[
-                          const SizedBox(width: AppSpacing.sm),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.accent,
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              badgeLabel!,
-                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: AppColors.surface,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
+                    Text(
+                      _title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
                           ),
-                        ],
-                      ],
                     ),
                     if (_sublabel != null) ...[
                       const SizedBox(height: 2),
@@ -455,6 +446,102 @@ class _OfferCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ── Placeholder plan card (Wave 5.17d degraded paywall) ─────────────────────
+//
+// Shown when RC offerings are unavailable (graceful-degradation mode in dev,
+// or RC dashboard config missing in early Phase 4). Mirrors the visual
+// language of `_OfferCard` (accent border, large title) but the Subscribe
+// action is DISABLED — the user can read the intended plan structure but
+// cannot transact. Restore Purchases (the caller's secondary action)
+// handles cross-device entitlement separately.
+//
+// V1 plan : Weekly Premium only. No "Best value" badge — that affordance
+// requires a second offer to compare against. Price is shown as
+// "Price available at launch" until RevenueCat is configured ; once Phase
+// 4 wires real offerings, this branch is bypassed (`weekly != null`) and
+// the live storefront price renders via `_OfferCard`.
+
+class _PlaceholderPlanCard extends StatelessWidget {
+  const _PlaceholderPlanCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+        border: Border.all(color: AppColors.accent, width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Weekly Premium',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'billed weekly',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppColors.textTertiary,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                'Price available at launch',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textTertiary,
+                      fontStyle: FontStyle.italic,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: null, // disabled — temporarily unavailable
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.textPrimary,
+                foregroundColor: AppColors.surface,
+                disabledBackgroundColor: AppColors.border,
+                disabledForegroundColor: AppColors.textTertiary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+              child: Text(
+                'Subscribe — temporarily unavailable',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: AppColors.textTertiary,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
