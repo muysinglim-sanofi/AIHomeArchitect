@@ -8,11 +8,13 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/pending_generations_provider.dart';
+import '../../core/providers/premium_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/mock/mock_projects.dart';
 import '../../data/models/message_model.dart';
 import '../../data/models/project_model.dart';
+import '../../features/paywall/paywall_sheet.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_dots.dart';
 import '../../shared/widgets/app_pill.dart';
@@ -175,10 +177,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  // Thin, calm top bar — gamified sparkle badge replaced by a quiet credits
-  // pill that PRESERVES the /sessions navigation. Non-interactive Interior/
-  // Exterior pills removed (they did nothing).
+  // Thin, calm top bar — Wave 5.17d.1 replaces the legacy "5 credits" pill
+  // (which navigated to the now-removed BuySessionsScreen credit-pack
+  // paywall) with a Premium-aware affordance :
+  //   • Free users → gold "Premium" pill that opens PaywallSheet directly
+  //   • Premium users → calm gold "Premium ✓" badge, non-routing
+  // Non-interactive Interior/Exterior pills removed long ago.
   Widget _buildHeader(BuildContext context, AppLocalizations l10n) {
+    final isPremium = ref.watch(premiumProvider);
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.pagePadding,
@@ -190,8 +196,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // Flexible + ellipsis: the trailing controls grew (intro replay +
-          // credits), so guard the wordmark against narrow devices / long
-          // localized app names / large text scale (no row overflow).
+          // premium pill), so guard the wordmark against narrow devices /
+          // long localized app names / large text scale (no row overflow).
           Flexible(
             child: Text(
               l10n.appName.toUpperCase(),
@@ -211,18 +217,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             children: [
               // Calm return-to-intro affordance — re-enters the FTUE
               // (route already exists; no router change). Quiet ghost
-              // icon, never competes with the credits pill or CTA.
+              // icon, never competes with the premium pill.
               _IntroReplayButton(
                 onTap: () => context.push('/onboarding'),
               ),
               const SizedBox(width: AppSpacing.sm),
-              AppPill(
-                text: '5 credits',
-                onTap: () => context.push('/sessions'),
-              ),
+              if (isPremium)
+                const _PremiumActiveBadge()
+              else
+                AppPill(
+                  text: 'Premium',
+                  onTap: () => _openHomePaywall(context),
+                ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  /// Wave 5.17d.1 — open the single canonical PaywallSheet from the home
+  /// header. `PaywallTrigger.locked` keeps the copy generic (the user
+  /// hasn't hit any specific lock yet — they tapped Premium directly).
+  Future<void> _openHomePaywall(BuildContext context) async {
+    await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const PaywallSheet(
+        trigger: PaywallTrigger.locked,
       ),
     );
   }
@@ -670,6 +693,45 @@ class _IntroReplayButton extends StatelessWidget {
             color: AppColors.textSecondary,
           ),
         ),
+      ),
+    );
+  }
+}
+
+// Wave 5.17d.1 — Premium-active badge shown in the home header in place
+// of the "Premium" CTA pill when the user already has an active premium
+// entitlement. Non-interactive : the user already paid, no further
+// action is needed from this surface (subscription management goes
+// through the platform store, not through the app's chrome).
+class _PremiumActiveBadge extends StatelessWidget {
+  const _PremiumActiveBadge();
+
+  static const _gold = Color(0xFFD6A85F);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _gold.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _gold.withValues(alpha: 0.55)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.check_circle, color: _gold, size: 13),
+          SizedBox(width: 5),
+          Text(
+            'Premium',
+            style: TextStyle(
+              color: _gold,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -155,3 +155,48 @@ String? atmosphereIdFromLabel(String? label) {
   }
   return null;
 }
+
+/// Wave 5.17d.1 — Global display order for atmospheres across every
+/// surface that lists them : FTUE Screen 3, New Design upload screen,
+/// Re-upload modal in chat, Full Reveal carousel, Paywall hero strip.
+/// The free pair (Warm Modern + Nordic Warmth) MUST come first so
+/// non-premium users see what they can do before what's locked.
+const List<String> kPreferredAtmosphereOrder = <String>[
+  'warm_modern',
+  'nordic_warmth',
+  'soft_luxury',
+  'japandi_calm',
+  'tropical_escape',
+  'nature_retreat',
+  'desert_luxe',
+];
+
+/// Wave 5.17d.1 — canonical default atmosphere id. Use this for any
+/// pre-selection (FTUE default, "Start with" suggestion, fallback when
+/// the user hasn't picked yet). Always free, always available.
+const String kDefaultAtmosphereId = 'warm_modern';
+
+/// Wave 5.17d.1 — return [items] sorted by [kPreferredAtmosphereOrder].
+/// Atmospheres not in the order list go last (preserves their relative
+/// order). Caller should use this in every surface that iterates
+/// [kAtmospheres] for display.
+List<AtmosphereStyle> sortAtmospheresByDisplayOrder(
+  List<AtmosphereStyle> items,
+) {
+  final indexOf = <String, int>{
+    for (var i = 0; i < kPreferredAtmosphereOrder.length; i++)
+      kPreferredAtmosphereOrder[i]: i,
+  };
+  final sorted = [...items];
+  sorted.sort((a, b) {
+    final ai = indexOf[a.id] ?? 999;
+    final bi = indexOf[b.id] ?? 999;
+    return ai.compareTo(bi);
+  });
+  return sorted;
+}
+
+/// Wave 5.17d.1 — convenience accessor : the globally ordered atmosphere
+/// catalogue. Call this instead of [kAtmospheres] when rendering a list.
+List<AtmosphereStyle> get kAtmospheresOrdered =>
+    sortAtmospheresByDisplayOrder(kAtmospheres);

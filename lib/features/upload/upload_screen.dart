@@ -279,7 +279,7 @@ class _UploadScreenState extends State<UploadScreen>
                   ),
                   secondary: Text(
                     _canProceed
-                        ? 'AI will create your transformation'
+                        ? 'AI will create your redesign'
                         : _missingHint,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(

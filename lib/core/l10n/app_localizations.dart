@@ -108,9 +108,15 @@ class AppLocalizations {
         _get('driveway'),
       ];
 
-  // Emotional atmosphere styles — image-first, evocative naming
-  static List<AtmosphereStyle> get atmospheres => kAtmospheres;
-  static List<String> get styleNames => kAtmospheres.map((a) => a.name).toList();
+  // Emotional atmosphere styles — image-first, evocative naming.
+  // Wave 5.17d.1 — display order honors the free pair (Warm Modern,
+  // Nordic Warmth) first so non-premium users see what they can do
+  // before what's locked. Single switch propagates to upload_screen,
+  // chat_screen Re-upload modal, and before_after_screen Full Reveal
+  // carousel — all of which read through these getters.
+  static List<AtmosphereStyle> get atmospheres => kAtmospheresOrdered;
+  static List<String> get styleNames =>
+      kAtmospheresOrdered.map((a) => a.name).toList();
 
   // ── Chat ──────────────────────────────────────────────────────────────────
   String get chatTitle => _get('chatTitle');
@@ -142,31 +148,19 @@ class AppLocalizations {
   String get historyTitle => _get('historyTitle');
   String get newProject => _get('newProject');
 
-  // ── Sessions ──────────────────────────────────────────────────────────────
-  String get sessionsTitle => _get('sessionsTitle');
-  String get sessionsBalance => _get('sessionsBalance');
-  String get sessionsSubtitle => _get('sessionsSubtitle');
-  String get sessionsAvailable => _get('sessionsAvailable');
-  String get choosePlan => _get('choosePlan');
-  String get bestValue => _get('bestValue');
-  String get selectPlan => _get('selectPlan');
-  String get perSession => _get('perSession');
-  String get session => _get('session');
-  String get sessions => _get('sessions');
+  // ── Redesigns (Wave 5.17d.1 — replaces the legacy "Sessions" credit
+  //    pack vocabulary ; getters tied to the deleted BuySessionsScreen
+  //    have been removed) ─────────────────────────────────────────────
   String get transformation => _get('transformation');
   String get transformations => _get('transformations');
 
-  String sessionCount(int n) => '$n ${n == 1 ? session : sessions}';
   String transformationCount(int n) =>
       '$n ${n == 1 ? _get('transformation') : _get('transformations')}';
-  String unlockLabel(int n, double price) =>
-      '${_get('unlockSessions')} ${sessionCount(n)} — \$${price.toStringAsFixed(2)}';
 
   // ── Profile ───────────────────────────────────────────────────────────────
   String get profileTitle => _get('profileTitle');
   String get signOut => _get('signOut');
   String get projectsCount => _get('projectsCount');
-  String get sessionsCount => _get('sessionsCount');
   String get sharedCount => _get('sharedCount');
 
   // ── Settings ──────────────────────────────────────────────────────────────
@@ -201,12 +195,11 @@ class AppLocalizations {
   String get replacePhoto => _get('replacePhoto');
   String get sourcePhotoUpdated => _get('sourcePhotoUpdated');
 
-  // ── Bimodal intent (Wave 5.5.14b.2) ───────────────────────────────────────
-  String get modeChooserTitle => _get('modeChooserTitle');
-  String get modePreserve => _get('modePreserve');
-  String get modePreserveSub => _get('modePreserveSub');
-  String get modeCreate => _get('modeCreate');
-  String get modeCreateSub => _get('modeCreateSub');
+  // Wave 5.16b — bimodal l10n getters (modeChooserTitle / modePreserve /
+  // modePreserveSub / modeCreate / modeCreateSub) removed together with
+  // the FTUE step 4 (Wave 5.16) and the chat sheet MODE toggle (5.16b).
+  // Backend `generation_mode` still accepted ; UI no longer renders a
+  // choice. Re-introduce here if creative mode ever returns to the UI.
 }
 
 // ── Delegate ──────────────────────────────────────────────────────────────────

@@ -660,7 +660,7 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
     _cycleTimer?.cancel();
     _cycleTimer = Timer.periodic(const Duration(milliseconds: 2500), (_) {
       if (!_userInteracted && mounted) {
-        setState(() => _selected = (_selected + 1) % kAtmospheres.length);
+        setState(() => _selected = (_selected + 1) % kAtmospheresOrdered.length);
       }
     });
   }
@@ -674,7 +674,7 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      final atm = kAtmospheres[_selected];
+      final atm = kAtmospheresOrdered[_selected];
       final screenH = MediaQuery.sizeOf(context).height;
 
       // Wave 4.10j (FTUE 3 FINAL hero-dominance correction):
@@ -853,10 +853,10 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.pagePadding),
-                itemCount: kAtmospheres.length,
+                itemCount: kAtmospheresOrdered.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 10),
                 itemBuilder: (context, i) {
-                  final a = kAtmospheres[i];
+                  final a = kAtmospheresOrdered[i];
                   return SizedBox(
                     width: cardWFinal,
                     child: AtmosphereCard(

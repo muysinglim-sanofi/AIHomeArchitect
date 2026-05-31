@@ -10,7 +10,6 @@ import '../../features/chat/chat_screen.dart';
 import '../../features/generation/generation_loading_screen.dart';
 import '../../features/result/before_after_screen.dart';
 import '../../features/history/projects_history_screen.dart';
-import '../../features/sessions/buy_sessions_screen.dart';
 import '../../features/profile/profile_screen.dart';
 import '../../shared/widgets/main_shell.dart';
 
@@ -116,10 +115,6 @@ final appRouter = GoRouter(
         final projectId = state.pathParameters['projectId'] ?? '1';
         return _slideUpPage(BeforeAfterScreen(projectId: projectId, resultExtra: state.extra), state);
       },
-    ),
-    GoRoute(
-      path: '/sessions',
-      pageBuilder: (context, state) => _slideUpPage(const BuySessionsScreen(), state),
     ),
   ],
 );

@@ -38,4 +38,12 @@ class FeatureFlags {
   /// as a production hot-fix while a misconfiguration is being
   /// resolved on the RevenueCat dashboard — never as the default.
   static const bool revenuecatGracefulDegradation = false;
+
+  /// Wave 5.17d.1 — Display ABA + ACLEDA payment chips in the paywall
+  /// "Secure payments" row. OFF by default because RevenueCat does not
+  /// process Cambodian banking rails directly ; showing those badges
+  /// without an actual processor would violate App Store + Play policy
+  /// (misleading payment claims). Re-enable only after a confirmed
+  /// regional processor is wired AND store policy is reviewed.
+  static const bool cambodianPaymentBadges = false;
 }

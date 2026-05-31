@@ -25,8 +25,8 @@ const Map<String, String> enTranslations = {
   'homeGreetingAfternoon': 'Good afternoon',
   'homeGreetingEvening': 'Good evening',
   'newDesignSession': 'New Design Session',
-  'recentTransformations': 'Recent Transformations',
-  'latestTransformation': 'Latest Transformation',
+  'recentTransformations': 'Recent redesigns',
+  'latestTransformation': 'Latest redesign',
   'noProjects': 'Your first transformation\nstarts here.',
   'seeAll': 'See all',
   'continueDesigning': 'Continue Designing',
@@ -65,7 +65,7 @@ const Map<String, String> enTranslations = {
 
   // Chat
   'chatTitle': 'Design Session',
-  'chatPlaceholder': 'Describe what you want to change...',
+  'chatPlaceholder': 'How should this space evolve next?',
   'chatGeneratingHint': 'Generating your vision...',
   'generateButton': 'Generate',
   'generatingInChat': 'Generating your transformation...',
@@ -87,32 +87,24 @@ const Map<String, String> enTranslations = {
   'shareResult': 'Share',
   'newVariation': 'Try Another',
   'dragToReveal': 'Drag to reveal',
-  'yourTransformation': 'Your Transformation',
+  'yourTransformation': 'Your redesign',
 
   // History
-  'historyTitle': 'Transformations',
-  'newProject': '+ New Design Session',
+  'historyTitle': 'Redesigns',
+  'newProject': '+ New redesign',
 
-  // Sessions
-  'sessionsTitle': 'Design Studio',
-  'sessionsBalance': 'Creative Access',
-  'sessionsSubtitle': 'Creative access for your architectural journey.',
-  'sessionsAvailable': 'credits',
-  'choosePlan': 'Choose your access level',
-  'bestValue': 'Most popular',
-  'unlockSessions': 'Unlock',
-  'selectPlan': 'Select a plan',
-  'session': 'session',
-  'sessions': 'sessions',
-  'transformation': 'transformation',
-  'transformations': 'transformations',
-  'perSession': '/ session',
+  // Wave 5.17d.1 — legacy credit-pack keys removed (sessionsTitle,
+  // sessionsBalance, sessionsSubtitle, sessionsAvailable, choosePlan,
+  // bestValue, unlockSessions, selectPlan, perSession, session,
+  // sessions). Monetization is now Weekly + Annual Premium via
+  // RevenueCat — see frontend/lib/features/paywall/paywall_sheet.dart.
+  'transformation': 'redesign',
+  'transformations': 'redesigns',
 
   // Profile
   'profileTitle': 'Profile',
   'signOut': 'Sign Out',
-  'projectsCount': 'Transformations',
-  'sessionsCount': 'Sessions',
+  'projectsCount': 'Redesigns',
   'sharedCount': 'Shared',
 
   // Settings
@@ -134,12 +126,8 @@ const Map<String, String> enTranslations = {
   'replacePhoto': 'Replace photo',
   'sourcePhotoUpdated': 'Source photo updated',
 
-  // Bimodal intent (Wave 5.5.14b.2)
-  'modeChooserTitle': 'How should AI redesign your space?',
-  'modePreserve': 'Preserve',
-  'modePreserveSub': 'Keep your exact space',
-  'modeCreate': 'Create',
-  'modeCreateSub': 'Reimagine freely',
+  // Wave 5.16b — bimodal intent strings removed (modeChooserTitle /
+  // modePreserve / modePreserveSub / modeCreate / modeCreateSub).
 
   // Hero
   'featuredVision': 'Featured Vision',

@@ -299,7 +299,7 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
   String _title = '';
   // Wave 5.13b — _subtitle field dropped : the AppBar title slot no
   // longer exists in the reveal screen, and _title is still kept since
-  // Share uses it ("Check out my AI home transformation — $_title!").
+  // Share uses it ("Check out my AI home redesign — $_title!").
   String? _selectedAtmosphere;
 
   // Cinematic immersive mode (controls fade away → pure image). Hybrid: tap
@@ -1051,7 +1051,7 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                 color: Colors.transparent,
                 child: InkWell(
                   onTap: () => Share.share(
-                    'Check out my AI home transformation — $_title!',
+                    'Check out my AI home redesign — $_title!',
                   ),
                   borderRadius: BorderRadius.circular(20),
                   child: Container(

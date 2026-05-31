@@ -88,32 +88,20 @@ const Map<String, String> kmTranslations = {
   'shareResult': 'ចែក​រំលែក',
   'newVariation': 'សាក​ម្ដង​ទៀត',
   'dragToReveal': 'អូស​ដើម្បី​បង្ហាញ',
-  'yourTransformation': 'ការ​បំប្លែង​របស់​អ្នក',
+  'yourTransformation': 'ការ​រចនា​ឡើង​វិញ​របស់​អ្នក',
 
   // History
-  'historyTitle': 'ការ​បំប្លែង',
-  'newProject': '+ វគ្គ​រចនា​ថ្មី',
+  'historyTitle': 'ការ​រចនា​ឡើង​វិញ',
+  'newProject': '+ ការ​រចនា​ឡើង​វិញ​ថ្មី',
 
-  // Sessions
-  'sessionsTitle': 'ស្ទូឌីយ៉ូ​រចនា',
-  'sessionsBalance': 'ការ​ប្រើ​ប្រាស់​ស្នាដៃ',
-  'sessionsSubtitle': 'ការ​ប្រើ​ប្រាស់​ស្ថាបត្យ​ការ​សម្រាប់​ការ​ស្រមៃ​របស់​អ្នក',
-  'sessionsAvailable': 'ក្រេឌីត',
-  'choosePlan': 'ជ្រើស​កម្រិត​ប្រើ​ប្រាស់',
-  'bestValue': 'ពេញ​និយម',
-  'unlockSessions': 'បើក',
-  'selectPlan': 'ជ្រើស​ផែន​ការ',
-  'session': 'វគ្គ',
-  'sessions': 'វគ្គ',
-  'transformation': 'ការ​បំប្លែង',
-  'transformations': 'ការ​បំប្លែង',
-  'perSession': '/ វគ្គ',
+  // Wave 5.17d.1 — legacy credit-pack keys removed.
+  'transformation': 'ការ​រចនា​ឡើង​វិញ',
+  'transformations': 'ការ​រចនា​ឡើង​វិញ',
 
   // Profile
   'profileTitle': 'ប្រវត្តិ​រូប',
   'signOut': 'ចេញ',
-  'projectsCount': 'ការ​បំប្លែង',
-  'sessionsCount': 'វគ្គ',
+  'projectsCount': 'ការ​រចនា​ឡើង​វិញ',
   'sharedCount': 'ចែក​រំលែក',
 
   // Settings
@@ -138,12 +126,8 @@ const Map<String, String> kmTranslations = {
   'replacePhoto': 'ជំនួស​រូបថត',
   'sourcePhotoUpdated': 'ធ្វើ​បច្ចុប្បន្ន​ភាព​រូបថត​ដើម',
 
-  // Bimodal intent (Wave 5.5.14b.2)
-  'modeChooserTitle': 'តើ AI គួរ​បន្ត​រចនា​លំនៅដ្ឋាន​របស់​អ្នក​យ៉ាង​ដូចម្ដេច?',
-  'modePreserve': 'រក្សា',
-  'modePreserveSub': 'រក្សា​ទុក​លំនៅដ្ឋាន​ដូច​ដើម',
-  'modeCreate': 'បង្កើត',
-  'modeCreateSub': 'ស្រម័យ​ឱ្យ​ស្រេច',
+  // Wave 5.16b — bimodal intent strings removed (modeChooserTitle /
+  // modePreserve / modePreserveSub / modeCreate / modeCreateSub).
 
   // Chat timeline & project state
   'vision': 'ទស្សនៈ',

@@ -1,4 +1,9 @@
-/// Wave 5.17d — Free-tier scope (Decision D1, locked 2026-05-30).
+/// Wave 5.17d.1 — Free-tier scope (re-pivot 2026-05-31).
+///
+/// Re-pivot from D1 lock (2026-05-30) :
+///   nordic_warmth + soft_luxury → warm_modern + nordic_warmth
+/// Rationale : Warm Modern is the more universal "starter" style ;
+/// Soft Luxury repositioned as a premium teaser.
 ///
 /// Mirrors `backend/free_tier.py`. Both sides MUST agree — the frontend
 /// uses these constants to dim + lock out-of-scope cards in the UI, and
@@ -27,8 +32,8 @@ const Set<String> kFreeRoomIds = {
 /// `backend/free_tier.py::FREE_ATMOSPHERES`. Ids match the `id` field
 /// of `AtmosphereStyle` in `frontend/lib/core/models/atmosphere_style.dart`.
 const Set<String> kFreeAtmosphereIds = {
+  'warm_modern',
   'nordic_warmth',
-  'soft_luxury',
 };
 
 /// True iff the (room_id, atmosphere_id) pair is in the free scope.

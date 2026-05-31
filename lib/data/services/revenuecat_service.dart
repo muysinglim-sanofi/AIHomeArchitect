@@ -27,9 +27,13 @@
 ///   - `REVENUECAT_PUBLIC_API_KEY_ANDROID` in .env
 ///   - Apple/Google products created in App Store Connect + Play
 ///     Console (operational ; not code).
-///   - Entitlement `premium` defined in the RC dashboard with a single
-///     weekly product attached (Wave 5.17d alignment ; supersedes the
-///     earlier D2 monthly + annual plan).
+///   - Entitlement `premium` defined in the RC dashboard with two
+///     products attached (Wave 5.17d.1 re-pivot, 2026-05-31) :
+///       • Weekly product   → PackageType.weekly  → $7.99 / week
+///       • Annual product   → PackageType.annual  → $79.99 / year
+///     The paywall sheet picks both via `_selectPackages(offering)` and
+///     renders Weekly (gold, MOST POPULAR) + Annual (green, BEST VALUE)
+///     side by side on wide screens / stacked on small screens.
 library;
 
 import 'dart:async';

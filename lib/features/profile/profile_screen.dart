@@ -407,7 +407,7 @@ class _NotificationsSheet extends StatefulWidget {
 }
 
 class _NotificationsSheetState extends State<_NotificationsSheet> {
-  bool _transformations = true;
+  bool _redesigns = true;
   bool _generated = true;
   bool _inspiration = false;
   bool _product = false;
@@ -429,10 +429,10 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
           const SizedBox(height: AppSpacing.lg),
           _NotifToggle(
             icon: Icons.auto_awesome_outlined,
-            title: 'Transformation updates',
+            title: 'Redesign updates',
             subtitle: 'Progress on your active designs',
-            value: _transformations,
-            onChanged: (v) => setState(() => _transformations = v),
+            value: _redesigns,
+            onChanged: (v) => setState(() => _redesigns = v),
           ),
           _NotifToggle(
             icon: Icons.check_circle_outline,
@@ -622,17 +622,17 @@ class _HelpCenterSheet extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           _FaqCard(
-            question: 'How many design sessions do I have?',
-            answer: 'Each transformation uses one session credit. You can buy more from the Design Studio screen. Credits never expire.',
+            question: 'What\'s included in Premium?',
+            answer: 'Premium unlocks every room and every atmosphere with your personal AI Architect, plus HD exports. Two plans : Weekly Premium for a complete home project, or Annual Premium for the whole year.',
           ),
           const SizedBox(height: AppSpacing.sm),
           _FaqCard(
             question: 'Can I replace the source photo?',
-            answer: 'Yes. Inside any design session, tap the source photo strip at the top to open the Design Direction workspace. You can swap the photo and adjust your atmosphere direction anytime.',
+            answer: 'Yes. Inside any redesign, tap the source photo strip at the top to open the Design Direction workspace. You can swap the photo and adjust your atmosphere direction anytime.',
           ),
           const SizedBox(height: AppSpacing.sm),
           _FaqCard(
-            question: 'Can I share my transformations?',
+            question: 'Can I share my redesigns?',
             answer: 'Yes — from any result screen, tap Share to send your before & after reveal to anyone. Save it to your gallery too.',
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -904,11 +904,14 @@ class _StatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    // Wave 5.17d.1 — the legacy 3-card stats row (Transformations /
+    // Sessions / Shared) referenced the now-retired credit-pack model
+    // ("5 sessions" was the default pack balance). With Premium replacing
+    // credit packs, we keep only the two real stats : redesigns count
+    // (projects) + shared count. No fake "credits" number.
     return Row(
       children: [
         _StatCard(value: '$projectCount', label: l10n.projectsCount),
-        const SizedBox(width: AppSpacing.sm),
-        _StatCard(value: '5', label: l10n.sessionsCount),
         const SizedBox(width: AppSpacing.sm),
         _StatCard(value: '2', label: l10n.sharedCount),
       ],

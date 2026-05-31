@@ -97,13 +97,13 @@ final _p1Messages = [
 final _p2Messages = [
   MessageModel(
     id: 'p2_1',
-    content: 'Strong bones — good geometry and excellent proportions already. The facade reads well; it just needs a complete material and atmosphere transformation. For a genuine Bali Resort arrival, I\'d bring in natural stone cladding, a deeper roof overhang, and tropical planting at the gate to immediately shift the approach experience.',
+    content: 'Strong bones — good geometry and excellent proportions already. The facade reads well; it just needs a complete material and atmosphere redesign. For a genuine Bali Resort arrival, I\'d bring in natural stone cladding, a deeper roof overhang, and tropical planting at the gate to immediately shift the approach experience.',
     isAi: true,
     createdAt: DateTime.now().subtract(const Duration(hours: 4, minutes: 30)),
   ),
   MessageModel(
     id: 'p2_2',
-    content: 'I want a full Bali Resort transformation. Tropical entrance, natural materials, water feature if possible.',
+    content: 'I want a full Bali Resort redesign. Tropical entrance, natural materials, water feature if possible.',
     isAi: false,
     createdAt: DateTime.now().subtract(const Duration(hours: 4, minutes: 20)),
   ),
@@ -146,7 +146,7 @@ final _p2Messages = [
 final _p3Messages = [
   MessageModel(
     id: 'p3_1',
-    content: 'The window is the room\'s greatest asset — excellent natural light, and that\'s worth building everything around. For a Japandi-focused transformation, I\'d make a walnut slab desk the centrepiece, add integrated storage to eliminate visual noise, and use a warm white and stone palette that lets the daylight do the work.',
+    content: 'The window is the room\'s greatest asset — excellent natural light, and that\'s worth building everything around. For a Japandi-focused redesign, I\'d make a walnut slab desk the centrepiece, add integrated storage to eliminate visual noise, and use a warm white and stone palette that lets the daylight do the work.',
     isAi: true,
     createdAt: DateTime.now().subtract(const Duration(days: 7, hours: 3)),
   ),
@@ -295,40 +295,29 @@ final mockProjects = [
 
 // ── Chat suggestions ──────────────────────────────────────────────────────────
 
+// Wave 5.11 — atmosphere-neutral architectural defaults. Reads as
+// editorial refinement language, not generic AI-tool prompts. Backend
+// override path (chat / generation response `suggestions` field) stays
+// untouched — these are the calmer fallback list. Per-atmosphere
+// contextual mapping deferred to a future wave.
 const preGenerationSuggestions = [
-  'More warmth & texture',
-  'Go more tropical',
-  'Keep it minimal',
-  'Open it with light',
+  'Push this direction further',
+  'Bring in more daylight',
+  'Calmer atmosphere',
+  'Open the space visually',
 ];
 
 const postGenerationSuggestions = [
-  'Make it more luxury',
-  'Add more plants',
-  'Modernize the materials',
-  'More Bali feeling',
+  'Push this direction further',
+  'Introduce softer indirect lighting',
+  'Try another material palette',
+  'Make the atmosphere calmer',
 ];
 
-// ── Session packs ─────────────────────────────────────────────────────────────
-
-final mockSessionPacks = [
-  SessionPack(id: '1', sessions: 1, price: 4.99, label: 'Explorer Pass', popular: false),
-  SessionPack(id: '2', sessions: 5, price: 17.99, label: 'Design Companion', popular: true),
-  SessionPack(id: '3', sessions: 20, price: 49.99, label: 'Architect Studio', popular: false),
-];
-
-class SessionPack {
-  final String id;
-  final int sessions;
-  final double price;
-  final String label;
-  final bool popular;
-
-  const SessionPack({
-    required this.id,
-    required this.sessions,
-    required this.price,
-    required this.label,
-    required this.popular,
-  });
-}
+// ── Session packs (Wave 5.17d.1 — removed) ────────────────────────────────────
+//
+// Pre-monetization mock for "Explorer Pass / Design Companion / Architect
+// Studio" pay-per-session packs. The credit-pack model was retired in Wave
+// 5.17d.1 in favour of the Weekly + Annual Premium subscription via
+// RevenueCat (see frontend/lib/features/paywall/paywall_sheet.dart).
+// Intentionally left out — do not re-introduce.
