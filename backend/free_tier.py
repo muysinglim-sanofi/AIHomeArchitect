@@ -1,9 +1,13 @@
 """
-Wave 5.17d — Free-tier scope restriction.
+Wave 5.17d.1 — Free-tier scope restriction.
 
 Free (non-premium) users may generate ONLY :
   - room_type_id ∈ FREE_ROOMS       (Living Room only)
-  - atmosphere_id ∈ FREE_ATMOSPHERES (Nordic Warmth + Soft Luxury — Decision D1)
+  - atmosphere_id ∈ FREE_ATMOSPHERES (Warm Modern + Nordic Warmth — re-pivot 2026-05-31)
+
+Re-pivot from D1 lock (2026-05-30) : Nordic Warmth + Soft Luxury →
+Warm Modern + Nordic Warmth. Soft Luxury moves to the premium teaser
+set ; Warm Modern is the universal default starter style.
 
 This module owns the policy. The /generate endpoint imports
 `check_restrictions` and calls it AFTER quota OK but BEFORE the
@@ -45,8 +49,8 @@ log = logging.getLogger("aih.free_tier")
 FREE_ROOMS = ("livingRoom",)
 
 # Canonical atmosphere ids (mirrors frontend AtmosphereStyle.id).
-# Decision D1 (locked 2026-05-30) — Nordic Warmth + Soft Luxury.
-FREE_ATMOSPHERES = ("nordic_warmth", "soft_luxury")
+# Wave 5.17d.1 re-pivot (2026-05-31) — Warm Modern + Nordic Warmth.
+FREE_ATMOSPHERES = ("warm_modern", "nordic_warmth")
 
 
 # Reference catalogue for drift detection and operator clarity. Not used
@@ -104,7 +108,7 @@ async def check_restrictions(
                 "error_code": "FREE_TIER_RESTRICTED",
                 "user_message": (
                     "Let AI Decide and Surprise Me are part of premium. "
-                    "Pick Living Room with Nordic Warmth or Soft Luxury "
+                    "Pick Living Room with Warm Modern or Nordic Warmth "
                     "to keep exploring for free."
                 ),
                 "restricted_field": "delegated_choice",
@@ -147,7 +151,7 @@ async def check_restrictions(
                 "error_code": "FREE_TIER_RESTRICTED",
                 "user_message": (
                     "Premium unlocks every atmosphere. The free tier offers "
-                    "Nordic Warmth and Soft Luxury."
+                    "Warm Modern and Nordic Warmth."
                 ),
                 "restricted_field": "atmosphere",
                 "received_id": atmosphere_id,
