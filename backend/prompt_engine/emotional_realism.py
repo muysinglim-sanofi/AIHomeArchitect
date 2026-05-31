@@ -121,9 +121,14 @@ _EMOTIONAL_REALISM_CREATIVE_BY_ATM: dict[str, str] = {
         "EMOTIONAL REALISM — humid golden-hour warmth, barefoot vacation "
         "calm, sun-filtered atmosphere around the existing focal zone."
     ),
+    # Wave 5.13b — Warm Modern daylight recalibration (2026-05-31).
+    # Removed "golden-hour glow" + "warm ambient depth" — they were the
+    # primary creative-mode drivers of dark / hotel-at-night outputs.
+    # New sentence keeps warm + premium + residential anchors while
+    # leading with daytime brightness.
     "warm_modern": (
-        "EMOTIONAL REALISM — golden-hour glow, restrained emotional "
-        "warmth, warm ambient depth around the existing focal zone."
+        "EMOTIONAL REALISM — bright warm daylight, premium residential "
+        "calm, inviting daytime warmth around the existing focal zone."
     ),
     "soft_luxury": (
         "EMOTIONAL REALISM — refined ambient depth, soft luminous calm, "
