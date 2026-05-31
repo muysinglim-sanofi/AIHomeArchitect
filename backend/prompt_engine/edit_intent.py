@@ -313,23 +313,23 @@ def build_style_refinement_header(
     Header block for STYLE_REFINEMENT mode.
 
     Wave 4.2.1: compressed from ~934 chars to ~300 chars.
-    The full structural contract has been replaced by build_continuation_contract()
-    (~375 chars) in the composer, so this header must NOT duplicate geometry
-    preservation language — it only frames the evolution intent.
+    Wave 5.13d Phase 2 (2026-05-31) — compressed further from ~250 chars
+    to ~70 chars. The preservation tail ("Incremental evolution only:
+    evolve materials, lighting, colour and textiles; do not reimagine or
+    replace the design") was redundant with the CORE PREAMBLE V2 emitted
+    in the next section ("Continue evolving the current vision of the
+    same apartment — preserve every architectural fact..."). Direction
+    framing also handled by the dedicated USER INTENT block downstream.
+    This header now serves as a minimal mode + atmosphere + direction
+    label only.
     """
-    # Wave 4.8.2: de-duplicated. The frozen-geometry / spatial-anchors-locked /
-    # PRESERVE-furniture prose was redundant with structural_identity +
-    # atmosphere_contract (FROZEN camera/walls/windows + TOPOLOGY LOCKED) +
-    # negative_anchors. Removing the duplication (this section is P1 and was
-    # evicting design_intel/realism — see 4.8.1a) while keeping the canonical
-    # SAME APARTMENT CONTINUATION + incremental-evolution + Direction tokens.
     room_ctx = f" {room_type}" if room_type else ""
-    direction = f" Direction: {user_instruction.strip()[:160]}." if user_instruction.strip() else ""
-    return (
-        f"SAME APARTMENT CONTINUATION — REFINE this{room_ctx} — {style_name}. "
-        f"Incremental evolution only: evolve materials, lighting, colour and "
-        f"textiles; do not reimagine or replace the design.{direction}"
+    direction = (
+        f" — direction: {user_instruction.strip()[:160]}"
+        if user_instruction.strip()
+        else ""
     )
+    return f"REFINE —{room_ctx} — {style_name}{direction}."
 
 
 def build_structural_transformation_header(

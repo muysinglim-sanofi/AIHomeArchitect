@@ -1510,6 +1510,7 @@ async def generate(
         structural_negative_anchors=negative_anchors_clause,
         authorized_user_changes=authorized_changes_clause,
         generation_mode=generation_mode,  # Wave 5.5.14c — no-op unless BIMODAL_ENABLED=1
+        edit_mode=edit_mode,  # Wave 5.13d Phase 1 — single source of truth (main.py classified + elevated)
     )
     _prompt_s = time.monotonic() - _t_prompt
     log.info(
@@ -1652,7 +1653,18 @@ async def generate(
             # (Desert Luxe → low) still take precedence over the default
             # but are subsumed by this LOCAL_EDIT override when both apply.
             # Revert = delete this 2-line conditional.
-            if edit_mode == EditMode.LOCAL_EDIT:
+            #
+            # Wave 5.13d Phase A (2026-05-31) — extend the LOCAL_EDIT recipe
+            # (quality=low + fidelity=OMIT below) to STYLE_REFINEMENT. The
+            # cascade-noise audit confirmed STYLE_REFINEMENT was running on
+            # quality=medium + fidelity=high + source=LATEST — the exact
+            # combination LOCAL_EDIT had pre-correction. Aligning STYLE_REFINEMENT
+            # on the corrected recipe is the targeted fix for cascade pixel
+            # grain on iterations 2+ (V2 "Nordic instead", V4 "make it warmer",
+            # V8 "more luxurious"). STRUCTURAL_TRANSFORMATION and STYLE_SWITCH
+            # customized are NOT touched in Phase A — empirical validation
+            # of Phase A drives the next step.
+            if edit_mode in (EditMode.LOCAL_EDIT, EditMode.STYLE_REFINEMENT):
                 _quality_override = "low"
             _fidelity_override = "high" if generation_mode == "preserve" else profile.input_fidelity
             # Wave 5.13c Option C (2026-05-31) — drop input_fidelity for
@@ -1677,7 +1689,28 @@ async def generate(
             # the line. If architectural drift becomes a regression, the
             # next lever is reinforcing the prompt's "preserve all openings
             # including doors" wording.
-            if edit_mode in (EditMode.LOCAL_EDIT, EditMode.LAYOUT_CHANGE):
+            # Wave 5.13d Phase A (2026-05-31) — add STYLE_REFINEMENT to the
+            # fidelity-OMIT set. Same rationale as the quality=low extension
+            # above : cascade-noise audit showed STYLE_REFINEMENT on LATEST
+            # source with fidelity=high anchored the model to noisy AI pixels.
+            # Omitting fidelity lets the model render from clean internal
+            # priors. structural_identity + accumulated_state in the prompt
+            # still constrain WHAT changes.
+            #
+            # Wave 5.13d Phase B (2026-05-31) — extend the fidelity-OMIT set
+            # to STRUCTURAL_TRANSFORMATION. Quality stays medium for STRUCT
+            # (large semantic transformations — opening a wall, removing a
+            # partition — need re-render definition that low quality smooths
+            # away). Only fidelity drops, so the model gets latitude from
+            # internal priors instead of pixel-anchoring to a potentially
+            # noisy AI source. structural_identity + structural_permission
+            # in the V3 prompt still constrain WHAT can change.
+            if edit_mode in (
+                EditMode.LOCAL_EDIT,
+                EditMode.LAYOUT_CHANGE,
+                EditMode.STYLE_REFINEMENT,
+                EditMode.STRUCTURAL_TRANSFORMATION,
+            ):
                 _fidelity_override = None
             edit_kwargs: dict = dict(
                 model="gpt-image-1",
@@ -1695,6 +1728,10 @@ async def generate(
                 _edit_mode_label = "yes(LOCAL_EDIT)"
             elif edit_mode == EditMode.LAYOUT_CHANGE:
                 _edit_mode_label = "yes(LAYOUT_CHANGE)"
+            elif edit_mode == EditMode.STYLE_REFINEMENT:
+                _edit_mode_label = "yes(STYLE_REFINEMENT/Wave5.13d-PhaseA)"
+            elif edit_mode == EditMode.STRUCTURAL_TRANSFORMATION:
+                _edit_mode_label = "yes(STRUCTURAL_TRANSFORMATION/Wave5.13d-PhaseB)"
             else:
                 _edit_mode_label = "no"
             if edit_kwargs.get("input_fidelity") is None:

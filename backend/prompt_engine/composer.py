@@ -613,6 +613,7 @@ def compose_generation_prompt(
     structural_negative_anchors: str = "",
     authorized_user_changes: str = "",
     generation_mode: str = "preserve",  # Wave 5.5.14c — bimodal intent; passed to _design_intelligence_block. No-op unless BIMODAL_ENABLED env var is truthy.
+    edit_mode: "EditMode | None" = None,  # Wave 5.13d Phase 1 — single source of truth for edit_mode (passed from main.py).
 ) -> str:
     """
     Build the complete generation prompt from all intelligence layers.
@@ -625,13 +626,26 @@ def compose_generation_prompt(
 
     compact_prompts=True (DEV mode): compact realism everywhere, P4 enrichments
     (dream richness, scene completion, interior completeness) skipped.
+
+    Wave 5.13d Phase 1 (2026-05-31) — `edit_mode` parameter accepted from
+    main.py. If provided, it overrides internal `classify_edit_mode` call,
+    establishing main.py as the single source of truth. Previous behavior :
+    main.py and composer.py / composer_v2.py each independently classified
+    on different inputs (raw prompt vs enriched_instruction), producing
+    schizophrenic prompts when classifications diverged (e.g. main.py said
+    STRUCTURAL, composer_v2 said LOCAL_EDIT on the same request). Fallback
+    to classify_edit_mode when None preserves backward compat for any
+    caller not yet updated.
     """
     dna = get_style(style_label)
     atmosphere_id = label_to_atmosphere_id(style_label)
     refinement_state = parse_history(history, iteration)
-    mode = classify_edit_mode(user_instruction, iteration)
-
-    log.info("  edit_mode: %s  atmosphere: %s  room: %s", mode.value, atmosphere_id, room_type or "(none)")
+    if edit_mode is None:
+        mode = classify_edit_mode(user_instruction, iteration)
+        log.info("  edit_mode: %s (classified internally)  atmosphere: %s  room: %s", mode.value, atmosphere_id, room_type or "(none)")
+    else:
+        mode = edit_mode
+        log.info("  edit_mode: %s (received from caller)  atmosphere: %s  room: %s", mode.value, atmosphere_id, room_type or "(none)")
 
     # ── Path A: LOCAL EDIT ────────────────────────────────────────────────────
     # Wave 5.13c — retrofit. The previous Path A was the thinnest in the

@@ -77,7 +77,11 @@ from .edit_intent import (
 )
 from .realism_layer import build_compact_realism_block
 from .wow_layer import build_atmosphere_dna_boundary  # Wave 5.5.4 — propagation of C3 to V2+ path
-from .refinement_memory import build_refinement_block, parse_history
+from .refinement_memory import (
+    build_refinement_block,
+    build_accumulated_state_block,  # Wave 5.13d Phase 2 — natural-state history
+    parse_history,
+)
 from .style_dna import get_style
 from .transformation_classifier import (
     TransformationType,
@@ -636,9 +640,22 @@ def _build_style_block(
     )
     if compact_prompts:
         return f"{prefix}\n{dna_text}"
-    # Wave 5.5.14f — AMBITION tail (voice #4) drops in preserve mode.
-    ambition = _transformation_ambition_for_mode(generation_mode)
-    return f"{prefix}\n{dna_text}\n{ambition}"
+    # Wave 5.13d Phase 2 (2026-05-31) — AMBITION dropped entirely on V2+
+    # paths (was: STYLE_REFINEMENT + STRUCTURAL_TRANSFORMATION).
+    # Rationale :
+    #   • For STYLE_REFINEMENT — "premium hospitality-grade restyling" is
+    #     already conveyed by the DNA `luxury_level` ; "Decorate this
+    #     photo; do not recompose it" duplicates STYLE TRANSFORMATION
+    #     prefix above. Redundant, contributes to signal drowning of the
+    #     user intent (Bug C : "more luxurious" → V6 ≈ V5).
+    #   • For STRUCTURAL_TRANSFORMATION — "do not recompose it" actively
+    #     contradicts the structural intent (user IS recomposing by
+    #     definition : "open up the wall", "add a window").
+    # On V1 atmosphere SWITCH branches that delegate to composer.py
+    # Path D (REBOOT_FRESH), AMBITION is unaffected (Path D uses
+    # different layer). Wave 5.5.14f bimodal preserve-mode tail-drop is
+    # subsumed by this universal drop.
+    return f"{prefix}\n{dna_text}"
 
 
 def _build_user_block(
@@ -666,6 +683,13 @@ def _build_user_block(
         from the previous atmosphere are filtered out).
       * Neither set                     → V1/INCREMENTAL behaviour, byte-
         identical to pre-Wave-5.3.
+
+    Wave 5.13d Phase 2 (2026-05-31) — STYLE_REFINEMENT-specific variant
+    available via `_build_style_refinement_user_block` below. This
+    function remains in use for STRUCTURAL_TRANSFORMATION + atmosphere
+    SWITCH paths where the verbose USER DIRECTION + REFINEMENT MEMORY +
+    AUTHORIZED USER CHANGES separation still maps to the prompt-engine
+    contract.
     """
     pieces: list[str] = []
 
@@ -691,6 +715,83 @@ def _build_user_block(
         pieces.append(auc)
 
     return "\n".join(pieces)
+
+
+def _build_style_refinement_user_block(
+    user_instruction: str,
+    iteration: int,
+    history: Optional[list],
+    refinement_history_override: Optional[list] = None,
+    suppress_refinement_memory: bool = False,
+) -> str:
+    """
+    Wave 5.13d Phase 2 (2026-05-31) — unified USER INTENT block for
+    STYLE_REFINEMENT path only.
+
+    Replaces the 3-section USER DIRECTION + REFINEMENT MEMORY + AUTHORIZED
+    USER CHANGES emission (which repeated the user's instruction 3-4 times
+    and saturated the prompt with preservation tail redundant with the
+    CORE PREAMBLE upstream). New structure :
+
+        USER INTENT (Vision N):
+        Direction: <user instruction>
+
+        This iteration MUST create a clearly noticeable refinement.
+        The difference from the previous vision should be immediately
+        recognizable while preserving the same apartment and architectural
+        structure.
+
+        Accumulated design state from prior visions:
+        - X (already added)
+        - Y (already applied)
+
+        Preserve these existing changes and build on top of them.
+
+    Rationale :
+      • Directive is GENERIC ("clearly noticeable refinement") so it
+        works for any "more X" prompt (luxurious, premium, cozy, elegant,
+        sophisticated, warmer, brighter) without per-case wording.
+      • Past refinements expressed as natural state ("already added")
+        rather than procedural log ("Add or introduce: ...; Design
+        direction evolution: ..."). Reduces redundancy with the upstream
+        CORE PREAMBLE's universal preservation.
+      • No more "AUTHORIZED USER CHANGES" preservation tail ("Keep
+        openings, bay window, facade and perspective fixed") — already
+        enforced by S2 CORE PREAMBLE (FROZEN + STRUCTURAL clauses).
+
+    Scope :
+      • STYLE_REFINEMENT only. STRUCTURAL_TRANSFORMATION + atmosphere
+        SWITCH paths continue to use `_build_user_block` above.
+    """
+    instruction = (user_instruction or "").strip()[:300]
+
+    parts: list[str] = [f"USER INTENT (Vision {iteration}):"]
+    if instruction:
+        parts.append(f"Direction: {instruction}")
+
+    parts.append(
+        "This iteration MUST create a clearly noticeable refinement. "
+        "The difference from the previous vision should be immediately "
+        "recognizable while preserving the same apartment and "
+        "architectural structure."
+    )
+
+    # Accumulated state from prior visions, if any.
+    if iteration > 1 and not suppress_refinement_memory:
+        eff_history = (
+            refinement_history_override
+            if refinement_history_override is not None
+            else history
+        )
+        if eff_history is not None:
+            refinement_state = parse_history(eff_history, iteration)
+            accumulated = build_accumulated_state_block(
+                refinement_state, iteration
+            )
+            if accumulated:
+                parts.append(accumulated)
+
+    return "\n\n".join(parts)
 
 
 # ── Mode-aware CORE assembly ─────────────────────────────────────────────────
@@ -809,6 +910,7 @@ def compose_generation_prompt(
     structural_negative_anchors: str = "",
     authorized_user_changes: str = "",
     generation_mode: str = "preserve",  # Wave 5.5.14c — bimodal intent. Forwarded into _build_style_block / _v1_compose. No-op unless BIMODAL_ENABLED env var truthy.
+    edit_mode: "EditMode | None" = None,  # Wave 5.13d Phase 1 — single source of truth for edit_mode (from main.py classification + elevation).
 ) -> str:
     """
     Drop-in replacement for composer.py::compose_generation_prompt.
@@ -825,12 +927,23 @@ def compose_generation_prompt(
     ARCHITECTURAL FACTS).
     """
     atmosphere_id = label_to_atmosphere_id(style_label)
-    edit_mode = classify_edit_mode(user_instruction, iteration)
+    # Wave 5.13d Phase 1 — single source of truth. If caller (main.py)
+    # provided edit_mode, use it directly. Otherwise classify internally
+    # for backwards compat. The previous behavior of always reclassifying
+    # internally on enriched_instruction produced schizophrenic prompts
+    # when classifications diverged (e.g. STRUCT classified in main.py,
+    # LOCAL_EDIT reclassified here from enriched_instruction containing
+    # spatial_addendum's "STRUCTURAL CHANGE" / "does not change" tokens).
+    if edit_mode is None:
+        edit_mode = classify_edit_mode(user_instruction, iteration)
+        _classification_source = "internal"
+    else:
+        _classification_source = "caller"
     log.info(
         "[ComposerV2] edit_mode=%s  atmosphere=%s  room=%s  iteration=%d  "
-        "compact=%s",
+        "compact=%s  classification=%s",
         edit_mode.value, atmosphere_id, room_type or "(none)", iteration,
-        compact_prompts,
+        compact_prompts, _classification_source,
     )
 
     # ── Wave 5.3.1 — V1 (FIRST_VISION) delegation to frozen composer.py ──────
@@ -859,6 +972,7 @@ def compose_generation_prompt(
             structural_identity, source_continuity, structural_negative_anchors,
             authorized_user_changes,
             generation_mode,  # Wave 5.5.14c — forward bimodal intent
+            edit_mode=edit_mode,  # Wave 5.13d Phase 1 — forward single-source-of-truth edit_mode
         )
 
     # ── LOCAL_EDIT — strict differential edit (Wave 5.13c retrofit) ───────────
@@ -1082,7 +1196,26 @@ def compose_generation_prompt(
     #   * REBOOT_CUSTOMIZED — keep only customization items in memory; drop
     #     atmosphere-only tweaks tied to the previous atmosphere
     #   * INCREMENTAL       — unchanged behaviour
-    if switch_strategy == _SwitchStrategy.REBOOT_FRESH:
+    #
+    # Wave 5.13d Phase 2 (2026-05-31) — STYLE_REFINEMENT (incremental,
+    # non-switch) uses the new unified `_build_style_refinement_user_block`
+    # which replaces the 3-section USER DIRECTION + REFINEMENT MEMORY +
+    # AUTHORIZED USER CHANGES with a single coherent USER INTENT block
+    # (generic directive + natural-state history). Switch paths
+    # (REBOOT_FRESH / REBOOT_CUSTOMIZED) and STRUCTURAL_TRANSFORMATION
+    # continue using `_build_user_block` for now (out of Phase 2 scope).
+    _use_phase2_user_block = (
+        edit_mode == EditMode.STYLE_REFINEMENT
+        and switch_strategy == _SwitchStrategy.INCREMENTAL
+        and iteration > 1
+    )
+    if _use_phase2_user_block:
+        user_block = _build_style_refinement_user_block(
+            user_instruction=user_instruction,
+            iteration=iteration,
+            history=history,
+        )
+    elif switch_strategy == _SwitchStrategy.REBOOT_FRESH:
         user_block = _build_user_block(
             user_instruction=user_instruction,
             iteration=iteration,

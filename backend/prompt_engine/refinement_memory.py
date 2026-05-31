@@ -243,3 +243,52 @@ def build_refinement_block(state: RefinementState, iteration: int) -> str:
         return ""
 
     return " ".join(parts)
+
+
+def build_accumulated_state_block(
+    state: RefinementState, iteration: int
+) -> str:
+    """
+    Wave 5.13d Phase 2 (2026-05-31) — natural-state history block.
+
+    Replaces the verbose REFINEMENT MEMORY format with a present-tense
+    "Accumulated design state" expression. The model reads what is
+    ALREADY PRESENT in the design (prior refinements as state) rather
+    than a procedural log of past instructions repeated 3 times across
+    USER DIRECTION / REFINEMENT MEMORY / AUTHORIZED USER CHANGES.
+
+    Scope :
+      - Includes : add[] (objects already present), remove[] (already
+        cleared), directions[] (already applied).
+      - Excludes : enhance[] — qualitative intensifications are hard to
+        express as state ("more luxurious" applied at V3 doesn't read
+        well as "more luxurious already present"). The current
+        iteration's intent (typically an enhance) goes into the
+        USER INTENT directive instead.
+      - Excludes : keep[] — preservation is already universally enforced
+        by the CORE PREAMBLE upstream.
+      - Excludes : latest — that is the CURRENT iteration's directive,
+        emitted separately in the USER INTENT block.
+
+    Returns empty string when no prior accumulated changes exist (i.e.
+    Vision 1 or a clean session).
+    """
+    if iteration <= 1:
+        return ""
+
+    items: list[str] = []
+    for entry in state.add:
+        items.append(f"- {entry} (already added)")
+    for entry in state.directions:
+        items.append(f"- {entry} (already applied)")
+    for entry in state.remove:
+        items.append(f"- {entry} (already removed)")
+
+    if not items:
+        return ""
+
+    return (
+        "Accumulated design state from prior visions:\n"
+        + "\n".join(items)
+        + "\nPreserve these existing changes and build on top of them."
+    )
