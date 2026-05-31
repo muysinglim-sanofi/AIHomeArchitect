@@ -112,9 +112,16 @@ _PROFILES: dict[str, GenerationProfile] = {
         # LOW for atmospheres with strong natural texture identity
         # (validated visually per 16-photo bench: WM/Desert win in low,
         # SL/Japandi/Nordic/Nature/Tropical win in medium).
+        # Wave 5.13b (2026-05-31): warm_modern override TEMPORARILY
+        # REMOVED to test the daylight recalibration at medium quality.
+        # The original 5.13n empirical "WM wins in low" was likely
+        # correlated with the dark/orange/hotel mood that 5.13b is
+        # rewriting away — low-quality picturial artifacts may have
+        # been masking the over-warm tint. Re-bench Warm Modern at
+        # both qualities after 5.13b stabilises and either re-add the
+        # override or commit medium as the new permanent default.
         quality="medium",
         quality_overrides=(
-            ("warm_modern", "low"),
             ("desert_luxe", "low"),
         ),
         # Wave 5.13n preserve override (in main.py call site): input_fidelity="high"

@@ -269,6 +269,7 @@ from .edit_intent import (
     EditMode,
     classify_edit_mode,
     build_local_edit_prompt,
+    build_layout_change_prompt,  # Wave 5.13c — new LAYOUT_CHANGE path
     build_style_refinement_header,
     build_structural_transformation_header,
 )
@@ -315,7 +316,17 @@ _MODE_BUDGETS: dict[str, int] = {
     # (3550) and the 4000 hard ceiling — quality restoration, not inflation.
     "STYLE_REFINEMENT": 3500,
     "STRUCTURAL_TRANSFORMATION": 3600,
-    "LOCAL_EDIT": 1500,
+    # Wave 5.13c — LOCAL_EDIT budget raised 1500→2200 to accommodate the
+    # retrofitted structural_identity + source_continuity sections on top
+    # of the stricter (longer) differential edit prompt. New estimate :
+    # source_continuity ~200 + structural_identity ~400 + edit_block ~1200
+    # + compact_realism ~150 ≈ 1950, leaving ~250 chars of safety margin.
+    "LOCAL_EDIT": 2200,
+    # Wave 5.13c — LAYOUT_CHANGE budget : same family as LOCAL_EDIT but
+    # adds the partial DNA intel block (~350 chars). edit_block ~1300 +
+    # partial DNA ~350 + structural_identity ~400 + source_continuity
+    # ~200 + compact_realism ~150 ≈ 2400. Round up to 2600.
+    "LAYOUT_CHANGE": 2600,
 }
 
 # P5 dropped first; P1 never dropped. Unknown sections default to P3 (realism tier).
@@ -339,6 +350,7 @@ _SECTION_PRIORITY: dict[str, int] = {
     "atmosphere_dna_boundary": 1,      # Wave 5.5.3 — DNA-vs-photo boundary clause; placed after design_intel; never dropped
     # P2 — core design intelligence (dropped only if forced)
     "design_intel": 2,
+    "design_intel_partial": 2,  # Wave 5.13c — LAYOUT_CHANGE atmosphere + lighting only
     # P3 — realism quality floor
     "full_realism": 3,
     "compact_realism": 3,
@@ -515,6 +527,56 @@ def _compact_structural_identity_wrapper(verbose_clause: str) -> str:
     return verbose_clause
 
 
+# ── Wave 5.13c — LAYOUT_CHANGE partial DNA helper ────────────────────────────
+#
+# LAYOUT_CHANGE rearranges existing furniture without restyling. Emitting
+# the FULL atmosphere DNA (materials + furniture vocabulary) tells the
+# model to materialize specific pieces — exactly what we want to avoid.
+# This helper emits a TRIMMED DNA block : atmosphere identity (philosophy,
+# emotional intent, luxury level) + room-specific lighting_behavior ONLY.
+# material_palette, furniture_language, decor_language and realism
+# constraints are dropped — the existing image already carries those.
+# Atmosphere-agnostic : works for every registered atmosphere.
+
+def _layout_change_intel_block(atmosphere_id: str, room_type: str) -> str:
+    """
+    Wave 5.13c — partial DNA block for LAYOUT_CHANGE.
+
+    Emits :
+      ATMOSPHERE (Name): philosophy — emotional_intent. [luxury_level]
+      ROOM (Room) LIGHTING (preserve): {room_dna.lighting_behavior}
+      ROOM CONTEXT: {room_dna.room_specific_constraints[:2]}.
+
+    Returns "" when the atmosphere is not registered.
+
+    Wave 5.13c bugfix (2026-05-31) — restore `room_specific_constraints`
+    emission. See composer_v2.py docstring for the full rationale.
+    Kept in sync with composer_v2._layout_change_intel_block so V1
+    fallback behavior (if ever exercised) matches the runtime path.
+    """
+    from .atmosphere_dna import get_core, get_room_dna
+    core = get_core(atmosphere_id)
+    if not core:
+        return ""
+
+    atm_name = atmosphere_id.replace("_", " ").title()
+    lines = [
+        f"ATMOSPHERE ({atm_name}): {core.philosophy} — {core.emotional_intent}. "
+        f"[{core.luxury_level}]"
+    ]
+    room_dna = get_room_dna(atmosphere_id, room_type)
+    if room_dna:
+        room_name = room_dna.room_type.replace("_", " ").title()
+        if room_dna.lighting_behavior:
+            lines.append(
+                f"ROOM ({room_name}) LIGHTING (preserve): {room_dna.lighting_behavior}"
+            )
+        if room_dna.room_specific_constraints:
+            ctx = "; ".join(room_dna.room_specific_constraints[:2])
+            lines.append(f"ROOM CONTEXT: {ctx}.")
+    return "\n".join(lines)
+
+
 def _audit(
     mode: str,
     sections: list[tuple[str, str]],
@@ -572,6 +634,15 @@ def compose_generation_prompt(
     log.info("  edit_mode: %s  atmosphere: %s  room: %s", mode.value, atmosphere_id, room_type or "(none)")
 
     # ── Path A: LOCAL EDIT ────────────────────────────────────────────────────
+    # Wave 5.13c — retrofit. The previous Path A was the thinnest in the
+    # composer (edit_block + compact_realism only). Combined with the
+    # LATEST-as-source default and input_fidelity=high, V3 LOCAL_EDITs
+    # produced cascade-degraded outputs : artefacts, regenerated textures,
+    # unrequested modifications. The retrofit injects two P1 anchors that
+    # already exist in V2/V3 STYLE_REFINEMENT and STRUCTURAL_TRANSFORMATION
+    # paths : source_continuity ("CONTINUE FROM CURRENT DESIGN") and
+    # structural_identity (windows/openings/depth facts). No atmosphere DNA
+    # added — keeping LOCAL_EDIT differentiated from STYLE_REFINEMENT.
     if mode == EditMode.LOCAL_EDIT:
         edit_block = build_local_edit_prompt(
             user_instruction=user_instruction,
@@ -580,13 +651,54 @@ def compose_generation_prompt(
             room_description=room_description,
         )
         realism = build_compact_realism_block()
-        raw_sections = [("edit_block", edit_block), ("compact_realism", realism)]
+        raw_sections = [
+            ("source_continuity", source_continuity),   # P1 — Wave 5.13c retrofit
+            ("structural_identity", structural_identity),  # P1 — Wave 5.13c retrofit
+            ("edit_block", edit_block),
+            ("compact_realism", realism),
+        ]
         _audit("LOCAL_EDIT", raw_sections)
         prompt, dropped = _assemble_with_budget("LOCAL_EDIT", raw_sections)
         log.info(
             "[Prompt Budget] mode=LOCAL_EDIT  budget=%d  actual=%d  "
             "compression_applied=%s  removed_sections=%s",
             _MODE_BUDGETS["LOCAL_EDIT"], len(prompt), bool(dropped), dropped or [],
+        )
+        return prompt
+
+    # ── Path E: LAYOUT_CHANGE ─────────────────────────────────────────────────
+    # Wave 5.13c — new path for spatial rearrangement intents ("move TV in
+    # front of sofa", "rearrange the seating"). Sits between LOCAL_EDIT
+    # (no position change allowed) and STYLE_REFINEMENT (full DNA, redesign
+    # permitted). Source stays LATEST (continue the vision). Prompt permits
+    # position/orientation changes for the named pieces while forbidding
+    # material/colour/model substitution. Paired with a PARTIAL DNA block
+    # (atmosphere identity + lighting only — furniture_language and
+    # material_palette dropped to avoid the model rerendering furniture
+    # pieces it should just move).
+    if mode == EditMode.LAYOUT_CHANGE:
+        edit_block = build_layout_change_prompt(
+            user_instruction=user_instruction,
+            style_name=dna.name,
+            room_type=room_type,
+            room_description=room_description,
+        )
+        partial_dna = _layout_change_intel_block(atmosphere_id, room_type)
+        realism = build_compact_realism_block()
+        raw_sections = [
+            ("source_continuity", source_continuity),
+            ("structural_identity", structural_identity),
+            ("structural_negative_anchors", structural_negative_anchors),
+            ("edit_block", edit_block),
+            ("design_intel_partial", partial_dna),
+            ("compact_realism", realism),
+        ]
+        _audit("LAYOUT_CHANGE", raw_sections)
+        prompt, dropped = _assemble_with_budget("LAYOUT_CHANGE", raw_sections)
+        log.info(
+            "[Prompt Budget] mode=LAYOUT_CHANGE  budget=%d  actual=%d  "
+            "compression_applied=%s  removed_sections=%s",
+            _MODE_BUDGETS["LAYOUT_CHANGE"], len(prompt), bool(dropped), dropped or [],
         )
         return prompt
 

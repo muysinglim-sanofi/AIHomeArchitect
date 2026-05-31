@@ -1416,18 +1416,25 @@ async def generate(
     edit_mode = classify_edit_mode(prompt, iteration)
     _t_prompt = time.monotonic()
 
-    # Override: LOCAL_EDIT bypasses the structural contract and atmosphere boundary.
-    # Functional reassignment and structural changes require those layers — if the
-    # edit_mode classifier routes them to LOCAL_EDIT (e.g., "make the TV area a bedroom"
-    # has local signals), elevate to STRUCTURAL_TRANSFORMATION so the full prompt
-    # path is used and the spatial/functional constraints are included.
-    if edit_mode == EditMode.LOCAL_EDIT and transformation_type in (
+    # Override: LOCAL_EDIT and LAYOUT_CHANGE bypass the structural contract and
+    # atmosphere boundary. Functional reassignment and structural changes require
+    # those layers — if the edit_mode classifier routes them to LOCAL_EDIT (e.g.,
+    # "make the TV area a bedroom" has local signals) or LAYOUT_CHANGE (e.g.,
+    # "rearrange the room into a bedroom" has layout signals), elevate to
+    # STRUCTURAL_TRANSFORMATION so the full prompt path is used and the
+    # spatial/functional constraints are included.
+    # Wave 5.13c — extended the elevation to LAYOUT_CHANGE so transformation-type
+    # signals override the new layout classification when they conflict.
+    if edit_mode in (EditMode.LOCAL_EDIT, EditMode.LAYOUT_CHANGE) and transformation_type in (
         TransformationType.FUNCTIONAL_REASSIGNMENT,
         TransformationType.STRUCTURAL_CHANGE,
         TransformationType.LAYOUT_REINTERPRETATION,
     ):
+        log.info(
+            "  edit_mode elevated %s → STRUCTURAL_TRANSFORMATION (transformation_type=%s)",
+            edit_mode.value, transformation_type.value,
+        )
         edit_mode = EditMode.STRUCTURAL_TRANSFORMATION
-        log.info("  edit_mode elevated to STRUCTURAL_TRANSFORMATION (transformation_type=%s)", transformation_type.value)
 
     log.info("--- edit mode: %s ---", edit_mode.value)
 
@@ -1629,7 +1636,49 @@ async def generate(
             # V2 activation is unaffected. Revert = remove these 2 lines.
             _qo_dict = dict(profile.quality_overrides)
             _quality_override = _qo_dict.get(atmosphere_id, profile.quality)
+            # Wave 5.13c Phase 2 (2026-05-31) — LOCAL_EDIT quality downgrade.
+            # Empirical finding : even with the strict differential prompt
+            # (source_continuity + structural_identity + DIFFERENTIAL IMAGE
+            # EDIT framing introduced earlier in Wave 5.13c), gpt-image-1
+            # still re-renders the whole image and introduces stippling /
+            # grain artifacts on textile, wood, and stone surfaces when
+            # quality=medium. Low quality's pictorial smoothing masks these
+            # artifacts. Trade-off accepted : the requested change (e.g.
+            # "white curtain") is slightly less crisp, but the surrounding
+            # preserved zones look clean instead of noisy.
+            # Scope STRICTLY LOCAL_EDIT — the medium default for
+            # STYLE_REFINEMENT / STRUCTURAL_TRANSFORMATION / LAYOUT_CHANGE /
+            # FIRST_VISION stays untouched. Atmosphere overrides
+            # (Desert Luxe → low) still take precedence over the default
+            # but are subsumed by this LOCAL_EDIT override when both apply.
+            # Revert = delete this 2-line conditional.
+            if edit_mode == EditMode.LOCAL_EDIT:
+                _quality_override = "low"
             _fidelity_override = "high" if generation_mode == "preserve" else profile.input_fidelity
+            # Wave 5.13c Option C (2026-05-31) — drop input_fidelity for
+            # LOCAL_EDIT + LAYOUT_CHANGE. Phase 2 (quality=low) alone didn't
+            # kill the stippling grain artifacts on regenerated surfaces.
+            # Hypothesis : input_fidelity=high forces the model to "anchor
+            # hard + reproduce" the V1 AI image, and its reproduction
+            # introduces the grain. Omitting fidelity gives the model
+            # latitude to render from its internal priors (cleaner surface
+            # textures) instead of pixel-matching the V1 cascade-degraded
+            # input. The strict differential prompt + source_continuity +
+            # structural_identity still constrain WHAT changes.
+            #
+            # Wave 5.13c Plan B (2026-05-31, second amendment) — extend the
+            # fidelity drop to LAYOUT_CHANGE. Empirical finding (V4 test) :
+            # with fidelity=high, the model refused to relocate the TV ("it's
+            # already facing the sofa from across the room"). Omitting
+            # fidelity gives LAYOUT_CHANGE the latitude needed to actually
+            # apply the spatial rearrangement requested. Trade-off : the
+            # model may also drift on architecture (e.g. doors disappearing)
+            # — the LAYOUT_CHANGE prompt + structural_identity must hold
+            # the line. If architectural drift becomes a regression, the
+            # next lever is reinforcing the prompt's "preserve all openings
+            # including doors" wording.
+            if edit_mode in (EditMode.LOCAL_EDIT, EditMode.LAYOUT_CHANGE):
+                _fidelity_override = None
             edit_kwargs: dict = dict(
                 model="gpt-image-1",
                 image=img_file,
@@ -1641,19 +1690,28 @@ async def generate(
             )
             # Wave 4.7.0 Step 1: mobile_mvp_baseline sets input_fidelity=None —
             # omit the parameter entirely from the API call (absent, not "low").
+            _atmo_override = atmosphere_id in _qo_dict
+            if edit_mode == EditMode.LOCAL_EDIT:
+                _edit_mode_label = "yes(LOCAL_EDIT)"
+            elif edit_mode == EditMode.LAYOUT_CHANGE:
+                _edit_mode_label = "yes(LAYOUT_CHANGE)"
+            else:
+                _edit_mode_label = "no"
             if edit_kwargs.get("input_fidelity") is None:
                 edit_kwargs.pop("input_fidelity", None)
                 if _attempt == 1:
                     log.info(
-                        "  [Wave 5.13n] quality=%s (atmo=%s, override=%s) input_fidelity: OMITTED from API call",
+                        "  [Wave 5.13n+c2] quality=%s (atmo=%s atmo_override=%s edit_mode_override=%s) input_fidelity: OMITTED from API call",
                         _quality_override, atmosphere_id,
-                        "yes" if atmosphere_id in _qo_dict else "no",
+                        "yes" if _atmo_override else "no",
+                        _edit_mode_label,
                     )
             elif _attempt == 1:
                 log.info(
-                    "  [Wave 5.13n] quality=%s (atmo=%s, override=%s) input_fidelity=%s (preserve override active)",
+                    "  [Wave 5.13n+c2] quality=%s (atmo=%s atmo_override=%s edit_mode_override=%s) input_fidelity=%s (preserve override active)",
                     _quality_override, atmosphere_id,
-                    "yes" if atmosphere_id in _qo_dict else "no",
+                    "yes" if _atmo_override else "no",
+                    _edit_mode_label,
                     _fidelity_override,
                 )
             if mask_file is not None:

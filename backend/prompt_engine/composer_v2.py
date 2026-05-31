@@ -70,6 +70,7 @@ from .geometry_attached_furnishing import build_furnishing_signal
 from .edit_intent import (
     EditMode,
     build_local_edit_prompt,
+    build_layout_change_prompt,  # Wave 5.13c — new LAYOUT_CHANGE path
     build_style_refinement_header,
     build_structural_transformation_header,
     classify_edit_mode,
@@ -731,6 +732,66 @@ def _build_core(
     return core
 
 
+# ── Wave 5.13c — LAYOUT_CHANGE partial DNA helper ────────────────────────────
+#
+# LAYOUT_CHANGE rearranges existing furniture without restyling. Emitting
+# the FULL atmosphere DNA (materials + furniture vocabulary) tells the
+# model to materialize specific pieces — exactly what we want to avoid.
+# This helper emits a TRIMMED DNA block : atmosphere identity (philosophy,
+# emotional intent, luxury level) + room-specific lighting_behavior ONLY.
+# material_palette, furniture_language, decor_language and realism
+# constraints are dropped — the existing image already carries those.
+# Atmosphere-agnostic : works for every registered atmosphere.
+
+def _layout_change_intel_block(atmosphere_id: str, room_type: str) -> str:
+    """
+    Wave 5.13c — partial DNA block for LAYOUT_CHANGE.
+
+    Emits :
+      ATMOSPHERE (Name): philosophy — emotional_intent. [luxury_level]
+      ROOM (Room) LIGHTING (preserve): {room_dna.lighting_behavior}
+      ROOM CONTEXT: {room_dna.room_specific_constraints[:2]}.
+
+    Returns "" when the atmosphere is not registered (graceful fallback —
+    LAYOUT_CHANGE will still get source_continuity + structural_identity
+    + the edit_block which forbids material/colour changes).
+
+    Wave 5.13c bugfix (2026-05-31) — restore `room_specific_constraints`
+    emission. The Wave 5.5.48 / 5.5.49 "TV media console flex" rule
+    ("television on existing wall surface or media console — never on a
+    new wall") lives in this field for every atmosphere's living_room
+    DNA. The original helper dropped it alongside furniture / material
+    vocabulary on the assumption that everything in DNA-room-level
+    constraints would push the model to materialize new pieces — but
+    `room_specific_constraints` is STRUCTURAL (anti-wall-invention,
+    placement hierarchy), not stylistic. Without it, LAYOUT_CHANGE
+    "move TV" requests led the model to convert glass partitions into
+    solid walls to mount the TV. Restoring this field re-activates the
+    pre-existing Wave 5.5.49 anti-wall rule for the new path.
+    """
+    from .atmosphere_dna import get_core, get_room_dna
+    core = get_core(atmosphere_id)
+    if not core:
+        return ""
+
+    atm_name = atmosphere_id.replace("_", " ").title()
+    lines = [
+        f"ATMOSPHERE ({atm_name}): {core.philosophy} — {core.emotional_intent}. "
+        f"[{core.luxury_level}]"
+    ]
+    room_dna = get_room_dna(atmosphere_id, room_type)
+    if room_dna:
+        room_name = room_dna.room_type.replace("_", " ").title()
+        if room_dna.lighting_behavior:
+            lines.append(
+                f"ROOM ({room_name}) LIGHTING (preserve): {room_dna.lighting_behavior}"
+            )
+        if room_dna.room_specific_constraints:
+            ctx = "; ".join(room_dna.room_specific_constraints[:2])
+            lines.append(f"ROOM CONTEXT: {ctx}.")
+    return "\n".join(lines)
+
+
 # ── Public API ───────────────────────────────────────────────────────────────
 
 
@@ -800,9 +861,18 @@ def compose_generation_prompt(
             generation_mode,  # Wave 5.5.14c — forward bimodal intent
         )
 
-    # ── LOCAL_EDIT — delegate to the existing targeted-edit path ─────────────
-    # LOCAL_EDIT does not fit the 5-section global-preservation model and
-    # forcing it would only add noise. Same behaviour as composer.py.
+    # ── LOCAL_EDIT — strict differential edit (Wave 5.13c retrofit) ───────────
+    # Wave 5.13c diagnosis (2026-05-31): the previous LOCAL_EDIT path was
+    # the thinnest in the codebase (edit_block + compact_realism only).
+    # Combined with source_mode=LATEST default and input_fidelity=high,
+    # V2/V3 refinements were cascade-degrading textures, regenerating
+    # furniture, and modifying zones not mentioned by the user. Symptom
+    # confirmed atmosphere-agnostic (observed on Warm Modern, Nordic
+    # Warmth, etc.). Fix: inject the two P1 anchors that already exist on
+    # the V2/V3 STYLE_REFINEMENT path — source_continuity ("CONTINUE FROM
+    # CURRENT DESIGN") and structural_identity (windows/openings/depth
+    # facts) — paired with the rewritten build_local_edit_prompt which now
+    # uses the "DIFFERENTIAL IMAGE EDIT / PIXEL-IDENTICAL" framing.
     if edit_mode == EditMode.LOCAL_EDIT:
         dna = get_style(style_label)
         edit_block = build_local_edit_prompt(
@@ -811,8 +881,61 @@ def compose_generation_prompt(
             room_type=room_type,
             room_description=room_description,
         )
-        prompt = f"{edit_block}\n{build_compact_realism_block()}"
-        log.info("[ComposerV2] mode=LOCAL_EDIT  size=%d  sections=2", len(prompt))
+        sections = []
+        if source_continuity:
+            sections.append(source_continuity)
+        if structural_identity:
+            sections.append(structural_identity)
+        sections.append(edit_block)
+        sections.append(build_compact_realism_block())
+        prompt = "\n\n".join(sections)
+        log.info(
+            "[ComposerV2] mode=LOCAL_EDIT  size=%d  sections=%d  "
+            "(source_continuity=%s, structural_identity=%s)",
+            len(prompt), len(sections),
+            "yes" if source_continuity else "no",
+            "yes" if structural_identity else "no",
+        )
+        return prompt
+
+    # ── LAYOUT_CHANGE — spatial rearrangement path (Wave 5.13c new) ───────────
+    # Sits between LOCAL_EDIT (no position change allowed) and the
+    # STYLE_REFINEMENT 5-section global-preservation model (full DNA, full
+    # restyle license). The user wants to MOVE existing furniture pieces —
+    # not replace them, not restyle them. The prompt permits position /
+    # orientation changes while forbidding material / colour / model
+    # substitution, paired with a PARTIAL DNA block (atmosphere identity +
+    # lighting only ; furniture_language and material_palette dropped to
+    # avoid the model rerendering pieces it should just move).
+    if edit_mode == EditMode.LAYOUT_CHANGE:
+        dna = get_style(style_label)
+        edit_block = build_layout_change_prompt(
+            user_instruction=user_instruction,
+            style_name=dna.name,
+            room_type=room_type,
+            room_description=room_description,
+        )
+        partial_dna = _layout_change_intel_block(atmosphere_id, room_type)
+        sections = []
+        if source_continuity:
+            sections.append(source_continuity)
+        if structural_identity:
+            sections.append(structural_identity)
+        if structural_negative_anchors:
+            sections.append(structural_negative_anchors)
+        sections.append(edit_block)
+        if partial_dna:
+            sections.append(partial_dna)
+        sections.append(build_compact_realism_block())
+        prompt = "\n\n".join(sections)
+        log.info(
+            "[ComposerV2] mode=LAYOUT_CHANGE  size=%d  sections=%d  "
+            "(source_continuity=%s, structural_identity=%s, partial_dna=%s)",
+            len(prompt), len(sections),
+            "yes" if source_continuity else "no",
+            "yes" if structural_identity else "no",
+            "yes" if partial_dna else "no",
+        )
         return prompt
 
     # ── Wave 5.2c — detect explicit atmosphere switch on V2+ STYLE_REFINEMENT.

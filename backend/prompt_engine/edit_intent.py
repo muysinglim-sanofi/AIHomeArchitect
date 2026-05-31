@@ -29,6 +29,12 @@ from enum import Enum
 class EditMode(str, Enum):
     FIRST_VISION = "first_vision"
     LOCAL_EDIT = "local_edit"
+    # Wave 5.13c — LAYOUT_CHANGE separates spatial rearrangement (move TV,
+    # rearrange seating, put sofa against the wall) from pure local edits
+    # (change colour, add object). Rearrangement needs position freedom +
+    # partial DNA (atmosphere/lighting identity preserved) ; pure local
+    # edits need maximum preservation (pixel-identical surgical pass).
+    LAYOUT_CHANGE = "layout_change"
     STYLE_REFINEMENT = "style_refinement"
     STRUCTURAL_TRANSFORMATION = "structural_transformation"
 
@@ -51,10 +57,32 @@ _STRUCTURAL_SIGNALS = re.compile(
 )
 
 _LOCAL_EDIT_SIGNALS = re.compile(
+    # Wave 5.13c — `move|shift|relocate` removed: they belong to
+    # LAYOUT_CHANGE which has its own dedicated path with partial DNA
+    # and position-aware preservation rules. LOCAL_EDIT is now purely
+    # for substitution / addition / removal of single items + colour
+    # changes.
     r"\b(add|place|put|hang|install|include|insert|remove|take\s+out|delete|"
-    r"eliminate|move|shift|relocate|change|replace|swap|paint|colour|color|"
+    r"eliminate|change|replace|swap|paint|colour|color|"
     r"make\s+(the|a|an|it)|turn\s+(the|it)\s+\w+|give\s+(the|it)|"
-    r"(can\s+you|could\s+you|please)\s+(add|remove|change|replace|move|put|make|give))\b",
+    r"(can\s+you|could\s+you|please)\s+(add|remove|change|replace|put|make|give))\b",
+    re.IGNORECASE,
+)
+
+# Wave 5.13c — LAYOUT_CHANGE signals : spatial rearrangement of existing
+# furniture pieces. The user wants to MOVE / ROTATE / REPOSITION items,
+# not replace or restyle them. Two-bucket detection :
+#   - Rearrangement verbs : move, shift, relocate, reposition, rearrange,
+#     rotate, flip.
+#   - Spatial-relational prepositions following an action verb : "in front
+#     of", "next to", "beside", "against", "facing", "toward", "across
+#     from", "opposite", "in the corner".
+# "on the wall" / "in the center" intentionally excluded — too ambiguous
+# with mounting-placement local edits.
+_LAYOUT_SIGNALS = re.compile(
+    r"\b(move|shift|relocate|reposition|rearrange|rotate|flip)\b|"
+    r"\b(in\s+front\s+of|next\s+to|beside|against|facing|toward|"
+    r"across\s+from|opposite\s+(the|a|an)|in\s+the\s+corner)\b",
     re.IGNORECASE,
 )
 
@@ -75,9 +103,20 @@ def classify_edit_mode(user_instruction: str, iteration: int) -> EditMode:
     """
     Classify user instruction into the appropriate edit mode.
 
-    Scoring: each classifier is scored independently; the highest scorer wins.
-    Structural signals take priority when tied with local (larger structural changes
-    subsume any local edits mentioned alongside them).
+    Wave 5.13c — priority order :
+      STRUCTURAL > LAYOUT > LOCAL > STYLE
+
+    Rationale :
+      - STRUCTURAL (open the wall) overrides everything — architectural
+        changes always win over decor-level signals.
+      - LAYOUT (move TV in front of sofa) overrides LOCAL because spatial
+        rearrangement needs its own dedicated path (partial DNA, position
+        freedom + identity preservation). Without this split, "move TV"
+        was falling into LOCAL_EDIT and getting the pixel-identical
+        preservation rules — incompatible with movement intent.
+      - LOCAL (change curtains to white, add flowers) wins over STYLE only
+        when strictly higher : ties go to STYLE so "make it warmer/cozier"
+        stays an atmospheric refinement.
     """
     if iteration <= 1:
         return EditMode.FIRST_VISION
@@ -87,15 +126,19 @@ def classify_edit_mode(user_instruction: str, iteration: int) -> EditMode:
         return EditMode.STYLE_REFINEMENT
 
     structural = len(_STRUCTURAL_SIGNALS.findall(text))
+    layout = len(_LAYOUT_SIGNALS.findall(text))
     local = len(_LOCAL_EDIT_SIGNALS.findall(text))
     style = len(_STYLE_SIGNALS.findall(text))
 
-    # Structural overrides local when it scores equally or higher
-    if structural > 0 and structural >= local:
+    # STRUCTURAL wins when present and not dominated by LAYOUT+LOCAL combined.
+    if structural > 0 and structural >= max(layout, local):
         return EditMode.STRUCTURAL_TRANSFORMATION
-    # Local overrides style only when it scores strictly higher
-    # Ties go to STYLE_REFINEMENT: "make it warmer/cozier" has equal local+style signals
-    # but is an atmospheric shift, not a targeted object edit.
+    # LAYOUT wins over LOCAL whenever any layout signal is present
+    # (ties between layout and local go to LAYOUT — rearrangement intent
+    # is the stronger signal when both verbs co-occur).
+    if layout > 0 and layout >= local:
+        return EditMode.LAYOUT_CHANGE
+    # LOCAL wins over STYLE only when strictly higher.
     if local > 0 and local > style:
         return EditMode.LOCAL_EDIT
     return EditMode.STYLE_REFINEMENT
@@ -125,14 +168,22 @@ def build_local_edit_prompt(
     room_description: str,
 ) -> str:
     """
-    Targeted edit prompt for LOCAL_EDIT mode.
+    Wave 5.13c — strict differential edit prompt for LOCAL_EDIT mode.
 
-    Deliberately omits full style-DNA and redesign language — those tokens
-    cause the model to regenerate the entire scene. Instead, this prompt:
-    1. Frames the task as image editing, not image generation
-    2. Lists required changes as an explicit numbered checklist
-    3. Enumerates everything that must be preserved
-    4. Ends with a strong visual-continuity instruction
+    Diagnosed problem (Wave 5.13b validation cycle 2026-05-31) : the
+    previous LOCAL_EDIT prompt had strong but GENERIC preservation
+    language ("preserve walls, furniture, lighting..."). Combined with
+    the LATEST-as-source default (V3 generates from V2 AI image) and
+    input_fidelity=high, the model was faithfully re-rendering the V2
+    cascade-degraded image and amplifying its artifacts.
+
+    Fix : framing-side reinforcement.
+      1. Single-element substitution framing : the model is told this
+         is a PIXEL-IDENTICAL pass, not a generation.
+      2. Per-element negative enumeration : DO NOT regenerate sofa,
+         DO NOT alter floor, DO NOT shift colour grading, etc.
+      3. Output requirement reframed : "indistinguishable from the
+         input photo except for the listed change".
     """
     changes = _split_changes(user_instruction)
     if changes:
@@ -141,31 +192,115 @@ def build_local_edit_prompt(
         )
     else:
         instruction = user_instruction.strip()
-        change_list = f"(1) {instruction[0].upper() + instruction[1:]}." if instruction else "(1) Apply the requested changes."
+        change_list = (
+            f"(1) {instruction[0].upper() + instruction[1:]}."
+            if instruction
+            else "(1) Apply the requested changes."
+        )
 
     room_ctx = f" {room_type}" if room_type else ""
-    description_ctx = f" Existing space: {room_description}" if room_description else ""
+    description_ctx = (
+        f" Existing space context: {room_description}" if room_description else ""
+    )
 
     return (
-        f"TARGETED IMAGE EDIT — {room_ctx.strip() or 'room'} in {style_name} style.\n"
-        f"MAKE ONLY THESE CHANGES (each must be clearly visible in the output): "
-        f"{change_list}\n"
-        f"PRESERVE EXACTLY — do not alter any of the following under any circumstances: "
+        f"DIFFERENTIAL IMAGE EDIT — {room_ctx.strip() or 'room'} in {style_name} style.\n"
+        f"This is a single-element substitution pass. The output image must be "
+        f"PIXEL-IDENTICAL to the input image, EXCEPT for the listed change.\n"
+        f"REQUESTED CHANGE: {change_list}\n"
+        f"PRESERVE PIXEL-IDENTICAL — every element below must remain visually identical to the input image: "
         f"the camera angle, viewing height, and perspective; "
-        f"all walls, windows, doors, and ceiling — their exact positions and character; "
-        f"CRITICAL: all window openings must remain fully unblocked — "
-        f"no furniture, object, or surface may overlap or cover a window; "
-        f"natural light entering from every window must remain visible; "
-        f"all furniture not explicitly mentioned above — positions, forms, and materials unchanged; "
+        f"all walls, windows, doors, and ceiling — exact positions, exact character; "
+        f"all window openings — fully unblocked, natural light entering from every window must remain visible; "
+        f"every piece of furniture not explicitly mentioned above — same form, same materials, same colour, same position; "
         f"all objects and decorative items not explicitly mentioned above; "
-        f"the lighting direction, warmth, and shadow pattern; "
-        f"the floor material, color, and finish; "
-        f"the overall spatial composition and room layout.\n"
-        f"STYLE CONTEXT: new or changed elements should match the {style_name} aesthetic.{description_ctx}\n"
-        f"OUTPUT REQUIREMENT: the result must look nearly identical to the input image "
-        f"except for the listed changes. Furniture must not move. "
-        f"The room must not be redesigned. The perspective must not shift. "
-        f"This is surgical editing, not a new generation."
+        f"the lighting direction, warmth, exposure, and shadow pattern; "
+        f"the floor material, colour, and finish; "
+        f"the overall spatial composition and room layout; "
+        f"the colour grading and atmosphere tone.\n"
+        f"DO NOT regenerate, re-render, or restyle any of the preserved elements. "
+        f"DO NOT recreate textures or material surfaces. "
+        f"DO NOT shift any furniture position. "
+        f"DO NOT alter the colour grading, exposure, or atmosphere identity. "
+        f"DO NOT redesign the room.\n"
+        f"STYLE CONTEXT: any new element introduced by the change should match the {style_name} aesthetic.{description_ctx}\n"
+        f"OUTPUT: indistinguishable from the input photo except for the listed change. "
+        f"Surgical substitution, not regeneration."
+    )
+
+
+def build_layout_change_prompt(
+    user_instruction: str,
+    style_name: str,
+    room_type: str,
+    room_description: str,
+) -> str:
+    """
+    Wave 5.13c — layout rearrangement prompt.
+
+    LAYOUT_CHANGE sits between LOCAL_EDIT (no position change allowed)
+    and STYLE_REFINEMENT (full DNA, redesign permitted). The user wants
+    to MOVE existing furniture — not replace it, not restyle it. The
+    prompt must :
+      - Permit position / orientation changes for the named pieces.
+      - Forbid material / colour / model substitution.
+      - Forbid atmosphere drift (same warmth, same mood, same identity).
+      - Preserve the room architecture (walls, windows, ceiling).
+    The composer pairs this prompt with a PARTIAL DNA block (atmosphere
+    identity + lighting only ; furniture_language and material_palette
+    dropped to avoid the model rerendering pieces it should just move).
+    """
+    changes = _split_changes(user_instruction)
+    if changes:
+        change_list = " ".join(
+            f"({i + 1}) {c[0].upper() + c[1:]}." for i, c in enumerate(changes)
+        )
+    else:
+        instruction = user_instruction.strip()
+        change_list = (
+            f"(1) {instruction[0].upper() + instruction[1:]}."
+            if instruction
+            else "(1) Rearrange the furniture as requested."
+        )
+
+    room_ctx = f" {room_type}" if room_type else ""
+    description_ctx = (
+        f" Existing space context: {room_description}" if room_description else ""
+    )
+
+    return (
+        f"LAYOUT REARRANGEMENT — {room_ctx.strip() or 'room'} in {style_name} style.\n"
+        f"This is a furniture-position pass. Move and rotate the named pieces only ; "
+        f"do NOT replace, regenerate, or restyle any furniture.\n"
+        f"REQUESTED REARRANGEMENT: {change_list}\n"
+        # Wave 5.13c Plan B+ (2026-05-31) — anti-duplication cue. Empirical
+        # finding : gpt-image-1 interprets "move X" as additive ("produce
+        # an X here") rather than relocational ("move the existing X
+        # here"), producing two Xs in the output. Explicit relocation
+        # framing forces the model to treat the request as a one-to-one
+        # repositioning rather than a generative addition.
+        f"CRITICAL: 'move X' means relocate the existing X from its current "
+        f"position to the requested new position. Do NOT add or duplicate X. "
+        f"The named object must appear exactly once in the final image, at "
+        f"its new location.\n"
+        f"PERMITTED CHANGES — positions and orientations only: "
+        f"move the requested furniture pieces to the new positions; "
+        f"adjust orientation/rotation for the new placement; "
+        f"re-light shadows and ambient occlusion consistent with the new placement.\n"
+        f"PRESERVE IDENTICAL — every other element remains unchanged: "
+        f"the camera angle, viewing height, and perspective; "
+        f"all walls, windows, doors, and ceiling — exact positions and character; "
+        f"all window openings — fully unblocked, natural light visible; "
+        f"EVERY furniture piece — same model, same materials, same colour, same finish — ONLY the position changes; "
+        f"all objects and decorative items not explicitly moved; "
+        f"the overall lighting direction, warmth, exposure, and atmosphere tone; "
+        f"the floor material, colour, and finish; "
+        f"the {style_name} atmosphere identity — same warmth, same mood, same character.\n"
+        f"DO NOT redesign the room. "
+        f"DO NOT replace furniture pieces with different models. "
+        f"DO NOT change materials, colours, or finishes. "
+        f"DO NOT shift the colour grading or atmosphere.{description_ctx}\n"
+        f"OUTPUT: same room, same atmosphere, same furniture pieces — only their positions adjusted."
     )
 
 
