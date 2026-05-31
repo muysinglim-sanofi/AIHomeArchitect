@@ -29,6 +29,10 @@ from quota import (
     fail_generation,
     FREE_TIER_LIMIT,
 )
+# Wave 5.17d — Free-tier scope (room + atmosphere allowlist for non-premium)
+from free_tier import check_restrictions
+# Wave 5.17d — RevenueCat webhook receiver (POST /webhooks/revenuecat)
+from revenuecat_webhook import router as revenuecat_router
 from rate_limit import check_ip_rate_limit
 
 from prompt_engine import (
@@ -288,6 +292,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Wave 5.17d — Mount the RevenueCat webhook router. The endpoint is
+# POST /webhooks/revenuecat ; see revenuecat_webhook.py for the contract.
+app.include_router(revenuecat_router)
 
 # max_retries=0: disable SDK-level retries entirely.
 # The OpenAI Python SDK defaults to max_retries=2 (1 initial + 2 SDK retries = 3 SDK-level
@@ -921,6 +929,11 @@ async def generate(
     before_image_url: str = Form(...),
     style_label: str = Form(...),
     room_type: str = Form(""),
+    # Wave 5.17d — canonical ids (locale-stable) for the free-tier scope
+    # check. The legacy label form params above stay for prompt-engine
+    # compatibility ; these ids drive the membership test ONLY.
+    room_type_id: str = Form(""),
+    atmosphere_id: str = Form(""),
     iteration: int = Form(1),
     history: str = Form(""),              # JSON-encoded list of {role, content} messages
     let_ai_decide: bool = Form(False),    # AI infers primary room type from image
@@ -1006,6 +1019,19 @@ async def generate(
     log.info(
         "[Wave 5.17b] quota OK — user=%s used=%d/%d reason=%s",
         current_user.user_id, _quota.used, _quota.limit, _quota.reason,
+    )
+
+    # ── Wave 5.17d — Free-tier scope check ────────────────────────────────────
+    # Non-premium users may only generate Living Room + (Nordic Warmth |
+    # Soft Luxury). Premium / admin bypass via the same has_admin_role
+    # path the quota check already uses. Raises HTTPException(402,
+    # detail.error_code='FREE_TIER_RESTRICTED') on violation.
+    await check_restrictions(
+        user_id=current_user.user_id,
+        room_type_id=room_type_id,
+        atmosphere_id=atmosphere_id,
+        let_ai_decide=let_ai_decide,
+        surprise_me=surprise_me_flag,
     )
 
     # ── Step 1: log request ───────────────────────────────────────────────────

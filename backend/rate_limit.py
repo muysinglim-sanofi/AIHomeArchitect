@@ -94,7 +94,7 @@ def check_ip_rate_limit(ip: Optional[str], *, is_anonymous: bool) -> None:
                 "error_code": "RATE_LIMIT_EXCEEDED",
                 "user_message": (
                     "Too many generations from this network. "
-                    "Please try again later or sign in to continue."
+                    "Please try again later."
                 ),
                 "retry_after_seconds": retry_after_seconds,
                 "retryable": False,

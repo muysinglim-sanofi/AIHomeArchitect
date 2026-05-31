@@ -56,7 +56,7 @@ log = logging.getLogger("wave_5_17b.quota")
 
 # ── Tunable constants ───────────────────────────────────────────────────────
 
-FREE_TIER_LIMIT = 3                 # generations per user, lifetime, before paywall
+FREE_TIER_LIMIT = 2                 # Wave 5.17d (locked Decision D4 — 2 free gens before paywall)
 _ROLE_CACHE_TTL_SECONDS = 60        # admin/premium role lookup cache window
 _BYPASS_ROLES = {"admin", "premium"} # any role in this set bypasses quota
 
