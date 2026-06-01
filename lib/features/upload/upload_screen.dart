@@ -9,6 +9,7 @@ import '../../core/constants/free_tier.dart';
 import '../../core/constants/room_type_images.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/premium_provider.dart';
+import '../../core/providers/access_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_pill.dart';
@@ -989,17 +990,19 @@ class _RoomScroller extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final isPremium = ref.watch(premiumProvider);
+    // Wave 5.18 — admin bypass added alongside premium bypass.
+    final isAdmin = ref.watch(accessProvider);
 
     // Wave 5.17d — locked predicates. A room is locked when the user is
     // non-premium AND its canonical id is not in the free set. The "AI
     // Decide" tile is always premium-only — non-premium users cannot
     // delegate the choice (mirrors the backend free_tier policy).
     bool roomLocked(String label) {
-      if (isPremium) return false;
+      if (isPremium || isAdmin) return false;
       final id = RoomTypeImages.idForLabel(l10n, label);
       return id == null || !kFreeRoomIds.contains(id);
     }
-    bool aiLocked() => !isPremium;
+    bool aiLocked() => !isPremium && !isAdmin;
 
     // Tap router : locked → paywall, else → original onSelected/onAiDecide.
     void onRoomTap(String label) {
@@ -1106,6 +1109,8 @@ class _AtmosphereScroller extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isPremium = ref.watch(premiumProvider);
+    // Wave 5.18 — admin bypass for atmosphere/surprise/custom carousel.
+    final isAdmin = ref.watch(accessProvider);
     final atmospheres = AppLocalizations.atmospheres;
     final hasSurprise = onSurprise != null;
     final leading = hasSurprise ? 1 : 0;
@@ -1119,7 +1124,8 @@ class _AtmosphereScroller extends ConsumerWidget {
         itemBuilder: (context, index) {
           if (hasSurprise && index == 0) {
             // Wave 5.17d — Surprise Me is delegated-choice, premium-only.
-            final locked = !isPremium;
+            // Wave 5.18 — admin bypass.
+            final locked = !isPremium && !isAdmin;
             return SizedBox(
               width: 150,
               child: AtmosphereCard.surprise(
@@ -1140,7 +1146,9 @@ class _AtmosphereScroller extends ConsumerWidget {
           if (atmosphereIndex < atmospheres.length) {
             final a = atmospheres[atmosphereIndex];
             // Wave 5.17d — non-free atmosphere is locked for non-premium.
-            final locked = !isPremium && !kFreeAtmosphereIds.contains(a.id);
+            // Wave 5.18 — admin bypass.
+            final locked = !isPremium && !isAdmin
+                && !kFreeAtmosphereIds.contains(a.id);
             return SizedBox(
               width: 150,
               child: AtmosphereCard(
@@ -1158,7 +1166,8 @@ class _AtmosphereScroller extends ConsumerWidget {
           }
           // Custom tile = free-text direction, premium-only (out of free
           // scope by definition — the user is asking the AI to interpret).
-          final customLocked = !isPremium;
+          // Wave 5.18 — admin bypass.
+          final customLocked = !isPremium && !isAdmin;
           return SizedBox(
             width: 150,
             child: AtmosphereCard.custom(

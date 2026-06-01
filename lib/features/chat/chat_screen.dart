@@ -18,6 +18,7 @@ import '../../core/l10n/app_localizations.dart';
 import '../../core/models/atmosphere_style.dart';
 import '../../core/providers/pending_generations_provider.dart';
 import '../../core/providers/premium_provider.dart';
+import '../../core/providers/access_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/services/session_persistence_service.dart';
 import '../../data/mock/mock_projects.dart';
@@ -2732,8 +2733,10 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
   // across every selection surface in the app. Premium users bypass all
   // locks (predicates return false).
   bool _roomLocked(String label) {
+    // Wave 5.18 — admin bypass added alongside premium bypass.
     final isPremium = ref.read(premiumProvider);
-    if (isPremium) return false;
+    final isAdmin = ref.read(accessProvider);
+    if (isPremium || isAdmin) return false;
     final id = RoomTypeImages.idForLabel(context.l10n, label);
     return id == null || !kFreeRoomIds.contains(id);
   }
@@ -2951,8 +2954,10 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
                         final a = AppLocalizations.atmospheres[i];
                         // Wave 5.17d — atmosphere lock + paywall-on-tap
                         // mirroring upload-screen and full-reveal carousel.
+                        // Wave 5.18 — admin bypass added.
                         final isPremium = ref.watch(premiumProvider);
-                        final locked = !isPremium
+                        final isAdmin = ref.watch(accessProvider);
+                        final locked = !isPremium && !isAdmin
                             && !kFreeAtmosphereIds.contains(a.id);
                         return SizedBox(
                           width: 150,

@@ -11,6 +11,7 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/constants/free_tier.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/premium_provider.dart';
+import '../../core/providers/access_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/mock/mock_projects.dart';
@@ -1213,7 +1214,10 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
               // Warmth + Soft Luxury as tappable ; everything else
               // dimmed with a lock chip ; locked tap → paywall sheet.
               final isPremium = ref.watch(premiumProvider);
-              final locked = !isPremium && !kFreeAtmosphereIds.contains(a.id);
+              // Wave 5.18 — admin bypass.
+              final isAdmin = ref.watch(accessProvider);
+              final locked = !isPremium && !isAdmin
+                  && !kFreeAtmosphereIds.contains(a.id);
               return SizedBox(
                 width: cardWidth,
                 child: AtmosphereCard(
