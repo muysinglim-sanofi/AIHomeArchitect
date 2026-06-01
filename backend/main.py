@@ -470,35 +470,96 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
                     {"type": "image_url",
                      "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"}},
                     {"type": "text", "text": (
+                        # ── Wave 5.19 (2026-06-01) — Structural Capture Enrichment ─────
+                        # Expands the prompt from 5 buckets to 11 buckets, covering
+                        # interior doors, fixed built-ins, vertical circulation,
+                        # ceiling signature, surface transitions, and fixed wall
+                        # fixtures. Audit (cf. wave_5_19 memory) confirmed the
+                        # original 5-bucket prompt was systematically blind to
+                        # non-glass architectural features (notably wooden doors),
+                        # yielding facts=1 on simple rooms where 3-4 facts were
+                        # visually present.
+                        #
+                        # The downstream parser in structural_identity.extract_
+                        # from_description() matches the EXACT vocabulary listed
+                        # below for each bucket — outputs that deviate are
+                        # filtered silently (hallucination guard).
                         "Analyze this room photograph for architectural identity. "
-                        "State each architectural fact below when present in the "
-                        "photo; skip cleanly if absent. Use the EXACT vocabulary "
-                        "listed (the downstream parser depends on it). "
+                        "List each architectural fact VISIBLY PRESENT in the photo; "
+                        "skip cleanly if absent. Use the EXACT vocabulary listed "
+                        "for each bucket — the downstream parser depends on it. "
+                        "NEVER infer, NEVER invent — only what is visually "
+                        "verifiable in the photograph counts.\n"
+                        "\n"
+                        "OPENINGS:\n"
                         "(1) Dominant opening — pick the best match: "
-                        "'floor-to-ceiling window', 'bay window', 'panoramic window', "
-                        "'corner window', 'glazed wall', 'glazed facade', "
-                        "'sliding glass door', 'patio door', or 'picture window'. "
-                        "Add a size qualifier ('wide', 'tall', 'full-height', "
-                        "'dominant') and state the wall (left/right/back). "
-                        "(2) Glass partition — if visible, say 'glass partition' "
-                        "with frame colour ('black-framed' etc.) and position. "
-                        "(3) Spatial depth — say 'open-plan' if the layout is open, "
-                        "otherwise describe depth (e.g. 'diagonal depth toward rear "
-                        "space'). "
-                        "(4) Visible kitchen — even if only partially visible at the "
-                        "image edge, say EXACTLY 'open kitchen visible on the left' "
-                        "OR 'open kitchen visible on the right' (use the side word "
-                        "verbatim). "
-                        "(5) Secondary opening — if a 'pair of windows' or "
-                        "additional windows on the same facade are visible, state "
-                        "so. "
-                        "Architecture only — NO furniture, NO decor, NO style, "
-                        "NO atmosphere, NO subjective quality adjectives. Skip any "
-                        "fact that is not present in the photo. Max 60 words."
+                        "'floor-to-ceiling window', 'bay window', 'panoramic "
+                        "window', 'corner window', 'glazed wall', 'glazed facade', "
+                        "'sliding glass door', 'patio door', 'french door', "
+                        "'pivot door', 'bi-fold door', or 'picture window'. Add a "
+                        "size qualifier ('wide', 'tall', 'full-height', 'dominant') "
+                        "and state the wall (left/right/back).\n"
+                        "(2) Secondary opening — if visible, state 'pair of "
+                        "windows', 'additional windows on the same facade', or "
+                        "'second door' with position.\n"
+                        "\n"
+                        "PARTITIONS & WALL FEATURES:\n"
+                        "(3) Glass partition — if visible, say 'glass partition' "
+                        "with frame colour ('black-framed' etc.) and position.\n"
+                        "(4) Interior door — if a wooden or painted (NON-GLASS) "
+                        "door is visible, say EXACTLY 'wooden door' or 'painted "
+                        "door' visible on the (upper-)left/right/back wall. If "
+                        "multiple, say 'two interior doors' with position. Skip "
+                        "if no such door is visible.\n"
+                        "(5) Fixed built-in — if visible, say one of: 'fireplace', "
+                        "'alcove', 'niche', 'recessed shelving', 'bookshelf', "
+                        "'floating cabinetry', 'kitchen island', 'mantel', "
+                        "'hearth'. State position. Skip decorative objects.\n"
+                        "\n"
+                        "CIRCULATION:\n"
+                        "(6) Vertical circulation — if visible, say one of: 'open "
+                        "staircase', 'spiral stair', 'floating stair', 'staircase', "
+                        "'mezzanine', 'loft level', 'gallery floor'. State "
+                        "position.\n"
+                        "\n"
+                        "SPATIAL:\n"
+                        "(7) Spatial depth — say 'open-plan' if the layout is "
+                        "open, otherwise describe depth (e.g. 'diagonal depth "
+                        "toward rear space', 'enclosed space').\n"
+                        "(8) Visible kitchen — even if only partially visible at "
+                        "the image edge, say EXACTLY 'open kitchen visible on the "
+                        "left' OR 'open kitchen visible on the right' (verbatim).\n"
+                        "\n"
+                        "BOUNDING SURFACES:\n"
+                        "(9) Ceiling signature — if visually distinctive, say one "
+                        "of: 'exposed beam' (with wood/timber/steel material if "
+                        "visible), 'vaulted ceiling', 'cathedral ceiling', "
+                        "'raised ceiling section', 'lowered ceiling section'. "
+                        "Skip if the ceiling is flat and unremarkable.\n"
+                        "(10) Surface transition — only if prominent, say one of: "
+                        "'raised step into the rear zone', 'floor level change', "
+                        "'step up to the kitchen', 'split level', 'threshold at "
+                        "the kitchen'. Skip subtle transitions.\n"
+                        "\n"
+                        "FIXED FIXTURES:\n"
+                        "(11) Fixed appliance — only when VISUALLY PROMINENT, say "
+                        "one of: 'wall-mounted AC unit' (with position), "
+                        "'vertical radiator', 'wall heater'. Skip small details "
+                        "and any portable items.\n"
+                        "\n"
+                        "CRITICAL RULES:\n"
+                        "- Architecture ONLY. NO furniture, NO decor, NO style, "
+                        "NO atmosphere, NO subjective adjectives.\n"
+                        "- Skip cleanly any fact NOT VISUALLY PRESENT.\n"
+                        "- Use EXACT vocabulary per bucket. Outputs deviating from "
+                        "the vocabulary are silently dropped by the parser.\n"
+                        "- Max 120 words total."
                     )},
                 ],
             }],
-            max_tokens=150,
+            # Wave 5.19 — bumped 150 → 200 to accommodate the expanded
+            # 11-bucket output (up to ~120 words ≈ 180 tokens).
+            max_tokens=200,
         )
         _raw = (resp.choices[0].message.content or "").strip()
         # Wave 5.13g+ debug — log raw gpt-4o output so we can audit which

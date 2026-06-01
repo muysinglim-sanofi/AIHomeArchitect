@@ -35,6 +35,7 @@ TASK 6 (no generation-authority leak):
 from __future__ import annotations
 
 import json
+import re  # Wave 5.19 — per-bucket extractors use re.search for vocabulary matching
 from dataclasses import dataclass, asdict, fields
 
 from .anchor_detector import _PARTITION, _DEPTH, _OPENING  # deterministic regexes
@@ -48,13 +49,29 @@ class ApartmentStructuralIdentity:
     Lightweight, architecture-ONLY identity of the uploaded apartment.
     Every field is a short factual phrase or "" (absent). No atmosphere,
     no decor, no furniture, no emotion, no premium language — ever.
+
+    Wave 5.19 (2026-06-01) — Structural Capture Enrichment :
+    6 new fields added to capture architectural features previously
+    invisible to the parser (interior doors, built-ins, staircases,
+    ceiling signatures, surface transitions, fixed wall fixtures).
+    Backward compat : older tokens (6-field) load cleanly via from_token
+    which filters by `fields(ApartmentStructuralIdentity)` — the 6 new
+    fields default to "" when absent from JSON.
     """
+    # ── Original Wave 4.7.2 ───────────────────────────────────────────
     dominant_opening: str = ""        # e.g. "wide full-height bay window dominating the rear wall"
     opening_layout: str = ""          # e.g. "secondary window pair on the left"
     glass_partition: str = ""         # e.g. "black-framed glass partition separating the living zone"
     room_depth_type: str = ""         # e.g. "deep diagonal perspective toward the kitchen"
     kitchen_visibility: str = ""      # e.g. "open kitchen visible on the right"
     anchor_relationships: str = ""    # e.g. "bay window centred between partition and kitchen opening"
+    # ── Wave 5.19 — Structural Capture Enrichment ─────────────────────
+    interior_door: str = ""           # e.g. "wooden door visible on the back-left wall"
+    fixed_built_in: str = ""          # e.g. "fireplace alcove on the right wall"
+    vertical_circulation: str = ""    # e.g. "open staircase visible on the right"
+    ceiling_signature: str = ""       # e.g. "exposed wooden beam parallel to the back wall"
+    surface_transition: str = ""      # e.g. "raised step into the rear zone"
+    fixed_appliance: str = ""         # e.g. "wall-mounted AC unit on the upper-left wall"
 
     @property
     def is_present(self) -> bool:
@@ -176,13 +193,158 @@ def extract_from_description(room_description: str) -> ApartmentStructuralIdenti
     elif dominant and kitchen:
         rel = "the primary opening and the kitchen opening hold fixed relative positions"
 
+    # ── Wave 5.19 — Structural Capture Enrichment extractors ─────────────────
+    # Each extractor matches the EXACT vocabulary asked from gpt-4o in
+    # main.py::_capture_structural_text. Hallucinations that don't match
+    # the vocabulary are filtered out silently (parser deterministic guard).
+    # Wording is preserved in present-tense fact form so the downstream
+    # STRUCTURAL IDENTITY clause reads naturally.
+
+    # (1) Interior door — wooden/painted (non-glass). Position preserved.
+    # EXCLUDES sliding/patio/glazed doors — those go to dominant_opening.
+    # Two-tier search : prefer specific material+position matches over the
+    # generic "interior door" label (gpt-4o bucket prefix "(4) Interior
+    # door —" matches before the rich phrasing if we don't prioritize).
+    interior_door = ""
+    _door_specific = re.search(
+        r"\b(two|three|multiple)?\s*"
+        r"(wooden|painted)\s+door[s]?"
+        r"(\s+visible)?"
+        r"(\s+on\s+the\s+(upper[\s-])?(left|right|back|front)(\s+wall)?)?",
+        text, re.IGNORECASE,
+    )
+    if _door_specific:
+        interior_door = (
+            _door_specific.group(0).strip().lower()
+            + " as a fixed wall feature"
+        )
+    else:
+        _door_generic = re.search(
+            r"\b(two|three|multiple)?\s*"
+            r"interior\s+door[s]?"
+            r"(\s+visible)?"
+            r"(\s+on\s+the\s+(upper[\s-])?(left|right|back|front)(\s+wall)?)?",
+            text, re.IGNORECASE,
+        )
+        if _door_generic:
+            interior_door = (
+                _door_generic.group(0).strip().lower()
+                + " as a fixed wall feature"
+            )
+
+    # (2) Fixed built-in — fireplace / alcove / niche / built-in cabinetry / island.
+    built_in = ""
+    for key in (
+        "fireplace", "kitchen island", "floating cabinetry",
+        "recessed shelving", "built-in shelving", "built-in",
+        "alcove", "niche", "mantel", "hearth", "bookshelf",
+    ):
+        if key in low:
+            _bi_pat = re.search(
+                rf"\b{re.escape(key)}\b"
+                rf"(\s+on\s+the\s+(upper[\s-])?(left|right|back)(\s+wall)?)?",
+                text, re.IGNORECASE,
+            )
+            if _bi_pat:
+                built_in = (
+                    _bi_pat.group(0).strip().lower()
+                    + " as a fixed architectural feature"
+                )
+                break
+
+    # (3) Vertical circulation — staircase / mezzanine / loft.
+    stair = ""
+    for key in (
+        "spiral stair", "floating stair", "open staircase",
+        "staircase", "mezzanine", "loft level", "gallery floor",
+        "gallery level",
+    ):
+        if key in low:
+            _st_pat = re.search(
+                rf"\b{re.escape(key)}\b"
+                rf"(\s+(visible|on)\s+the\s+(left|right|back|center))?",
+                text, re.IGNORECASE,
+            )
+            if _st_pat:
+                stair = (
+                    _st_pat.group(0).strip().lower()
+                    + " as a fixed circulation feature"
+                )
+                break
+
+    # (4) Ceiling signature — exposed beams, vaulted, cathedral, raised/lowered.
+    ceiling_sig = ""
+    _ceil_pat = re.search(
+        r"\b("
+        r"exposed\s+(wooden|timber|steel|concrete|wood)?\s*beam[s]?"
+        r"|vaulted\s+ceiling"
+        r"|cathedral\s+ceiling"
+        r"|(raised|lowered)\s+ceiling(\s+section)?"
+        r")\b",
+        text, re.IGNORECASE,
+    )
+    if _ceil_pat:
+        ceiling_sig = (
+            _ceil_pat.group(0).strip().lower()
+            + " defining the ceiling signature"
+        )
+
+    # (5) Surface transition — threshold / step / level change. Avoid
+    # material names (e.g. "marble") which trigger the _BANNED_SUBSTR
+    # leak guard ; describe BOUNDARIES instead.
+    surface_trans = ""
+    _surf_pat = re.search(
+        r"\b("
+        r"raised\s+step(\s+into\s+\w+\s+zone)?"
+        r"|floor\s+level\s+change"
+        r"|step\s+(up|down)\s+(into|to)\s+\w+"
+        r"|split\s+level"
+        r"|threshold\s+(at|between)\s+the\s+\w+"
+        r"|material\s+change\s+at\s+the\s+\w+\s+threshold"
+        r")\b",
+        text, re.IGNORECASE,
+    )
+    if _surf_pat:
+        surface_trans = (
+            _surf_pat.group(0).strip().lower()
+            + " marking the spatial boundary"
+        )
+
+    # (6) Fixed appliance — AC unit / radiator / wall heater.
+    # Only when explicitly stated in raw_text. Position preserved if present.
+    appliance = ""
+    _app_pat = re.search(
+        r"\b("
+        r"(wall[-\s]mounted\s+)?ac\s+unit"
+        r"|air\s+conditioner"
+        r"|vertical\s+radiator"
+        r"|wall\s+heater"
+        r"|wall[-\s]mounted\s+(tv\s+bracket|mount)"
+        r")\b"
+        r"(\s+on\s+the\s+(upper[\s-])?(left|right|back)(\s+wall)?)?",
+        text, re.IGNORECASE,
+    )
+    if _app_pat:
+        appliance = (
+            _app_pat.group(0).strip().lower()
+            + " as a fixed wall fixture"
+        )
+
     identity = ApartmentStructuralIdentity(
+        # Original Wave 4.7.2
         dominant_opening=_clean(dominant),
         opening_layout=_clean(layout),
         glass_partition=_clean(partition),
         room_depth_type=_clean(depth),
         kitchen_visibility=_clean(kitchen),
         anchor_relationships=_clean(rel),
+        # Wave 5.19 — Structural Capture Enrichment
+        interior_door=_clean(interior_door),
+        fixed_built_in=_clean(built_in),
+        vertical_circulation=_clean(stair),
+        ceiling_signature=_clean(ceiling_sig),
+        surface_transition=_clean(surface_trans),
+        fixed_appliance=_clean(appliance),
     )
     return identity if identity.is_present else EMPTY_IDENTITY
 
@@ -217,27 +379,39 @@ def from_token(token: str) -> ApartmentStructuralIdentity:
 
 # Priority order for trimming when over the char cap (least identity-defining
 # dropped first). The dominant opening is NEVER dropped.
+#
+# Wave 5.19 (2026-06-01) — Structural Capture Enrichment ordering :
+# new fields interleaved by preservation criticality.
+#   • interior_door right after dominant_opening : porte oubliée = pire
+#     regression observée (cf. Nordic 21:11:29 baseline) → priorité haute.
+#   • fixed_built_in + vertical_circulation : architectural anchors lourds
+#     qui définissent l'identité de la pièce.
+#   • ceiling_signature : visible mais moins critique pour la
+#     reconnaissance immédiate.
+#   • surface_transition + fixed_appliance : last-resort, droppés en
+#     premier si la clause sature.
 _RENDER_ORDER = (
-    "dominant_opening",
+    "dominant_opening",          # critical — never drops
+    "interior_door",             # Wave 5.19 — door preservation high prio
     "glass_partition",
+    "fixed_built_in",            # Wave 5.19
+    "vertical_circulation",      # Wave 5.19
     "room_depth_type",
+    "ceiling_signature",         # Wave 5.19
     "opening_layout",
     "kitchen_visibility",
+    "surface_transition",        # Wave 5.19 — droppable
+    "fixed_appliance",           # Wave 5.19 — droppable
     "anchor_relationships",
 )
-# Wave 5.5.10b (2026-05-21) — raised 360 → 460 so the clause can render 4
-# parser-captured facts simultaneously (dominant_opening + glass_partition +
-# room_depth_type + kitchen_visibility). Before the bump, Wave 5.5.10's new
-# dominant_opening capture (e.g. "large floor-to-ceiling sliding glass door...")
-# was filling the 360-char budget and pushing kitchen_visibility OUT of the
-# rendered clause — a regression on the user's #1 concern (kitchen preservation).
-# anchor_relationships (the 5th fact) still drops at this budget level since
-# it's redundant with the implicit pairing of dominant+partition in adjacent
-# facts. Trade-off: composer.py V1 prompt grows by ~80-100 chars, which may
-# cause visible_spaces (P5) or natural_enrichment (P4) to drop on tight
-# atmospheres. Kitchen is preserved in STRUCTURAL_IDENTITY (P1, never drops)
-# regardless. Rollback = revert to 360.
-_MAX_CLAUSE_CHARS = 460
+# Wave 5.5.10b (2026-05-21) — raised 360 → 460.
+# Wave 5.19 (2026-06-01) — raised 460 → 600 to accommodate the 6 new
+# Structural Capture fields without forcing immediate trim. Net budget
+# impact on STYLE_REFINEMENT prompts : +140 chars worst case. Empirically
+# all live prompts stay under 4500 chars (well below gpt-image-1's effective
+# ceiling). Rollback = revert to 460 ; new fields then drop first per
+# _RENDER_ORDER without breaking the existing identity.
+_MAX_CLAUSE_CHARS = 600
 
 
 def render_clause(
@@ -323,9 +497,23 @@ _NEG_CORE = (
     "Photographed openings/glass are open space, NOT walls. Do not insert "
     "walls between them, compartmentalize the open facade, or close glass "
     "continuity. The applied treatment must adapt to the photographed "
-    "architecture and must not restructure the facade."
+    "architecture and must not restructure the facade. "
+    # Wave 5.19 (2026-06-01) — fixed-features preservation rule.
+    # Covers the new Structural Capture fields (interior_door,
+    # fixed_built_in, vertical_circulation, ceiling_signature,
+    # fixed_appliance) which describe closed/solid architectural
+    # elements that the open-space rule above does not protect.
+    "Photographed fixed architectural features (interior doors, "
+    "built-ins, staircases, exposed beams, wall-mounted fixtures) "
+    "must remain in place — do not relocate, remove, cover, or "
+    "convert them into wall surface."
 )
-_NEG_MAX_SECTION = 450  # Task 5 hard ceiling
+# Wave 5.5.x : 450 chars ceiling.
+# Wave 5.19 : raised 450 → 600 to fit the extended NEG_CORE (~440 chars
+# of body + section header). The two-sentence structure (openings rule
+# + fixed features rule) is intentional — single concatenation kept the
+# emit/skip logic and the leak-guard machinery unchanged.
+_NEG_MAX_SECTION = 600
 
 
 def render_negative_anchors(
