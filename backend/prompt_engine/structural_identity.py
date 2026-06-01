@@ -458,10 +458,17 @@ def render_clause(
             ". Use them as an architectural reference, not as constraints."
         )
     else:
-        prefix = ("STRUCTURAL IDENTITY — this apartment already contains these "
-                  "architectural facts; reproduce them exactly, do not normalize, "
-                  "narrow, or restyle them: ")
-        suffix = ". These are existing structural truths, not design choices."
+        # Wave 5.20 (2026-06-01) — Prompt Authority Consolidation.
+        # Compacted prefix/suffix while preserving the DESCRIPTIVE framing
+        # anchor ("this apartment's photographed facts") from Wave 4.7.2.
+        # Parenthetical instructions keep all preservation negations
+        # ("do not normalize, narrow, or restyle"). V3 suffix unchanged
+        # — "explicitly" is a critical V3 anchor for permitted structural
+        # changes and must not be softened.
+        prefix = ("STRUCTURAL IDENTITY — this apartment's photographed "
+                  "facts (reproduce exactly, do not normalize, narrow, "
+                  "or restyle): ")
+        suffix = ". Existing structural facts — not design choices."
         if mode == "V3":
             suffix += " Only the explicitly requested structural change may alter them."
 
@@ -494,19 +501,35 @@ def render_clause(
 # WITHOUT the words "atmosphere"/"styling"/"aesthetic" so it stays within
 # Task 7's architecture-only purity and passes the strict _leaks guard.
 _NEG_CORE = (
-    "Photographed openings/glass are open space, NOT walls. Do not insert "
-    "walls between them, compartmentalize the open facade, or close glass "
-    "continuity. The applied treatment must adapt to the photographed "
-    "architecture and must not restructure the facade. "
+    # Wave 5.20 (2026-06-01) — Prompt Authority Consolidation.
+    # Trimmed redundancies with the mode_contract preamble (lives in
+    # preservation.py) which already says "blocked, replaced by a wall
+    # surface" (covers "Do not insert walls between them"), "doors stay
+    # exact" (covers Wave 5.19 "interior doors"), and "Do not add,
+    # remove, resize, relocate, reinterpret, or redesign" (covers
+    # "relocate, remove"). What stays here is the UNIQUE negative
+    # topology framing ("open space, NOT walls" + facade-restructuring
+    # ban) and the Wave 5.19 fixed-features list MINUS interior_door.
+    "Photographed openings/glass are open space, NOT walls — do not "
+    "compartmentalize the open facade or close glass continuity. "
+    "The applied treatment must adapt to the photographed architecture "
+    "and must not restructure the facade. "
     # Wave 5.19 (2026-06-01) — fixed-features preservation rule.
-    # Covers the new Structural Capture fields (interior_door,
-    # fixed_built_in, vertical_circulation, ceiling_signature,
-    # fixed_appliance) which describe closed/solid architectural
-    # elements that the open-space rule above does not protect.
-    "Photographed fixed architectural features (interior doors, "
-    "built-ins, staircases, exposed beams, wall-mounted fixtures) "
-    "must remain in place — do not relocate, remove, cover, or "
-    "convert them into wall surface."
+    # Covers the Structural Capture fields interior_door, fixed_built_in,
+    # vertical_circulation, ceiling_signature, fixed_appliance.
+    # Wave 5.20 (2026-06-01) Option β — interior_doors INTENTIONALLY kept
+    # in the fixed-features list despite preamble coverage of "doors stay
+    # exact". Rationale : multi-layer redundancy on door preservation
+    # (Wave 5.19 was a dedicated wave for this single feature). In the
+    # corner case where gpt-4o capture misses a visible door (partially
+    # occluded, painted to match wall, marginal in frame), the preamble's
+    # single-word "doors" mention becomes the only protection. Keeping
+    # the explicit NEG_CORE enumeration provides a second emphatic layer
+    # that survives capture failure. Net savings : 16 chars sacrificed
+    # to preserve door authority — favorable trade-off.
+    "Photographed fixed features (interior doors, built-ins, staircases, "
+    "exposed beams, wall-mounted fixtures) stay in place — do not cover "
+    "or convert into wall surface."
 )
 # Wave 5.5.x : 450 chars ceiling.
 # Wave 5.19 : raised 450 → 600 to fit the extended NEG_CORE (~440 chars
