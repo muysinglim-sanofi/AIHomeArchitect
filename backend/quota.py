@@ -114,6 +114,58 @@ def _get_supa():
 # ── Public API ──────────────────────────────────────────────────────────────
 
 
+async def is_admin_role(user_id: str, *, supa=None) -> bool:
+    """Wave 5.18 — admin-specific check for /me/access endpoint.
+
+    True iff the user has an active role == 'admin' in user_roles
+    (NOT 'premium'). Distinct from `has_admin_role` which is the
+    BYPASS check (admin OR premium combined). This function is used
+    by the Developer Validation Mode endpoint to expose the admin
+    flag to the frontend without conflating it with subscription state.
+
+    The frontend combines `accessProvider.isAdmin` with the existing
+    `premiumProvider` (driven by RevenueCat) to compute full-access
+    UI gating — keeping the two signals separate avoids race
+    conditions on the live RC stream.
+
+    Fail-open : if the DB lookup errors, return False (UI degrades
+    to free tier ; backend bypass remains authoritative via the
+    cached `has_admin_role` path).
+    """
+    supa = supa or _get_supa()
+    try:
+        result = await asyncio.to_thread(
+            lambda: supa.table("user_roles")
+            .select("role, expires_at")
+            .eq("user_id", user_id)
+            .eq("role", "admin")
+            .execute()
+        )
+        rows = getattr(result, "data", None) or []
+    except Exception as exc:
+        log.warning(
+            "[Wave 5.18] is_admin_role lookup failed open — user=%s error=%s",
+            user_id, exc,
+        )
+        return False
+
+    now_ts = time.time()
+    for r in rows:
+        expires_at = r.get("expires_at")
+        if expires_at is None:
+            return True  # permanent admin
+        try:
+            from datetime import datetime
+            expires_dt = datetime.fromisoformat(
+                expires_at.replace("Z", "+00:00")
+            )
+            if expires_dt.timestamp() > now_ts:
+                return True
+        except (ValueError, AttributeError):
+            return True  # unparseable expiry → assume active
+    return False
+
+
 async def has_admin_role(user_id: str, *, supa=None) -> bool:
     """True iff the user has an active 'admin' or 'premium' role in
     user_roles (or any other role in _BYPASS_ROLES). Cached 60s per user.

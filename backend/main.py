@@ -22,12 +22,14 @@ from supabase import create_client
 # Wave 5.17a — Identity foundation
 from auth import CurrentUser, get_current_user
 # Wave 5.17b — Quota enforcement + IP rate limit
+# Wave 5.18 — Developer Validation Mode admin-flag endpoint
 from quota import (
     get_quota_status,
     reserve_generation,
     confirm_generation,
     fail_generation,
     FREE_TIER_LIMIT,
+    is_admin_role,
 )
 # Wave 5.17d — Free-tier scope (room + atmosphere allowlist for non-premium)
 from free_tier import check_restrictions
@@ -516,6 +518,35 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# ── Wave 5.18 — Developer Validation Mode admin flag ─────────────────────────
+# Single-purpose endpoint that exposes the admin status of the authenticated
+# user to the frontend. The frontend's `accessProvider` polls this on app
+# start + auth state changes and combines the result with `premiumProvider`
+# (RevenueCat) for UI gating :
+#     hasFullAccess = isPremium || isAdmin
+#
+# Backend remains the single source of truth — no RevenueCat custom
+# entitlement, no JWT claim, no local override. Granting admin is a manual
+# INSERT in user_roles (expires_at NULL for permanent).
+#
+# Premium status is NOT exposed here. Premium is tracked client-side via the
+# RC SDK stream so the UI updates instantly on purchase, without a backend
+# round-trip. Mixing the two signals into a single endpoint would create a
+# stale-window after purchase.
+#
+# Response shape is deliberately minimal — extending later (e.g. adding
+# is_premium, role_expires_at) is non-breaking since callers parse only
+# fields they need.
+@app.get("/me/access")
+async def get_me_access(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Return {is_admin: bool} for the authenticated user."""
+    return {
+        "is_admin": await is_admin_role(current_user.user_id),
+    }
 
 
 @app.post("/chat")
