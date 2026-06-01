@@ -36,6 +36,32 @@ class TransformationType(str, Enum):
 # ── Detection patterns ────────────────────────────────────────────────────────
 # Order matters: check most specific first to avoid false-positives.
 
+# ── Wave 5.13e (2026-05-31) — atmosphere-name vocabulary (centralized) ────────
+# Used by _ATMOSPHERE_SWITCH_RE's new natural-language frames below. Matches :
+#   • 7 registered display names (atmosphere_dna/ package) — full + short alias
+#   • 4 legacy display names still routed via _LEGACY_ALIASES (_base.py)
+#   • 2 French short aliases that already appeared in the older bare clause
+#     (nordique / scandinave)
+#
+# DELIBERATELY EXCLUDED from this alternation (would clash with
+# _STYLE_REFINEMENT_RE causing false-positive atmosphere switches) :
+#   • "warm"    → clashes with "warmer" / generic warmth refinement
+#   • "soft"    → clashes with "softer" / "soft lighting"
+#   • "modern"  → too generic, no atmosphere-switch intent
+#   • "luxury"  → clashes with "more luxurious"
+# These tokens count as atmosphere names ONLY in full phrase form
+# ("warm modern", "soft luxury"). See Wave 5.13e audit (Sub-task 1) for the
+# 51-phrase classification matrix used to validate this exclusion list.
+_ATMOSPHERE_NAME = (
+    r"(?:warm\s+modern|japandi(?:\s+calm)?|soft\s+luxury|"
+    r"nordic(?:\s+warmth)?|nature(?:\s+retreat)?|"
+    r"desert(?:\s+luxe)?|tropical(?:\s+escape)?|"
+    r"scandinavian|bali|zen|"
+    r"nordique|scandinave|"
+    r"dark\s+contemporary|penthouse\s+contemporary|"
+    r"bali\s+sanctuary|zen\s+retreat)"
+)
+
 _ATMOSPHERE_SWITCH_RE = re.compile(
     r"\b(switch\s+to|change\s+(the\s+)?(atmosphere|style|look|feel)|try\s+(a\s+|the\s+)?(\w+\s+)+(style|look|atmosphere|vibe)|"
     r"go\s+with|try\s+(japandi|warm\s+modern|nordic|scandinavian|luxury|dark\s+contemporary|"
@@ -59,7 +85,24 @@ _ATMOSPHERE_SWITCH_RE = re.compile(
     # delimiter, so all 10 atmospheres now classify as ATMOSPHERE_SWITCH.
     # Strict bookends (redesign... + style) prevent false positives like
     # "Redesign the kitchen with new tiles" (no `in the X style` suffix).
-    r"redesign\s+(?:this|the)\s+(?:space|room|place)\s+in\s+(?:the|a)\s+.+?\s+style)\b",
+    r"redesign\s+(?:this|the)\s+(?:space|room|place)\s+in\s+(?:the|a)\s+.+?\s+style|"
+    # Wave 5.13e (2026-05-31) — 6 natural-language atmosphere-switch frames.
+    # Audit found 13/16 UNKNOWN classifications in a 51-phrase sample were
+    # atmosphere switches typed casually ("Nordic instead", "make it Nordic",
+    # "let's do Japandi", "give me Desert"). UNKNOWN gets conservatively
+    # counted as customization (is_customization_transformation policy) →
+    # Wave 5.3 routing locked to REBOOT_CUSTOMIZED → source_mode kept as
+    # LATEST → cascade noise on subsequent switches. These six frames close
+    # the natural-phrasing gap without touching STYLE_REFINEMENT priority
+    # (atmosphere names in _ATMOSPHERE_NAME never overlap with the
+    # _STYLE_REFINEMENT_RE vocabulary). See [[cascade_noise_recipe]] memory
+    # for the full routing chain.
+    rf"{_ATMOSPHERE_NAME}\s+(?:instead|please|now|next|this\s+time)|"
+    rf"(?:let'?s\s+)?(?:do|go|use|just|try)\s+{_ATMOSPHERE_NAME}|"
+    rf"make\s+it\s+{_ATMOSPHERE_NAME}|"
+    rf"give\s+me\s+{_ATMOSPHERE_NAME}|"
+    rf"(?:i\s+want\s+|i'?ll\s+take\s+|actually\s+){_ATMOSPHERE_NAME}|"
+    rf"switch\s+(?:atmosphere\s+to\s+|to\s+)?{_ATMOSPHERE_NAME})\b",
     re.IGNORECASE,
 )
 
