@@ -1,0 +1,4 @@
+[submodule "frontend"]
+	path = frontend
+	url = https://github.com/muysinglim-sanofi/AIHomeArchitect.git
+	branch = wave4-design-spine
