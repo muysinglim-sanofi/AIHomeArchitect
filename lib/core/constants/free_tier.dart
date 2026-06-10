@@ -31,9 +31,11 @@ const Set<String> kFreeRoomIds = {
 /// Canonical atmosphere ids that free users can use. Mirrors
 /// `backend/free_tier.py::FREE_ATMOSPHERES`. Ids match the `id` field
 /// of `AtmosphereStyle` in `frontend/lib/core/models/atmosphere_style.dart`.
+// 2026-06-08 — free pair changed to Warm Modern + Japandi Calm
+// (Nordic Warmth → premium). Keep in lockstep with backend FREE_ATMOSPHERES.
 const Set<String> kFreeAtmosphereIds = {
   'warm_modern',
-  'nordic_warmth',
+  'japandi_calm',
 };
 
 /// True iff the (room_id, atmosphere_id) pair is in the free scope.

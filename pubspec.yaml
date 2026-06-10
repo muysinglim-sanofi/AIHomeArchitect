@@ -26,6 +26,9 @@ dependencies:
   # Images
   image_picker: ^1.1.2
   cached_network_image: ^3.3.1
+  # Wave 6.15 — compress the source photo before Supabase upload (2.2 MB raw
+  # → ~0.6 MB) so the generation starts ~3-4s sooner. Native; handles EXIF.
+  flutter_image_compress: ^2.3.0
 
   # Sharing
   share_plus: ^10.0.0
@@ -76,4 +79,7 @@ flutter:
     - assets/showcase/
     - assets/atmospheres/
     - assets/atmospheres/ftue/
+    - assets/cards/rooms/
+    - assets/cards/atmospheres/
+    - assets/examples/
 

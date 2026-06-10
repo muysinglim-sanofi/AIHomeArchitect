@@ -116,30 +116,6 @@ const kAtmospheres = <AtmosphereStyle>[
     iconData: Icons.ac_unit,
     ftueHeroImagePath: 'assets/atmospheres/ftue/ftue_nordic_warmth.jpg',
   ),
-  AtmosphereStyle(
-    id: 'nature_retreat',
-    name: 'Nature Retreat',
-    tagline: 'Biophilic design immersed in greenery',
-    heroImagePath: 'assets/atmospheres/nature_retreat.jpg',
-    iconImagePath: 'assets/atmospheres/nature_retreat_icon.png',
-    showcaseAsset: null,
-    fallbackImageUrl:
-        'https://images.unsplash.com/photo-1518780664697-55e3ad937233?w=400&fit=crop&crop=center',
-    iconData: Icons.eco,
-    ftueHeroImagePath: 'assets/atmospheres/ftue/ftue_nature_retreat.jpg',
-  ),
-  AtmosphereStyle(
-    id: 'desert_luxe',
-    name: 'Desert Luxe',
-    tagline: 'Warm earth tones with artisanal warmth',
-    heroImagePath: 'assets/atmospheres/desert_luxe.jpg',
-    iconImagePath: 'assets/atmospheres/desert_luxe_icon.png',
-    showcaseAsset: null,
-    fallbackImageUrl:
-        'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&fit=crop&crop=center',
-    iconData: Icons.wb_twilight,
-    ftueHeroImagePath: 'assets/atmospheres/ftue/ftue_desert_luxe.jpg',
-  ),
 ];
 
 /// Wave 5.17d — canonical atmosphere id from a possibly-decorated label
@@ -159,16 +135,16 @@ String? atmosphereIdFromLabel(String? label) {
 /// Wave 5.17d.1 — Global display order for atmospheres across every
 /// surface that lists them : FTUE Screen 3, New Design upload screen,
 /// Re-upload modal in chat, Full Reveal carousel, Paywall hero strip.
-/// The free pair (Warm Modern + Nordic Warmth) MUST come first so
+/// The free pair (Warm Modern + Japandi Calm) MUST come first so
 /// non-premium users see what they can do before what's locked.
+// 2026-06-08 — reordered by popularity, free pair (Warm Modern + Japandi)
+// first. Drives display order on every surface via kAtmospheresOrdered.
 const List<String> kPreferredAtmosphereOrder = <String>[
   'warm_modern',
-  'nordic_warmth',
-  'soft_luxury',
   'japandi_calm',
+  'soft_luxury',
+  'nordic_warmth',
   'tropical_escape',
-  'nature_retreat',
-  'desert_luxe',
 ];
 
 /// Wave 5.17d.1 — canonical default atmosphere id. Use this for any

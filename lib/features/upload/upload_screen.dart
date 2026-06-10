@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,6 +11,7 @@ import '../../core/constants/room_type_images.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/premium_provider.dart';
 import '../../core/providers/access_provider.dart';
+import '../../core/providers/me_status_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_pill.dart';
@@ -19,6 +21,11 @@ import '../../shared/widgets/room_type_card.dart';
 import '../../shared/widgets/sticky_action_bar.dart';
 import '../chat/widgets/chat_input_bar.dart' show MicButton;
 import '../paywall/paywall_sheet.dart';
+import '../../core/feature_flags.dart';
+import '../cards/card_catalog.dart';
+import '../cards/widgets/ai_action_card.dart';
+import '../cards/widgets/atmosphere_hero_card.dart';
+import '../cards/widgets/room_card.dart';
 
 // ── Wave 5.8 → 5.16 — New Design Screen Redesign (4-step architectural journey)
 // 5.8 reframed the upload flow as 5 explicit, persistent steps with a guided
@@ -141,6 +148,62 @@ class _UploadScreenState extends State<UploadScreen>
   }
 
   void _showImagePicker() {
+    if (FeatureFlags.uploadPickerV2) {
+      _showImagePickerV2();
+    } else {
+      _showImagePickerV1();
+    }
+  }
+
+  // AYDEN premium picker — serif title + Camera/Gallery cards + "Example
+  // photos" carousel (blank before-rooms to test instantly) + privacy footer.
+  void _showImagePickerV2() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _ImagePickerSheet(
+        onCamera: () {
+          Navigator.pop(sheetCtx);
+          _pickImage(ImageSource.camera);
+        },
+        onGallery: () {
+          Navigator.pop(sheetCtx);
+          _pickImage(ImageSource.gallery);
+        },
+        onExample: (asset) {
+          Navigator.pop(sheetCtx);
+          _useExamplePhoto(asset);
+        },
+      ),
+    );
+  }
+
+  // Selecting an example = uploading it. The bundled asset is copied to a temp
+  // file and assigned to `_image` exactly like a Camera/Gallery pick, so the
+  // entire downstream flow (4 steps → generation) is unchanged.
+  Future<void> _useExamplePhoto(String assetPath) async {
+    try {
+      final data = await rootBundle.load(assetPath);
+      final file = File(
+        '${Directory.systemTemp.path}/ayden_example_'
+        '${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      await file.writeAsBytes(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+      );
+      if (!mounted) return;
+      setState(() => _image = file);
+    } catch (e) {
+      debugPrint('[Upload] example photo load failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.uplExampleLoadError)),
+      );
+    }
+  }
+
+  void _showImagePickerV1() {
     final l10n = context.l10n;
     showModalBottomSheet(
       context: context,
@@ -207,9 +270,9 @@ class _UploadScreenState extends State<UploadScreen>
   bool get _canProceed => _image != null && _roomChosen && _styleChosen;
 
   String get _missingHint {
-    if (_image == null) return 'Add a photo of your space to begin';
-    if (!_roomChosen) return 'Choose a room — or let the AI decide';
-    return 'Pick an atmosphere — or let the AI surprise you';
+    if (_image == null) return context.l10n.uplHintAddPhoto;
+    if (!_roomChosen) return context.l10n.uplHintChooseRoom;
+    return context.l10n.uplHintPickAtmosphere;
   }
 
   void _start() {
@@ -275,12 +338,12 @@ class _UploadScreenState extends State<UploadScreen>
                 ),
                 StickyActionBar(
                   primary: AppButton(
-                    label: 'Generate Design ✨',
+                    label: '${context.l10n.uplGenerateDesign} ✨',
                     onPressed: _canProceed ? _start : null,
                   ),
                   secondary: Text(
                     _canProceed
-                        ? 'AI will create your redesign'
+                        ? context.l10n.uplWillCreate
                         : _missingHint,
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -312,10 +375,8 @@ class _UploadScreenState extends State<UploadScreen>
           _StepSection(
             anchorKey: _stepKeys[0],
             stepNumber: 1,
-            title: 'Upload your space',
-            subtitle:
-                'Upload a photo of the room, facade, garden or any space '
-                'you want to redesign.',
+            title: context.l10n.uploadYourSpace,
+            subtitle: context.l10n.uplStep1Sub,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -330,7 +391,7 @@ class _UploadScreenState extends State<UploadScreen>
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'Your photos are private and secure',
+                      context.l10n.uplPrivacy,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppColors.textTertiary,
                           ),
@@ -346,8 +407,8 @@ class _UploadScreenState extends State<UploadScreen>
           _StepSection(
             anchorKey: _stepKeys[1],
             stepNumber: 2,
-            title: 'What type of space are we transforming?',
-            subtitle: 'Choose the type of space you want to transform.',
+            title: context.l10n.uplStep2Title,
+            subtitle: context.l10n.uplStep2Sub,
             child: _RoomScroller(
               selected: _selectedRoom,
               onSelected: (v) => setState(() {
@@ -367,8 +428,8 @@ class _UploadScreenState extends State<UploadScreen>
           _StepSection(
             anchorKey: _stepKeys[2],
             stepNumber: 3,
-            title: 'Choose your atmosphere',
-            subtitle: 'Select the feeling and style that defines your space.',
+            title: context.l10n.uplStep3Title,
+            subtitle: context.l10n.uplStep3Sub,
             child: _AtmosphereScroller(
               selected: _selectedStyle,
               onSelected: (v) => setState(() {
@@ -391,10 +452,9 @@ class _UploadScreenState extends State<UploadScreen>
           _StepSection(
             anchorKey: _stepKeys[3],
             stepNumber: 4,
-            title: 'Describe your vision',
+            title: context.l10n.uplStep4Title,
             titleTrailing: const _OptionalBadge(),
-            subtitle: 'Brief the architect in your own words. '
-                'You can speak or type.',
+            subtitle: context.l10n.uplStep4Sub,
             child: _DescriptionField(controller: _descController),
           ),
           const SizedBox(height: AppSpacing.xxl),
@@ -483,7 +543,7 @@ class _StepBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        'STEP $stepNumber OF 4',
+        context.l10n.uplStepBadge(stepNumber),
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: AppColors.surface,
               fontWeight: FontWeight.w600,
@@ -508,7 +568,7 @@ class _OptionalBadge extends StatelessWidget {
         border: Border.all(color: AppColors.border),
       ),
       child: Text(
-        'Optional',
+        context.l10n.uplOptional,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: AppColors.textTertiary,
               fontWeight: FontWeight.w500,
@@ -528,31 +588,30 @@ class _StepperSide extends StatelessWidget {
   final int currentStep;
   final ValueChanged<int> onStep;
 
-  static const _labels = [
-    'Upload',
-    'Room Type',
-    'Atmosphere',
-    'Your Vision',
-  ];
-
   const _StepperSide({required this.currentStep, required this.onStep});
 
   @override
   Widget build(BuildContext context) {
+    final labels = [
+      context.l10n.uplStepperUpload,
+      context.l10n.uplStepperRoom,
+      context.l10n.uplStepperAtmosphere,
+      context.l10n.uplStepperVision,
+    ];
     return Container(
       width: 132,
       padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.xl, 8,
           AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: List.generate(_labels.length, (i) {
+        children: List.generate(labels.length, (i) {
           final step = i + 1;
           final isCurrent = step == currentStep;
           final isPast = step < currentStep;
-          final isLast = i == _labels.length - 1;
+          final isLast = i == labels.length - 1;
           return _StepperNode(
             stepNumber: step,
-            label: _labels[i],
+            label: labels[i],
             isCurrent: isCurrent,
             isPast: isPast,
             isLast: isLast,
@@ -992,17 +1051,21 @@ class _RoomScroller extends ConsumerWidget {
     final isPremium = ref.watch(premiumProvider);
     // Wave 5.18 — admin bypass added alongside premium bypass.
     final isAdmin = ref.watch(accessProvider);
+    // Sprint 1B — an active promo grant (limited or unlimited) unlocks ALL
+    // rooms/atmospheres too, exactly like the backend resolver's bypass_scope.
+    final hasPromo = ref.watch(meStatusProvider)?.hasActivePromo ?? false;
+    final entitled = isPremium || isAdmin || hasPromo;
 
-    // Wave 5.17d — locked predicates. A room is locked when the user is
-    // non-premium AND its canonical id is not in the free set. The "AI
-    // Decide" tile is always premium-only — non-premium users cannot
-    // delegate the choice (mirrors the backend free_tier policy).
+    // Wave 5.17d — locked predicates. A room is locked when the user is NOT
+    // entitled AND its canonical id is not in the free set. The "AI Decide"
+    // tile is entitled-only — free users cannot delegate the choice (mirrors
+    // the backend free_tier policy).
     bool roomLocked(String label) {
-      if (isPremium || isAdmin) return false;
+      if (entitled) return false;
       final id = RoomTypeImages.idForLabel(l10n, label);
       return id == null || !kFreeRoomIds.contains(id);
     }
-    bool aiLocked() => !isPremium && !isAdmin;
+    bool aiLocked() => !entitled;
 
     // Tap router : locked → paywall, else → original onSelected/onAiDecide.
     void onRoomTap(String label) {
@@ -1020,6 +1083,13 @@ class _RoomScroller extends ConsumerWidget {
       onAiDecide!();
     };
 
+    // AYDEN new card system (flag-gated). Same selection value (localized
+    // label), same locks/paywall — only the rendering changes.
+    if (FeatureFlags.newDesignCards) {
+      return _newRoomsLayout(context, l10n, onRoomTap, roomLocked, onAi,
+          aiLocked());
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1030,9 +1100,9 @@ class _RoomScroller extends ConsumerWidget {
           selected: selected,
           onSelected: onRoomTap,
           aiDecideSelected: aiDecideSelected,
-          aiLabel: onAi != null ? 'AI Decide' : null,
+          aiLabel: onAi != null ? context.l10n.uplAiDecide : null,
           aiSublabel:
-              onAi != null ? 'Let AI detect the space for me' : null,
+              onAi != null ? context.l10n.uplAiDecideSub : null,
           onAiDecide: onAi,
           isLocked: roomLocked,
           isAiLocked: aiLocked,
@@ -1047,6 +1117,98 @@ class _RoomScroller extends ConsumerWidget {
           isLocked: roomLocked,
         ),
       ],
+    );
+  }
+
+  // ── AYDEN new card system — hero grid + "More Spaces" row ──────────────────
+  // Display labels = English (Option A). Selection VALUE = localized label via
+  // RoomTypeImages.labelForId → routing / free-tier / paywall unchanged.
+  Widget _newRoomsLayout(
+    BuildContext context,
+    AppLocalizations l10n,
+    void Function(String) onRoomTap,
+    bool Function(String) roomLocked,
+    VoidCallback? onAi,
+    bool aiLockedNow,
+  ) {
+    // VALUE routed to session/backend = canonical ENGLISH label (locale-stable;
+    // backend DNA room lookup keys off English names). Display stays English
+    // (r.label) per Option A. Localized labels must NEVER be the routed value —
+    // they make the backend drop room DNA (room context / TV anchor).
+    String value(String id) => RoomTypeImages.enLabelForId(id) ?? id;
+    RoomCard card(RoomCardData r) {
+      final v = value(r.id);
+      return RoomCard(
+        label: r.label,
+        asset: r.asset,
+        selected: selected == v,
+        locked: roomLocked(v),
+        onTap: () => onRoomTap(v),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final cols = MediaQuery.sizeOf(context).width >= 600 ? 3 : 2;
+        final heroH = (c.maxWidth - (cols - 1) * 12) / cols * 5 / 6;
+        final secH = heroH * 0.78;
+        final secW = secH * 6 / 5;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GridView.count(
+              padding: EdgeInsets.zero,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: cols,
+              childAspectRatio: 6 / 5,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              children: [for (final r in kHeroRooms) card(r)],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text(
+                  context.l10n.uplMoreSpaces,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(width: 6),
+                const Icon(Icons.arrow_forward,
+                    size: 15, color: AppColors.textTertiary),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: secH,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                clipBehavior: Clip.none,
+                itemCount: kMoreRooms.length + (onAi != null ? 1 : 0),
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                itemBuilder: (context, i) {
+                  if (onAi != null && i == kMoreRooms.length) {
+                    return SizedBox(
+                      width: secW,
+                      child: AiActionCard(
+                        title: context.l10n.uplAiDecide,
+                        subtitle: context.l10n.uplAiDecideSub,
+                        locked: aiLockedNow,
+                        onTap: onAi,
+                      ),
+                    );
+                  }
+                  return SizedBox(width: secW, child: card(kMoreRooms[i]));
+                },
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1111,6 +1273,16 @@ class _AtmosphereScroller extends ConsumerWidget {
     final isPremium = ref.watch(premiumProvider);
     // Wave 5.18 — admin bypass for atmosphere/surprise/custom carousel.
     final isAdmin = ref.watch(accessProvider);
+    // Sprint 1B — promo grants full atmosphere access too.
+    final hasPromo = ref.watch(meStatusProvider)?.hasActivePromo ?? false;
+    final entitled = isPremium || isAdmin || hasPromo;
+
+    // AYDEN new card system (flag-gated). Same selection value (a.name),
+    // same locks/paywall — only the rendering changes.
+    if (FeatureFlags.newDesignCards) {
+      return _newAtmosphereLayout(context, entitled);
+    }
+
     final atmospheres = AppLocalizations.atmospheres;
     final hasSurprise = onSurprise != null;
     final leading = hasSurprise ? 1 : 0;
@@ -1125,12 +1297,12 @@ class _AtmosphereScroller extends ConsumerWidget {
           if (hasSurprise && index == 0) {
             // Wave 5.17d — Surprise Me is delegated-choice, premium-only.
             // Wave 5.18 — admin bypass.
-            final locked = !isPremium && !isAdmin;
+            final locked = !entitled;
             return SizedBox(
               width: 150,
               child: AtmosphereCard.surprise(
-                label: 'Surprise Me',
-                sublabel: 'Let the AI choose a fitting atmosphere',
+                label: context.l10n.uplSurpriseMe,
+                sublabel: context.l10n.uplSurpriseSub,
                 selected: surpriseSelected,
                 locked: locked,
                 onTap: locked
@@ -1147,7 +1319,7 @@ class _AtmosphereScroller extends ConsumerWidget {
             final a = atmospheres[atmosphereIndex];
             // Wave 5.17d — non-free atmosphere is locked for non-premium.
             // Wave 5.18 — admin bypass.
-            final locked = !isPremium && !isAdmin
+            final locked = !entitled
                 && !kFreeAtmosphereIds.contains(a.id);
             return SizedBox(
               width: 150,
@@ -1167,12 +1339,12 @@ class _AtmosphereScroller extends ConsumerWidget {
           // Custom tile = free-text direction, premium-only (out of free
           // scope by definition — the user is asking the AI to interpret).
           // Wave 5.18 — admin bypass.
-          final customLocked = !isPremium && !isAdmin;
+          final customLocked = !entitled;
           return SizedBox(
             width: 150,
             child: AtmosphereCard.custom(
               label: _customLabel,
-              sublabel: 'Tell us in your own words',
+              sublabel: context.l10n.uplCustomSub,
               selected: selected == _customLabel,
               locked: customLocked,
               onTap: customLocked
@@ -1187,6 +1359,72 @@ class _AtmosphereScroller extends ConsumerWidget {
       ),
     );
   }
+
+  // ── AYDEN new card system — mini-hero atmosphere carousel ──────────────────
+  // Iterates the canonical ordered list (AppLocalizations.atmospheres) for
+  // identity/order/free-tier; pulls the new visuals (subtitle + asset) by id.
+  // Selection VALUE = a.name → routing / free-tier / paywall unchanged.
+  Widget _newAtmosphereLayout(BuildContext context, bool entitled) {
+    final atmospheres = AppLocalizations.atmospheres;
+    final hasSurprise = onSurprise != null;
+    final notEntitled = !entitled;
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final cardW = c.maxWidth * 0.80;
+        final h = cardW / 1.2;
+
+        final items = <Widget>[
+          for (final a in atmospheres)
+            AtmosphereHeroCard(
+              name: a.name,
+              subtitle: context.l10n.atmosphereSubtitle(a.id),
+              asset: kAtmosphereCardById[a.id]?.asset ??
+                  'assets/cards/atmospheres/${a.id}.png',
+              selected: selected == a.name,
+              locked: notEntitled && !kFreeAtmosphereIds.contains(a.id),
+              onTap: notEntitled && !kFreeAtmosphereIds.contains(a.id)
+                  ? () =>
+                      _openLockedPaywall(context, restrictedField: 'atmosphere')
+                  : () => onSelected(a.name),
+            ),
+          if (hasSurprise)
+            AiActionCard(
+              title: context.l10n.uplSurpriseMe,
+              subtitle: context.l10n.uplSurpriseSub,
+              radius: 18,
+              locked: notEntitled,
+              onTap: notEntitled
+                  ? () => _openLockedPaywall(context,
+                      restrictedField: 'delegated_choice')
+                  : onSurprise!,
+            ),
+          AiActionCard(
+            title: _customLabel,
+            subtitle: context.l10n.uplCustomSub,
+            radius: 18,
+            locked: notEntitled,
+            onTap: notEntitled
+                ? () => _openLockedPaywall(context, restrictedField: 'atmosphere')
+                : () => onSelected(_customLabel),
+          ),
+        ];
+
+        return SizedBox(
+          height: h,
+          child: PageView.builder(
+            controller: PageController(viewportFraction: 0.80),
+            padEnds: false,
+            itemCount: items.length,
+            itemBuilder: (context, i) => Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: items[i],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 // ── Wave 5.16 — FTUE Simplification & V1 Focus ────────────────────────────────
@@ -1198,3 +1436,378 @@ class _AtmosphereScroller extends ConsumerWidget {
 // time, per the V1 positioning : preserve onboarding, creative refinement.
 // Backend `generation_mode` contract untouched ; the FTUE simply omits the
 // `mode` query param so the server-side default ("preserve") applies.
+
+// ════════════════════════════════════════════════════════════════════════════
+// AYDEN premium image-source picker (FeatureFlags.uploadPickerV2)
+// Emotional entry point: serif title + Camera/Gallery cards + "Example photos"
+// carousel (blank before-rooms to test instantly) + privacy reassurance.
+// Frontend/UI only — Camera/Gallery pick unchanged; an example just becomes the
+// source image via _useExamplePhoto (temp file → _image), like a normal pick.
+// ════════════════════════════════════════════════════════════════════════════
+
+const Color _pkCream = Color(0xFFF6F2EB);
+const Color _pkCreamBorder = Color(0xFFEBE4D9);
+const Color _pkMuted = Color(0xFF8C857B);
+const Color _pkChampagne = Color(0xFFC2A172);
+// Softer than _pkCream — used for the SECONDARY example section so it recedes
+// (less contrast vs. the white sheet) while the Camera/Gallery cards stay
+// visually dominant on _pkCream.
+const Color _pkCreamSoft = Color(0xFFFAF8F4);
+
+class _PickerExample {
+  final String asset;
+  final String label;
+  final IconData icon;
+  const _PickerExample(this.asset, this.label, this.icon);
+}
+
+class _ImagePickerSheet extends StatefulWidget {
+  final VoidCallback onCamera;
+  final VoidCallback onGallery;
+  final void Function(String asset) onExample;
+
+  const _ImagePickerSheet({
+    required this.onCamera,
+    required this.onGallery,
+    required this.onExample,
+  });
+
+  @override
+  State<_ImagePickerSheet> createState() => _ImagePickerSheetState();
+}
+
+class _ImagePickerSheetState extends State<_ImagePickerSheet> {
+  final ScrollController _scroll = ScrollController();
+
+  // Blank "before" rooms — replace these 3 files with the real shots you'll
+  // provide (same paths). Selecting one uploads it instantly.
+  static const _examples = <_PickerExample>[
+    _PickerExample(
+        'assets/examples/living_room.jpg', 'Living Room', Icons.weekend_outlined),
+    _PickerExample(
+        'assets/examples/kitchen.jpg', 'Kitchen', Icons.countertops_outlined),
+    _PickerExample(
+        'assets/examples/bedroom.jpg', 'Bedroom', Icons.bed_outlined),
+  ];
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _scrollRight() {
+    if (!_scroll.hasClients) return;
+    final target =
+        (_scroll.offset + 150).clamp(0.0, _scroll.position.maxScrollExtent);
+    _scroll.animateTo(target,
+        duration: const Duration(milliseconds: 320), curve: Curves.easeOutCubic);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 28,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: AppColors.border.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                context.l10n.uploadYourSpace,
+                textAlign: TextAlign.center,
+                style: AppTheme.displayEditorial(
+                    fontSize: 26, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                context.l10n.uplPickerSubtitle,
+                textAlign: TextAlign.center,
+                style:
+                    const TextStyle(color: _pkMuted, fontSize: 13, height: 1.3),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: _PickerSourceCard(
+                      icon: Icons.camera_alt_outlined,
+                      label: context.l10n.uplCamera,
+                      onTap: widget.onCamera,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: _PickerSourceCard(
+                      icon: Icons.image_outlined,
+                      label: context.l10n.uplGallery,
+                      onTap: widget.onGallery,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+                decoration: BoxDecoration(
+                  color: _pkCreamSoft,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: _pkCreamBorder.withValues(alpha: 0.6)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.star_rounded,
+                            color: _pkChampagne, size: 17),
+                        const SizedBox(width: 7),
+                        Text(
+                          context.l10n.uplExamplePhotos,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      context.l10n.uplExampleHint,
+                      style: const TextStyle(color: _pkMuted, fontSize: 11.5),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 96,
+                      child: Stack(
+                        children: [
+                          ListView.separated(
+                            controller: _scroll,
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            clipBehavior: Clip.none,
+                            itemCount: _examples.length,
+                            separatorBuilder: (_, _) => const SizedBox(width: 10),
+                            itemBuilder: (_, i) {
+                              final ex = _examples[i];
+                              final labels = [
+                                context.l10n.livingRoom,
+                                context.l10n.kitchen,
+                                context.l10n.masterBedroom,
+                              ];
+                              return _ExamplePhotoCard(
+                                example:
+                                    _PickerExample(ex.asset, labels[i], ex.icon),
+                                onTap: () => widget.onExample(ex.asset),
+                              );
+                            },
+                          ),
+                          Positioned(
+                            right: -2,
+                            top: 0,
+                            bottom: 0,
+                            child: Center(
+                              child: _CarouselArrow(onTap: _scrollRight),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              const _PickerPrivacyFooter(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PickerSourceCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _PickerSourceCard({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          decoration: BoxDecoration(
+            color: _pkCream,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _pkCreamBorder),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: _pkChampagne.withValues(alpha: 0.14),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: _pkChampagne, size: 21),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ExamplePhotoCard extends StatelessWidget {
+  final _PickerExample example;
+  final VoidCallback onTap;
+
+  const _ExamplePhotoCard({required this.example, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 110,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Image.asset(
+                  example.asset,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) =>
+                      const ColoredBox(color: _pkCreamBorder),
+                ),
+              ),
+              Container(
+                color: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(example.icon, size: 13, color: _pkMuted),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        example.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CarouselArrow extends StatelessWidget {
+  final VoidCallback onTap;
+  const _CarouselArrow({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    // Deliberately understated (brief #5): soft translucent disc, no heavy
+    // border, gentle chevron — a quiet "there's more" cue, not a web control.
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.82),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.10),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: const Icon(Icons.chevron_right, size: 18, color: _pkMuted),
+      ),
+    );
+  }
+}
+
+class _PickerPrivacyFooter extends StatelessWidget {
+  const _PickerPrivacyFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    // Minimal single-line reassurance — present but unobtrusive.
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.lock_outline, size: 13, color: _pkMuted),
+        const SizedBox(width: 7),
+        Text(
+          context.l10n.uplPrivacy,
+          style: const TextStyle(color: _pkMuted, fontSize: 11.5),
+        ),
+      ],
+    );
+  }
+}

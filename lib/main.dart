@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
+import 'core/providers/me_status_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'data/services/revenuecat_service.dart';
@@ -64,6 +65,10 @@ class App extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final locale = ref.watch(localeProvider);
+    // Sprint 1 — instantiate + keep the status/reconcile notifier alive for the
+    // whole app lifetime (listen, not watch → no MaterialApp rebuilds). This is
+    // what runs POST /purchases/sync on premium signals app-wide.
+    ref.listen(meStatusProvider, (_, _) {});
     return MaterialApp.router(
       title: 'AI Home Architect',
       theme: AppTheme.light,

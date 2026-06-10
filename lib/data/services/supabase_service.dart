@@ -75,7 +75,19 @@ class SupabaseService {
     return rows;
   }
 
-  Future<void> insertMessage({
+  /// Insert a chat message row and return its Supabase `id`.
+  ///
+  /// Wave 5.21e — return type widened from `Future<void>` to
+  /// `Future<String?>` so the caller can keep a handle on the row for
+  /// targeted cleanup (e.g. removing a user message whose subsequent
+  /// `/generate` call failed, preventing it from polluting the
+  /// atmosphere-history walk). Callers that ignore the return value
+  /// (fire-and-forget) keep working unchanged.
+  ///
+  /// Returns the new row's `id` on success, or `null` if the insert
+  /// completed but Supabase did not return a row payload (best-effort
+  /// — never raises a different error than before).
+  Future<String?> insertMessage({
     required String sessionId,
     required String role,
     required String content,
@@ -85,7 +97,7 @@ class SupabaseService {
     String? styleLabel,
   }) async {
     debugPrint('[DB] insertMessage() — session_id: $sessionId | role: $role | type: $messageType | content: "${content.substring(0, content.length.clamp(0, 40))}..."');
-    await _db.from('messages').insert({
+    final inserted = await _db.from('messages').insert({
       'session_id': sessionId,
       'role': role,
       'content': content,
@@ -93,8 +105,26 @@ class SupabaseService {
       'before_image_url': beforeImageUrl,
       'after_image_url': afterImageUrl,
       'style_label': styleLabel,
-    });
-    debugPrint('[DB] insertMessage() — done');
+    }).select('id').maybeSingle();
+    final rowId = inserted?['id'] as String?;
+    debugPrint('[DB] insertMessage() — done (id=$rowId)');
+    return rowId;
+  }
+
+  /// Wave 5.21e — delete a previously inserted message by row id.
+  /// Used by the chat screen to clean up a user message whose
+  /// `/generate` call failed, preventing that orphan message from
+  /// polluting `_previous_atmosphere_id_from_history` on subsequent
+  /// generations. Best-effort: errors are swallowed (the local
+  /// `_messages` removal already happened).
+  Future<void> deleteMessage(String rowId) async {
+    debugPrint('[DB] deleteMessage() — row_id: $rowId');
+    try {
+      await _db.from('messages').delete().eq('id', rowId);
+      debugPrint('[DB] deleteMessage() — done');
+    } catch (e) {
+      debugPrint('[DB] deleteMessage() — failed (best-effort): $e');
+    }
   }
 
   // ── Storage ───────────────────────────────────────────────────────────────

@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import '../l10n/app_localizations.dart';
 
 /// Wave 4.10h — Centralized, curated room-type imagery.
@@ -96,11 +97,40 @@ class RoomTypeImages {
     'driveway': (l) => l.driveway,
   };
 
+  /// Canonical id → LOCALIZED room label (the routing/free-tier value the
+  /// screens pass around). Lets the new card system key by stable camelCase
+  /// id while still routing the localized label the backend expects.
+  static String? labelForId(AppLocalizations l10n, String id) =>
+      _labelOf[id]?.call(l10n);
+
+  /// Locale-stable ENGLISH label for an id. THIS is the canonical value routed
+  /// through session/generation as `room_type` — the backend prompt engine's
+  /// DNA room lookup keys off English room names ("Living Room", "Kitchen", …).
+  /// Routing the localized label instead (e.g. "Salon") makes the backend drop
+  /// the whole room DNA block (room context, TV anchor, furniture directives).
+  /// UI display may still localize via [labelForId]; the VALUE must stay English.
+  static final AppLocalizations _enL10n = AppLocalizations(const Locale('en'));
+  static String? enLabelForId(String id) => _labelOf[id]?.call(_enL10n);
+
+  /// Localized DISPLAY label for a routed (canonical English) room value.
+  /// Round-trips English value → id → localized label so the UI can show
+  /// "Salon" while the VALUE stays the backend-safe "Living Room". Falls back
+  /// to the value itself for unknown/legacy strings.
+  static String displayLabel(AppLocalizations l10n, String value) {
+    final id = idForLabel(l10n, value);
+    if (id == null) return value;
+    return labelForId(l10n, id) ?? value;
+  }
+
   /// Curated image URL for a LOCALIZED room label (the value the screens
   /// already pass around). Null ⇒ the caller shows the calm fallback.
   static String? urlForLabel(AppLocalizations l10n, String label) {
     for (final entry in _labelOf.entries) {
-      if (entry.value(l10n) == label) return _byId[entry.key];
+      // Match the canonical English value (what we route) OR the current-locale
+      // label (legacy/persisted values) — locale-stable.
+      if (entry.value(_enL10n) == label || entry.value(l10n) == label) {
+        return _byId[entry.key];
+      }
     }
     return null;
   }
@@ -114,7 +144,11 @@ class RoomTypeImages {
   static String? idForLabel(AppLocalizations l10n, String label) {
     if (label.isEmpty) return null;
     for (final entry in _labelOf.entries) {
-      if (entry.value(l10n) == label) return entry.key;
+      // Match the canonical English value (what we route) OR the current-locale
+      // label (legacy/persisted values) — locale-stable.
+      if (entry.value(_enL10n) == label || entry.value(l10n) == label) {
+        return entry.key;
+      }
     }
     return null;
   }

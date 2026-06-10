@@ -37,7 +37,7 @@ class FeatureFlags {
   /// back to "Restore Purchases" + "Maybe later" only. Use this only
   /// as a production hot-fix while a misconfiguration is being
   /// resolved on the RevenueCat dashboard — never as the default.
-  static const bool revenuecatGracefulDegradation = false;
+  static const bool revenuecatGracefulDegradation = true;
 
   /// Wave 5.17d.1 — Display ABA + ACLEDA payment chips in the paywall
   /// "Secure payments" row. OFF by default because RevenueCat does not
@@ -46,4 +46,41 @@ class FeatureFlags {
   /// (misleading payment claims). Re-enable only after a confirmed
   /// regional processor is wired AND store policy is reviewed.
   static const bool cambodianPaymentBadges = false;
+
+  /// AYDEN Part A (A2) — cinematic before→after reveal on the result surface.
+  ///
+  /// When false (default) : the result reveal uses the existing `RevealHero`
+  /// slider exactly as before — zero behaviour change.
+  /// When true : the result surface swaps in the new `RevealWidget`
+  /// (deterministic feathered sweep + shared ≤3% push, auto-play once → settle
+  /// on AFTER, then manual scrub). Additive, isolated, fully reversible — flip
+  /// to preview on device. No AI, no provider, no image-core/DNA impact.
+  static const bool cinematicReveal = true;
+
+  /// AYDEN card system preview — exposes a dev entry (Profile) + `/cards-preview`
+  /// route to validate the redesigned Room/Atmosphere/AI card system on device.
+  /// Isolated; does not alter the real upload/selection flow.
+  static const bool cardsPreview = true;
+
+  /// AYDEN new card system wired into the real New Design (upload Step 2/3).
+  /// When true (default) : Step 2 = hero grid + More Spaces row, Step 3 =
+  /// mini-hero atmosphere carousel (new RoomCard/AtmosphereHeroCard/AiActionCard).
+  /// When false : the original `RoomTypeRow` / `AtmosphereCard` selectors —
+  /// instant rollback. Display labels English (Option A); routing/free-tier
+  /// values + paywall + `_start()` unchanged.
+  static const bool newDesignCards = true;
+
+  /// AYDEN premium paywall V2 — emotional lifestyle redesign (Cormorant
+  /// headline, premium hero, simplified vertically-stacked plans with Annual
+  /// pushed as Best Value, "How it works" mini-story, lighter density). When
+  /// false : the original V1 paywall layout. Frontend/UI only — pricing,
+  /// RevenueCat purchase/restore logic and `_start()` are unchanged.
+  static const bool paywallV2 = true;
+
+  /// AYDEN premium "Upload your space" picker — the image-source bottom sheet
+  /// redesigned (serif title, Camera/Gallery cards, "Example photos" carousel
+  /// of blank before-rooms to test instantly, privacy footer). When false : the
+  /// original Camera/Gallery `ListTile` sheet. Frontend/UI only — selecting an
+  /// example just sets the source image exactly like a normal pick.
+  static const bool uploadPickerV2 = true;
 }

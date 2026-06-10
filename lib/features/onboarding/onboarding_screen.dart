@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../../core/feature_flags.dart';
+import '../cards/card_catalog.dart';
+import '../cards/widgets/atmosphere_hero_card.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
@@ -153,11 +156,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 // full-bleed responsive hero + a calm editorial text block. Defensive against
 // small-device overflow via Flexible + ellipsis (validated SE→Max).
 
-double _heroHeight(BuildContext context) {
-  final h = MediaQuery.sizeOf(context).height;
-  return (h * 0.50).clamp(240.0, 470.0);
-}
-
 class _SlideShell extends StatelessWidget {
   final Widget hero;
   final String title;
@@ -170,7 +168,13 @@ class _SlideShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Hero sized from the slide's AVAILABLE height (not the full screen) so
+        // the fixed hero + spacing + text never overflow the PageView on short
+        // devices or with taller scripts (Khmer). Fixes the FTUE overflow stripe.
+        final heroH = (constraints.maxHeight * 0.60).clamp(200.0, 470.0);
+        return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: AppSpacing.sm),
@@ -181,7 +185,7 @@ class _SlideShell extends StatelessWidget {
             bottom: Radius.circular(AppSpacing.radiusHero),
           ),
           child: SizedBox(
-            height: _heroHeight(context),
+            height: heroH,
             width: double.infinity,
             child: hero,
           ),
@@ -222,6 +226,8 @@ class _SlideShell extends StatelessWidget {
           ),
         ),
       ],
+        );
+      },
     );
   }
 }
@@ -380,11 +386,12 @@ class _RevealSlideState extends State<_RevealSlide>
                   left: divX - 20, top: 0, bottom: 0, width: 40,
                   child: const Center(child: _RevealHandle()),
                 ),
-                const Positioned(
-                    top: 14, left: 14, child: AppPill(text: 'Before')),
-                const Positioned(
+                Positioned(
+                    top: 14, left: 14,
+                    child: AppPill(text: context.l10n.ftueBefore)),
+                Positioned(
                     top: 14, right: 14,
-                    child: AppPill(text: 'AI Vision', dark: true)),
+                    child: AppPill(text: context.l10n.ftueAiVision, dark: true)),
               ],
             ),
           );
@@ -508,7 +515,9 @@ class _ChatDemoSlideState extends State<_ChatDemoSlide> {
               duration: const Duration(milliseconds: 400),
               child: AppPill(
                 key: ValueKey(_showAfter),
-                text: _showAfter ? 'After' : 'Before',
+                text: _showAfter
+                    ? context.l10n.ftueAfter
+                    : context.l10n.ftueBefore,
               ),
             ),
           ),
@@ -521,13 +530,13 @@ class _ChatDemoSlideState extends State<_ChatDemoSlide> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _CaptionLine(
-                  text: 'Renew my villa, add a swimming pool, surprise me',
+                  text: context.l10n.ftueDemoUser,
                   isUser: true,
                   visible: _showUser,
                 ),
                 const SizedBox(height: 6),
                 _CaptionLine(
-                  text: 'Modern architecture — warmer, swimming pool and playground',
+                  text: context.l10n.ftueDemoAi,
                   isUser: false,
                   visible: _showAi,
                 ),
@@ -556,7 +565,7 @@ class _ChatDemoSlideState extends State<_ChatDemoSlide> {
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            'Refining the space…',
+                            context.l10n.ftueDemoRefining,
                             style: Theme.of(context)
                                 .textTheme
                                 .bodySmall
@@ -823,7 +832,7 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              atm.tagline,
+                              context.l10n.atmosphereTagline(atm.id),
                               style: Theme.of(context)
                                   .textTheme
                                   .bodySmall
@@ -859,11 +868,21 @@ class _AtmosphereExplorerSlideState extends State<_AtmosphereExplorerSlide> {
                   final a = kAtmospheresOrdered[i];
                   return SizedBox(
                     width: cardWFinal,
-                    child: AtmosphereCard(
-                      atmosphere: a,
-                      selected: _selected == i,
-                      onTap: () => _select(i),
-                    ),
+                    child: FeatureFlags.newDesignCards
+                        ? AtmosphereHeroCard(
+                            compact: true,
+                            name: a.name,
+                            subtitle: context.l10n.atmosphereSubtitle(a.id),
+                            asset: kAtmosphereCardById[a.id]?.asset ??
+                                'assets/cards/atmospheres/${a.id}.png',
+                            selected: _selected == i,
+                            onTap: () => _select(i),
+                          )
+                        : AtmosphereCard(
+                            atmosphere: a,
+                            selected: _selected == i,
+                            onTap: () => _select(i),
+                          ),
                   );
                 },
               ),

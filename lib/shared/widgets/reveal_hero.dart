@@ -102,12 +102,21 @@ class RevealHero extends StatefulWidget {
 }
 
 class _RevealHeroState extends State<RevealHero>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late double _fraction;
   bool _userInteracted = false;
 
   AnimationController? _sweepCtrl;
   Animation<double>? _sweepAnim;
+
+  // Wave 5.10 — magnetic snap on drag release. If the user lets go within
+  // [_snapThreshold] of an attractor (0, 0.5, 1) the fraction eases to it
+  // over [_snapDuration]. Subtle assist, not a constraint : releases away
+  // from any attractor stay exactly where the user left them.
+  AnimationController? _snapCtrl;
+  Animation<double>? _snapAnim;
+  static const double _snapThreshold = 0.05;
+  static const Duration _snapDuration = Duration(milliseconds: 180);
 
   bool get _hasBefore => widget.beforeImage != null;
 
@@ -152,11 +161,13 @@ class _RevealHeroState extends State<RevealHero>
   @override
   void dispose() {
     _sweepCtrl?.dispose();
+    _snapCtrl?.dispose();
     super.dispose();
   }
 
   void _onDragStart(DragStartDetails _) {
     _sweepCtrl?.stop();
+    _snapCtrl?.stop();
     _userInteracted = true;
   }
 
@@ -165,6 +176,31 @@ class _RevealHeroState extends State<RevealHero>
     setState(() {
       _fraction = (_fraction + d.delta.dx / width).clamp(0.02, 0.98);
     });
+  }
+
+  void _onDragEnd(DragEndDetails _) {
+    // Snap targets at the clamp boundaries + the midpoint. Only fires when
+    // the release is already within _snapThreshold ; if the user lets go
+    // anywhere else the fraction stays put — assistance, not constraint.
+    const targets = <double>[0.02, 0.5, 0.98];
+    double? snapTo;
+    for (final t in targets) {
+      if ((_fraction - t).abs() < _snapThreshold) {
+        snapTo = t;
+        break;
+      }
+    }
+    if (snapTo == null || (_fraction - snapTo).abs() < 0.001) return;
+
+    _snapCtrl?.dispose();
+    _snapCtrl = AnimationController(vsync: this, duration: _snapDuration);
+    _snapAnim = Tween<double>(begin: _fraction, end: snapTo)
+        .chain(CurveTween(curve: Curves.easeOutCubic))
+        .animate(_snapCtrl!);
+    _snapAnim!.addListener(() {
+      if (mounted) setState(() => _fraction = _snapAnim!.value);
+    });
+    _snapCtrl!.forward();
   }
 
   double get _handleSize =>
@@ -200,12 +236,14 @@ class _RevealHeroState extends State<RevealHero>
             ),
           ));
 
-          // Subtle divider — a clean hairline, no shadow.
+          // Wave 5.10 — sharper hairline divider (1px instead of 2px).
+          // Cleaner visual hierarchy ; the handle carries the depth, the
+          // line stays editorial.
           layers.add(Positioned(
-            left: divX - 1,
+            left: divX - 0.5,
             top: 0,
             bottom: 0,
-            width: 2,
+            width: 1,
             child: Container(color: Colors.white.withValues(alpha: 0.9)),
           ));
 
@@ -271,6 +309,7 @@ class _RevealHeroState extends State<RevealHero>
               behavior: HitTestBehavior.opaque,
               onHorizontalDragStart: _onDragStart,
               onHorizontalDragUpdate: (d) => _onDragUpdate(d, width),
+              onHorizontalDragEnd: _onDragEnd,
             ),
           ));
         }
@@ -282,6 +321,7 @@ class _RevealHeroState extends State<RevealHero>
             behavior: HitTestBehavior.opaque,
             onHorizontalDragStart: _onDragStart,
             onHorizontalDragUpdate: (d) => _onDragUpdate(d, width),
+            onHorizontalDragEnd: _onDragEnd,
             child: stack,
           );
         }
@@ -316,6 +356,17 @@ class _RevealHandle extends StatelessWidget {
         color: Colors.white,
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 2),
+        // Wave 5.10 — soft ambient shadow lifts the handle off the
+        // image without becoming a heavy chip. Pairs with the thinner
+        // hairline divider : line stays editorial, handle carries depth.
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+            spreadRadius: 0,
+          ),
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,

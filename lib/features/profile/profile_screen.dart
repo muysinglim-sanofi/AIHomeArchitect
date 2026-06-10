@@ -6,9 +6,13 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/feature_flags.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/locale_provider.dart';
+import '../../core/providers/me_status_provider.dart';
 import '../../core/providers/session_provider.dart';
+import '../../data/services/status_service.dart';
+import '../paywall/paywall_sheet.dart';
 import '../../data/services/auth_service.dart';
 import '../auth/sign_in_screen.dart';
+import '../admin/admin_promo_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -18,6 +22,7 @@ class ProfileScreen extends ConsumerWidget {
     final l10n = context.l10n;
     final currentLocale = ref.watch(localeProvider);
     final sessionCount = ref.watch(sessionProvider).length;
+    final meStatus = ref.watch(meStatusProvider); // Sprint 1B — admin entry gate
 
     void show(Widget sheet) => showModalBottomSheet(
           context: context,
@@ -60,6 +65,17 @@ class ProfileScreen extends ConsumerWidget {
                   AppSpacing.lg,
                 ),
                 child: _StatsRow(projectCount: sessionCount),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.pagePadding,
+                  0,
+                  AppSpacing.pagePadding,
+                  AppSpacing.lg,
+                ),
+                child: const _PremiumStatusCard(),
               ),
             ),
             _SectionHeader(label: l10n.settingsAccount),
@@ -133,6 +149,31 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
             ),
+            // ── Sprint 1B — Admin section (visible ONLY if backend says admin;
+            // the real gate is server-side is_admin_role on every endpoint) ──
+            if (meStatus?.isAdmin == true) ...[
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+              _SectionHeader(label: l10n.admTitle),
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.pagePadding),
+                  child: _SettingsCard(
+                    items: [
+                      _SettingItem(
+                        icon: Icons.confirmation_number_outlined,
+                        label: l10n.admPromoCodes,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                              builder: (_) => const AdminPromoScreen()),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             // ── Voluntary sign-in entry (Wave 5.17b, hidden in 5.17d) ─────
             // The funnel no longer requires sign-in (Decision Wave 5.17d).
             // Restore Purchases lives on the paywall sheet (D7). To
@@ -173,7 +214,7 @@ class ProfileScreen extends ConsumerWidget {
             // ── Sign-out (Wave 5.17a, hidden in 5.17d) ────────────────────
             // With sign-in hidden, there is nothing to sign out of. Also
             // closes the quota-reset abuse path (sign-out → fresh anon
-            // UUID → 2 fresh free gens). To re-enable, flip the same flag.
+            // UUID → fresh free gens). To re-enable, flip the same flag.
             if (FeatureFlags.signInEnabled) ...[
               const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
               SliverToBoxAdapter(
@@ -248,6 +289,14 @@ class _LanguageSelectorSheet extends StatelessWidget {
                   : null,
               onTap: () => onSelect(const Locale('km')),
             ),
+            ListTile(
+              leading: const Text('🇫🇷', style: TextStyle(fontSize: 24)),
+              title: Text(l10n.french),
+              trailing: currentLocale.languageCode == 'fr'
+                  ? const Icon(Icons.check_rounded, color: AppColors.accent)
+                  : null,
+              onTap: () => onSelect(const Locale('fr')),
+            ),
           ],
         ),
       ),
@@ -297,7 +346,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
           Center(child: _SheetHandle()),
           const SizedBox(height: 20),
           Text(
-            'Edit Profile',
+            context.l10n.editProfile,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -331,7 +380,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
           ),
           const SizedBox(height: AppSpacing.xl),
           Text(
-            'DISPLAY NAME',
+            context.l10n.spDisplayName,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.textTertiary,
                   fontWeight: FontWeight.w600,
@@ -345,12 +394,12 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
             decoration: InputDecoration(
               filled: true,
               fillColor: AppColors.surfaceVariant,
-              hintText: 'Your name',
+              hintText: context.l10n.spYourName,
             ),
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            'EMAIL',
+            context.l10n.spEmail,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppColors.textTertiary,
                   fontWeight: FontWeight.w600,
@@ -387,7 +436,7 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 elevation: 0,
               ),
-              child: Text(_saved ? 'Saved' : 'Save Changes',
+              child: Text(_saved ? context.l10n.spSaved : context.l10n.spSaveChanges,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.surface)),
             ),
           ),
@@ -423,35 +472,35 @@ class _NotificationsSheetState extends State<_NotificationsSheet> {
         children: [
           Center(child: _SheetHandle()),
           const SizedBox(height: 20),
-          Text('Notifications', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+          Text(context.l10n.notifications, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
-          Text('Choose what keeps you inspired.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary)),
+          Text(context.l10n.spNotifSubtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary)),
           const SizedBox(height: AppSpacing.lg),
           _NotifToggle(
             icon: Icons.auto_awesome_outlined,
-            title: 'Redesign updates',
-            subtitle: 'Progress on your active designs',
+            title: context.l10n.spNotif1Title,
+            subtitle: context.l10n.spNotif1Sub,
             value: _redesigns,
             onChanged: (v) => setState(() => _redesigns = v),
           ),
           _NotifToggle(
             icon: Icons.check_circle_outline,
-            title: 'Generation completed',
-            subtitle: 'When your vision is ready to reveal',
+            title: context.l10n.spNotif2Title,
+            subtitle: context.l10n.spNotif2Sub,
             value: _generated,
             onChanged: (v) => setState(() => _generated = v),
           ),
           _NotifToggle(
             icon: Icons.wb_sunny_outlined,
-            title: 'Weekly inspiration',
-            subtitle: 'Curated architectural ideas',
+            title: context.l10n.spNotif3Title,
+            subtitle: context.l10n.spNotif3Sub,
             value: _inspiration,
             onChanged: (v) => setState(() => _inspiration = v),
           ),
           _NotifToggle(
             icon: Icons.campaign_outlined,
-            title: 'Product updates',
-            subtitle: 'New features and improvements',
+            title: context.l10n.spNotif4Title,
+            subtitle: context.l10n.spNotif4Sub,
             value: _product,
             onChanged: (v) => setState(() => _product = v),
           ),
@@ -523,26 +572,26 @@ class _PrivacySheet extends StatelessWidget {
         children: [
           Center(child: _SheetHandle()),
           const SizedBox(height: 20),
-          Text('Privacy & Data', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+          Text(context.l10n.spPrivacyTitle, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
-          Text('Your trust is the foundation of everything we build.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary)),
+          Text(context.l10n.spPrivacySubtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary)),
           const SizedBox(height: AppSpacing.xl),
           _PrivacySection(
             icon: Icons.photo_outlined,
-            title: 'Your Photos',
-            body: 'Photos you upload are processed securely to generate your architectural visions. They are never stored beyond your active session, never used to train AI models, and never shared with third parties.',
+            title: context.l10n.spPrivacy1Title,
+            body: context.l10n.spPrivacy1Body,
           ),
           const SizedBox(height: AppSpacing.lg),
           _PrivacySection(
             icon: Icons.auto_awesome_outlined,
-            title: 'AI Generation',
-            body: 'Your design sessions are processed through our AI generation pipeline. Conversations and prompts are used only to produce your vision — they are not retained after generation completes.',
+            title: context.l10n.spPrivacy2Title,
+            body: context.l10n.spPrivacy2Body,
           ),
           const SizedBox(height: AppSpacing.lg),
           _PrivacySection(
             icon: Icons.tune_outlined,
-            title: 'Your Control',
-            body: 'You can delete your design sessions at any time. Full data export, account deletion, and advanced privacy controls are coming in the next release.',
+            title: context.l10n.spPrivacy3Title,
+            body: context.l10n.spPrivacy3Body,
           ),
           const SizedBox(height: AppSpacing.lg),
           Container(
@@ -553,7 +602,7 @@ class _PrivacySheet extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              'More privacy controls coming soon. We\'re committed to giving you full ownership of your data.',
+              context.l10n.spPrivacyComingSoon,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.accentDark, height: 1.6),
               textAlign: TextAlign.center,
             ),
@@ -612,28 +661,28 @@ class _HelpCenterSheet extends StatelessWidget {
         children: [
           Center(child: _SheetHandle()),
           const SizedBox(height: 20),
-          Text('Help Center', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+          Text(context.l10n.helpCenter, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
-          Text('Everything you need to create your dream space.', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary)),
+          Text(context.l10n.spHelpSubtitle, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary)),
           const SizedBox(height: AppSpacing.lg),
           _FaqCard(
-            question: 'How does AIHomeArchitect work?',
-            answer: 'Upload a photo of your space, choose an atmosphere direction, and describe what you feel. Our AI architect transforms your space into a cinematic before & after vision.',
+            question: context.l10n.spFaq1Q,
+            answer: context.l10n.spFaq1A,
           ),
           const SizedBox(height: AppSpacing.sm),
           _FaqCard(
-            question: 'What\'s included in Premium?',
-            answer: 'Premium unlocks every room and every atmosphere with your personal AI Architect, plus HD exports. Two plans : Weekly Premium for a complete home project, or Annual Premium for the whole year.',
+            question: context.l10n.spFaq2Q,
+            answer: context.l10n.spFaq2A,
           ),
           const SizedBox(height: AppSpacing.sm),
           _FaqCard(
-            question: 'Can I replace the source photo?',
-            answer: 'Yes. Inside any redesign, tap the source photo strip at the top to open the Design Direction workspace. You can swap the photo and adjust your atmosphere direction anytime.',
+            question: context.l10n.spFaq3Q,
+            answer: context.l10n.spFaq3A,
           ),
           const SizedBox(height: AppSpacing.sm),
           _FaqCard(
-            question: 'Can I share my redesigns?',
-            answer: 'Yes — from any result screen, tap Share to send your before & after reveal to anyone. Save it to your gallery too.',
+            question: context.l10n.spFaq4Q,
+            answer: context.l10n.spFaq4A,
           ),
           const SizedBox(height: AppSpacing.xl),
           Container(
@@ -648,7 +697,7 @@ class _HelpCenterSheet extends StatelessWidget {
               children: [
                 const Icon(Icons.mail_outline, size: 28, color: AppColors.textSecondary),
                 const SizedBox(height: 8),
-                Text('Still need help?', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                Text(context.l10n.spStillNeedHelp, style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 Text('support@aihomearchitect.com', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.accent)),
               ],
@@ -734,13 +783,13 @@ class _RateAppSheetState extends State<_RateAppSheet> {
             const Icon(Icons.auto_awesome, size: 36, color: AppColors.accent),
             const SizedBox(height: 16),
             Text(
-              'How\'s your experience so far?',
+              context.l10n.spRateTitle,
               style: Theme.of(context).textTheme.headlineSmall,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              'Your feedback helps us create a better design experience.',
+              context.l10n.spRateSubtitle,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
@@ -775,23 +824,23 @@ class _RateAppSheetState extends State<_RateAppSheet> {
                   elevation: 0,
                   disabledBackgroundColor: AppColors.border,
                 ),
-                child: Text('Submit', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.surface)),
+                child: Text(context.l10n.spSubmit, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.surface)),
               ),
             ),
           ] else ...[
             const Icon(Icons.favorite, size: 36, color: AppColors.accent),
             const SizedBox(height: 16),
-            Text('Thank you!', style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
+            Text(context.l10n.spThankYou, style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
             const SizedBox(height: 8),
             Text(
-              'Your feedback means everything to us.',
+              context.l10n.spThankYouSub,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: AppSpacing.xl),
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text('Close', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textTertiary)),
+              child: Text(context.l10n.spClose, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textTertiary)),
             ),
           ],
         ],
@@ -822,18 +871,18 @@ class _AboutSheet extends StatelessWidget {
             child: const Icon(Icons.architecture, color: AppColors.surface, size: 32),
           ),
           const SizedBox(height: 16),
-          Text('AI Home Architect', style: Theme.of(context).textTheme.headlineSmall),
+          Text(context.l10n.appName, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 4),
-          Text('Version 1.0 · MVP Preview', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary)),
+          Text(context.l10n.spAboutVersion, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary)),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'Your personal AI architect companion.\nImagine. Refine. Reveal.',
+            context.l10n.spAboutTagline,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary, height: 1.6),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: AppSpacing.xl),
           Text(
-            '© 2026 AI Home Architect. All rights reserved.',
+            context.l10n.spCopyright,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textTertiary, fontSize: 10),
           ),
         ],
@@ -896,6 +945,149 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 // ── Stats row ─────────────────────────────────────────────────────────────────
+
+// Sprint 1 — additive premium/quota status card. Reads the backend snapshot
+// (GET /me/status via meStatusProvider). Renders nothing until the first
+// successful fetch (graceful: a status error never shows a broken card).
+class _PremiumStatusCard extends ConsumerStatefulWidget {
+  const _PremiumStatusCard();
+
+  @override
+  ConsumerState<_PremiumStatusCard> createState() => _PremiumStatusCardState();
+}
+
+class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
+  @override
+  void initState() {
+    super.initState();
+    // Refresh on open so the quota reflects generations done since boot
+    // (the provider otherwise only refetches on auth / premium signals).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(meStatusProvider.notifier).refresh();
+    });
+  }
+
+  Future<void> _openPaywall(PaywallTrigger trigger) async {
+    await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => PaywallSheet(trigger: trigger),
+    );
+    // Returning from the paywall may have flipped premium — refresh the card.
+    if (mounted) ref.read(meStatusProvider.notifier).refresh();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final MeStatus? status = ref.watch(meStatusProvider);
+    if (status == null) return const SizedBox.shrink();
+
+    final bool premium = status.isPremium;
+    // Sprint 1B — promo is shown ONLY when not premium (premium/admin priority).
+    final bool promo = status.hasActivePromo;
+    final bool entitled = premium || promo;  // has access → nothing to upsell
+    final Color accent =
+        entitled ? AppColors.accent : AppColors.textSecondary;
+    final l10n = context.l10n;
+    final IconData icon = premium
+        ? Icons.workspace_premium
+        : (promo ? Icons.redeem : Icons.bolt_outlined);
+
+    final String title;
+    final String subtitle;
+    if (status.isAdmin) {
+      title = l10n.stAdminFullAccess;
+      subtitle = l10n.stUnlimited;
+    } else if (premium) {
+      title = l10n.stPremiumActive;
+      subtitle = l10n.stUnlimited;
+    } else if (promo && status.promoUnlimitedActive) {
+      title = l10n.promoAccessUnlimited;
+      subtitle = status.activePromoCampaign ?? l10n.stUnlimited;
+    } else if (promo) {
+      title = l10n.promoAccessLabel;
+      subtitle = l10n.promoAccessLimited(status.promoGenerationsRemaining);
+    } else {
+      title = l10n.stFreePlan;
+      subtitle = l10n.freeGenerationsLeft(status.remaining);
+    }
+
+    // Free users tap the card to open the paywall (upgrade) — quota trigger
+    // when exhausted, generic otherwise. Entitled users (premium/promo) have
+    // nothing to upsell.
+    final VoidCallback? onTap = entitled
+        ? null
+        : () => _openPaywall(
+              status.remaining <= 0
+                  ? PaywallTrigger.quota
+                  : PaywallTrigger.locked,
+            );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: entitled
+                  ? AppColors.accent.withValues(alpha: 0.35)
+                  : AppColors.border,
+            ),
+          ),
+          child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: accent, size: 22),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          if (entitled)
+            const Icon(Icons.verified, color: AppColors.accent, size: 20)
+          else
+            const Icon(Icons.chevron_right,
+                color: AppColors.textSecondary, size: 22),
+        ],
+      ),
+        ),
+      ),
+    );
+  }
+}
 
 class _StatsRow extends StatelessWidget {
   final int projectCount;

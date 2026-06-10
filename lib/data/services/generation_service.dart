@@ -23,7 +23,7 @@ class GenerationException implements Exception {
   final int? quotaLimit;
 
   /// Wave 5.17d — true iff the backend returned HTTP 402 FREE_TIER_RESTRICTED.
-  /// Distinct from quotaExhausted (which means "you used all 2 free gens") :
+  /// Distinct from quotaExhausted (which means "you used all your free gens") :
   /// the user picked an out-of-scope room/atmosphere or delegated the choice
   /// (let_ai_decide / surprise_me) without being premium. Same paywall sheet,
   /// different subhead copy.

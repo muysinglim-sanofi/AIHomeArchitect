@@ -3,8 +3,15 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'dart:typed_data';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import '../../core/feature_flags.dart';
+import '../cards/card_catalog.dart';
+import '../cards/widgets/atmosphere_hero_card.dart';
+import '../cards/widgets/room_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,6 +23,7 @@ import '../../core/constants/free_tier.dart';
 import '../../core/constants/room_type_images.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/models/atmosphere_style.dart';
+import '../../core/providers/me_status_provider.dart';
 import '../../core/providers/pending_generations_provider.dart';
 import '../../core/providers/premium_provider.dart';
 import '../../core/providers/access_provider.dart';
@@ -85,6 +93,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
   bool _isGenerating = false;
+  // Wave 6.15 — perceived-latency: true while the V1 loading bubble is shown
+  // EARLY (source image visible instantly) but the Supabase init chain
+  // (createSession + source upload) is still running, before _generate fires.
+  // Gates the composer like _isGenerating but does NOT block _generate's own
+  // re-entrancy guard. Cleared the moment _generate starts (or on init failure).
+  bool _v1Priming = false;
+  bool get _busy => _isGenerating || _v1Priming;
   Timer? _longGenerationTimer;
   bool _isChatting = false;
   bool _hasGenerated = false;
@@ -100,6 +115,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   final _titleFocusNode = FocusNode();
 
   File? _sourceImageFile;
+  // Set when the user replaces the source mid-session; consumed on the next
+  // generation to start a FRESH lineage (re-upload + reset chain → FIRST_VISION).
+  bool _sourceReplaced = false;
   final _picker = ImagePicker();
 
   late String _currentRoomType;
@@ -251,7 +269,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
           isAi: true,
           createdAt: DateTime.now(),
         ),
+        // Wave 6.15 — show the V1 loading bubble IMMEDIATELY (it renders the
+        // local source file as backdrop), so the source image appears the
+        // instant the chat opens — instead of waiting for createSession +
+        // source upload to finish. _generate (after the upload) reuses this
+        // bubble (it won't add a second one). content "1|<style>" = iteration 1.
+        MessageModel(
+          id: 'loading_v1_priming',
+          content: '1|$style',
+          isAi: true,
+          type: MessageType.loading,
+          createdAt: DateTime.now(),
+        ),
       ];
+      _v1Priming = true;
       _iterationCount = 0;
       // Initialize before _initNewSession() reads them synchronously.
       _currentRoomType = roomType;
@@ -400,7 +431,33 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   /// Called once for new sessions. Creates the row in Supabase, persists the
   /// initial greeting, flushes any messages sent before the row was ready,
   /// then updates _project with the real UUID so subsequent writes work.
+  // Wave 6.15 — downscale + JPEG-recompress the source before upload. ~2.2 MB
+  // raw → ~0.6 MB, cutting ~3-4s off the Supabase upload (and the gen start).
+  // q=85 + 1920px cap preserves all detail the model needs (output is
+  // 1536x1024; high-fidelity anchors architecture, not fine grain). Native plugin
+  // auto-applies EXIF rotation. Returns null on any failure → caller uses raw.
+  Future<Uint8List?> _compressSource(String path) async {
+    try {
+      return await FlutterImageCompress.compressWithFile(
+        path,
+        quality: 85,
+        minWidth: 1920,
+        minHeight: 1920,
+        format: CompressFormat.jpeg,
+        keepExif: false,
+      );
+    } catch (e) {
+      debugPrint('[Compress] source compress failed (non-fatal): $e');
+      return null;
+    }
+  }
+
   Future<void> _initNewSession() async {
+    // Wave 6.15 — perceived-latency timing. Logs ms elapsed at each Supabase
+    // step so we can see exactly where the click→source-image time goes
+    // (typically the source upload). Read these in the Flutter console.
+    final sw = Stopwatch()..start();
+    debugPrint('[Timing] _initNewSession START (t=0)');
     debugPrint('[DB] _initNewSession() started — title: "$_sessionTitle" room: "$_currentRoomType" style: "$_currentStyle"');
     try {
       final realProject = await ref.read(sessionProvider.notifier).createSession(
@@ -408,6 +465,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         roomType: _currentRoomType,
         atmosphere: _currentStyle,
       );
+      debugPrint('[Timing] createSession done @ ${sw.elapsedMilliseconds}ms');
       debugPrint('[DB] _initNewSession() session created — id: ${realProject.id}');
 
       // Upload source image (fire after session exists so we have the real ID for the path).
@@ -416,7 +474,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       if (imageFile != null) {
         debugPrint('[DB] _initNewSession() uploading source image…');
         try {
-          final bytes = await imageFile.readAsBytes();
+          // Wave 6.15 — compress the source before upload (2.2 MB raw → ~0.6 MB)
+          // so the upload (and thus the generation start) is ~3-4s faster. Falls
+          // back to the raw bytes if compression fails.
+          final rawLen = await imageFile.length();
+          final compressed = await _compressSource(imageFile.path);
+          final bytes = compressed ?? await imageFile.readAsBytes();
+          debugPrint(
+              '[Compress] source ${(rawLen / 1024).round()} KB → ${(bytes.length / 1024).round()} KB @ ${sw.elapsedMilliseconds}ms');
           final filename = 'source_${DateTime.now().millisecondsSinceEpoch}.jpg';
           beforeUrl = await _svc.uploadSourceImage(
             sessionId: realProject.id,
@@ -431,6 +496,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
           // generation source — i.e. the latest render — on V2+ refinements).
           ref.read(sessionProvider.notifier)
               .updateBeforeImageUrl(realProject.id, beforeUrl);
+          debugPrint('[Timing] uploadSourceImage (${(bytes.length / 1024).round()} KB) done @ ${sw.elapsedMilliseconds}ms');
           debugPrint('[DB] _initNewSession() source image uploaded — url: $beforeUrl');
         } catch (uploadErr) {
           debugPrint('[DB] _initNewSession() image upload failed (non-fatal): $uploadErr');
@@ -443,6 +509,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         role: 'ai',
         content: _messages.first.content,
       );
+      debugPrint('[Timing] insertMessage(greeting) done @ ${sw.elapsedMilliseconds}ms');
       debugPrint('[DB] _initNewSession() initial greeting persisted');
 
       // Flush user messages that arrived before the session row existed.
@@ -473,12 +540,41 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       _persistSession();
 
       // Auto-generate Vision 1 once the session and image are confirmed ready.
+      debugPrint('[Timing] init chain complete, triggering autogen @ ${sw.elapsedMilliseconds}ms (this is when the source image / loading bubble appears in the OLD flow)');
       debugPrint('[AutoGen] beforeImageUrl resolved — eligible: ${beforeUrl != null && mounted}');
       _triggerAutoGenerate();
     } catch (e, st) {
       debugPrint('[DB] _initNewSession() ERROR: $e');
       debugPrint('[DB] _initNewSession() STACK: $st');
+      _abortV1Priming('init error: $e');
     }
+  }
+
+  // Wave 6.15 — the V1 loading bubble is shown EARLY (priming). If the init
+  // chain fails before _generate runs (createSession/upload error → no
+  // beforeImageUrl), that bubble would hang forever. Remove it + surface the
+  // failure so the user can retry. No-op once _generate has taken over.
+  void _abortV1Priming(String reason) {
+    if (!_v1Priming) return; // _generate already owns the loading state
+    debugPrint('[Wave 6.15] aborting V1 priming — $reason');
+    if (!mounted) {
+      _v1Priming = false;
+      return;
+    }
+    setState(() {
+      _v1Priming = false;
+      _isGenerating = false;
+      _messages.removeWhere((m) => m.type == MessageType.loading);
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Could not start the generation. Please try again.'),
+        backgroundColor: AppColors.accentDark,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   void _triggerAutoGenerate() {
@@ -492,6 +588,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     }
     if (_project.beforeImageUrl == null || _project.beforeImageUrl!.isEmpty) {
       debugPrint('[AutoGen] skipped — no beforeImageUrl');
+      _abortV1Priming('no beforeImageUrl (source upload failed)');
       return;
     }
     debugPrint('[AutoGen] triggering Vision 1 auto-generation');
@@ -730,7 +827,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
 
   Future<void> _send(String text) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty || _isGenerating || _isChatting) return;
+    if (trimmed.isEmpty || _busy || _isChatting) return;
 
     final userMsg = MessageModel(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -845,6 +942,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   Future<void> _generate({String? overridePrompt}) async {
     if (_isGenerating) return;
 
+    // Mid-session source change → re-upload + reset the chain BEFORE reading the
+    // generation source, so this generation runs as a fresh FIRST_VISION on the
+    // new photo (iteration == 1).
+    if (_sourceReplaced) {
+      final ok = await _applyReplacedSource();
+      if (!ok) {
+        if (!mounted) return;
+        if (overridePrompt == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                  'Could not upload the new photo. Please try again.'),
+              backgroundColor: AppColors.accentDark,
+              behavior: SnackBarBehavior.floating,
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(16),
+            ),
+          );
+        }
+        return;
+      }
+    }
+    if (!mounted) return;
+
     // originalUrl is the structural anchor only (keeps geometry stable on the
     // backend). It must NOT drive the reveal viewer.
     // generationSource is the EXACT image this step evolves from and is the
@@ -871,7 +993,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       if (overridePrompt == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Please upload a source photo first.'),
+            content: Text(context.l10n.chatPleaseUpload),
             backgroundColor: AppColors.accentDark,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -913,6 +1035,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     //   3. Skip when the typed-message flow (_send) already added a matching
     //      userMsg — `_send` inserts userMsg into _messages BEFORE calling
     //      `_generate`, so contextMessages already has it.
+    // Wave 5.21e — track the user message we are about to insert so we can
+    // clean it up if /generate fails with a structured backend error. Without
+    // cleanup the orphan message persists into atmosphere history and the
+    // next generation's _previous_atmosphere_id_from_history walk sees a
+    // phantom switch (failed Japandi reported as prev even though Nature
+    // was the last actually-rendered atmosphere). Tracking is per-call —
+    // local variables only, no shared state.
+    String? insertedUserMsgLocalId;
+    Future<String?>? insertedUserMsgRowFuture;
     if (overridePrompt != null &&
         overridePrompt.isNotEmpty &&
         _iterationCount >= 1) {
@@ -926,11 +1057,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
           isAi: false,
           createdAt: DateTime.now(),
         );
+        insertedUserMsgLocalId = userMsg.id;
         setState(() {
           _messages.add(userMsg);
         });
         if (_project.id != 'new') {
-          _svc.insertMessage(sessionId: _project.id, role: 'user', content: overridePrompt);
+          // Capture the Future so the catch block can await it (fire-and-
+          // forget semantics preserved for the happy path).
+          insertedUserMsgRowFuture = _svc.insertMessage(
+            sessionId: _project.id,
+            role: 'user',
+            content: overridePrompt,
+          );
         } else {
           _pendingMessages.add(userMsg);
         }
@@ -939,16 +1077,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
 
     setState(() {
       _isGenerating = true;
+      _v1Priming = false; // generation now owns the loading state
       // Content encodes "<iteration>|<style>" so the loading bubble can pick
       // the right phrase set AND the subtle atmosphere-flavoured beat
       // (Wave 4.9.1b) without a separate state field. Parsed defensively.
-      _messages.add(MessageModel(
-        id: 'loading_${DateTime.now().millisecondsSinceEpoch}',
-        content: '$newCount|$_currentStyle',
-        isAi: true,
-        type: MessageType.loading,
-        createdAt: DateTime.now(),
-      ));
+      // Wave 6.15 — reuse the early V1 priming bubble if it's already shown
+      // (don't stack a second loading bubble); otherwise add one (V2+ path).
+      if (!_messages.any((m) => m.type == MessageType.loading)) {
+        _messages.add(MessageModel(
+          id: 'loading_${DateTime.now().millisecondsSinceEpoch}',
+          content: '$newCount|$_currentStyle',
+          isAi: true,
+          type: MessageType.loading,
+          createdAt: DateTime.now(),
+        ));
+      }
     });
     _scrollToBottom();
 
@@ -1037,6 +1180,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       // Wave 5.6c — user is still on the chat screen at completion; clear
       // any pending state for this session (result will render inline).
       pendingNotifier.clear(sessionIdForLifecycle);
+
+      // A successful generation consumed quota — refresh the status snapshot so
+      // the profile card's "free generations left" stays accurate.
+      ref.read(meStatusProvider.notifier).refresh();
 
       final afterUrl = result['after_image_url'] as String;
       // Wave 5.13c perf #3 — fire-and-forget image precache. The
@@ -1140,6 +1287,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       // Only now do we surface the failure to the user.
       _longGenerationTimer?.cancel();
       _longGenerationTimer = null;
+
+      // ── Wave 5.21e — Failed-generation history cleanup ────────────────
+      // The user message we inserted before calling /generate must NOT
+      // survive a structured backend failure. Otherwise the next
+      // generation's _previous_atmosphere_id_from_history walk picks up
+      // this orphan as the most-recent atmosphere transition — exactly
+      // the Session-2 bug where a failed Japandi tap shadowed the
+      // successful Nature retreat that followed. Cleanup runs on BOTH
+      // GenerationException paths (paywall + regular failure), but NOT
+      // on the transport-error catch below — there the backend may
+      // still succeed (Wave 5.6 server-side persistence polling).
+      if (insertedUserMsgLocalId != null) {
+        setState(() {
+          _messages.removeWhere((m) => m.id == insertedUserMsgLocalId);
+        });
+        if (insertedUserMsgRowFuture != null) {
+          final rowId = await insertedUserMsgRowFuture;
+          if (rowId != null) {
+            await _svc.deleteMessage(rowId);
+          }
+        }
+      }
+
       if (!mounted) {
         // Wave 5.6c — failure arrived after user navigated away.
         // Mark the session as "error, not yet seen" so home shows a badge.
@@ -1161,6 +1331,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
           _isGenerating = false;
           _messages.removeWhere((m) => m.type == MessageType.loading);
         });
+        // Quota state just changed — refresh the status snapshot (profile card).
+        ref.read(meStatusProvider.notifier).refresh();
         await showModalBottomSheet<bool>(
           context: context,
           isScrollControlled: true,
@@ -1361,6 +1533,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
           });
           // Wave 4.10g — room/atmosphere selection survives restart.
           _persistSession();
+          // AYDEN option B — "Generate Design" triggers a real generation
+          // through the normal /generate path (quota consumed for free users,
+          // exactly like any generation). Flag-gated with the new card system.
+          if (FeatureFlags.newDesignCards) {
+            _generate();
+          }
         },
         // Wave 5.16b — initialMode + onModeChanged callsite dropped with
         // the sheet's MODE toggle. _generationMode still wired to the
@@ -1370,22 +1548,62 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     );
   }
 
-  Future<void> _replaceSourcePhoto() async {
-    Navigator.of(context).pop();
+  // Replace the source photo WITHOUT closing the sheet (the sheet stays open
+  // so the user can still pick room + atmosphere). Returns the new file so the
+  // sheet can update its own preview; the sheet only closes on quit or on
+  // "Generate Design".
+  Future<File?> _replaceSourcePhoto() async {
     final picked = await _picker.pickImage(source: ImageSource.gallery);
-    if (picked == null || !mounted) return;
-    final l10n = context.l10n;
+    if (picked == null || !mounted) return null;
+    final file = File(picked.path);
     setState(() {
-      _sourceImageFile = File(picked.path);
-      _messages.add(MessageModel(
-        id: 'sys_${DateTime.now().millisecondsSinceEpoch}',
-        content: '${l10n.sourcePhotoUpdated} · $_currentRoomType',
-        isAi: false,
-        type: MessageType.system,
-        createdAt: DateTime.now(),
-      ));
+      _sourceImageFile = file;
+      _sourceReplaced = true; // next generation = fresh V1 from this photo
     });
-    _scrollToBottom();
+    return file;
+  }
+
+  // Mid-session source change → re-upload the new photo, make it the new
+  // structural anchor, and reset the vision chain so the NEXT generation is a
+  // FIRST_VISION (iteration == 1). Old visions stay in the chat history. A
+  // system message marks the new lineage. Returns false on upload failure.
+  Future<bool> _applyReplacedSource() async {
+    final file = _sourceImageFile;
+    if (file == null) return false;
+    try {
+      // Wave 6.15 — compress the replaced source too (same as V1 upload).
+      final compressed = await _compressSource(file.path);
+      final bytes = compressed ?? await file.readAsBytes();
+      final filename = 'source_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final newUrl = await _svc.uploadSourceImage(
+        sessionId: _project.id,
+        filename: filename,
+        bytes: bytes,
+      );
+      await _svc.updateBeforeImageUrl(_project.id, newUrl);
+      ref
+          .read(sessionProvider.notifier)
+          .updateBeforeImageUrl(_project.id, newUrl);
+      if (!mounted) return false;
+      setState(() {
+        _project = _project.copyWith(beforeImageUrl: newUrl);
+        _generationSourceUrl = null; // new root → generationSource == new anchor
+        _iterationCount = 0; // → iteration == 1 → FIRST_VISION
+        _sourceReplaced = false;
+        _messages.add(MessageModel(
+          id: 'sys_${DateTime.now().millisecondsSinceEpoch}',
+          content: context.l10n.chatNewSourceMsg,
+          isAi: false,
+          type: MessageType.system,
+          createdAt: DateTime.now(),
+        ));
+      });
+      _persistSession();
+      return true;
+    } catch (e) {
+      debugPrint('[NewSource] re-upload failed: $e');
+      return false;
+    }
   }
 
   @override
@@ -1458,7 +1676,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
-            child: _isGenerating
+            child: _busy
                 ? const Center(
                     child: SizedBox(
                       width: 20,
@@ -1555,7 +1773,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
             _SuggestionBar(
               suggestions: _suggestions,
               onTap: _send,
-              enabled: !_isGenerating && !_isChatting,
+              enabled: !_busy && !_isChatting,
             ),
             // Wave 5.12b — the sticky "CONTINUING • VISION X" context
             // line shipped in Wave 5.12 was removed : it competed with
@@ -1567,7 +1785,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
             ChatInputBar(
               controller: _inputController,
               onSend: _send,
-              enabled: !_isGenerating && !_isChatting,
+              enabled: !_busy && !_isChatting,
             ),
           ],
         ),
@@ -1721,55 +1939,10 @@ class _TextBubbleState extends State<_TextBubble>
 
 // ── Loading bubble ────────────────────────────────────────────────────────────
 
-// Wave 4.9.1b — Perceived-latency UX.
-// Phases are an ORDERED architectural narrative (not a cycling loop). The
-// scheduler advances through them once with widening, slightly-jittered dwell
-// windows and then HOLDS the final phase for the remainder of the 40–90s
-// generation — so the experience always reads as "progressing → confidently
-// finalizing", never "looping / did it crash". Slot index 3 is the
-// atmosphere-flavoured beat (see _atmospherePhase).
-const _initialPhrases = [
-  'Reading your space…',
-  'Preserving the architecture…',
-  'Studying natural light and openings…',
-  'Composing materials and palette…',     // ← atmosphere-flavoured slot (3)
-  'Balancing realism and proportion…',
-  'Refining the composition…',
-  'Finalizing your vision…',              // ← held to completion
-];
-
-const _refinementPhrases = [
-  'Revisiting the current design…',
-  'Holding the architecture steady…',
-  'Applying your direction…',
-  'Evolving materials and light…',        // ← atmosphere-flavoured slot (3)
-  'Balancing realism and depth…',
-  'Refining the details…',
-  'Finalizing your vision…',              // ← held to completion
-];
-
-// Subtle, single atmosphere-flavoured beat (Task 5). Premium architectural
-// tone — deliberately understated, no "AI poetry". Falls back to the generic
-// slot-3 phrase when the atmosphere is unknown/absent (resilient — Task 8).
-const _atmosphereFlavor = <String, String>{
-  'soft luxury': 'Layering warmth, softness, and quiet luxury…',
-  'warm modern': 'Warming the materials and natural light…',
-  'japandi': 'Balancing calm, wood, and negative space…',
-  'zen': 'Settling stillness and material calm…',
-  'tropical': 'Bringing in natural texture and open light…',
-  'bali': 'Weaving organic texture and sanctuary calm…',
-  'nordic': 'Softening with pale wood and hygge warmth…',
-  'desert': 'Layering sand tones and sculpted shade…',
-  'nature retreat': 'Drawing in raw nature and grounded calm…',
-};
-
-String? _atmospherePhase(String atmosphere) {
-  final a = atmosphere.toLowerCase();
-  for (final entry in _atmosphereFlavor.entries) {
-    if (a.contains(entry.key)) return entry.value;
-  }
-  return null;
-}
+// Wave 4.9.1b — Perceived-latency UX. The ordered loading narrative (initial +
+// refinement phrases + the slot-3 atmosphere-flavoured beat) now lives in l10n
+// (AppLocalizations.genInitPhrases / genRefinePhrases / genFlavor) so it
+// localizes; the scheduler below consumes the localized sequence.
 
 class _LoadingBubble extends StatefulWidget {
   final int iteration;
@@ -1817,15 +1990,27 @@ class _LoadingBubbleState extends State<_LoadingBubble> with TickerProviderState
 
     _breathCtrl = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 1700))..repeat(reverse: true);
+    // NOTE: the localized phrase sequence is built in didChangeDependencies —
+    // NOT here. context.l10n → Localizations.of → dependOnInheritedWidgetOf…
+    // is illegal in initState (throws → red ErrorWidget covering the loader).
+  }
 
-    // Build the one-shot ordered narrative once. Slot 3 becomes the
-    // atmosphere-flavoured beat when the atmosphere is recognised.
-    final base = widget.iteration > 1 ? _refinementPhrases : _initialPhrases;
+  bool _seqReady = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_seqReady) return; // build the one-shot narrative exactly once
+    _seqReady = true;
+    // Slot 3 becomes the atmosphere-flavoured beat when the atmosphere is
+    // recognised.
+    final l10n = context.l10n;
+    final base =
+        widget.iteration > 1 ? l10n.genRefinePhrases : l10n.genInitPhrases;
     final seq = List<String>.from(base);
-    final flavor = _atmospherePhase(widget.atmosphere);
+    final flavor = l10n.genFlavor(widget.atmosphere);
     if (flavor != null && seq.length > 3) seq[3] = flavor;
     _sequence = seq;
-
     _advancePhases();
   }
 
@@ -2653,7 +2838,9 @@ class _SourceContextStrip extends StatelessWidget {
                         ),
                   ),
                   Text(
-                    '$currentRoomType · $currentStyle',
+                    // Routed value is canonical English; localize for display.
+                    '${RoomTypeImages.displayLabel(l10n, currentRoomType)}'
+                    ' · $currentStyle',
                     style: Theme.of(context)
                         .textTheme
                         .bodySmall
@@ -2687,7 +2874,7 @@ class _SourcePhotoSheet extends ConsumerStatefulWidget {
   final void Function(_VisionRef) onContinueFromVision;
   final String initialRoomType;
   final String initialStyle;
-  final VoidCallback onReplace;
+  final Future<File?> Function() onReplace;
   final void Function(String roomType, String style) onDirectionChanged;
   // Wave 5.16b — bimodal toggle removed (preserve-only UI in V1).
   // `initialMode` + `onModeChanged` params dropped ; parent no longer
@@ -2714,11 +2901,21 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
   late String _selectedStyle;
   // Wave 5.16b — `_selectedMode` field removed with the MODE toggle.
 
+  // Local source preview — lets "Replace photo" update the sheet in place
+  // without closing it.
+  File? _sourceFile;
+
   @override
   void initState() {
     super.initState();
     _selectedRoomType = widget.initialRoomType;
     _selectedStyle = widget.initialStyle;
+    _sourceFile = widget.sourceFile;
+  }
+
+  Future<void> _onReplaceTap() async {
+    final file = await widget.onReplace();
+    if (file != null && mounted) setState(() => _sourceFile = file);
   }
 
   void _apply() {
@@ -2734,9 +2931,11 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
   // locks (predicates return false).
   bool _roomLocked(String label) {
     // Wave 5.18 — admin bypass added alongside premium bypass.
+    // Sprint 1B — promo grant unlocks all rooms too (matches backend bypass).
     final isPremium = ref.read(premiumProvider);
     final isAdmin = ref.read(accessProvider);
-    if (isPremium || isAdmin) return false;
+    final hasPromo = ref.read(meStatusProvider)?.hasActivePromo ?? false;
+    if (isPremium || isAdmin || hasPromo) return false;
     final id = RoomTypeImages.idForLabel(context.l10n, label);
     return id == null || !kFreeRoomIds.contains(id);
   }
@@ -2761,6 +2960,77 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
         trigger: PaywallTrigger.locked,
         restrictedField: restrictedField,
       ),
+    );
+  }
+
+  // ── AYDEN new card system (reupload sheet) — hero grid + "More Spaces" ─────
+  // Selection VALUE = canonical ENGLISH label (locale-stable; the backend DNA
+  // room lookup keys off English names — routing a localized label drops the
+  // room DNA block). Same locks/paywall (_roomLocked / _onRoomTap). No AI
+  // Decide here. Display labels English (Option A).
+  Widget _newRoomsLayoutSheet(BuildContext context) {
+    String value(String id) => RoomTypeImages.enLabelForId(id) ?? id;
+    RoomCard card(RoomCardData r) {
+      final v = value(r.id);
+      return RoomCard(
+        label: r.label,
+        asset: r.asset,
+        selected: _selectedRoomType == v,
+        locked: _roomLocked(v),
+        onTap: () => _onRoomTap(v),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final cols = MediaQuery.sizeOf(context).width >= 600 ? 3 : 2;
+        final heroH = (c.maxWidth - (cols - 1) * 12) / cols * 5 / 6;
+        final secH = heroH * 0.78;
+        final secW = secH * 6 / 5;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            GridView.count(
+              padding: EdgeInsets.zero,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: cols,
+              childAspectRatio: 6 / 5,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              children: [for (final r in kHeroRooms) card(r)],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text(
+                  context.l10n.uplMoreSpaces,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(width: 6),
+                const Icon(Icons.arrow_forward,
+                    size: 15, color: AppColors.textTertiary),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: secH,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                clipBehavior: Clip.none,
+                itemCount: kMoreRooms.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                itemBuilder: (context, i) =>
+                    SizedBox(width: secW, child: card(kMoreRooms[i])),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -2803,7 +3073,7 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
                   children: [
                     _SheetVisionImage(
                       visionUrl: widget.currentVisionUrl,
-                      sourceFile: widget.sourceFile,
+                      sourceFile: _sourceFile,
                       beforeUrl: widget.project.beforeImageUrl,
                     ),
                     const Positioned.fill(
@@ -2821,7 +3091,7 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const AppPill(text: 'Evolving this vision'),
+                          AppPill(text: context.l10n.chatEvolvingVision),
                           const SizedBox(height: 6),
                           Text(
                             '$_selectedRoomType · $_selectedStyle',
@@ -2864,8 +3134,8 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
                         child: SizedBox(
                           width: 40,
                           height: 40,
-                          child: widget.sourceFile != null
-                              ? Image.file(widget.sourceFile!,
+                          child: _sourceFile != null
+                              ? Image.file(_sourceFile!,
                                   fit: BoxFit.cover,
                                   filterQuality: FilterQuality.medium)
                               : widget.project.beforeImageUrl != null
@@ -2892,7 +3162,7 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
                       AppPill(
                         text: l10n.replacePhoto,
                         icon: Icons.image_outlined,
-                        onTap: widget.onReplace,
+                        onTap: _onReplaceTap,
                       ),
                     ],
                   ),
@@ -2902,7 +3172,7 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
                   // Calm progression (V1 → … → latest), not a technical
                   // version tree. Tapping a vision continues from it.
                   if (widget.visions.isNotEmpty) ...[
-                    const _SheetEyebrow(label: 'DESIGN EVOLUTION'),
+                    _SheetEyebrow(label: context.l10n.chatDesignEvolution),
                     const SizedBox(height: 10),
                     _EvolutionStrip(
                       visions: widget.visions,
@@ -2918,29 +3188,33 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
                   // non-premium users see Living Room tappable, every
                   // other room dimmed with a 🔒 chip ; locked tap opens
                   // the paywall sheet (PaywallTrigger.locked).
-                  const _SheetEyebrow(label: 'SPACE TYPE'),
+                  _SheetEyebrow(label: context.l10n.chatSpaceType),
                   const SizedBox(height: 10),
-                  _SheetRoomLabel(label: l10n.interiorSection),
-                  const SizedBox(height: 8),
-                  RoomTypeRow(
-                    rooms: l10n.interiorRooms,
-                    selected: _selectedRoomType,
-                    onSelected: _onRoomTap,
-                    isLocked: _roomLocked,
-                  ),
-                  const SizedBox(height: 14),
-                  _SheetRoomLabel(label: l10n.exteriorSection),
-                  const SizedBox(height: 8),
-                  RoomTypeRow(
-                    rooms: l10n.exteriorRooms,
-                    selected: _selectedRoomType,
-                    onSelected: _onRoomTap,
-                    isLocked: _roomLocked,
-                  ),
+                  if (FeatureFlags.newDesignCards)
+                    _newRoomsLayoutSheet(context)
+                  else ...[
+                    _SheetRoomLabel(label: l10n.interiorSection),
+                    const SizedBox(height: 8),
+                    RoomTypeRow(
+                      rooms: l10n.interiorRooms,
+                      selected: _selectedRoomType,
+                      onSelected: _onRoomTap,
+                      isLocked: _roomLocked,
+                    ),
+                    const SizedBox(height: 14),
+                    _SheetRoomLabel(label: l10n.exteriorSection),
+                    const SizedBox(height: 8),
+                    RoomTypeRow(
+                      rooms: l10n.exteriorRooms,
+                      selected: _selectedRoomType,
+                      onSelected: _onRoomTap,
+                      isLocked: _roomLocked,
+                    ),
+                  ],
                   const SizedBox(height: 22),
 
                   // Atmosphere — shared AtmosphereCard V2 horizontal strip.
-                  const _SheetEyebrow(label: 'ATMOSPHERE'),
+                  _SheetEyebrow(label: context.l10n.chatAtmosphere),
                   const SizedBox(height: 10),
                   SizedBox(
                     height: 190,
@@ -2957,18 +3231,32 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
                         // Wave 5.18 — admin bypass added.
                         final isPremium = ref.watch(premiumProvider);
                         final isAdmin = ref.watch(accessProvider);
-                        final locked = !isPremium && !isAdmin
+                        final hasPromo =
+                            ref.watch(meStatusProvider)?.hasActivePromo ?? false;
+                        final locked = !isPremium && !isAdmin && !hasPromo
                             && !kFreeAtmosphereIds.contains(a.id);
+                        final onTap = locked
+                            ? () => _openSheetPaywall('atmosphere')
+                            : () => setState(() => _selectedStyle = a.name);
                         return SizedBox(
                           width: 150,
-                          child: AtmosphereCard(
-                            atmosphere: a,
-                            selected: a.name == _selectedStyle,
-                            locked: locked,
-                            onTap: locked
-                                ? () => _openSheetPaywall('atmosphere')
-                                : () => setState(() => _selectedStyle = a.name),
-                          ),
+                          child: FeatureFlags.newDesignCards
+                              ? AtmosphereHeroCard(
+                                  compact: true,
+                                  name: a.name,
+                                  subtitle: context.l10n.atmosphereSubtitle(a.id),
+                                  asset: kAtmosphereCardById[a.id]?.asset ??
+                                      'assets/cards/atmospheres/${a.id}.png',
+                                  selected: a.name == _selectedStyle,
+                                  locked: locked,
+                                  onTap: onTap,
+                                )
+                              : AtmosphereCard(
+                                  atmosphere: a,
+                                  selected: a.name == _selectedStyle,
+                                  locked: locked,
+                                  onTap: onTap,
+                                ),
                         );
                       },
                     ),
@@ -2991,7 +3279,10 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
           StickyActionBar(
             background: AppColors.surface,
             primary: AppButton(
-              label: 'Apply Direction',
+              label: FeatureFlags.newDesignCards
+                  ? context.l10n.uplGenerateDesign
+                  : context.l10n.chatApplyDirection,
+              icon: FeatureFlags.newDesignCards ? Icons.auto_awesome : null,
               onPressed: _apply,
             ),
           ),
@@ -3077,10 +3368,11 @@ class _EvolutionStrip extends StatelessWidget {
                           ),
                         ),
                       if (isCurrent)
-                        const Positioned(
+                        Positioned(
                           top: 6,
                           left: 6,
-                          child: AppPill(text: 'Current', dark: true),
+                          child:
+                              AppPill(text: context.l10n.chatCurrent, dark: true),
                         ),
                     ],
                   ),

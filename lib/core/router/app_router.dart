@@ -11,6 +11,7 @@ import '../../features/generation/generation_loading_screen.dart';
 import '../../features/result/before_after_screen.dart';
 import '../../features/history/projects_history_screen.dart';
 import '../../features/profile/profile_screen.dart';
+import '../../features/cards/cards_preview_screen.dart';
 import '../../shared/widgets/main_shell.dart';
 
 Page<dynamic> _fadePage(Widget child, GoRouterState state) => CustomTransitionPage(
@@ -115,6 +116,12 @@ final appRouter = GoRouter(
         final projectId = state.pathParameters['projectId'] ?? '1';
         return _slideUpPage(BeforeAfterScreen(projectId: projectId, resultExtra: state.extra), state);
       },
+    ),
+    // AYDEN card system preview (dev, flag-gated entry in Profile).
+    GoRoute(
+      path: '/cards-preview',
+      pageBuilder: (context, state) =>
+          _fadePage(const CardsPreviewScreen(), state),
     ),
   ],
 );

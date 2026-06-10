@@ -12,6 +12,7 @@ import '../../core/constants/free_tier.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/premium_provider.dart';
 import '../../core/providers/access_provider.dart';
+import '../../core/providers/me_status_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/mock/mock_projects.dart';
@@ -19,6 +20,13 @@ import '../../data/models/message_model.dart';
 import '../../shared/widgets/app_pill.dart';
 import '../../shared/widgets/atmosphere_card.dart';
 import '../../shared/widgets/reveal_hero.dart';
+import '../../core/feature_flags.dart';
+import '../../shared/reveal/reveal_controller.dart';
+import '../../shared/reveal/reveal_fullscreen.dart';
+import '../../shared/reveal/reveal_profile.dart';
+import '../../shared/reveal/reveal_widget.dart';
+import '../cards/card_catalog.dart';
+import '../cards/widgets/atmosphere_hero_card.dart';
 import '../paywall/paywall_sheet.dart';
 
 // ── Wave 5.15 → 5.15d — Cinematic Full Reveal Screen Rebuild ─────────────────
@@ -281,9 +289,15 @@ class BeforeAfterScreen extends ConsumerStatefulWidget {
 }
 
 class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final AnimationController _entryController;
   late final Animation<double> _fadeAnim;
+
+  // AYDEN Part A — owned only when the cinematic reveal flag is on. Lifted to
+  // the screen (vs RevealWidget-owned) so the floating Replay control can
+  // re-trigger the same reveal without leaving/re-entering the screen. Null
+  // when the flag is off → zero behaviour change.
+  RevealController? _revealController;
 
   // Wave 4.10f — three distinct concepts kept separate:
   //   _beforeUrl        → reveal SLIDER "before" = PREVIOUS SOURCE VISION
@@ -323,6 +337,11 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
         vsync: this, duration: const Duration(milliseconds: 600))
       ..forward();
     _fadeAnim = CurvedAnimation(parent: _entryController, curve: Curves.easeOut);
+
+    if (FeatureFlags.cinematicReveal) {
+      _revealController =
+          RevealController(vsync: this, profile: RevealProfile.cinematic);
+    }
 
     final extra = widget.resultExtra;
     if (extra is GeneratedResult) {
@@ -400,6 +419,7 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
     // returns to chat with status + nav bars visible.
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _entryController.dispose();
+    _revealController?.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -458,6 +478,25 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
   void _continueAction() => context.canPop()
       ? context.pop(widget.resultExtra)
       : context.go('/home');
+
+  // AYDEN Part A (A4) — open the immersive fullscreen reveal (option A). A
+  // dedicated route with its own controller; a soft fade in/out. Flag-gated +
+  // only when a before exists (a reveal needs two images).
+  void _openFullscreenReveal() {
+    Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: true,
+        transitionDuration: const Duration(milliseconds: 280),
+        reverseTransitionDuration: const Duration(milliseconds: 220),
+        pageBuilder: (_, _, _) => RevealFullscreenScreen(
+          beforeUrl: _beforeUrl,
+          afterUrl: _afterUrl,
+        ),
+        transitionsBuilder: (_, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
+    );
+  }
 
   // Wave 5.10 — toggle cinematic immersive mode + system chrome together.
   // Tapping the image hides the status + navigation bars (Android) and
@@ -693,22 +732,42 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                                           const Duration(milliseconds: 150),
                                       curve: Curves.easeOut,
                                       child: _hasBefore
-                                          ? RevealHero(
-                                              afterImage: _RevealImage(
-                                                  url: _afterUrl),
-                                              beforeImage: _RevealImage(
-                                                  url: _beforeUrl),
-                                              initialFraction: 0.5,
-                                              autoSweep: false,
-                                              dragMode:
-                                                  RevealDragMode.surface,
-                                              // 5.13d.11 — compact handle
-                                              // 30 dp (vs 38) softens the
-                                              // white circle's weight.
-                                              variant:
-                                                  RevealVariant.compact,
-                                              showLabels: false,
-                                            )
+                                          // AYDEN Part A (A2) — behind a
+                                          // feature flag (OFF by default). When
+                                          // on, the cinematic RevealWidget
+                                          // replaces the RevealHero slider on
+                                          // this surface only; everything else
+                                          // (incl. Home/FTUE) keeps RevealHero
+                                          // verbatim.
+                                          ? (FeatureFlags.cinematicReveal
+                                              ? RevealWidget(
+                                                  afterImage: _RevealImage(
+                                                      url: _afterUrl),
+                                                  beforeImage: _RevealImage(
+                                                      url: _beforeUrl),
+                                                  controller: _revealController,
+                                                  profile:
+                                                      RevealProfile.cinematic,
+                                                  interaction: RevealInteraction
+                                                      .surface,
+                                                  showLabels: false,
+                                                )
+                                              : RevealHero(
+                                                  afterImage: _RevealImage(
+                                                      url: _afterUrl),
+                                                  beforeImage: _RevealImage(
+                                                      url: _beforeUrl),
+                                                  initialFraction: 0.5,
+                                                  autoSweep: false,
+                                                  dragMode:
+                                                      RevealDragMode.surface,
+                                                  // 5.13d.11 — compact handle
+                                                  // 30 dp (vs 38) softens the
+                                                  // white circle's weight.
+                                                  variant:
+                                                      RevealVariant.compact,
+                                                  showLabels: false,
+                                                ))
                                           : _RevealImage(url: _afterUrl),
                                     ),
                                     // Original upload cross-fade — wrapped
@@ -789,8 +848,8 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                                         duration: const Duration(
                                             milliseconds: 150),
                                         curve: Curves.easeOut,
-                                        child:
-                                            const AppPill(text: 'Before'),
+                                        child: AppPill(
+                                            text: context.l10n.ftueBefore),
                                       ),
                                     ),
                                   ),
@@ -818,7 +877,8 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                                       duration:
                                           const Duration(milliseconds: 150),
                                       curve: Curves.easeOut,
-                                      child: const AppPill(text: 'Original'),
+                                      child:
+                                          AppPill(text: context.l10n.beforeLabel),
                                     ),
                                   ),
                                 ),
@@ -1070,6 +1130,62 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                 ),
               ),
             ),
+            // AYDEN Part A (A4) — floating Fullscreen (expand) control
+            // (flag-gated). Opens the immersive fullscreen reveal route. Sits
+            // right of Back, same visual language.
+            if (FeatureFlags.cinematicReveal && _hasBefore)
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + 8,
+                left: 52,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _openFullscreenReveal,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface.withValues(alpha: 0.65),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.fullscreen,
+                        size: 16,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            // AYDEN Part A — floating Replay control (flag-gated). Re-triggers
+            // the cinematic reveal in place so the user never has to leave and
+            // re-enter Full Reveal. Sits left of Share, same visual language.
+            if (FeatureFlags.cinematicReveal &&
+                _hasBefore &&
+                _revealController != null)
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + 8,
+                right: 52,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => _revealController!.replay(),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface.withValues(alpha: 0.65),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.replay,
+                        size: 16,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             // Wave 5.15e — Full Reveal title + Swipe to compare subtitle.
             // Overlays the very top of the image area (where the top
             // gradient + ShaderMask fade darken the matte) so the white
@@ -1214,22 +1330,36 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
               // Warmth + Soft Luxury as tappable ; everything else
               // dimmed with a lock chip ; locked tap → paywall sheet.
               final isPremium = ref.watch(premiumProvider);
-              // Wave 5.18 — admin bypass.
+              // Wave 5.18 — admin bypass. Sprint 1B — promo grant unlocks too.
               final isAdmin = ref.watch(accessProvider);
-              final locked = !isPremium && !isAdmin
+              final hasPromo =
+                  ref.watch(meStatusProvider)?.hasActivePromo ?? false;
+              final locked = !isPremium && !isAdmin && !hasPromo
                   && !kFreeAtmosphereIds.contains(a.id);
+              final onTap = locked
+                  ? () => _openCarouselPaywall(context, 'atmosphere')
+                  : () => _selectAtmosphere(a.name);
               return SizedBox(
                 width: cardWidth,
-                child: AtmosphereCard(
-                  atmosphere: a,
-                  selected: _selectedAtmosphere == a.name,
-                  dark: true,
-                  variant: AtmosphereCardVariant.compact,
-                  locked: locked,
-                  onTap: locked
-                      ? () => _openCarouselPaywall(context, 'atmosphere')
-                      : () => _selectAtmosphere(a.name),
-                ),
+                child: FeatureFlags.newDesignCards
+                    ? AtmosphereHeroCard(
+                        compact: true,
+                        name: a.name,
+                        subtitle: context.l10n.atmosphereSubtitle(a.id),
+                        asset: kAtmosphereCardById[a.id]?.asset ??
+                            'assets/cards/atmospheres/${a.id}.png',
+                        selected: _selectedAtmosphere == a.name,
+                        locked: locked,
+                        onTap: onTap,
+                      )
+                    : AtmosphereCard(
+                        atmosphere: a,
+                        selected: _selectedAtmosphere == a.name,
+                        dark: true,
+                        variant: AtmosphereCardVariant.compact,
+                        locked: locked,
+                        onTap: onTap,
+                      ),
               );
             },
           ),

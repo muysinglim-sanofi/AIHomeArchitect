@@ -40,10 +40,13 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
+import 'package:google_fonts/google_fonts.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
 import '../../core/feature_flags.dart';
+import '../../core/l10n/app_localizations.dart';
 import '../../data/services/revenuecat_service.dart';
+import '../promo/promo_redeem_sheet.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/reveal_hero.dart';
 
@@ -105,6 +108,7 @@ class _PaywallSheetState extends State<PaywallSheet> {
   }
 
   Future<void> _onPurchasePressed(Package pkg) async {
+    final l10n = context.l10n;
     setState(() {
       _busy = true;
       _errorMessage = null;
@@ -117,14 +121,14 @@ class _PaywallSheetState extends State<PaywallSheet> {
       } else {
         setState(() {
           _busy = false;
-          _errorMessage = 'Purchase did not complete. Please try again.';
+          _errorMessage = l10n.pwErrIncomplete;
         });
       }
     } on RevenuecatNotConfiguredException {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _errorMessage = 'Purchases are not available in this test build yet.';
+        _errorMessage = l10n.pwErrNotAvailable;
       });
     } on PlatformException catch (e) {
       if (!mounted) return;
@@ -135,18 +139,19 @@ class _PaywallSheetState extends State<PaywallSheet> {
       }
       setState(() {
         _busy = false;
-        _errorMessage = e.message ?? 'Purchase failed.';
+        _errorMessage = e.message ?? l10n.pwErrFailed;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _errorMessage = 'Purchase failed. Please try again.';
+        _errorMessage = l10n.pwErrFailed;
       });
     }
   }
 
   Future<void> _onRestorePressed() async {
+    final l10n = context.l10n;
     setState(() {
       _busy = true;
       _errorMessage = null;
@@ -159,20 +164,20 @@ class _PaywallSheetState extends State<PaywallSheet> {
       } else {
         setState(() {
           _busy = false;
-          _errorMessage = 'No prior purchases found on this device.';
+          _errorMessage = l10n.pwErrNoRestore;
         });
       }
     } on RevenuecatNotConfiguredException {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _errorMessage = 'Purchases are not available in this test build yet.';
+        _errorMessage = l10n.pwErrNotAvailable;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _errorMessage = 'Restore failed. Please try again.';
+        _errorMessage = l10n.pwErrFailed;
       });
     }
   }
@@ -220,9 +225,15 @@ class _PaywallSheetState extends State<PaywallSheet> {
             // the universal "close this overlay" cue. Sits above the
             // hero with a soft scrim background so it stays legible
             // over varied artwork.
+            // The sheet content runs under the status bar (SafeArea top:false
+            // so the hero reaches the top). The close button MUST sit BELOW the
+            // status bar / notch — otherwise the OS intercepts the taps there.
+            // Use viewPadding (the REAL notch inset — never zeroed by the modal,
+            // unlike padding.top which the bottom-sheet route reports as 0) with
+            // a floor so it's always clearly below the system UI.
             Positioned(
-              top: 8,
-              right: 8,
+              top: (media.viewPadding.top > 0 ? media.viewPadding.top : 24) + 14,
+              right: 12,
               child: _CloseButton(
                 onTap: _busy ? null : () => Navigator.of(context).pop(false),
               ),
@@ -238,6 +249,13 @@ class _PaywallSheetState extends State<PaywallSheet> {
     required Package? weekly,
     required Package? annual,
   }) {
+    if (FeatureFlags.paywallV2) {
+      return _buildContentV2(
+        heroHeight: heroHeight,
+        weekly: weekly,
+        annual: annual,
+      );
+    }
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
       children: [
@@ -296,6 +314,51 @@ class _PaywallSheetState extends State<PaywallSheet> {
       ],
     );
   }
+
+  // ── V2 — premium emotional redesign (flag-gated, FeatureFlags.paywallV2) ───
+  // Frontend/UI only. Reuses the exact pricing/purchase wiring (onWeekly /
+  // onAnnual → _onPurchasePressed) — nothing about subscription logic changes.
+  Widget _buildContentV2({
+    required double heroHeight,
+    required Package? weekly,
+    required Package? annual,
+  }) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
+      children: [
+        const _DragHandle(),
+        const SizedBox(height: 16),
+        _HeroPremiumV2(height: heroHeight * 0.92),
+        const SizedBox(height: 22),
+        const _HeadlineV2(),
+        const SizedBox(height: 14),
+        const _SocialProofV2(),
+        const SizedBox(height: 24),
+        _PricingV2(
+          weeklyPackage: weekly,
+          annualPackage: annual,
+          busy: _busy,
+          onWeekly: weekly == null ? null : () => _onPurchasePressed(weekly),
+          onAnnual: annual == null ? null : () => _onPurchasePressed(annual),
+        ),
+        if (_errorMessage != null) ...[
+          const SizedBox(height: 14),
+          _PaywallErrorBox(message: _errorMessage!),
+        ],
+        const SizedBox(height: 30),
+        const _HowItWorks(),
+        const SizedBox(height: 26),
+        const _PaymentTrustFooter(),
+        const SizedBox(height: 18),
+        _RestoreAndDismissActions(
+          busy: _busy,
+          onRestore: _onRestorePressed,
+          onDismiss: () => Navigator.of(context).pop(false),
+        ),
+        const SizedBox(height: 4),
+      ],
+    );
+  }
 }
 
 // ── Close button (top-right overlay) ────────────────────────────────────────
@@ -306,28 +369,26 @@ class _CloseButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: 'Close',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          customBorder: const CircleBorder(),
-          child: Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.55),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-            ),
-            child: const Icon(
-              Icons.close,
-              size: 18,
-              color: Colors.white,
-            ),
+    // Raw pointer handling via Listener — it does NOT join the gesture arena,
+    // so it can't lose the tap to the modal's drag-to-dismiss recognizer (the
+    // reason a GestureDetector/IconButton overlay here never fired). onPointerUp
+    // always fires when the finger lifts over the 44px opaque target.
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerUp: onTap == null ? null : (_) => onTap!(),
+      child: Container(
+        width: 44,
+        height: 44,
+        alignment: Alignment.center,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.55),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
           ),
+          child: const Icon(Icons.close, size: 20, color: Colors.white),
         ),
       ),
     );
@@ -1284,13 +1345,13 @@ class _PaymentTrustFooter extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.shield_outlined, color: _gold, size: 18),
-              SizedBox(width: 8),
+            children: [
+              const Icon(Icons.shield_outlined, color: _gold, size: 18),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  '7-day satisfaction guarantee',
-                  style: TextStyle(
+                  context.l10n.pwGuarantee,
+                  style: const TextStyle(
                     color: _textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -1300,17 +1361,17 @@ class _PaymentTrustFooter extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          const Padding(
-            padding: EdgeInsets.only(left: 26),
+          Padding(
+            padding: const EdgeInsets.only(left: 26),
             child: Text(
-              'Not in love? Get a full refund within 7 days.',
-              style: TextStyle(color: _textMuted, fontSize: 11),
+              context.l10n.pwGuaranteeSub,
+              style: const TextStyle(color: _textMuted, fontSize: 11),
             ),
           ),
           const SizedBox(height: 14),
-          const Text(
-            'Secure payments',
-            style: TextStyle(
+          Text(
+            context.l10n.pwSecurePayments,
+            style: const TextStyle(
               color: _textDim,
               fontSize: 11,
               letterSpacing: 0.4,
@@ -1404,9 +1465,9 @@ class _RestoreAndDismissActions extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              'Already subscribed? ',
-              style: TextStyle(color: _textDim, fontSize: 13),
+            Text(
+              context.l10n.pwAlreadySubscribed,
+              style: const TextStyle(color: _textDim, fontSize: 13),
             ),
             TextButton(
               onPressed: busy ? null : onRestore,
@@ -1416,9 +1477,9 @@ class _RestoreAndDismissActions extends StatelessWidget {
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 foregroundColor: _gold,
               ),
-              child: const Text(
-                'Restore Purchase',
-                style: TextStyle(
+              child: Text(
+                context.l10n.pwRestore,
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
@@ -1426,14 +1487,417 @@ class _RestoreAndDismissActions extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 10),
+        // Sprint 1B — discreet promo entry (never competes with the sub CTAs).
+        const PromoCodeLink(),
         const SizedBox(height: 6),
         AppButton(
-          label: 'Not now',
+          label: context.l10n.pwNotNow,
           variant: AppButtonVariant.ghost,
           fullWidth: true,
           onPressed: busy ? null : onDismiss,
         ),
       ],
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// V2 — PREMIUM EMOTIONAL REDESIGN (FeatureFlags.paywallV2)
+// Frontend/UI only — no pricing/RevenueCat/subscription logic touched.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Editorial serif (Cormorant) for emotional titles — same family as the card /
+// atmosphere design system. Sans stays for functional pricing/benefits.
+TextStyle _serif({
+  required double fontSize,
+  FontWeight fontWeight = FontWeight.w500,
+  Color color = _textPrimary,
+  double height = 1.1,
+  double letterSpacing = 0,
+}) =>
+    GoogleFonts.cormorantGaramond(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color,
+      height: height,
+      letterSpacing: letterSpacing,
+    );
+
+class _HeroPremiumV2 extends StatelessWidget {
+  final double height;
+  const _HeroPremiumV2({required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: SizedBox(
+        height: height,
+        width: double.infinity,
+        child: const Stack(
+          fit: StackFit.expand,
+          children: [
+            _KenBurnsImage(asset: 'assets/cards/atmospheres/warm_modern.png'),
+            IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment(0, 0.25),
+                    colors: [Color(0x99000000), Color(0x00000000)],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HeadlineV2 extends StatelessWidget {
+  const _HeadlineV2();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          context.l10n.pwHeadline,
+          textAlign: TextAlign.center,
+          style: _serif(fontSize: 30, fontWeight: FontWeight.w600, height: 1.05),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          context.l10n.pwSubheadline,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: _textMuted, fontSize: 14, height: 1.4),
+        ),
+      ],
+    );
+  }
+}
+
+class _SocialProofV2 extends StatelessWidget {
+  const _SocialProofV2();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        ...List.generate(
+          5,
+          (_) => const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 1),
+            child: Icon(Icons.star, color: _gold, size: 14),
+          ),
+        ),
+        const SizedBox(width: 8),
+        RichText(
+          text: TextSpan(children: [
+            TextSpan(
+                text: context.l10n.pwLovedBy,
+                style: const TextStyle(color: _textMuted, fontSize: 12.5)),
+            const TextSpan(
+                text: '12,500+',
+                style: TextStyle(
+                    color: _gold,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700)),
+            TextSpan(
+                text: context.l10n.pwHomeowners,
+                style: const TextStyle(color: _textMuted, fontSize: 12.5)),
+          ]),
+        ),
+      ],
+    );
+  }
+}
+
+class _PricingV2 extends StatelessWidget {
+  final Package? weeklyPackage;
+  final Package? annualPackage;
+  final bool busy;
+  final VoidCallback? onWeekly;
+  final VoidCallback? onAnnual;
+
+  const _PricingV2({
+    required this.weeklyPackage,
+    required this.annualPackage,
+    required this.busy,
+    required this.onWeekly,
+    required this.onAnnual,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final annualPrice = annualPackage?.storeProduct.priceString ?? '\$79.99';
+    final weeklyPrice = weeklyPackage?.storeProduct.priceString ?? '\$7.99';
+    return Column(
+      children: [
+        // Annual FIRST + emphasized → psychologically pushed as the best choice.
+        _PlanCardV2(
+          accent: _green,
+          badge: context.l10n.pwBestValue,
+          name: context.l10n.pwAnnual,
+          price: annualPrice,
+          period: context.l10n.pwPerYear,
+          positioning: context.l10n.pwAnnualPositioning,
+          benefits: [
+            context.l10n.pwBenefitEveryRoom,
+            context.l10n.pwBenefitUnlimited,
+            context.l10n.pwBenefitPriority,
+          ],
+          savings: context.l10n.pwSavings,
+          fineprint: context.l10n.pwBilledYearly,
+          emphasized: true,
+          enabled: !busy && onAnnual != null,
+          onTap: onAnnual,
+        ),
+        const SizedBox(height: 14),
+        _PlanCardV2(
+          accent: _gold,
+          badge: context.l10n.pwPopular,
+          name: context.l10n.pwWeekly,
+          price: weeklyPrice,
+          period: context.l10n.pwPerWeek,
+          positioning: context.l10n.pwWeeklyPositioning,
+          benefits: [
+            context.l10n.pwBenefitEveryRoom,
+            context.l10n.pwBenefitHd,
+          ],
+          savings: null,
+          fineprint: context.l10n.pwBilledWeekly,
+          emphasized: false,
+          enabled: !busy && onWeekly != null,
+          onTap: onWeekly,
+        ),
+      ],
+    );
+  }
+}
+
+class _PlanCardV2 extends StatelessWidget {
+  final Color accent;
+  final String badge;
+  final String name;
+  final String price;
+  final String period;
+  final String positioning;
+  final List<String> benefits;
+  final String? savings;
+  final String fineprint;
+  final bool emphasized;
+  final bool enabled;
+  final VoidCallback? onTap;
+
+  const _PlanCardV2({
+    required this.accent,
+    required this.badge,
+    required this.name,
+    required this.price,
+    required this.period,
+    required this.positioning,
+    required this.benefits,
+    required this.savings,
+    required this.fineprint,
+    required this.emphasized,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      decoration: BoxDecoration(
+        color: emphasized ? _paywallCard : _paywallCardSoft,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: accent.withValues(alpha: emphasized ? 0.7 : 0.3),
+          width: emphasized ? 1.6 : 1.0,
+        ),
+        boxShadow: emphasized
+            ? [
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.14),
+                  blurRadius: 22,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                name,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  badge,
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                price,
+                style: const TextStyle(
+                  color: _textPrimary,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w900,
+                  height: 1.0,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Text(period,
+                    style: const TextStyle(color: _textMuted, fontSize: 13)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            positioning,
+            style: TextStyle(
+                color: accent, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          _CheckList(accent: accent, fontSize: 12.5, items: benefits),
+          if (savings != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: accent.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                savings!,
+                style: TextStyle(
+                    color: accent, fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          _PrimaryPaywallButton(
+            label: '${context.l10n.pwChoose} $name',
+            color: accent,
+            enabled: enabled,
+            onTap: onTap,
+          ),
+          const SizedBox(height: 6),
+          Center(
+            child: Text(fineprint,
+                style: const TextStyle(color: _textDim, fontSize: 10.5)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HowItWorks extends StatelessWidget {
+  const _HowItWorks();
+
+  static const _icons = <IconData>[
+    Icons.add_a_photo_outlined,
+    Icons.palette_outlined,
+    Icons.chat_bubble_outline,
+    Icons.auto_awesome,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final labels = [l10n.pwStep1, l10n.pwStep2, l10n.pwStep3, l10n.pwStep4];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.pwHowItWorks,
+            style: _serif(fontSize: 22, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 14),
+        for (var i = 0; i < _icons.length; i++) ...[
+          if (i > 0) const SizedBox(height: 14),
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: _gold.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _gold.withValues(alpha: 0.4)),
+                ),
+                child: Icon(_icons[i], color: _gold, size: 18),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  labels[i],
+                  style: const TextStyle(
+                    color: _textMuted,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    height: 1.3,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PaywallErrorBox extends StatelessWidget {
+  final String message;
+  const _PaywallErrorBox({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF3A1F1F),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(color: Color(0xFFE8A8A8), fontSize: 13),
+        textAlign: TextAlign.center,
+      ),
     );
   }
 }
