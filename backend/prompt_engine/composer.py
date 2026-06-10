@@ -262,6 +262,8 @@ from .fidelity_layer import build_first_vision_task, build_openings_anchor
 from .refinement_memory import RefinementState, parse_history, build_refinement_block
 from .realism_layer import (
     build_compact_realism_block,
+    build_editorial_realism_block,  # Wave 5.14A — additive editorial-realism layer
+    build_photographic_credibility_block,  # Wave 5.14B — re-enabled in Wave 5.14A Last-Chance Step 2 (combined with quality=low)
     build_medium_realism_block,
     build_interior_completeness_rule,
 )
@@ -280,6 +282,13 @@ from .atmosphere_dna import (
     label_to_atmosphere_id,
 )
 from .atmosphere_dna.bimodal_classifier import apply_bimodal, inject_creative_revival  # Wave 5.5.14c/d — no-op unless BIMODAL_ENABLED=1
+# Wave 6.1 — Decorative Foundation pilot (WM + Living + FV + preserve only).
+# Both helpers return "" outside the pilot gate — production prompts stay
+# byte-identical for any non-WM-Living-FV-preserve call.
+from .decorative_manifest import (
+    build_decoration_anchor_rule,
+    build_staging_manifest,
+)
 # Wave 5.5.15c — trimmed retry of emotional_realism.
 # Wave 5.5.15b shipped "lived-in micro-layering" (preserve) + "layered texture
 # realism" + "lived-in storytelling" (creative) → wall invention 3/9 on bench
@@ -306,7 +315,7 @@ from .visible_space_logic import build_visible_spaces_block
 # ── Budget system ─────────────────────────────────────────────────────────────
 
 _MODE_BUDGETS: dict[str, int] = {
-    "FIRST_VISION": 4000,  # Wave 5.5.14g (richness reinvestment): raised 3850→4000 (hard ceiling). Rationale: Wave 5.5.14f freed ~445 chars in preserve mode by dropping 3 boundary voices, but Wave 5.5.14d's creative mode ADDS ~250-300 chars (dormant DNA revival + REIMAGINED framing). Measured tightest creative margin: Tropical Escape at +11 above 3850 → unsafe for real-world prompts with descriptions or extra visible spaces. Raising to the matrix hard ceiling 4000 gives creative mode +130-360 margin while letting preserve mode's P4/P5 sections (natural_enrichment, visible_spaces, design_direction) thrive on rich prompts. No new content added — just headroom for existing sections to survive budget. Default (BIMODAL_ENABLED unset) prompts stay well under any cap. Wave 5.5.3 lineage: 3550→3850 to seat C3 boundary; Wave 5.5.14g: 3850→4000 to seat creative revival headroom.
+    "FIRST_VISION": 4300,  # Wave 6.16 (2026-06-10): raised 4000→4300. The 6.14 styling layer (decor 2→6) + 6.16 emphatic curtains & focal-TV legitimately enriched the preserve prompt; the 5 styled livings landed at ~3810-3840 (margin only ~170), and WM-Living already overflowed at 4022 → the budget dropped dna_room_context (the TV anchor!). 4300 gives ~460 margin so the TV anchor survives even on feature-rich sources. Same "headroom for existing sections" rationale as 5.5.14g. ~1075 tokens — still cheap vs the image gen. ↓ original 5.5.14g note ↓ Wave 5.5.14g (richness reinvestment): raised 3850→4000 (hard ceiling). Rationale: Wave 5.5.14f freed ~445 chars in preserve mode by dropping 3 boundary voices, but Wave 5.5.14d's creative mode ADDS ~250-300 chars (dormant DNA revival + REIMAGINED framing). Measured tightest creative margin: Tropical Escape at +11 above 3850 → unsafe for real-world prompts with descriptions or extra visible spaces. Raising to the matrix hard ceiling 4000 gives creative mode +130-360 margin while letting preserve mode's P4/P5 sections (natural_enrichment, visible_spaces, design_direction) thrive on rich prompts. No new content added — just headroom for existing sections to survive budget. Default (BIMODAL_ENABLED unset) prompts stay well under any cap. Wave 5.5.3 lineage: 3550→3850 to seat C3 boundary; Wave 5.5.14g: 3850→4000 to seat creative revival headroom.
     # Wave 4.8.2: raised 2400→3500 / 2500→3600. The 4.8.1a audit proved the
     # (legitimately grown 4.6–4.7) P1 preservation/continuity stack alone
     # (~2528 / ~2601) exceeded the old 2400/2500 caps, silently evicting
@@ -354,6 +363,8 @@ _SECTION_PRIORITY: dict[str, int] = {
     # P3 — realism quality floor
     "full_realism": 3,
     "compact_realism": 3,
+    "editorial_realism": 3,  # Wave 5.14A — additive editorial-realism layer (drops alongside compact under tight budget)
+    "photographic_credibility": 3,  # Wave 5.14B — additive photographic-credibility layer (same tier)
     "dna_room_context": 3,  # Wave 5.5.18 — revives dormant DNA fields (room_specific_constraints + visible_transition_logic). Same tier as realism: drops before P4/P5 enrichments but after P2 design_intel.
     # P4 — dream richness / scene enrichment
     # P5 — interior completeness (nice-to-have; drops before wow_directive — Wave 4.4.1)
@@ -363,6 +374,13 @@ _SECTION_PRIORITY: dict[str, int] = {
     "dream_micro": 4,
     "wow_directive": 4,   # Wave 4.3.1 — FIRST_VISION transformation ambition
     "natural_enrichment": 4,  # Wave 4.6.2 — light natural decoration (FIRST_VISION only)
+    # Wave 6.1 — Decorative Foundation (pilot WM-Living-FV-preserve).
+    # decoration_anchor_rule is P3 (safety rail — must outlive the manifest
+    # under budget pressure so latitude never opens without anchoring).
+    # staging_manifest is P4 (drops first under tight budget — the anchor
+    # rule keeps decoration safe in that case).
+    "decoration_anchor_rule": 3,
+    "staging_manifest": 4,
     # P5 — optional enrichment context (dropped first)
     "visible_spaces": 5,
     "refinement_memory": 5,
@@ -614,6 +632,7 @@ def compose_generation_prompt(
     authorized_user_changes: str = "",
     generation_mode: str = "preserve",  # Wave 5.5.14c — bimodal intent; passed to _design_intelligence_block. No-op unless BIMODAL_ENABLED env var is truthy.
     edit_mode: "EditMode | None" = None,  # Wave 5.13d Phase 1 — single source of truth for edit_mode (passed from main.py).
+    editorial_realism_enabled: bool = True,  # Wave 5.14A — gate the editorial-realism layer (FIRST_VISION only ; REBOOT_FRESH delegation passes False). Default True preserves direct V1 callers (main.py iteration=1).
 ) -> str:
     """
     Build the complete generation prompt from all intelligence layers.
@@ -670,6 +689,11 @@ def compose_generation_prompt(
             ("structural_identity", structural_identity),  # P1 — Wave 5.13c retrofit
             ("edit_block", edit_block),
             ("compact_realism", realism),
+            # Wave 5.14A Fix — editorial_realism intentionally NOT wired here.
+            # LOCAL_EDIT uses quality=low + fidelity=OMIT (main.py:1788). The
+            # rich editorial vocabulary (Material depth / Subtle imperfections /
+            # Natural light physics) at low fidelity degrades source-anchor
+            # crispness. Editorial is FIRST_VISION-only (medium+high params).
         ]
         _audit("LOCAL_EDIT", raw_sections)
         prompt, dropped = _assemble_with_budget("LOCAL_EDIT", raw_sections)
@@ -706,6 +730,8 @@ def compose_generation_prompt(
             ("edit_block", edit_block),
             ("design_intel_partial", partial_dna),
             ("compact_realism", realism),
+            # Wave 5.14A Fix — editorial_realism NOT wired here. LAYOUT_CHANGE
+            # uses quality=low + fidelity=OMIT ; see LOCAL_EDIT note above.
         ]
         _audit("LAYOUT_CHANGE", raw_sections)
         prompt, dropped = _assemble_with_budget("LAYOUT_CHANGE", raw_sections)
@@ -780,6 +806,8 @@ def compose_generation_prompt(
             ("visible_spaces", vs_block),
             ("refinement_memory", refinement_block),
             ("compact_realism", realism),
+            # Wave 5.14A Fix — editorial_realism NOT wired here. STYLE_REFINEMENT
+            # uses quality=low + fidelity=OMIT ; see LOCAL_EDIT note above.
         ]
         _audit("STYLE_REFINEMENT", raw_sections)
         prompt, dropped = _assemble_with_budget("STYLE_REFINEMENT", raw_sections)
@@ -828,6 +856,8 @@ def compose_generation_prompt(
             ("dna_room_context", dna_context_st),  # P3 — Wave 5.5.18 dormant fields revival
             ("refinement_memory", refinement_block),
             ("compact_realism", realism),
+            # Wave 5.14A Fix — editorial_realism NOT wired here. STRUCTURAL
+            # uses quality=low + fidelity=OMIT ; see LOCAL_EDIT note above.
         ]
         _audit("STRUCTURAL_TRANSFORMATION", raw_sections)
         prompt, dropped = _assemble_with_budget("STRUCTURAL_TRANSFORMATION", raw_sections)
@@ -853,7 +883,10 @@ def compose_generation_prompt(
     # flexible (creative). STRUCTURAL_IDENTITY (vision-captured facts) remains
     # injected separately as PHOTO FACTS TO RESPECT. Scope: FIRST_VISION only —
     # STYLE_REFINEMENT and STRUCTURAL_TRANSFORMATION paths are untouched.
-    mode_contract = build_mode_contract(generation_mode)
+    # Wave 6.3 — user_instruction is forwarded so the TEMPORAL CONTINUITY
+    # guardrail can be suppressed when the user explicitly requests a
+    # temporal transformation (evening / night / cinematic / etc.).
+    mode_contract = build_mode_contract(generation_mode, user_instruction)
 
     # Wave 5.13f — compact STRUCTURAL_IDENTITY wrapper for FIRST_VISION only.
     # render_clause emits "STRUCTURAL IDENTITY — this apartment already contains
@@ -930,6 +963,26 @@ def compose_generation_prompt(
     #   atmosphere_dna_boundary, design_direction (placeholder filler).
     # STYLE_REFINEMENT and STRUCTURAL_TRANSFORMATION paths are untouched
     # in this wave.
+    # Wave 6.1 — Decorative Foundation pilot (WM + Living + FV + preserve only).
+    # Both helpers return "" outside the strict pilot gate. Order matters :
+    # anchor_rule is placed BEFORE staging_manifest so the model reads
+    # "decoration anchors on existing surfaces" before reading the dense
+    # manifest of staging items. Same-prompt safety net.
+    _wave61_em_value = mode.value if hasattr(mode, "value") else str(mode)
+    decoration_anchor_block = build_decoration_anchor_rule(
+        atmosphere_id, room_type or "", generation_mode, _wave61_em_value
+    )
+    staging_manifest_block = build_staging_manifest(
+        atmosphere_id, room_type or "", generation_mode, _wave61_em_value
+    )
+    if decoration_anchor_block or staging_manifest_block:
+        log.info(
+            "[Wave6.1] decorative pilot ACTIVE  atm=%s  room=%s  mode=%s  "
+            "anchor_chars=%d  manifest_chars=%d",
+            atmosphere_id, room_type, generation_mode,
+            len(decoration_anchor_block), len(staging_manifest_block),
+        )
+
     raw_sections = [
         ("mode_contract", mode_contract),         # P1 — Wave 5.13f: single authoritative MODE_CONTRACT
         ("structural_identity", structural_identity_fv),  # P1 — Wave 4.7.2 facts + Wave 5.13f compact wrapper
@@ -937,6 +990,14 @@ def compose_generation_prompt(
         ("source_space", source),                  # P1 — source="" in FV (Wave 4.6.1)
         ("design_intel", intel_block),
         ("dna_room_context", dna_context_fv),     # P3 — Wave 5.5.18 dormant fields revival (TV anchor + visible continuity)
+        # Wave 6.1 — Decorative Foundation pilot sections (gated to
+        # WM-Living-FV-preserve ; "" everywhere else → byte-identical for
+        # any non-pilot call). Anchor rule first (P3 — safety), manifest
+        # second (P4 — content). Placed after DNA so the staging vocabulary
+        # builds on top of the atmosphere's furniture_language rather than
+        # competing with it.
+        ("decoration_anchor_rule", decoration_anchor_block),
+        ("staging_manifest", staging_manifest_block),
         ("interior_completeness", completeness),   # P5 — drops first (Wave 4.4.1: was P4)
         ("scene_completion", completion_block),    # P4 — non-DNA fallback path only
         ("visible_spaces", vs_block),
@@ -945,6 +1006,25 @@ def compose_generation_prompt(
         # Wave 5.5.16 — geometry-attached furnishing semantics (P5, BIMODAL-gated).
         ("geometry_attached_furnishing", build_furnishing_signal(generation_mode, room_type)),
         ("compact_realism", realism),              # P3 — compact realism block
+        # Wave 5.14A Fix — editorial_realism gated on the caller's intent.
+        # True for direct V1 calls (main.py iteration=1 with full quality=medium
+        # + fidelity=high params). False for composer_v2 REBOOT_FRESH delegation
+        # which keeps main.py's STYLE_REFINEMENT classification → quality=low
+        # + fidelity=OMIT — editorial degrades crispness at those params.
+        ("editorial_realism",
+         build_editorial_realism_block() if editorial_realism_enabled else ""),
+        # Wave 5.14A Last-Chance Step 2 (2026-06-02, TEMPORARY) — re-introduce
+        # Wave 5.14B Photographic Credibility ONLY in combination with the
+        # quality=low override (main.py Wave 5.14A Last-Chance block).
+        # Hypothesis : 5.14B regressed at quality=medium (Wave 5.14B Step 1
+        # — render became flat/bland under cumulative "natural/subtle/uniform"
+        # pressure on already-detailed medium render), but at quality=low
+        # (pictorial smoothing baseline) the same cues may COMPENSATE the
+        # "very drawn / illustrated" feel reported by user on quality=low
+        # alone. Different rendering regime ⇒ different cue interaction.
+        # REVERT = re-comment the tuple below.
+        ("photographic_credibility",
+         build_photographic_credibility_block() if editorial_realism_enabled else ""),
     ]
     _audit("FIRST_VISION", raw_sections)
     prompt, dropped = _assemble_with_budget("FIRST_VISION", raw_sections)

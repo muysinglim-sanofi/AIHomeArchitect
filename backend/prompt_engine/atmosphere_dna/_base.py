@@ -166,6 +166,16 @@ _LEGACY_ALIASES: dict[str, str] = {
     # id both fall back to `warm_modern` (closest urban-luxury sibling).
     "dark_contemporary": "warm_modern",
     "penthouse_contemporary": "warm_modern",
+    # 2026-06-03 — Desert Luxe removed entirely (visually weaker, less premium
+    # vs the 6-atmosphere line-up). Legacy sessions / cached labels fall back
+    # to `warm_modern` (closest warm-earth-tone sibling).
+    "desert_luxe": "warm_modern",
+    # 2026-06-04 — Nature Retreat removed entirely (visually too close to
+    # Tropical Escape, reduces differentiation in MVP atmosphere palette).
+    # Legacy sessions fall back to `warm_modern` (catch-all warm-materials
+    # sibling — Tropical was avoided as fallback because its architecturally
+    # permissive core would amplify legacy session drift).
+    "nature_retreat": "warm_modern",
 }
 
 
@@ -235,7 +245,17 @@ def build_dna_block(dna: RoomAdaptationDNA) -> str:
     room_name = dna.room_type.replace("_", " ").title()
 
     mat = ", ".join(dna.material_palette[:3])
-    style_items = (dna.furniture_language[:3] + dna.decor_language[:2])
+    # Wave 6.2a (2026-06-03) — decor_language slice extended from [:2] to [:4]
+    # to enable per-cell enrichment up to 4 decorative items per room.
+    # Wave 6.7 (2026-06-04) — extended to [:6] to ship the 2 additional
+    # lived-in items per Master Bedroom.
+    # Wave 6.8 (2026-06-04) — extended to [:8] for Nordic Master Bedroom
+    # A+B+C enrichment (bench + throw pillows + windowsill plant + base 5
+    # items = 8 total). Cells with ≤6 items unaffected (slice past list
+    # end = whole list). Only Nordic Master Bedroom currently has 8 items ;
+    # WM/SL/Tropical bedrooms still ship 6 ; Japandi 2 ; all other rooms
+    # ≤4. No impact on non-bedroom prompts.
+    style_items = (dna.furniture_language[:3] + dna.decor_language[:8])
     style = "; ".join(style_items)
     real = "; ".join(dna.realism_constraints[:2])
     room_avoid = dna.negative_rules[:3]

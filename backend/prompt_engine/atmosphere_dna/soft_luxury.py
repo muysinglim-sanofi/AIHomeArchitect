@@ -35,7 +35,20 @@ for _d in [
         # were sofa-anchored redundant with rug. Rug is living essential, more
         # impactful for inhabitation realism. User-locked wording (drops
         # "silk-blend" and "blush" to reduce hotel-staging semantics).
-        decor_language=["floor-level ceramic vessel with dried pampas or lunaria", "soft wool-blend rug in cream tones within the seating footprint"],
+        # Wave 6.14 (2026-06-09) — Emotional Styling Layer (SL Living). decor 2→6,
+        # validated recipe (anchored-to-existing + conditional-omit art +
+        # anchored-corner greenery + soft furnishings). SL voice: cashmere/velvet,
+        # cream/blush, champagne. Structure / materials / fidelity / TV anchor
+        # untouched. Gate: walls invented = 0 AND naturalness >= 4/5, else revert.
+        decor_language=[
+            "floor-length cashmere or silk-blend curtains in ivory or cream clearly framing each existing window, drawn open with the glass left fully clear — never covering, narrowing or blocking it, never on a glass partition",
+            "floor-level ceramic vessel with dried pampas or lunaria",
+            "soft wool-blend rug in cream tones within the seating footprint",
+            "layered cashmere and velvet cushions in cream and blush on the existing sofa — plush asymmetric placement, visible tactile weight",
+            "a weighted velvet or cashmere throw casually draped over the existing sofa or chaise — softly folded, lived-in luxury",
+            "a sculptural potted olive or fig anchored in the existing corner near the glazing — single statement vessel in cream ceramic or matte stone, never floating in the room",
+            "a warm-toned abstract or textural artwork on the existing wall above the sofa or console — only if that wall is solid and free, else omit",
+        ],
         realism_constraints=["sofa sized to room — not oversized for space", "marble floor with correct 3–5 mm grout lines"],
         # Wave 5.5.22 — added "a television" as a third focal-element option
         # so the model has explicit permission to place TV. Originally read
@@ -65,7 +78,7 @@ for _d in [
         # create a wall for the TV). New wording allows TV on existing
         # wall OR media console and explicitly forbids creating a new
         # wall. TV remains mandatory ("visible in living area").
-        room_specific_constraints=["television on existing wall surface or media console — never on a new wall", "balanced furniture placement — not haphazard"],
+        room_specific_constraints=["include a television as the living-room focal point, seating arranged toward it — clearly present on an existing wall or low media console, never a new wall or by converting glazing into a wall", "balanced furniture placement — not haphazard"],
         # Wave 5.5.36 — added "visible kitchen" continuity matching the WM
         # pattern. Previous wording mentioned dining + hallway but never
         # kitchen, contributing to "coin cuisine perdu" in bench 2026-05-25.
@@ -109,13 +122,36 @@ for _d in [
     RoomAdaptationDNA(
         atmosphere_id="soft_luxury",
         room_type="master_bedroom",
-        furniture_language=["cashmere or bouclé in ivory or champagne — plush tactile luxury", "brushed brass — warm champagne metal refinement", "velvet or bouclé in champagne — layered softness and warmth"],
+        # Wave 6.6 (2026-06-04) — master_bedroom anti-CGI emotional enrichment.
+        # Reinforces textile realism (asymmetrical drape, slight imperfection)
+        # and refined residential intimacy. Drops "above padded headboard
+        # wall" architectural directive from lighting_behavior (wall risk).
+        # Room-scoped, no living_room contamination.
+        furniture_language=["cashmere or bouclé in ivory or champagne with naturally relaxed fall and slight asymmetrical drape — plush tactile softness", "brushed brass — warm champagne metal refinement", "velvet or bouclé in champagne — layered softness and warmth"],
         material_palette=["honed marble or travertine floor", "fluted ivory plaster finish on existing walls", "raw silk or velvet soft furnishings"],
-        lighting_behavior="Concealed cove above padded headboard wall + brushed brass bedside table lamps with silk shade.",
+        lighting_behavior="Soft warm daylight from windows + concealed warm cove + brushed brass bedside table lamps with silk shade producing soft ambient glow; refined residential intimacy.",
         # Wave 5.5.27 — REPLACED artwork with bedside rug. User-locked wording
         # drops "cashmere or champagne" hotel-staging semantics.
-        decor_language=["layered cream-to-ivory bedding with velvet throw", "soft wool rug at the bedside in cream tones"],
-        realism_constraints=["headboard at correct height — 120–140 cm above mattress", "bench at foot of bed sized to bed width"],
+        # Wave 6.6 (2026-06-04) — extended from 2 to 4 items with secondary
+        # emotional visible layer (sculptural ceramic vase + weighted velvet
+        # throw at foot of bed). Anti-CGI : "naturally draped with slight
+        # asymmetrical fall" replaces clean hotel-staging.
+        # Wave 6.7 (2026-06-04) — A+B : assertive anti-staging vocab + 2
+        # lived-in items. SL preserve previously rendered as designer/CGI
+        # despite Wave 6.6 subtle anchors. Wave 6.7 amplifies anti-hotel
+        # directives ("VISIBLY", "PROMINENTLY", "casually draped") + adds
+        # concrete personal objects (book, framed photograph on dresser —
+        # not above bed) to break the hotel-suite render.
+        decor_language=[
+            "floor-length cashmere or silk-blend curtains in ivory or cream clearly framing each existing window, drawn open with the glass left fully clear — never covering, narrowing or blocking it, never on a glass partition",
+            "VISIBLY relaxed cream-to-ivory bedding with clearly natural asymmetric folds — natural moment, not hotel turndown",
+            "soft wool rug at the bedside in cream tones",
+            "PROMINENTLY displayed sculptural ceramic vase in cream or champagne on the existing nightstand or dresser",
+            "weighted velvet throw casually draped over the foot corner of the existing bed",
+            "open book or magazine on the existing nightstand",
+            "small framed photograph on the existing dresser",
+        ],
+        realism_constraints=["headboard at correct height — 120–140 cm above mattress", "velvet or cashmere bedding with visible slight imperfections in fabric drape — not hotel-stiff"],
         room_specific_constraints=["single bedding palette — cream, ivory, champagne only", "dressing area separated if space allows"],
         visible_transition_logic="marble floor and ivory plaster continue into ensuite; silk soft furnishing palette echoes dressing room",
         negative_rules=["no coloured bedding", "no mirrored furniture", "no pattern on bedding", "no LED strip headboard"],
@@ -123,12 +159,26 @@ for _d in [
     RoomAdaptationDNA(
         atmosphere_id="soft_luxury",
         room_type="kitchen",
+        # Wave 6.13b (2026-06-05) — kitchen enrichment (see WM block header).
+        # SL target (col 3) : layered premium + refined indirect lighting + subtle
+        # stone/marble styling + soft tonal textile + calm luxury. AVOID : gold
+        # overload, glamour-Instagram, excessive symmetry — restraint encoded in
+        # decor text (negative_rules[:3] only ships, so safety lives in the items).
         furniture_language=["fluted ivory lacquer cabinetry with recessed brass pulls", "honed Calacatta marble countertop and waterfall island", "integrated appliances behind panel fronts"],
         material_palette=["fluted ivory lacquer cabinetry", "Calacatta marble countertop", "brushed champagne brass hardware"],
-        lighting_behavior="Warm concealed under-cabinet strip + single brass pendant cluster over island centre.",
-        decor_language=["single marble mortar and stone cutting board on counter", "open shelf with 3 ceramic pieces — no clutter"],
+        lighting_behavior="Warm concealed under-cabinet indirect lighting grazing the Calacatta marble + single refined brass pendant cluster over the existing island; calm luxury brightness, quietly sophisticated, never glamour-staged.",
+        decor_language=[
+            "cashmere or silk-blend curtains in ivory or cream framing the existing window, drawn open with the glass clear — never covering or blocking it, never on a glass partition; only where a window exists",
+            "single marble mortar and honed stone cutting board styled on the existing counter — premium and restrained",
+            "open shelf with 3 sculptural ceramic pieces in cream and champagne tones — asymmetric, no clutter",
+            "a soft tonal ivory linen runner or tea towel draped on the existing counter — quiet textile layer",
+            "single white orchid or sculptural stem in a cream ceramic vessel on the existing counter",
+            "a stack of two neutral ceramic bowls beside the existing cooktop — curated, not styled-for-camera",
+        ],
         realism_constraints=["island at correct working height — 90 cm", "cabinet panels flush with appliances — no exposed appliance handles"],
-        room_specific_constraints=["countertop in single marble slab — no tile", "island in contrasting marble to perimeter counter"],
+        # Wave 6.13c (2026-06-05) — kitchen structure-preservation guard at [0] (see WM).
+        # SL is the other documented wall-symmetry-leaning atmosphere. Ships [:2].
+        room_specific_constraints=["arrange cabinetry and island without covering, narrowing or relocating any existing window, doorway or wall opening — keep photographed openings fully clear", "countertop in single marble slab — no tile", "island in contrasting marble to perimeter counter"],
         visible_transition_logic="ivory cabinet tone echoes dining room furniture; marble countertop palette flows to dining table surface",
         negative_rules=["no stainless steel appliances exposed", "no dark cabinetry", "no industrial fixtures", "no open shelf clutter"],
     ),
@@ -166,7 +216,8 @@ for _d in [
         furniture_language=["smooth render or limestone facade in ivory or cream", "arched or elegant window profiles", "solid oak or brushed brass entrance door"],
         material_palette=["smooth cream or ivory render finish", "natural limestone or travertine cladding strip", "brushed brass door hardware and lanterns"],
         lighting_behavior="Warm uplights at facade base + brushed brass lanterns flanking entrance; soft, not dramatic.",
-        decor_language=["clipped box or bay topiary flanking entrance", "flush letterbox and hardware in brushed brass"],
+        # Wave 6.26 (2026-06-06) — facade enrichment, architecture-safe (guard at [0]; see WM).
+        decor_language=["keep the building exactly — never add, alter, narrow, extend, or restyle any wall, window, door, roof, cladding or structure; only ground-level planting, a doormat and warm light on the existing entrance", "clipped box or bay topiary flanking entrance", "flush letterbox and hardware in brushed brass", "a stone urn with seasonal flowers beside the existing entrance", "a natural stone doormat at the existing threshold"],
         realism_constraints=["window proportions tall — not wide suburban ratios", "entrance door at correct centred position"],
         room_specific_constraints=["single facade material — render or stone only, not mixed", "entrance canopy or porch if present in classical proportions"],
         visible_transition_logic="cream render flows into boundary wall finish; limestone threshold continues to driveway material",
@@ -175,10 +226,22 @@ for _d in [
     RoomAdaptationDNA(
         atmosphere_id="soft_luxury",
         room_type="dining_room",
+        # Wave 6.13 (2026-06-05) — dining_room enrichment (see WM block header).
+        # SL target (col 2/3) : refined pendant + noble materials + minimalist
+        # table styling + subtle artwork + soothing sophistication. SL has a strong
+        # native signature (brass/marble) — enrich with restraint, not volume.
         furniture_language=["oval or round marble-top dining table on brass base", "upholstered dining chairs in ivory velvet", "marble-top sideboard with brass legs"],
         material_palette=["honed marble floor", "ivory plaster or linen-textured walls", "brushed brass lighting and hardware"],
-        lighting_behavior="Single large sculptural pendant in brushed brass over table, hung low; warm evening dimmed.",
-        decor_language=["low sculptural floral centrepiece in cream ceramic", "column candle holders in brass at table corners"],
+        lighting_behavior="Single large sculptural brushed-brass pendant hung low over the existing table + soft indirect glow washing the ivory walls; warm dimmed evening sophistication, calm and refined.",
+        decor_language=[
+            "floor-length cashmere or silk-blend curtains in ivory or cream clearly framing each existing window, drawn open with the glass left fully clear — never covering, narrowing or blocking it, never on a glass partition",
+            "PROMINENTLY displayed low sculptural floral centrepiece in cream ceramic — soft white blooms, editorial not busy",
+            "refined brass column candle holders flanking the centrepiece on the existing table",
+            "minimalist place settings on the existing chairs — ivory linen napkin and a single charger per setting, restrained and elegant",
+            "single subtle framed artwork above the existing sideboard — tonal abstract or soft photograph in a slim frame, only if that wall is free, else omit",
+            "two curated objects styled on the existing sideboard — a sculptural vase and a stacked art book in neutral tones",
+            "single white orchid or sculptural stem in cream ceramic on the existing sideboard",
+        ],
         realism_constraints=["pendant hung at correct 70–80 cm above table", "chair seat height correct for table — 45–47 cm"],
         room_specific_constraints=["table seats maximum 8 — not hotel-banquet scale", "chairs identical in fabric and form — no mixing"],
         visible_transition_logic="marble floor and ivory plaster echo living room; sideboard palette flows into kitchen visible beyond",
@@ -190,7 +253,8 @@ for _d in [
         furniture_language=["two upholstered armchairs in ivory outdoor fabric", "small marble or stone side table", "single sculptural planter"],
         material_palette=["honed limestone balcony floor", "ivory outdoor upholstery", "brushed brass or stone accents"],
         lighting_behavior="Single brass wall lantern; warm intimate tone — no overhead fixture.",
-        decor_language=["ivory outdoor cushions with subtle texture", "single white orchid or sculptural plant in white ceramic"],
+        # Wave 6.26 (2026-06-06) — balcony enrichment (anchoring guard at [0]; see WM).
+        decor_language=["anchored to the existing balcony floor, railing and furniture — existing layout kept exactly; no added walls, new structures, roofs or extensions", "ivory outdoor cushions with subtle texture", "single white orchid or sculptural plant in white ceramic", "a marble tray with two cups on the existing side table", "a soft throw layered on the existing armchairs", "a brass lantern on the existing floor", "a soft outdoor rug in ivory grounding the seating on the existing floor"],
         realism_constraints=["chairs sized to balcony — not oversized", "balustrade glass or stone — no metal rail"],
         room_specific_constraints=["two chairs with side table — no dining set on balcony", "single plant accent only"],
         visible_transition_logic="limestone balcony floor echoes interior marble; ivory upholstery palette visible through glass doors",
@@ -202,7 +266,8 @@ for _d in [
         furniture_language=["wide upholstered sun loungers in ivory outdoor linen", "linen canvas parasols on stone base", "low marble or stone side tables"],
         material_palette=["large-format honed limestone pool deck", "cream stone pool coping", "ivory outdoor upholstery"],
         lighting_behavior="Warm underwater lighting — soft blue-white + warm deck uplights at pool coping.",
-        decor_language=["symmetrical lounger pairs flanking pool", "large ceramic planters at pool ends with olive or bay tree"],
+        # Wave 6.25 (2026-06-06) — pool enrichment (anchoring guard at [0]; see WM).
+        decor_language=["anchored to the existing deck, coping and furniture — existing pool and spatial layout kept exactly; no added walls, new structures, roofs, pergolas or architectural extensions", "symmetrical lounger pairs flanking pool", "large ceramic planters at pool ends with olive or bay tree", "rolled ivory towels and a marble tray with a carafe and glasses on the existing side table", "plush layered ivory cushions and a soft throw on the existing loungers", "elegant lanterns set along the existing pool coping"],
         realism_constraints=["loungers at correct residential scale — not resort-runway spacing", "pool coping at correct level above deck"],
         room_specific_constraints=["symmetrical layout — not scattered", "parasol at correct height — not too low"],
         visible_transition_logic="limestone deck continues to terrace; cream render of house visible as backdrop",
@@ -214,7 +279,8 @@ for _d in [
         furniture_language=["single curved garden bench in stone or painted iron", "formal clipped hedging structure", "large planted urns flanking axis"],
         material_palette=["honed limestone or gravel path", "clipped box or yew hedging", "painted iron or stone furniture"],
         lighting_behavior="Concealed ground uplights on hedging structure + warm path lighting; formal and restrained.",
-        decor_language=["formal garden axis — clear sight line", "large planted urns in stone or lead finish"],
+        # Wave 6.26 (2026-06-06) — garden enrichment (anchoring guard at [0]; see WM balcony).
+        decor_language=["anchored to the existing paving, beds and garden footprint — existing layout kept exactly; no added walls, new structures, roofs, pergolas or hardscape", "formal garden axis — clear sight line", "large planted urns in stone or lead finish", "a soft cushion and a folded throw on the existing garden bench", "warm uplighting grazing the existing hedging", "stone planters with topiary on the existing paving"],
         realism_constraints=["hedging at correct maintained height — not CGI-perfect", "gravel path at correct depth and boundary edge"],
         room_specific_constraints=["formal symmetry in layout — not naturalistic garden style", "single plant palette — box or yew hedging"],
         visible_transition_logic="garden path continues to terrace; house facade visible as formal backdrop beyond hedging",
@@ -226,9 +292,18 @@ for _d in [
         furniture_language=["marble console table with brushed brass legs", "full-height arched mirror in brass frame", "single statement sculptural vase"],
         material_palette=["book-matched marble or large-format stone floor", "ivory fluted plaster finish on existing walls", "brushed brass hardware"],
         lighting_behavior="Concealed ceiling cove + pair of warm wall sconces flanking mirror; arrival warmth.",
-        decor_language=["single large floral arrangement in sculptural vessel", "single oversized framed artwork at end of hall"],
+        # Wave 6.24 (2026-06-06) — entrance enrichment, surface/floor only (see WM note).
+        decor_language=[
+            "cashmere or silk-blend curtains in ivory or cream framing the existing window, drawn open with the glass clear — never covering or blocking it, never on a glass partition; only where a window exists",
+            "single large floral arrangement in sculptural vessel",
+            "single oversized framed artwork at end of hall",
+            "a marble or lacquer tray with a small dish on the existing console",
+            "a sculptural table lamp on the existing console — soft ambient glow",
+            "a soft wool-blend runner in ivory along the floor",
+        ],
         realism_constraints=["console at correct 80–85 cm height", "mirror height 150 cm minimum for proportion"],
-        room_specific_constraints=["clear view to focal artwork from entrance door", "single console — not paired"],
+        # Wave 6.23 (2026-06-06) — entrance opening-preservation guard at [0] (see WM).
+        room_specific_constraints=["place the console, mirror and wall decor on an existing solid wall only — never cover, wall over, narrow or replace any existing opening, doorway or passage; if the only free wall is an opening, keep it open and place the console along a solid wall or omit it", "clear view to focal artwork from entrance door", "single console — not paired"],
         visible_transition_logic="marble floor and ivory plaster flow unbroken into living room; brass hardware echoes through all doors",
         negative_rules=["no coat rack visible", "no cluttered side table", "no crystal bowl or ornament collection", "no cold grey stone floor"],
     ),
@@ -238,7 +313,17 @@ for _d in [
         furniture_language=["large ivory lacquer or leather-wrapped desk", "upholstered chair in ivory cashmere or bouclé", "floor-to-ceiling bookshelf in ivory lacquer"],
         material_palette=["honed marble or oak parquet floor", "ivory plaster or linen-weave wall panelling", "brushed brass desk accessories"],
         lighting_behavior="Brushed brass adjustable desk lamp + concealed bookshelf uplighting; warm amber tone.",
-        decor_language=["curated book collection — spine colour edited to neutrals", "single framed artwork or architectural photograph"],
+        # Wave 6.14 (2026-06-06) — home_office enrichment (see WM block note).
+        # Wave 6.16 (2026-06-06) — full pack (see WM home_office note).
+        decor_language=[
+            "floor-length cashmere or silk-blend curtains in ivory or cream clearly framing each existing window, drawn open with the glass left fully clear — never covering, narrowing or blocking it, never on a glass partition",
+            "a single ivory bouclé lounge chair with a slim marble-topped side table in the open floor area — clear of any window or door, only if floor space allows, else omit",
+            "a soft wool-blend rug in ivory spanning the desk and the seating zone",
+            "a sculptural brass desk lamp, a closed leather portfolio and a fountain pen set on the existing desk — refined and in use",
+            "a curated row of neutral-spined books with a marble bookend on the existing shelf",
+            "a single subtle abstract artwork in a slim pale-gold frame on the existing wall — only if that wall is free, else omit",
+            "a cream ceramic vessel of dried stems on the side table",
+        ],
         realism_constraints=["desk at correct 72–75 cm working height", "bookshelf books at correct scale — not too sparse or too packed"],
         room_specific_constraints=["cable management complete — no visible wires", "single palette for all desk accessories — brass only"],
         visible_transition_logic="ivory palette and marble floor echo hallway and living room; brass accessories match door hardware throughout",
@@ -250,7 +335,8 @@ for _d in [
         furniture_language=["limestone or sandstone driveway with formal edging", "rendered gate pillars in cream or ivory", "wrought iron or brass estate gate"],
         material_palette=["honed limestone or fine gravel driveway", "cream smooth render gate pillars", "brushed brass or painted iron gate"],
         lighting_behavior="Warm brass lanterns on gate pillars + warm path uplights along drive edge.",
-        decor_language=["clipped box topiary spheres flanking gate", "formal stone pillar capping in limestone"],
+        # Wave 6.26 (2026-06-06) — driveway enrichment, architecture-safe (guard at [0]; see WM facade).
+        decor_language=["keep the drive, gate, pillars and boundary exactly — never add, alter, widen or extend any wall, gate, pillar, structure or paving; only border planting, potted plants and warm light on existing surfaces", "clipped box topiary spheres flanking gate", "formal stone pillar capping in limestone", "matched stone urns with topiary at the existing gate", "warm brass lantern light on the existing pillars"],
         realism_constraints=["driveway at correct width for vehicle — minimum 3.5 m", "gate pillar height proportional to gate width"],
         room_specific_constraints=["single driveway material — no mixing paving types", "gate pillars in same render as house facade"],
         visible_transition_logic="limestone driveway continues to forecourt; cream render facade visible beyond gate",

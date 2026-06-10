@@ -278,14 +278,17 @@
       "Bash(tasklist /FI \"PID eq 28032\")",
       "PowerShell($tree = Get-CimInstance Win32_Process | Where-Object { $_.ParentProcessId -eq 21600 -or $_.ProcessId -eq 21600 }; $pids = $tree.ProcessId; foreach \\($p in $pids\\) { try { Stop-Process -Id $p -Force -ErrorAction Stop; \"killed $p\" } catch { \"failed $p\" } }; Start-Sleep -Milliseconds 1000; if \\(Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue\\) { \"STILL LISTENING\" } else { \"port 8000 free\" })",
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" http://127.0.0.1:8000/health)",
-      "Bash(PYTHONIOENCODING=utf-8 backend/.venv/Scripts/python.exe tools/prompt_diff.py --atm \"Warm Modern\" --mode preserve --before HEAD~1)"
+      "Bash(PYTHONIOENCODING=utf-8 backend/.venv/Scripts/python.exe tools/prompt_diff.py --atm \"Warm Modern\" --mode preserve --before HEAD~1)",
+      "PowerShell($env:BIMODAL_ENABLED = \"1\"; Set-Location c:\\\\Projects\\\\AIHomeArchitect\\\\backend; & .\\\\.venv\\\\Scripts\\\\python.exe -m uvicorn main:app --reload --port 8000 --log-level info)",
+      "Bash(cp /tmp/wave411_split_backup/meta_intent.py prompt_engine/meta_intent.py && git status --short | head -5)"
     ],
     "additionalDirectories": [
       "C:\\Projects\\AIHomeArchitect\\backend",
       "c:\\Projects\\AIHomeArchitect\\frontend\\assets",
       "c:\\Projects\\AIHomeArchitect\\backend",
       "c:\\Users\\muysi\\.claude\\projects\\c--Projects-AIHomeArchitect\\memory",
-      "C:\\Projects\\AIHomeArchitect"
+      "C:\\Projects\\AIHomeArchitect",
+      "\\tmp\\wave411_split_backup"
     ]
   }
 }

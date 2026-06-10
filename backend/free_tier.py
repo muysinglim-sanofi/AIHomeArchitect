@@ -3,7 +3,7 @@ Wave 5.17d.1 — Free-tier scope restriction.
 
 Free (non-premium) users may generate ONLY :
   - room_type_id ∈ FREE_ROOMS       (Living Room only)
-  - atmosphere_id ∈ FREE_ATMOSPHERES (Warm Modern + Nordic Warmth — re-pivot 2026-05-31)
+  - atmosphere_id ∈ FREE_ATMOSPHERES (Warm Modern + Japandi Calm — 2026-06-08)
 
 Re-pivot from D1 lock (2026-05-30) : Nordic Warmth + Soft Luxury →
 Warm Modern + Nordic Warmth. Soft Luxury moves to the premium teaser
@@ -49,8 +49,9 @@ log = logging.getLogger("aih.free_tier")
 FREE_ROOMS = ("livingRoom",)
 
 # Canonical atmosphere ids (mirrors frontend AtmosphereStyle.id).
-# Wave 5.17d.1 re-pivot (2026-05-31) — Warm Modern + Nordic Warmth.
-FREE_ATMOSPHERES = ("warm_modern", "nordic_warmth")
+# 2026-06-08 — free pair changed to Warm Modern + Japandi Calm
+# (Nordic Warmth moved to premium; tied to the card-redesign popularity order).
+FREE_ATMOSPHERES = ("warm_modern", "japandi_calm")
 
 
 # Reference catalogue for drift detection and operator clarity. Not used
@@ -62,7 +63,7 @@ _ALL_ROOM_IDS = (
 )
 _ALL_ATMOSPHERE_IDS = (
     "tropical_escape", "warm_modern", "japandi_calm", "soft_luxury",
-    "nordic_warmth", "nature_retreat", "desert_luxe",
+    "nordic_warmth",
 )
 
 

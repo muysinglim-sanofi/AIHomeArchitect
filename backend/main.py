@@ -7,13 +7,13 @@ import os
 import time
 import traceback
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from PIL import Image as PilImage
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Body, Depends, FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI, BadRequestError
@@ -30,12 +30,26 @@ from quota import (
     fail_generation,
     FREE_TIER_LIMIT,
     is_admin_role,
+    has_admin_role,
 )
 # Wave 5.17d — Free-tier scope (room + atmosphere allowlist for non-premium)
 from free_tier import check_restrictions
 # Wave 5.17d — RevenueCat webhook receiver (POST /webhooks/revenuecat)
-from revenuecat_webhook import router as revenuecat_router
+from revenuecat_webhook import router as revenuecat_router, _upsert_premium
 from rate_limit import check_ip_rate_limit
+# Sprint 1 — server-side free-tier watermark (applied to bytes before upload)
+from watermark import apply_watermark
+# Sprint 1B — promo / influencer / admin codes (backend-authoritative resolver)
+from promo import (
+    resolve_generation_access,
+    get_promo_access,
+    redeem_promo,
+    consume_promo_generation,
+    create_promo_code,
+    list_promo_codes,
+    set_promo_active,
+    check_redeem_rate,
+)
 
 from prompt_engine import (
     compose_generation_prompt,
@@ -95,6 +109,7 @@ from prompt_engine.structural_identity import (
     to_token,
     render_clause,
     render_negative_anchors,
+    safe_union_merge,  # Wave 5.24 — parallel structural capture union
 )
 from prompt_engine.refinement_authority import (
     detect_refinement,
@@ -203,6 +218,19 @@ log.info(
     list_profiles(),
 )
 
+# Sprint 1 — monetization config visibility. Logs PRESENCE only (booleans), never
+# the secret values, so a missing key is obvious at boot without any leak.
+log.info(
+    "[Monetization] config - REVENUECAT_WEBHOOK_AUTH=%s  REVENUECAT_SECRET_API_KEY=%s",
+    "set" if os.environ.get("REVENUECAT_WEBHOOK_AUTH") else "MISSING",
+    "set" if os.environ.get("REVENUECAT_SECRET_API_KEY") else "MISSING",
+)
+if not os.environ.get("REVENUECAT_WEBHOOK_AUTH"):
+    log.warning(
+        "[Monetization] REVENUECAT_WEBHOOK_AUTH is MISSING - /webhooks/revenuecat "
+        "will reject all events; premium purchases will NOT propagate to user_roles."
+    )
+
 # Wave 4.7.9 — Functional Layout Intelligence observability (Task 8).
 # Folded into the compact realism block, length-neutral. budget_safe asserts
 # the block did not grow beyond Soft Luxury V1's 6-char headroom.
@@ -307,6 +335,13 @@ app.include_router(revenuecat_router)
 openai = AsyncOpenAI(
     api_key=os.environ["OPENAI_API_KEY"],
     max_retries=0,
+    # Wave 6.15 (2026-06-06) — cap the OpenAI call at 180s (was the SDK default
+    # 600s). A real gpt-image-1 generation finishes in 30-90s (≤~90s even at
+    # input_fidelity=high); a call still running at 180s is stalled OpenAI-side.
+    # Failing fast surfaces the EXISTING front-end error+retry in ~3 min instead
+    # of leaving the user stuck on "still working" for the full 10 min. connect
+    # kept short. Revert = drop the timeout kwarg.
+    timeout=httpx.Timeout(180.0, connect=5.0),
 )
 log.info(
     "[OpenAI Client] max_retries=%d  timeout=%s  "
@@ -574,6 +609,169 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
         return ""
 
 
+# ── Wave 5.23 — Mini Orientation Consensus (2026-06-03) ──────────────────────
+#
+# Targeted stabilization for the dominant_opening wall position.
+# Empirical evidence : gpt-4o vision capture stochastically flips LEFT/RIGHT/
+# BACK on the same source photo across separate sessions (12.5% on WM, 50% on
+# SL bench 2026-06-03). When the flipped position reaches the gpt-image-1
+# prompt, the model resolves the prompt-vs-photo contradiction by inventing
+# walls.
+#
+# Approach (user-recommended over best-of-N full capture) : keep the existing
+# 1× full structural capture unchanged ; add 2× tiny parallel classification
+# calls that ONLY answer LEFT/RIGHT/BACK/UNKNOWN for the dominant opening.
+# Apply consensus voting :
+#
+#   • A == B and explicit  → use the consensus position (patch full capture
+#     if it disagrees)
+#   • A or B is UNKNOWN    → prefer the explicit one
+#   • A != B (both explicit) → OMIT position from final identity (safer than
+#     wrong direction)
+#   • Both UNKNOWN          → OMIT position
+#
+# Cost : 2× gpt-4o-mini classification calls @ ~$0.00002 each = ~$0.00004 per
+# V1 (negligible). Latency : run parallel with the full capture via
+# asyncio.gather → total wall-time ≈ full capture time (mini is faster).
+#
+# Fallback : on any mini call exception, behave as if UNKNOWN. On both-fail,
+# return None → no patch → existing full capture used as-is (current
+# behaviour preserved).
+#
+# Why gpt-4o-mini and not gpt-4o : constrained 4-class classification on a
+# clear architectural feature is mini-grade. The
+# mini_door_classification_resistance memory documented mini's failure on
+# CATEGORY classification (window vs door) — that's a different cognitive
+# task. Position classification is consistently reliable on mini.
+
+_ORIENTATION_VALID = {"LEFT", "RIGHT", "BACK"}
+
+
+async def _capture_orientation_mini(image_bytes: bytes) -> str:
+    """Wave 5.23 — micro vision classification : where is the dominant
+    sliding glass opening / primary window located ?
+
+    Returns 'LEFT' | 'RIGHT' | 'BACK' | 'UNKNOWN' (or '' on exception —
+    treated as UNKNOWN by the consensus logic).
+    """
+    try:
+        b64 = base64.b64encode(image_bytes).decode()
+        resp = await openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url",
+                     "image_url": {
+                         "url": f"data:image/jpeg;base64,{b64}",
+                         "detail": "low",
+                     }},
+                    {"type": "text", "text": (
+                        "Looking at this room photograph, on which wall "
+                        "is the main sliding glass door, picture window, "
+                        "or primary opening located, relative to the "
+                        "camera viewpoint ?\n"
+                        "Answer ONLY with one of these four words "
+                        "(no prose, no explanation) :\n"
+                        "LEFT\n"
+                        "RIGHT\n"
+                        "BACK\n"
+                        "UNKNOWN"
+                    )},
+                ],
+            }],
+            max_tokens=4,
+        )
+        raw = (resp.choices[0].message.content or "").strip().upper()
+        for token in ("LEFT", "RIGHT", "BACK", "UNKNOWN"):
+            if token in raw:
+                return token
+        return "UNKNOWN"
+    except Exception as exc:
+        log.warning(
+            "[Wave5.23] mini orientation capture failed (non-fatal): %s: %s",
+            type(exc).__name__, exc,
+        )
+        return ""
+
+
+async def _resolve_orientation_consensus(image_bytes: bytes) -> str | None:
+    """Wave 5.23 — run 2× mini orientation classifications in parallel +
+    apply consensus voting. Returns 'left'|'right'|'back' if a confident
+    consensus is reached, None to leave the existing full-capture position
+    untouched (safer-than-wrong default)."""
+    a, b = await asyncio.gather(
+        _capture_orientation_mini(image_bytes),
+        _capture_orientation_mini(image_bytes),
+    )
+    a_up = (a or "").upper()
+    b_up = (b or "").upper()
+
+    # Case A — same answer twice, both explicit
+    if a_up == b_up and a_up in _ORIENTATION_VALID:
+        log.info(
+            "[Wave5.23] mini_orientation_consensus=A:%s B:%s final:%s",
+            a_up or "FAIL", b_up or "FAIL", a_up,
+        )
+        return a_up.lower()
+
+    # Case B / C — one explicit, the other UNKNOWN (or empty=failed)
+    if a_up in _ORIENTATION_VALID and b_up not in _ORIENTATION_VALID:
+        log.info(
+            "[Wave5.23] mini_orientation_consensus=A:%s B:%s final:%s "
+            "(B uncertain → defer to A)",
+            a_up, b_up or "FAIL", a_up,
+        )
+        return a_up.lower()
+    if b_up in _ORIENTATION_VALID and a_up not in _ORIENTATION_VALID:
+        log.info(
+            "[Wave5.23] mini_orientation_consensus=A:%s B:%s final:%s "
+            "(A uncertain → defer to B)",
+            a_up or "FAIL", b_up, b_up,
+        )
+        return b_up.lower()
+
+    # Case D — contradiction (both explicit, different) OR both
+    # UNKNOWN/failed → omit (safer than wrong direction)
+    log.info(
+        "[Wave5.23] mini_orientation_consensus=A:%s B:%s final:OMITTED",
+        a_up or "FAIL", b_up or "FAIL",
+    )
+    return None
+
+
+def _patch_dominant_opening_position(
+    identity, position: str,
+):
+    """Wave 5.23 — replace the wall position suffix in identity.dominant_
+    opening with the mini-consensus result. Returns a new identity (the
+    dataclass is frozen-by-convention ; we use dataclasses.replace)."""
+    import re
+    from dataclasses import replace
+
+    current = identity.dominant_opening
+    if not current:
+        return identity
+
+    # Strip any existing " on the X wall" suffix (handles Wave 5.21d output).
+    stripped = re.sub(
+        r"\s+on the (left|right|back|front)\s+wall$",
+        "",
+        current,
+        flags=re.IGNORECASE,
+    )
+    # Append the consensus-validated position.
+    patched = f"{stripped} on the {position} wall"
+
+    if patched != current:
+        log.info(
+            "[Wave5.23] dominant_opening patched : '%s' → '%s'",
+            current, patched,
+        )
+
+    return replace(identity, dominant_opening=patched)
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -608,6 +806,234 @@ async def get_me_access(
     return {
         "is_admin": await is_admin_role(current_user.user_id),
     }
+
+
+@app.get("/me/status")
+async def get_me_status(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Sprint 1 — READ-ONLY premium + quota snapshot for the UI.
+
+    The backend remains the sole authority: this endpoint only *reports* the
+    server-side state (RevenueCat → user_roles → quota). The client cannot use
+    it to grant itself anything.
+
+    Returns: is_premium, is_admin, role, quota_used, quota_limit,
+    remaining_free_generations (null when premium/admin = unlimited).
+    """
+    # Sprint 1B — one resolution covers subscription + promo + free quota.
+    d = await resolve_generation_access(current_user.user_id)
+    is_admin = d.tier == "admin"
+    is_premium = d.tier in ("admin", "premium")            # subscription/admin ONLY (promo ≠ premium)
+    unlimited = is_premium or d.promo_unlimited_active      # remaining_free is null only when truly unlimited
+    return {
+        # ── existing Sprint 1 fields (unchanged shape) ──
+        "is_premium": is_premium,
+        "is_admin": is_admin,
+        "role": "admin" if is_admin else ("premium" if is_premium else "free"),
+        "quota_used": max(0, FREE_TIER_LIMIT - d.free_remaining),
+        "quota_limit": FREE_TIER_LIMIT,
+        "remaining_free_generations": None if unlimited else d.free_remaining,
+        # ── Sprint 1B — promo fields ──
+        "promo_generations_remaining": d.promo_generations_remaining,
+        "promo_unlimited_active": d.promo_unlimited_active,
+        "active_promo_campaign": d.active_promo_campaign,
+        "effective_access_state": d.tier,                  # admin|premium|promo_unlimited|promo_limited|free|blocked
+        "can_generate": d.can_generate,
+    }
+
+
+@app.post("/purchases/sync")
+async def purchases_sync(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Sprint 1 — fallback reconciliation when the RevenueCat webhook is delayed
+    or missed.
+
+    Reads the subscriber's entitlement directly from the RevenueCat REST API
+    (server secret key) and, if 'premium' is active, UPSERTs the user_roles row
+    via the SAME helper the webhook uses. Flow is RC → backend → user_roles;
+    the client never asserts premium. Idempotent (upsert on (user_id, role)).
+    """
+    secret = os.environ.get("REVENUECAT_SECRET_API_KEY", "")
+    if not secret:
+        # Not configured yet (operational step). Don't pretend it worked.
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error_code": "RC_SYNC_NOT_CONFIGURED",
+                "user_message": "Purchase sync is temporarily unavailable.",
+            },
+        )
+
+    uid = current_user.user_id
+    url = f"https://api.revenuecat.com/v1/subscribers/{uid}"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, headers={"Authorization": f"Bearer {secret}"})
+    except Exception as exc:
+        log.warning("[purchases/sync] RC unreachable user=%s err=%s", uid, exc)
+        raise HTTPException(
+            status_code=502,
+            detail={"error_code": "RC_UNREACHABLE", "user_message": "Could not reach the store."},
+        )
+
+    if resp.status_code != 200:
+        # 404 = RC has never seen this app_user_id (no purchase). Not an error.
+        log.info("[purchases/sync] RC status=%s user=%s (no active entitlement)", resp.status_code, uid)
+        return {"synced": False, "is_premium": False, "reason": f"rc_status_{resp.status_code}"}
+
+    data = resp.json()
+    ent = (((data.get("subscriber") or {}).get("entitlements") or {}).get("premium")) or {}
+    expires = ent.get("expires_date")  # ISO-8601, or None for lifetime
+    active = False
+    if ent:
+        if expires is None:
+            active = True
+        else:
+            try:
+                exp_dt = datetime.fromisoformat(expires.replace("Z", "+00:00"))
+                active = exp_dt > datetime.now(timezone.utc)
+            except Exception:
+                active = False
+
+    if active:
+        await _upsert_premium(
+            supa=supa,
+            user_id=uid,
+            expires_at_iso=expires,
+            event_type="MANUAL_SYNC",
+            event_id="purchases_sync",
+        )
+        log.info("[purchases/sync] premium reconciled user=%s expires=%s", uid, expires)
+        return {"synced": True, "is_premium": True, "expires_at": expires}
+
+    return {"synced": False, "is_premium": False, "reason": "no_active_entitlement"}
+
+
+# ── Sprint 1B — Promo / influencer / admin codes ──────────────────────────────
+
+
+async def _require_admin(current_user: CurrentUser) -> None:
+    """Backend-authoritative STRICT admin gate — admin role ONLY (NOT premium).
+    Rejects regardless of any client flag; the frontend opening an admin screen
+    grants nothing. Every admin endpoint calls this first."""
+    if not await is_admin_role(current_user.user_id):
+        raise HTTPException(
+            status_code=403,
+            detail={"error_code": "forbidden", "user_message": "Admin access required."},
+        )
+
+
+@app.post("/promo/redeem")
+async def promo_redeem_endpoint(
+    payload: dict = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Redeem a promo code for the authenticated user (atomic, via RPC)."""
+    code = str(payload.get("code") or "").strip()
+    if not code:
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "invalid_code", "user_message": "Enter a promo code."},
+        )
+    if not check_redeem_rate(current_user.user_id):
+        raise HTTPException(
+            status_code=429,
+            detail={"error_code": "rate_limited",
+                    "user_message": "Too many attempts. Please try again later."},
+        )
+    result = await redeem_promo(current_user.user_id, code)
+    if not result.get("ok"):
+        err = result.get("error", "invalid_code")
+        log.info("[Sprint 1B] redeem rejected — user=%s error=%s", current_user.user_id, err)
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": err,
+                    "user_message": "This promo code could not be applied."},
+        )
+    log.info("[Sprint 1B] redeem OK — user=%s type=%s campaign=%s",
+             current_user.user_id, result.get("type"), result.get("campaign"))
+    return {
+        "ok": True,
+        "type": result.get("type"),
+        "unlimited": bool(result.get("unlimited")),
+        "generation_limit": result.get("generation_limit"),
+        "campaign": result.get("campaign"),
+    }
+
+
+@app.post("/admin/promo-codes")
+async def admin_create_promo_code(
+    payload: dict = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    await _require_admin(current_user)
+    type_ = str(payload.get("type") or "")
+    if type_ not in ("limited_generations", "unlimited"):
+        raise HTTPException(400, detail={"error_code": "invalid_type",
+                                         "user_message": "Invalid code type."})
+    gen_limit = payload.get("generation_limit")
+    if type_ == "limited_generations":
+        if not isinstance(gen_limit, int) or gen_limit <= 0:
+            raise HTTPException(400, detail={"error_code": "invalid_generation_limit",
+                                             "user_message": "generation_limit must be a positive integer."})
+    else:
+        gen_limit = None
+    max_red = payload.get("max_redemptions")
+    if max_red is not None and (not isinstance(max_red, int) or max_red <= 0):
+        raise HTTPException(400, detail={"error_code": "invalid_max_redemptions",
+                                         "user_message": "max_redemptions must be a positive integer or null."})
+    custom = payload.get("code")
+    if custom is not None:
+        custom = str(custom).strip() or None
+    try:
+        row = await create_promo_code(
+            created_by=current_user.user_id,
+            code=custom,
+            type_=type_,
+            generation_limit=gen_limit,
+            max_redemptions=max_red,
+            expires_at=payload.get("expires_at"),     # ISO-8601 string or null
+            campaign=(payload.get("campaign") or None),
+            note=(payload.get("note") or None),
+        )
+    except Exception as exc:  # noqa: BLE001 — duplicate code → unique index violation
+        log.warning("[Sprint 1B] create promo failed — admin=%s err=%s",
+                    current_user.user_id, exc)
+        raise HTTPException(409, detail={"error_code": "code_conflict",
+                                         "user_message": "That code already exists. Try another."})
+    log.info("[Sprint 1B] promo code created — admin=%s code=%s type=%s",
+             current_user.user_id, row.get("code"), type_)
+    return row
+
+
+@app.get("/admin/promo-codes")
+async def admin_list_promo_codes(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    await _require_admin(current_user)
+    return {"codes": await list_promo_codes()}
+
+
+@app.patch("/admin/promo-codes/{code_id}")
+async def admin_patch_promo_code(
+    code_id: str,
+    payload: dict = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    await _require_admin(current_user)
+    active = payload.get("active")
+    if not isinstance(active, bool):
+        raise HTTPException(400, detail={"error_code": "invalid_active",
+                                         "user_message": "active must be true or false."})
+    updated = await set_promo_active(code_id, active)
+    if not updated:
+        raise HTTPException(404, detail={"error_code": "not_found",
+                                         "user_message": "Promo code not found."})
+    log.info("[Sprint 1B] promo code %s set active=%s by admin=%s",
+             code_id, active, current_user.user_id)
+    return updated
 
 
 @app.post("/chat")
@@ -1078,20 +1504,33 @@ async def generate(
 
     # ── Wave 5.17b — IP rate limit (defensive ceiling, anon-only) ────────────
     # 10 generations / IP / 24h. Signed-in users bypass (account-bound quota
-    # below governs them). Raises HTTPException(429) on threshold breach.
+    # below governs them). Wave 5.21c (2026-06-02) — admin/premium roles
+    # ALSO bypass the IP ceiling, matching the quota bypass scope. Anonymous
+    # admin sessions (dev/validation flows) previously tripped the ceiling
+    # at gen #11 even though their user-level quota was uncapped.
+    # has_admin_role is cached 60s ; get_quota_status below hits the same
+    # cache (no extra DB roundtrip).
+    # ── Sprint 1B — centralised access resolver ───────────────────────────────
+    # ONE resolution of the generation-access priority:
+    #   admin/premium > promo_unlimited > promo_limited > free(watermark) > blocked
+    # It drives: the anon IP-limit bypass, the paywall gate, the free-tier scope
+    # check, the usage_log reservation, the promo consume, and the watermark.
+    _decision = await resolve_generation_access(current_user.user_id)
+    # Entitled tiers (admin/premium/promo) get clean images AND skip the
+    # anonymous IP rate limit; free/blocked do not. Kept under the legacy name
+    # `_is_admin_bypass` so the watermark site below stays unchanged — it now
+    # means "no watermark" which is exactly clean_watermark.
+    _is_admin_bypass = _decision.clean_watermark
     check_ip_rate_limit(
         ip=getattr(getattr(request, "client", None), "host", None),
         is_anonymous=current_user.is_anonymous,
+        is_admin=_is_admin_bypass,
     )
 
-    # ── Wave 5.17b — Free-tier quota check ────────────────────────────────────
-    # Counts usage_log rows for user_id where status != 'failed'. Admin + future
-    # premium roles bypass. On exhaustion, returns 402 with paywall payload.
-    _quota = await get_quota_status(current_user.user_id)
-    if not _quota.allowed:
+    if not _decision.can_generate:
         log.info(
-            "[Wave 5.17b] quota exhausted — user=%s used=%d limit=%d",
-            current_user.user_id, _quota.used, _quota.limit,
+            "[Sprint 1B] generation blocked — user=%s tier=%s free_remaining=%d",
+            current_user.user_id, _decision.tier, _decision.free_remaining,
         )
         raise HTTPException(
             status_code=402,
@@ -1102,29 +1541,30 @@ async def generate(
                     "Unlock unlimited redesigns and continue working with "
                     "your AI Architect."
                 ),
-                "quota_used": _quota.used,
-                "quota_limit": _quota.limit,
+                "quota_used": max(0, FREE_TIER_LIMIT - _decision.free_remaining),
+                "quota_limit": FREE_TIER_LIMIT,
                 "retryable": False,
                 "request_id": "",
             },
         )
     log.info(
-        "[Wave 5.17b] quota OK — user=%s used=%d/%d reason=%s",
-        current_user.user_id, _quota.used, _quota.limit, _quota.reason,
+        "[Sprint 1B] access OK — user=%s tier=%s free_remaining=%d promo_remaining=%d promo_unlimited=%s",
+        current_user.user_id, _decision.tier, _decision.free_remaining,
+        _decision.promo_generations_remaining, _decision.promo_unlimited_active,
     )
 
-    # ── Wave 5.17d — Free-tier scope check ────────────────────────────────────
-    # Non-premium users may only generate Living Room + (Nordic Warmth |
-    # Soft Luxury). Premium / admin bypass via the same has_admin_role
-    # path the quota check already uses. Raises HTTPException(402,
-    # detail.error_code='FREE_TIER_RESTRICTED') on violation.
-    await check_restrictions(
-        user_id=current_user.user_id,
-        room_type_id=room_type_id,
-        atmosphere_id=atmosphere_id,
-        let_ai_decide=let_ai_decide,
-        surprise_me=surprise_me_flag,
-    )
+    # ── Wave 5.17d — Free-tier scope check (Sprint 1B: promo bypasses too) ─────
+    # Non-entitled users may only generate Living Room + (Nordic Warmth |
+    # Soft Luxury). admin/premium AND promo (limited or unlimited) bypass —
+    # _decision.bypass_scope is True for every tier except 'free'.
+    if not _decision.bypass_scope:
+        await check_restrictions(
+            user_id=current_user.user_id,
+            room_type_id=room_type_id,
+            atmosphere_id=atmosphere_id,
+            let_ai_decide=let_ai_decide,
+            surprise_me=surprise_me_flag,
+        )
 
     # ── Step 1: log request ───────────────────────────────────────────────────
     request_id = client_request_id.strip() or uuid.uuid4().hex
@@ -1135,9 +1575,11 @@ async def generate(
     # success (status='success'), refunded on every error path
     # (status='failed' — quota slot returned to the user).
     _reservation_id = None
-    if _quota.reason != "admin_bypass":
-        # Admin / premium users do not consume quota — skip the reservation
-        # roundtrip for them. Their usage is implicitly unlimited.
+    if _decision.consumes_free_quota:
+        # ONLY the 'free' tier consumes the usage_log quota. admin/premium and
+        # promo (limited/unlimited) are off-ledger — so a promo that later
+        # expires leaves the free quota intact. promo_limited consumes from its
+        # OWN ledger via consume_promo_generation on success (below).
         _reservation_id = await reserve_generation(
             user_id=current_user.user_id,
             session_id=session_id,
@@ -1214,14 +1656,43 @@ async def generate(
             _history_list_for_switch, _switch_atmos_id, iteration,
         )
         if _strategy.value == "REBOOT_FRESH":
-            source_mode = "ORIGINAL"
-            _switch_override_applied = True
-            log.info(
-                "[Wave5.3] pure atmosphere SWITCH detected — "
-                "prev=%s new=%s customizations=False "
-                "→ source_mode overridden to ORIGINAL (fresh V1 on original)",
-                _prev_id, _switch_atmos_id,
+            # Wave 5.21 EXPERIMENT (2026-06-01, TEMPORARY) — V1 anchor.
+            # On a PURE atmosphere switch (no customizations in history), pin
+            # the image source to V1 (vision_number == 1) instead of LATEST.
+            # Rationale (Wave 5.21b audit, Section G) :
+            #   • V1 was generated at medium+high — a clean architectural
+            #     reference, single-cascade-step from the original photo.
+            #   • LATEST on V4+ would cascade from V3 which itself cascaded
+            #     from V2 — quality decay compounds across deep atmosphere-
+            #     shopping sessions.
+            #   • REBOOT_CUSTOMIZED branch (any prior customization) is
+            #     unchanged — keeps source=LATEST to preserve user spatial
+            #     changes. Confirmed safe: detect_history_customizations is
+            #     sticky-True once any customization exists, so this block
+            #     is unreachable after a custom edit.
+            # Robustness: select by vision_number == 1 (not index [0]) to
+            # survive parse_versions silent-skip on corrupt entries.
+            _v1 = next(
+                (v for v in _versions if v.vision_number == 1),
+                None,
             )
+            if _v1 and _v1.generated_image_url:
+                source_mode = "SPECIFIC_VERSION"
+                source_version_id = _v1.version_id
+                _switch_override_applied = True
+                log.info(
+                    "[Wave5.21-EXPERIMENT] REBOOT_FRESH detected — "
+                    "prev=%s new=%s customizations=False "
+                    "→ source pinned to V1 (v_id=%s) — cascade-free anchor",
+                    _prev_id, _switch_atmos_id, _v1.version_id,
+                )
+            else:
+                log.info(
+                    "[Wave5.21-EXPERIMENT] REBOOT_FRESH detected — "
+                    "prev=%s new=%s but V1 entry missing/empty "
+                    "→ fallback to LATEST (ledger_size=%d)",
+                    _prev_id, _switch_atmos_id, len(_versions),
+                )
         elif _strategy.value == "REBOOT_CUSTOMIZED":
             log.info(
                 "[Wave5.3] customized atmosphere SWITCH detected — "
@@ -1397,8 +1868,61 @@ async def generate(
         if structural_id_obj.is_present:
             _si_source = "text_v1"
         else:
-            _cap_text = await _capture_structural_text(image_bytes)
-            structural_id_obj = extract_from_description(_cap_text)
+            # Wave 5.24 (2026-06-03) — run 2× full structural captures in
+            # parallel + safe-union merge. Supersedes Wave 5.23 mini
+            # orientation consensus on the V1 FV path : 2 full captures
+            # naturally provide a 2-vote orientation consensus AND enrich
+            # the complementary architectural facts (interior door, kitchen
+            # visibility, ceiling signature, etc.) — empirically these
+            # additional facts correlate inversely with wall hallucination
+            # rate (3 facts = 40%, 5+ facts = 0%).
+            #
+            # Wave 5.23 mini consensus remains in code as rollback assets
+            # and is still wired in the recovery path below.
+            #
+            # Cost : +$0.0025 per V1 (~6% of total V1 cost). Latency : zero
+            # via parallel asyncio.gather. Merge logic in
+            # structural_identity.safe_union_merge — drops contradictory
+            # facts (missing > wrong principle).
+            _cap_a, _cap_b = await asyncio.gather(
+                _capture_structural_text(image_bytes),
+                _capture_structural_text(image_bytes),
+            )
+            _identity_a = extract_from_description(_cap_a)
+            _identity_b = extract_from_description(_cap_b)
+            structural_id_obj, _merge_decisions = safe_union_merge(
+                _identity_a, _identity_b,
+            )
+            # Telemetry — empirical validation depends on these logs.
+            log.info(
+                "[Wave5.24] capture_A facts=%d capture_B facts=%d merged facts=%d",
+                _identity_a.fact_count,
+                _identity_b.fact_count,
+                structural_id_obj.fact_count,
+            )
+            _added = [
+                k for k, v in _merge_decisions.items()
+                if v in ("additive_a", "additive_b")
+            ]
+            _stripped = [
+                k for k, v in _merge_decisions.items()
+                if v == "contradict_position_stripped"
+            ]
+            _kept = [
+                k for k, v in _merge_decisions.items()
+                if v in ("kept_a_longer", "kept_b_longer")
+            ]
+            if _added:
+                log.info("[Wave5.24] additive merged fields: %s", _added)
+            if _stripped:
+                log.info(
+                    "[Wave5.24] contradict position stripped: %s", _stripped,
+                )
+            if _kept:
+                log.info(
+                    "[Wave5.24] non-position disagreement, kept longer: %s",
+                    _kept,
+                )
             _si_source = "vision_capture_v1" if structural_id_obj.is_present else "none"
     else:
         structural_id_obj = extract_from_description(room_description)
@@ -1422,8 +1946,22 @@ async def generate(
                 "from source image bytes",
                 iteration,
             )
-            _cap_text = await _capture_structural_text(image_bytes)
+            # Wave 5.23 (2026-06-03) — same parallel capture + mini consensus
+            # pattern as the V1 path above. Applies to recovery cases (token
+            # lost on hot reload / app reopen) so the regenerated identity
+            # benefits from the same orientation stabilization.
+            _cap_text, _orient_consensus = await asyncio.gather(
+                _capture_structural_text(image_bytes),
+                _resolve_orientation_consensus(image_bytes),
+            )
             structural_id_obj = extract_from_description(_cap_text)
+            if (
+                _orient_consensus is not None
+                and structural_id_obj.dominant_opening
+            ):
+                structural_id_obj = _patch_dominant_opening_position(
+                    structural_id_obj, _orient_consensus,
+                )
             _si_source = (
                 "vision_capture_recovery"
                 if structural_id_obj.is_present else "none"
@@ -1741,9 +2279,8 @@ async def generate(
             # preserved zones look clean instead of noisy.
             # Scope STRICTLY LOCAL_EDIT — the medium default for
             # STYLE_REFINEMENT / STRUCTURAL_TRANSFORMATION / LAYOUT_CHANGE /
-            # FIRST_VISION stays untouched. Atmosphere overrides
-            # (Desert Luxe → low) still take precedence over the default
-            # but are subsumed by this LOCAL_EDIT override when both apply.
+            # FIRST_VISION stays untouched. (Per-atmosphere quality overrides
+            # are currently empty after Desert Luxe deregistration 2026-06-03.)
             # Revert = delete this 2-line conditional.
             #
             # Wave 5.13d Phase A (2026-05-31) — extend the LOCAL_EDIT recipe
@@ -1758,6 +2295,46 @@ async def generate(
             # of Phase A drives the next step.
             if edit_mode in (EditMode.LOCAL_EDIT, EditMode.STYLE_REFINEMENT):
                 _quality_override = "low"
+            # Wave 5.22a EXPERIMENT (2026-06-02) — REBOOT_FRESH quality bump.
+            # Wave 5.21 V1 anchor eliminates the source=LATEST cascade chain
+            # that Wave 5.13d Phase A's quality=low was designed to mask. With
+            # V1 as the single ancestor (medium+high render), the model can
+            # safely render REBOOT_FRESH at medium quality without re-introducing
+            # cascade grain. INCREMENTAL / REBOOT_CUSTOMIZED keep low (their
+            # source=LATEST cascade risk is intact). LOCAL_EDIT / LAYOUT_CHANGE
+            # are untouched (also source=LATEST cascade risk).
+            # fidelity=OMIT is NOT touched in this experiment — strict
+            # 1-variable A/B vs current production. If insufficient, next
+            # experiment is medium+high (Wave 5.22b).
+            # Discriminator: `_switch_override_applied` is True iff Wave 5.21
+            # block (lines 1200-1240) pinned source to V1 — i.e. exactly the
+            # REBOOT_FRESH-with-V1-anchor case.
+            # REVERT = comment out the two lines below.
+            if _switch_override_applied:
+                _quality_override = "medium"
+            # Wave 5.14A Last-Chance Experiment (2026-06-02, TEMPORARY) — test
+            # if quality=low on V1 FIRST_VISION (paired with fidelity=high +
+            # Editorial Realism active) gives a more photographic render than
+            # quality=medium. Hypothesis : medium re-rendering introduces
+            # subtle artifacts that the Editorial Realism vocabulary amplifies ;
+            # low-quality pictorial smoothing may absorb those artifacts →
+            # more photo-like, less "rendered detail" feel. User reported
+            # historical Wave 5.13 era V1 perceived as superior — quality
+            # tier is one of the only V1-affecting variables that changed.
+            # Historical precedent : desert_luxe previously used quality=low
+            # on V1 FV via profile.quality_overrides (no regression observed).
+            # That atmosphere was deregistered 2026-06-03 ; precedent stands.
+            # Restore Best Empirical V1 Step 9 (2026-06-02 evening) — V1 FV
+            # configured to quality=MEDIUM (profile default, no override) +
+            # fidelity=low (Step 3/A1 uncommented below). Step 8 quality=high
+            # override DISABLED — empirically rejected for 4× cost / 2×
+            # latency without proportional visual gain. Combined with 5.14A
+            # + 5.14B disabled via editorial_realism_enabled=False (composer_v2
+            # V1 delegation), this restores the cleaner natural render feel
+            # that the user identified as "commercializable" baseline.
+            # REVERT to Step 8 (quality=high) = uncomment the two lines below.
+            # if edit_mode == EditMode.FIRST_VISION:
+            #     _quality_override = "high"
             _fidelity_override = "high" if generation_mode == "preserve" else profile.input_fidelity
             # Wave 5.13c Option C (2026-05-31) — drop input_fidelity for
             # LOCAL_EDIT + LAYOUT_CHANGE. Phase 2 (quality=low) alone didn't
@@ -1804,6 +2381,103 @@ async def generate(
                 EditMode.STRUCTURAL_TRANSFORMATION,
             ):
                 _fidelity_override = None
+            # Wave 5.14A Last-Chance Step 6 (2026-06-02 evening) — V1 FV
+            # configured to quality=low + fidelity=HIGH (per user request).
+            # Step 1 already sets quality=low for V1 FV ; this block (Step
+            # 3/A1 fidelity=low override) is now COMMENTED OUT so V1 FV
+            # falls back to the natural preserve override fidelity="high"
+            # set at line 1815. Combined with 5.14B Photographic Credibility
+            # re-enabled this time (was OFF when Step 1 originally tested
+            # this same low+high combo and user reported "trop dessiné").
+            # History : Step 1 (low+high+Editorial only → trop dessiné) →
+            # Step 2 (+5.14B → mieux) → Step 3 (low+low → ?) → Step 4 Option
+            # E (omit+omit → 4× cost rejected) → Step 5 (low+omit) → Step 3
+            # restored (low+low) → Step 6 (low+high WITH 5.14B).
+            # Restore Best Empirical V1 FINAL (2026-06-03) + per-atmosphere
+            # fidelity=high exceptions (SL initial, Japandi added 2026-06-03
+            # late, Nordic added 2026-06-04) — V1 FV fidelity=LOW for all
+            # atmospheres EXCEPT Soft Luxury, Japandi, and Nordic Warmth,
+            # which get fidelity=HIGH.
+            # Rationale :
+            #   • LOW default : Row 1 vs Row 2 A/B showed low gives more
+            #     atmosphere drama (Tropical lush, WM warm) without losing
+            #     architecture preservation thanks to prompt-level anchors
+            #     (structural_identity, Wave 5.21d, BIMODAL strips).
+            #   • SL exception : SL bench shows higher wall invention rate
+            #     (25% with Wave 5.24 v2 vs ~15% target). SL is
+            #     intrinsically "evening mood" — atmosphere drama already
+            #     supplied by DNA (cove lighting, warm evening tone). The
+            #     model needs the extra pixel-anchor from fidelity=high
+            #     to keep architecture stable, and the trade-off (less
+            #     atmosphere latitude) is acceptable because SL DNA is
+            #     dramatic enough already.
+            #   • Japandi exception : empirically benefits from stronger
+            #     preservation anchoring (cleaner architectural lines, less
+            #     drift on the restraint-driven aesthetic). Same trade-off
+            #     accepted as SL — Japandi DNA already supplies the
+            #     atmosphere identity ; the extra pixel anchor helps the
+            #     calm/restrained signature read cleanly.
+            #   • Nordic exception (2026-06-04) : Nordic preserve bench on
+            #     Type B sources showed door/window preservation
+            #     sensitivity (1/3 capture hallucination rate). Nordic DNA
+            #     already supplies hygge identity through warm wool, amber
+            #     glass, pine — atmosphere readable without needing
+            #     low-fidelity latitude. Extra pixel-anchor from
+            #     fidelity=high stabilises architecture rendering on
+            #     ambiguous-source captures. Trade-off (slightly less
+            #     daylit airy drama) accepted in exchange for door/window
+            #     fidelity.
+            # REVERT exceptions = remove ids from the tuple.
+            if edit_mode == EditMode.FIRST_VISION:
+                # Wave 6.13j (2026-06-05) — WM KITCHEN-only fidelity=high.
+                # SL/Japandi/Nordic already use high here and preserve door/window
+                # well (SL 3/4); WM was kept at low for the airy-daylit look and
+                # pays it in structure (WM kitchen 1/4 door+window kept). Pixel-
+                # anchor from fidelity=high stabilises architecture rendering —
+                # scoped to WM kitchen ONLY (other WM rooms stay low/airy).
+                # ~2x latency on this cell only. room_type normalised for
+                # client-casing safety. Revert = drop the warm_modern clause.
+                # Wave 6.16 (2026-06-06) — WM home_office added to the high list:
+                # its 6.16 dual-zone floor furniture needs the same pixel-anchor as
+                # kitchen. Normalised (handles "Home Office"/spaces). SL/Japandi/
+                # Nordic home_office already high via the atmosphere tuple.
+                # Wave 6.14 (2026-06-09) — WM promoted to ALL-rooms fidelity=high.
+                # User decision after the WM-Living A/B: high KEEPS the 6.14
+                # styling-layer density (cushions/throw/anchored greenery/cond.
+                # art all survived) AND tightens structural preservation, at
+                # acceptable latency (~37-48s @ quality=medium). WM now joins
+                # SL/Japandi/Nordic as always-high — this SUPERSEDES the former
+                # per-room WM high clauses (kitchen 6.13j, home_office 6.16,
+                # bathroom 6.20, outdoor 6.28 — all subsumed). Tropical stays LOW
+                # (lush atmosphere drama / permissive core — do NOT promote).
+                # REVERT (WM back to low/airy) = drop "warm_modern" from the tuple
+                # and restore the per-room clause above.
+                if atmosphere_id in ("soft_luxury", "japandi_calm",
+                                     "nordic_warmth", "warm_modern"):
+                    _fidelity_override = "high"
+                else:
+                    _fidelity_override = "low"
+            # Wave 5.22b EXPERIMENT (2026-06-02) — REBOOT_FRESH fidelity bump.
+            # Pairs with Wave 5.22a quality=medium. Wave 5.21 V1 anchor source
+            # is a clean medium+high render (single-edit-from-photo), not a
+            # cascade-degraded AI image. Re-introducing light pixel anchoring
+            # ("low" tier — between OMIT and "high") lets the model reference
+            # V1's architecture (window position, furniture proportions)
+            # without the transformation-rigidity risk that fidelity=high
+            # carried (Wave 5.13c original symptom).
+            # Wave 5.22c (fidelity=high) was tested and ROLLED BACK : ~2× more
+            # latency (avg 59s vs 30s) without sufficient visual gain.
+            # Other paths (INCREMENTAL/REBOOT_CUSTOMIZED/LOCAL_EDIT/LAYOUT_CHANGE
+            # /STRUCT) keep OMIT — their source=LATEST cascade rationale intact.
+            # REVERT = comment the two lines below.
+            if _switch_override_applied:
+                _fidelity_override = "low"
+            # Wave 5.14A Last-Chance Step 4 / Option E REMOVED (2026-06-02
+            # evening) — omit-both config triggered OpenAI default quality=
+            # "auto" which heuristically selected "high" tier (~55s OpenAI
+            # processing, ~4× the cost of medium). Latency + cost too high
+            # vs visual gain. User reverted to Step 5 (quality=low set by
+            # Step 1 + fidelity=OMIT set by Step 5 below).
             edit_kwargs: dict = dict(
                 model="gpt-image-1",
                 image=img_file,
@@ -1821,7 +2495,14 @@ async def generate(
             elif edit_mode == EditMode.LAYOUT_CHANGE:
                 _edit_mode_label = "yes(LAYOUT_CHANGE)"
             elif edit_mode == EditMode.STYLE_REFINEMENT:
-                _edit_mode_label = "yes(STYLE_REFINEMENT/Wave5.13d-PhaseA)"
+                # Wave 5.22a+b — REBOOT_FRESH path receives different
+                # params than incremental SR (V1 anchor changes the
+                # cascade math). Distinguish in the log so empirical
+                # comparisons can be made on the right cohort.
+                if _switch_override_applied:
+                    _edit_mode_label = "yes(REBOOT_FRESH/Wave5.22a+b)"
+                else:
+                    _edit_mode_label = "yes(STYLE_REFINEMENT/Wave5.13d-PhaseA)"
             elif edit_mode == EditMode.STRUCTURAL_TRANSFORMATION:
                 _edit_mode_label = "yes(STRUCTURAL_TRANSFORMATION/Wave5.13d-PhaseB)"
             else:
@@ -1880,6 +2561,16 @@ async def generate(
             if _reservation_id is not None:
                 await confirm_generation(_reservation_id, cost_usd_estimate=0.0)
                 _reservation_id = None  # mark as committed — fail() path won't fire
+            # Sprint 1B — consume ONE promo generation on success (promo_limited
+            # only; _reservation_id is None for promo since it's off the
+            # usage_log ledger). Fail-soft inside consume_promo_generation: the
+            # image already succeeded, so a ledger hiccup never fails the request.
+            if _decision.consume_promo_on_success:
+                _pc = await consume_promo_generation(current_user.user_id)
+                log.info(
+                    "[Sprint 1B] promo generation consumed — user=%s result=%s",
+                    current_user.user_id, _pc,
+                )
             break  # success — exit retry loop
 
         except BadRequestError as exc:
@@ -1997,6 +2688,16 @@ async def generate(
                 _src_img = _flat
             elif _src_img.mode != "RGB":
                 _src_img = _src_img.convert("RGB")
+            # ── Sprint 1: free-tier watermark baked into the bytes ──────────
+            # Premium/admin (server-authoritative has_admin_role → the
+            # _is_admin_bypass computed earlier in this request) get a CLEAN
+            # image. Free users get the mark composited HERE, before the JPEG
+            # encode + upload — so the stored/served URL is never clean.
+            if not _is_admin_bypass:
+                _src_img = apply_watermark(_src_img)
+                log.info("  watermark: APPLIED (free tier)")
+            else:
+                log.info("  watermark: skipped (premium/admin)")
             _buf = io.BytesIO()
             _src_img.save(_buf, format="JPEG", quality=85, optimize=True, progressive=True)
             generated_bytes = _buf.getvalue()

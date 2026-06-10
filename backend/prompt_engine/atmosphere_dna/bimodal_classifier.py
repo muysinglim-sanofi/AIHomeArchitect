@@ -188,8 +188,8 @@ def inject_creative_revival(
     # Wave 5.5.14g — atmosphere_keywords injection deliberately SKIPPED.
     # Reason: per the budget-margin diagnostic (validate_wave5514g_margins.py),
     # injecting all 3 dormant fields pushed Tropical Escape creative to +47
-    # margin and Desert Luxe creative to +15 — too tight for a real user
-    # description. Keywords are the least-value dormant field (largely
+    # margin — too tight for a real user description (validated pre-Desert
+    # Luxe removal). Keywords are the least-value dormant field (largely
     # redundant with material_palette concrete terms like "volcanic stone"
     # or "tadelakt"). Skipping them saves ~85-100 chars per atmosphere and
     # keeps all creative-mode margins comfortably above the 50-char safety
@@ -264,28 +264,33 @@ _STRIPS: dict[str, list[tuple[str, str]]] = {
         # Facade room_specific_constraints: 🔴 "facade identity" pushes
         # whole-facade redesign.
         (" — facade identity", ""),
+        # Wave 6.3 (2026-06-04) — Temporal Continuity strips. Order matters :
+        # longest pattern first so the standalone "tropical evening" only
+        # matches occurrences not already covered by the longer variants.
+        # Targets : Terrace + Balcony + Facade + Garden lighting_behavior
+        # which default to "tropical evening …" on every photographed moment.
+        ("tropical evening ambience", "tropical ambience"),
+        ("tropical evening garden", "tropical garden"),
+        ("tropical evening", "tropical light"),
+        # Wave 6.4 (2026-06-04) — Tropical Living louvred-timber detune
+        # (preserve-only). Empirical bench 2026-06-04 : 3/4 Living gens
+        # replaced the source's existing window with louvred timber shutters
+        # when DNA shipped "louvred timber" as a material + furniture cue
+        # for Living. The model interpreted "louvred timber" as a window
+        # TREATMENT directive (covering an existing opening with louvres)
+        # rather than a material accent. Replacing the offending phrases
+        # with "tropical timber accents" keeps the warm-timber identity
+        # without naming a window-treatment archetype. Only matches the
+        # exact Living phrasing — Bedroom/Terrace/Facade variants use
+        # different wording and are untouched (validated by smoke).
+        # Wave 5.13k pattern (Wave 5.13k replaced "Sculptural, " → "" on SL,
+        # "candle-warm," → "soft Nordic daylight warmth," on Nordic) :
+        # neutralise the architectural overload while keeping atmosphere
+        # identity intact.
+        ("louvred timber panels or shutters", "tropical timber accents on existing surfaces"),
+        ("louvred timber — warm tropical surface quality", "tropical timber accent — warm surface quality"),
     ],
-    # 2. Desert Luxe — Wave 5.13j + 5.13k semantic cleanup (preserve-only) + pre-existing.
-    "desert_luxe": [
-        # Wave 5.13k philosophy: drop "desert architecture" + "sculptural calm" mass cues.
-        ("desert architecture and sculptural calm", "open desert light and luminous mineral calm"),
-        # Wave 5.13k emotional_intent: soften "timelessly opulent".
-        ("timelessly opulent", "warm luminous elegance"),
-        # Wave 5.13j LR furniture_language: drop "solid sandstone" mass cue.
-        ("solid sandstone or terracotta — sun-drenched surface warmth", "warm sand-toned tactile layers — sun-drenched warmth"),
-        # Wave 5.13k LR visible_transition_logic: drop "unbroken" enclosure cue.
-        ("warm sand palette unbroken through visible spaces", "flowing warm mineral palette through visible spaces"),
-        # Pre-existing: emotional_intent 🔴 "sculptural" and "monumental" are spatial words.
-        ("Sculptural, ", ""),
-        (", sculptural", ""),
-        ("monumental, ", ""),
-        (", monumental", ""),
-        # Bathroom furniture_language: 🔴 wet-room topology.
-        (
-            "full tadelakt wet room — walls and floor continuous",
-            "tadelakt wet room finish — walls and floor",
-        ),
-    ],
+    # 2. (Desert Luxe strips removed 2026-06-03 with atmosphere deregistration.)
     # 5. Japandi Calm — Wave 5.13k semantic cleanup (preserve-only).
     # Order matters: ", unhurried" replacement must happen before any
     # generic "unhurried" matching to avoid double-application.
@@ -332,43 +337,16 @@ _STRIPS: dict[str, list[tuple[str, str]]] = {
         ("layered textile softness", "soft layered textures"),
         # Wave 5.13j LR material_palette
         ("fluted ivory plaster finish on existing walls", "refined ivory textured finish on existing walls"),
+        # Wave 6.3 (2026-06-04) — Temporal Continuity strips. SL is the
+        # heaviest evening-coded atmosphere in DNA ("warm evening tone" on
+        # Living, "warm evening dimmed" on Dining, "warm intimate tone" on
+        # Balcony). Preserve mode keeps the warm character but releases the
+        # implicit time-of-day so daylight sources stay daylight.
+        ("warm evening tone", "warm tone"),
+        ("warm evening dimmed", "warm dimmed"),
+        ("warm intimate tone", "warm refined tone"),
     ],
-    # 8. Nature Retreat — Wave 5.13k semantic cleanup (preserve-only) + pre-existing.
-    "nature_retreat": [
-        # Wave 5.13k philosophy: drop "earthy luxury" mass cue.
-        ("earthy luxury.", "organic airy luxury."),
-        # Wave 5.13k emotional_intent: soften "restorative" enclosure.
-        ("restorative, earthy", "restorative open retreat, earthy"),
-        # Wave 5.13k LR furniture_language: soften "rough-cut stone" mass cue.
-        ("rough-cut stone or slate", "natural mineral texture or slate"),
-        # Wave 5.13k LR material_palette: soften "rammed earth" + "rough-cut stone".
-        ("rammed earth or clay plaster finish on existing walls", "earth-toned natural finish on existing walls"),
-        ("rough-cut stone accents on existing surfaces", "natural mineral texture accents on existing surfaces"),
-        # Pre-existing strips:
-        # philosophy: 🟨 "architectural realism" borderline. Source text reads
-        # "Biophilic calm integrated with architectural realism and earthy
-        # luxury" — drop the "architectural realism and " segment.
-        ("architectural realism and ", ""),
-        # Wave 5.5.32 — room_context leaks via build_dna_room_context_signal.
-        # Living room_specific_constraints strip removed Wave 5.5.37 — the
-        # source DNA no longer contains "single statement stone or timber
-        # wall — not all four walls" (replaced by the standardized TV
-        # anchor pattern). Strip is now a no-op, removed for clarity.
-        # Bedroom room_specific_constraints: 🔴 "clay plaster wall as
-        # composition" pushes wall material change.
-        (" — clay plaster wall as composition", ""),
-        # Bathroom room_specific_constraints: 🔴 "single stone throughout"
-        # pushes wholesale surface override.
-        (
-            "single stone throughout — no tile mixing",
-            "stone palette consistent — no busy tile pattern",
-        ),
-        # Pool area room_specific_constraints: 🟨 deck-material directive.
-        (
-            "natural material deck only — no artificial surface",
-            "natural material deck palette",
-        ),
-    ],
+    # 8. (Nature Retreat strips removed 2026-06-04 with atmosphere deregistration.)
     # 10. Nordic Warmth — Wave 5.5.34b upgraded to MEDIUM bias after
     # bench 2026-05-25 showed partition wall + bedroom invention in
     # preserve mode. Root cause: "human-scaled" in emotional_intent
@@ -392,6 +370,13 @@ _STRIPS: dict[str, list[tuple[str, str]]] = {
         # a bedroom zone on the right side.
         (", human-scaled", ""),
         ("human-scaled, ", ""),
+        # Wave 6.3 (2026-06-04) — Temporal Continuity strips. Nordic's
+        # hygge identity is heavily evening-coded ("warm evening ambience"
+        # on Dining, standalone "candle-warm" outside the comma variant
+        # already handled at line 366). Preserve mode keeps Nordic warmth
+        # but releases the implicit evening framing.
+        ("warm evening ambience", "warm ambience"),
+        ("candle-warm", "warm Nordic daylight"),
     ],
 }
 
@@ -442,9 +427,9 @@ def architecture_token_count(atmosphere_id: str) -> int:
 # ── Atmospheres covered (sanity check on module load) ─────────────────────────
 
 _EXPECTED_ATMOSPHERES = frozenset({
-    "tropical_escape", "desert_luxe",
+    "tropical_escape",
     "japandi_calm", "warm_modern", "soft_luxury",
-    "nature_retreat", "nordic_warmth",
+    "nordic_warmth",
 })
 
 

@@ -65,14 +65,24 @@ def _trim_bucket(bucket: deque, now_ts: float) -> None:
         bucket.popleft()
 
 
-def check_ip_rate_limit(ip: Optional[str], *, is_anonymous: bool) -> None:
+def check_ip_rate_limit(
+    ip: Optional[str],
+    *,
+    is_anonymous: bool,
+    is_admin: bool = False,
+) -> None:
     """
     Raise HTTPException(429) if `ip` has exceeded the rolling 24h
     quota for anonymous users. No-op when :
       - The user is signed-in (account quota governs instead)
+      - The user has an admin/premium role bypass (matches the quota
+        bypass scope — paying / admin users should never hit the
+        defensive ceiling). Wave 5.21c (2026-06-02).
       - `ip` is None or empty (can't enforce without a key)
     """
     if not is_anonymous:
+        return
+    if is_admin:
         return
     if not ip:
         return

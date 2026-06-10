@@ -118,10 +118,6 @@ _ALTERNATIVES: dict[str, dict[str, list[str]]] = {
             "wood and adds tonal depth and material weight.",
             "If you want lighter overall, Nordic Warmth keeps the wood "
             "but lifts the palette and opens the light.",
-            "For an organic pivot, Nature Retreat shifts toward stone, "
-            "plants and earthier finishes while keeping the warmth.",
-            "If you want hotel-grade restraint, Desert Luxe layers "
-            "earthen tones and a calmer material rhythm.",
         ],
     },
 
@@ -168,8 +164,6 @@ _ALTERNATIVES: dict[str, dict[str, list[str]]] = {
             "register but layers richer material weight.",
             "If you want lighter and brighter, Nordic Warmth carries "
             "the calm with more open palette.",
-            "For an organic pivot, Nature Retreat moves toward stone, "
-            "plants and earthier finishes while keeping the restraint.",
             "If you want more meditative, Wabi Sabi pushes the patina "
             "and weathered texture register further.",
             "For warmer evening atmosphere, Soft Luxury picks up the "
@@ -218,15 +212,10 @@ _ALTERNATIVES: dict[str, dict[str, list[str]]] = {
         _ATMO_PIVOT: [
             "For quieter material restraint, Warm Modern keeps the "
             "wood but lifts the visual weight.",
-            "If you want hotel-evening atmosphere, Desert Luxe layers "
-            "earthen tones in the Soft Luxury register.",
             "For a brighter overall feel, Nordic Warmth carries the "
             "wood register with a more open palette.",
             "If you want disciplined restraint, Japandi Calm pulls the "
             "atmosphere toward negative space and quiet materials.",
-            "For an organic luxury pivot, Nature Retreat keeps the "
-            "material weight but shifts toward stone, plants, "
-            "earthier finishes.",
         ],
     },
 
@@ -273,116 +262,8 @@ _ALTERNATIVES: dict[str, dict[str, list[str]]] = {
             "wood register with stricter negative space.",
             "If you want richer hospitality feel, Warm Modern picks up "
             "the wood and adds material depth.",
-            "For organic / natural pivot, Nature Retreat shifts toward "
-            "stone and plants while keeping the warmth.",
             "If you want layered evening atmosphere, Soft Luxury picks "
             "up the wood with richer textile weight.",
-            "For sun-warm hospitality pivot, Desert Luxe trades the "
-            "Nordic cool for earthen tones and woven textures.",
-        ],
-    },
-
-    # ── Nature Retreat ─────────────────────────────────────────────────
-    "nature_retreat": {
-        _MATERIALS: [
-            "Deepen the stone register — worked limestone or basalt "
-            "walls carry the retreat atmosphere further.",
-            "Add a worked-wood ceiling beam — anchors the natural "
-            "vocabulary and gives the room weight.",
-            "Layer woven natural fibres — jute, rattan, hemp — the "
-            "tactile signature of the atmosphere.",
-            "Introduce raw clay surfaces — a limewashed wall or "
-            "earthen plaster — softens the architecture.",
-            "Bring in driftwood or weathered timber accents — single "
-            "object, big presence.",
-        ],
-        _LIGHTING: [
-            "Add a woven pendant — rattan or jute shade — pure Nature "
-            "Retreat lighting register.",
-            "Layer warm low lamps throughout — evening atmosphere needs "
-            "pools of warmth, not overhead flat.",
-            "Push toward warm amber tones — matches the wood and stone "
-            "and the retreat intent.",
-            "Add a single hand-blown glass pendant — artisanal weight "
-            "without breaking the natural language.",
-            "Introduce candle-style sconces — calm, ritual-grade, very "
-            "much in the retreat register.",
-        ],
-        _DECOR: [
-            "Add one substantial plant — a fig, an olive, a giant "
-            "monstera — the room breathes immediately.",
-            "Bring in one piece of carved wood — a stool, a vessel, "
-            "a sculpture — silent presence.",
-            "Edit decor toward natural objects — a stone, a piece of "
-            "driftwood, a shell collection.",
-            "Add a heavy linen throw — natural drape, tactile depth, "
-            "very retreat-coherent.",
-            "Introduce earthen ceramics — terracotta, raw glaze — "
-            "ground the composition with material weight.",
-        ],
-        _ATMO_PIVOT: [
-            "For quieter discipline, Japandi Calm carries the natural "
-            "register with stricter restraint.",
-            "If you want richer warmth, Warm Modern picks up the wood "
-            "and adds hospitality-grade layering.",
-            "For sun-warm hospitality, Desert Luxe shifts toward "
-            "earthen tones and woven texture.",
-            "If you want tropical resort register, Tropical Escape "
-            "deepens the vegetation and softens the architecture further.",
-            "For light Nordic pivot, Nordic Warmth keeps the natural "
-            "vocabulary with a brighter palette.",
-        ],
-    },
-
-    # ── Desert Luxe ────────────────────────────────────────────────────
-    "desert_luxe": {
-        _MATERIALS: [
-            "Deepen the earthen plaster — a limewashed terracotta wall "
-            "anchors the desert palette.",
-            "Add a worked-stone counter or hearth — travertine or "
-            "limestone — carries the material weight.",
-            "Layer woven textiles — flat-weave rugs, linen drapes — "
-            "the desert tactile register.",
-            "Introduce one leather accent piece — a sling chair or "
-            "ottoman in caramel hide.",
-            "Bring in raw clay objects — terracotta vessels, hand-shaped "
-            "ceramics — material honesty.",
-        ],
-        _LIGHTING: [
-            "Add a paper or pleated pendant — soft warm desert light, "
-            "ritual-quiet.",
-            "Layer wall sconces alongside the seating — symmetric, "
-            "calming, very Desert Luxe.",
-            "Push toward amber-warm bulbs — matches the earth tones "
-            "and the sunset register.",
-            "Introduce a sculpted iron candelabra or fixture — "
-            "artisanal weight, calm presence.",
-            "Add a floor lamp with woven shade — anchors the corner "
-            "with the desert-textile register.",
-        ],
-        _DECOR: [
-            "Add one substantial cactus or dracaena — sculptural plant "
-            "presence in the desert register.",
-            "Bring in flat-weave rugs in terracotta and ochre — anchors "
-            "the seating, adds palette weight.",
-            "Edit toward heavy ceramics — terracotta, stoneware — fewer "
-            "and bigger.",
-            "Add one large piece of natural-edge wood — a slab table, "
-            "a bench — desert craft register.",
-            "Introduce a single piece of woven art — Berber or "
-            "tribal-inspired — anchors a wall calmly.",
-        ],
-        _ATMO_PIVOT: [
-            "For richer hospitality register, Soft Luxury picks up the "
-            "earthen tones with polished material weight.",
-            "If you want tropical resort feel, Tropical Escape shifts "
-            "toward dense vegetation and softer architecture.",
-            "For organic / retreat pivot, Nature Retreat carries the "
-            "natural register with stone and plants.",
-            "If you want warmer hospitality, Warm Modern keeps the "
-            "earthen warmth and layers wood depth.",
-            "For Nordic-light pivot, Nordic Warmth lifts the palette "
-            "and opens the visual weight.",
         ],
     },
 
@@ -425,12 +306,8 @@ _ALTERNATIVES: dict[str, dict[str, list[str]]] = {
             "tribal-inspired, anchored on one wall.",
         ],
         _ATMO_PIVOT: [
-            "For drier hospitality pivot, Desert Luxe trades the "
-            "tropical vegetation for earthen tones.",
             "If you want quieter restraint, Japandi Calm carries the "
             "natural materials with discipline.",
-            "For organic retreat pivot, Nature Retreat layers stone "
-            "and plants in a calmer register.",
             "If you want richer evening atmosphere, Soft Luxury picks "
             "up the wood and adds material weight.",
             "For warmer-modern pivot, Warm Modern keeps the wood and "

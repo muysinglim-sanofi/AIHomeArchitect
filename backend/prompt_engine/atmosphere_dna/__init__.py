@@ -30,8 +30,12 @@ from . import warm_modern          # noqa: F401
 from . import japandi_calm         # noqa: F401
 from . import soft_luxury          # noqa: F401
 from . import nordic_warmth        # noqa: F401
-from . import nature_retreat       # noqa: F401
-from . import desert_luxe          # noqa: F401
+# nature_retreat removed 2026-06-04 — see _LEGACY_ALIASES["nature_retreat"] = "warm_modern".
+# The DNA module on disk (atmosphere_dna/nature_retreat.py) is kept dormant for
+# safe rollback ; not imported here so no registration happens.
+# desert_luxe removed 2026-06-03 — see _LEGACY_ALIASES["desert_luxe"] = "warm_modern".
+# The DNA module on disk (atmosphere_dna/desert_luxe.py) is kept dormant for
+# safe rollback ; not imported here so no registration happens.
 from . import tropical_escape      # noqa: F401
 
 __all__ = [

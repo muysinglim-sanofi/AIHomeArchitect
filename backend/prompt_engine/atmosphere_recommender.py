@@ -13,6 +13,11 @@ from __future__ import annotations
 # ── Compatibility matrix ───────────────────────────────────────────────────────
 # Base scores per room_type → atmosphere. Range 0.0–1.0.
 # Higher = better visual and emotional fit for this room type.
+#
+# desert_luxe removed 2026-06-03 — see _LEGACY_ALIASES["desert_luxe"] in
+# atmosphere_dna/_base.py.
+# nature_retreat removed 2026-06-04 — same pattern (too close to Tropical
+# Escape, MVP differentiation gain).
 
 _BASE_COMPAT: dict[str, dict[str, float]] = {
     "living_room": {
@@ -20,8 +25,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "soft_luxury": 0.85,
         "japandi_calm": 0.80,
         "nordic_warmth": 0.65,
-        "desert_luxe": 0.65,
-        "nature_retreat": 0.60,
         "tropical_escape": 0.60,
     },
     "master_bedroom": {
@@ -29,8 +32,6 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "japandi_calm": 0.85,
         "warm_modern": 0.75,
         "nordic_warmth": 0.65,
-        "desert_luxe": 0.60,
-        "nature_retreat": 0.45,
         "tropical_escape": 0.45,
     },
     "kitchen": {
@@ -38,61 +39,47 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "japandi_calm": 0.85,
         "nordic_warmth": 0.75,
         "soft_luxury": 0.65,
-        "nature_retreat": 0.60,
-        "desert_luxe": 0.60,
         "tropical_escape": 0.35,
     },
     "bathroom": {
         "soft_luxury": 0.90,
         "japandi_calm": 0.85,
         "warm_modern": 0.70,
-        "nature_retreat": 0.65,
-        "desert_luxe": 0.65,
         "nordic_warmth": 0.50,
         "tropical_escape": 0.45,
     },
     "home_office": {
         "japandi_calm": 0.85,
         "warm_modern": 0.80,
-        "nature_retreat": 0.75,
         "soft_luxury": 0.60,
         "nordic_warmth": 0.60,
-        "desert_luxe": 0.45,
         "tropical_escape": 0.35,
     },
     "dining_room": {
         "soft_luxury": 0.85,
         "warm_modern": 0.80,
-        "desert_luxe": 0.75,
         "japandi_calm": 0.65,
         "nordic_warmth": 0.65,
-        "nature_retreat": 0.50,
         "tropical_escape": 0.50,
     },
     "entrance_hall": {
         "soft_luxury": 0.90,
         "warm_modern": 0.80,
-        "desert_luxe": 0.65,
         "japandi_calm": 0.65,
-        "nature_retreat": 0.45,
         "nordic_warmth": 0.45,
         "tropical_escape": 0.40,
     },
     "facade": {
         "warm_modern": 0.85,
         "soft_luxury": 0.80,
-        "nature_retreat": 0.75,
-        "desert_luxe": 0.65,
         "japandi_calm": 0.65,
         "tropical_escape": 0.60,
         "nordic_warmth": 0.45,
     },
     "garden": {
-        "nature_retreat": 0.90,
         "tropical_escape": 0.80,
         "warm_modern": 0.70,
         "nordic_warmth": 0.65,
-        "desert_luxe": 0.65,
         "soft_luxury": 0.60,
         "japandi_calm": 0.55,
     },
@@ -100,16 +87,12 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "tropical_escape": 0.90,
         "soft_luxury": 0.80,
         "warm_modern": 0.65,
-        "desert_luxe": 0.65,
-        "nature_retreat": 0.60,
         "nordic_warmth": 0.40,
         "japandi_calm": 0.40,
     },
     "terrace": {
         "tropical_escape": 0.85,
         "warm_modern": 0.75,
-        "nature_retreat": 0.70,
-        "desert_luxe": 0.65,
         "soft_luxury": 0.60,
         "nordic_warmth": 0.55,
         "japandi_calm": 0.45,
@@ -118,16 +101,12 @@ _BASE_COMPAT: dict[str, dict[str, float]] = {
         "warm_modern": 0.80,
         "tropical_escape": 0.75,
         "japandi_calm": 0.75,
-        "nature_retreat": 0.65,
         "nordic_warmth": 0.60,
         "soft_luxury": 0.55,
-        "desert_luxe": 0.45,
     },
     "driveway": {
         "warm_modern": 0.85,
         "soft_luxury": 0.80,
-        "desert_luxe": 0.70,
-        "nature_retreat": 0.65,
         "japandi_calm": 0.60,
         "tropical_escape": 0.45,
         "nordic_warmth": 0.45,
@@ -140,8 +119,6 @@ _DEFAULT_COMPAT: dict[str, float] = {
     "soft_luxury": 0.75,
     "japandi_calm": 0.75,
     "nordic_warmth": 0.60,
-    "nature_retreat": 0.60,
-    "desert_luxe": 0.55,
     "tropical_escape": 0.55,
 }
 
@@ -157,24 +134,18 @@ _SIGNAL_BONUSES: list[tuple[str, str, float]] = [
     ("compact",          "japandi_calm",      0.08),
     ("compact",          "warm_modern",       0.05),
     # Material signals
-    ("wood",             "nature_retreat",    0.10),
     ("wood",             "nordic_warmth",     0.10),
     ("wood",             "warm_modern",       0.05),
-    ("timber",           "nature_retreat",    0.10),
     ("timber",           "nordic_warmth",     0.08),
     ("timber",           "warm_modern",       0.05),
     ("concrete",         "japandi_calm",      0.05),
     ("marble",           "soft_luxury",       0.10),
     ("travertine",       "warm_modern",       0.10),
     # View/location signals
-    ("garden",           "nature_retreat",    0.08),
-    ("forest",           "nature_retreat",    0.12),
     ("forest",           "nordic_warmth",     0.08),
     ("tropical",         "tropical_escape",   0.12),
     ("palm",             "tropical_escape",   0.10),
     ("beach",            "tropical_escape",   0.08),
-    ("desert",           "desert_luxe",       0.15),
-    ("moroccan",         "desert_luxe",       0.12),
     ("ocean view",       "tropical_escape",   0.10),
     ("urban",            "warm_modern",       0.05),
     # Light signals

@@ -146,7 +146,31 @@ def extract_from_description(room_description: str) -> ApartmentStructuralIdenti
                 if q in low:
                     qualifier = q + " "
                     break
-            dominant = f"{qualifier}{key} as the apartment's primary opening"
+            # Wave 5.21d (2026-06-02) — capture the wall position when gpt-4o
+            # reports it. The capture prompt at main.py:496-502 instructs the
+            # model to "state the wall (left/right/back)" but the parser
+            # previously dropped that signal, leaving the gpt-image-1 prompt
+            # without a spatial anchor for the primary opening. The position
+            # search is bounded to the SAME sentence/bucket as the key
+            # (stops at the next period or newline) so a position belonging
+            # to a downstream bucket (interior_door, fixed_built_in, AC,
+            # etc.) cannot bleed into the dominant_opening clause.
+            position = ""
+            key_pos = low.find(key)
+            if key_pos >= 0:
+                tail = low[key_pos:]
+                boundary = re.search(r"[.\n]", tail)
+                end = boundary.start() if boundary else len(tail)
+                bucket_neighborhood = tail[:end]
+                pos_match = re.search(
+                    r"\b(left|right|back|front)\s+wall\b",
+                    bucket_neighborhood,
+                )
+                if pos_match:
+                    position = f" on the {pos_match.group(1)} wall"
+            dominant = (
+                f"{qualifier}{key} as the apartment's primary opening{position}"
+            )
             break
     if not dominant:
         m = _OPENING.search(text)
@@ -175,7 +199,26 @@ def extract_from_description(room_description: str) -> ApartmentStructuralIdenti
     depth = ""
     md = _DEPTH.search(text)
     if md:
-        depth = f"{md.group().strip().lower()} defining the spatial volume"
+        matched = md.group().strip().lower()
+        # Wave 5.25 (2026-06-03) — empirical bench V1 WM (8 generations,
+        # same source photo) showed 100% correlation between gpt-4o
+        # capturing "diagonal X" (depth / perspective / view / line /
+        # axis / composition) and wall invention on the V1 render. Root
+        # cause : the word "diagonal" reads as a GEOMETRIC DIRECTIVE to
+        # gpt-image-1 (render with diagonal architecture), not as a
+        # neutral depth descriptor — and the model "completes" the
+        # diagonality by inventing a partition/wall.
+        # Fix : normalize any "diagonal X" capture to the neutral
+        # "spatial depth defining the spatial volume" wording. Same
+        # concept (room has depth), zero geometric ambiguity.
+        # Trade-off : we lose the "diagonal" qualifier nuance, but on
+        # this benchmark photo it was a faux-ami descriptor — empirical
+        # output was worse with it kept (2/8 walls) than normalized
+        # (target 0/8). Universal fix, no atmosphere-specific gating.
+        if matched.startswith("diagonal"):
+            depth = "spatial depth defining the spatial volume"
+        else:
+            depth = f"{matched} defining the spatial volume"
     elif "open-plan" in low or "open plan" in low or "open concept" in low:
         depth = "open-plan spatial volume"
 
@@ -206,29 +249,39 @@ def extract_from_description(room_description: str) -> ApartmentStructuralIdenti
     # generic "interior door" label (gpt-4o bucket prefix "(4) Interior
     # door —" matches before the rich phrasing if we don't prioritize).
     interior_door = ""
+    # Wave 6.13d (C1, 2026-06-05) — tolerate a closing label-quote after "door".
+    # gpt-4o frequently emits the door as a quoted label, e.g.
+    #   "(4) Interior door — 'wooden door' visible on the left wall."
+    # The closing quote after "door" previously blocked the (visible)? and
+    # (on the … wall)? groups, so the door's WALL POSITION was DROPPED entirely
+    # (door shipped as a bare "fixed wall feature" with no anchor → the model
+    # was free to relocate it → observed right-drift on WM kitchen). The optional
+    # ['’‘"] consumes that quote so the position is recovered; stray quotes are
+    # scrubbed from the emitted clause. Purely additive — unquoted captures and
+    # already-anchored doors stay byte-identical (proven by the 6.13d snapshot).
     _door_specific = re.search(
         r"\b(two|three|multiple)?\s*"
-        r"(wooden|painted)\s+door[s]?"
+        r"(wooden|painted)\s+door[s]?['’‘\"]?"
         r"(\s+visible)?"
         r"(\s+on\s+the\s+(upper[\s-])?(left|right|back|front)(\s+wall)?)?",
         text, re.IGNORECASE,
     )
     if _door_specific:
         interior_door = (
-            _door_specific.group(0).strip().lower()
+            re.sub(r"['’‘\"]", "", _door_specific.group(0)).strip().lower()
             + " as a fixed wall feature"
         )
     else:
         _door_generic = re.search(
             r"\b(two|three|multiple)?\s*"
-            r"interior\s+door[s]?"
+            r"interior\s+door[s]?['’‘\"]?"
             r"(\s+visible)?"
             r"(\s+on\s+the\s+(upper[\s-])?(left|right|back|front)(\s+wall)?)?",
             text, re.IGNORECASE,
         )
         if _door_generic:
             interior_door = (
-                _door_generic.group(0).strip().lower()
+                re.sub(r"['’‘\"]", "", _door_generic.group(0)).strip().lower()
                 + " as a fixed wall feature"
             )
 
@@ -573,3 +626,141 @@ def _leaks(text: str) -> bool:
     """True if any banned (non-architectural) vocab is present."""
     low = text.lower()
     return any(b in low for b in _BANNED_SUBSTR)
+
+
+# ── Wave 5.24 — Safe Union Merge (parallel structural capture) ────────────────
+#
+# Empirical correlation analysis on 16 V1 captures (2026-06-03) revealed :
+#
+#   3 facts captured → 40% wall invention rate
+#   4 facts captured → 20%
+#   5+ facts        → 0%
+#
+# Root cause : gpt-4o structural capture is stochastic in WHICH features it
+# notices on a given image. Same photo → 3 facts in one call, 5 in another.
+# Sparse captures leave gpt-image-1 under-constrained → it invents walls to
+# "complete" the architecture (especially around the TV anchor).
+#
+# Wave 5.24 fix : run 2 full captures in parallel (via asyncio.gather in
+# main.py), parse each independently, then merge with SAFE UNION semantics —
+# additive on complementary facts, conflict-safe on contradictions.
+#
+# Field-merge policy :
+#   • Both empty       → empty
+#   • One empty        → take the non-empty (additive enrichment)
+#   • Both identical   → keep (no-op)
+#   • Both different :
+#     - POSITION-bearing fields (dominant_opening, interior_door, etc.) →
+#       check if they differ only in " on the X wall" suffix. If yes, strip
+#       the position and keep the base description. If the base differs too,
+#       drop entirely (real contradiction).
+#     - Other fields → drop entirely (safer than picking a wrong fact).
+#
+# Principle : missing fact > wrong fact. Never let a contradictory spatial
+# claim reach gpt-image-1.
+
+# Fields that may legitimately contain " on the X wall" / " on the right"
+# position suffixes captured by the parser. These get the strip-on-conflict
+# treatment ; other fields drop entirely on disagreement.
+_POSITION_BEARING_FIELDS = frozenset({
+    "dominant_opening",
+    "interior_door",
+    "kitchen_visibility",
+    "fixed_appliance",
+    "vertical_circulation",
+    "surface_transition",
+    "fixed_built_in",
+})
+
+# Strip " on the (left|right|back|front)[ wall]" + the upper-* variants the
+# interior_door extractor produces (Wave 5.21d).
+_POSITION_STRIP_RE = re.compile(
+    r"\s+on the\s+(?:upper[\s-]?)?(?:left|right|back|front)(?:\s+wall)?\b",
+    flags=re.IGNORECASE,
+)
+
+
+def _strip_position(s: str) -> str:
+    """Remove the trailing position phrase (if any) and tidy whitespace."""
+    return _POSITION_STRIP_RE.sub("", s).strip().rstrip(",").rstrip(";")
+
+
+def safe_union_merge(
+    a: ApartmentStructuralIdentity,
+    b: ApartmentStructuralIdentity,
+) -> tuple[ApartmentStructuralIdentity, dict[str, str]]:
+    """Wave 5.24 — safe-union merge of two parsed structural identities.
+
+    Returns (merged_identity, per-field-decisions). Decisions :
+      - 'identical'                  : both captures agreed (or both empty)
+      - 'additive_a' / 'additive_b'  : one had the fact, the other empty
+      - 'contradict_position_stripped': same base description, different
+                                        position suffix → kept base, dropped
+                                        position (safer than wrong direction
+                                        — applies to SPATIAL info only)
+      - 'kept_a_longer'              : non-empty disagreement → kept the
+                                        longer / first-capture variant
+                                        (preserves at least one descriptor —
+                                        empirical learning : dropping a fact
+                                        causes MORE wall invention than
+                                        keeping a slightly-imperfect one)
+
+    Wave 5.24 (post first-empirical-fix 2026-06-03 12:45) : the original
+    "drop on disagreement" policy regressed wall invention rate from 3/8
+    to 6/8 on SL bench. Root cause : non-spatial disagreements (e.g.,
+    'spatial depth' vs 'open-plan' on room_depth_type) were treated like
+    real contradictions and the field was dropped — gpt-image-1 received
+    LESS architectural context than from a single capture. New policy
+    only strips POSITION on position-bearing fields with same base ;
+    every other disagreement keeps the longer descriptor.
+    """
+    from dataclasses import fields as dc_fields, replace
+
+    merged_values: dict[str, str] = {}
+    decisions: dict[str, str] = {}
+
+    for f in dc_fields(a):
+        a_val = (getattr(a, f.name, "") or "").strip()
+        b_val = (getattr(b, f.name, "") or "").strip()
+
+        if not a_val and not b_val:
+            merged_values[f.name] = ""
+            decisions[f.name] = "identical"
+            continue
+
+        if a_val == b_val:
+            merged_values[f.name] = a_val
+            decisions[f.name] = "identical"
+            continue
+
+        if not a_val:
+            merged_values[f.name] = b_val
+            decisions[f.name] = "additive_b"
+            continue
+
+        if not b_val:
+            merged_values[f.name] = a_val
+            decisions[f.name] = "additive_a"
+            continue
+
+        # Both non-empty and different.
+        # Position-bearing fields : try to strip the conflicting position
+        # (LEFT vs RIGHT is the high-risk pattern — missing > wrong here).
+        if f.name in _POSITION_BEARING_FIELDS:
+            a_base = _strip_position(a_val)
+            b_base = _strip_position(b_val)
+            if a_base and a_base == b_base:
+                merged_values[f.name] = a_base
+                decisions[f.name] = "contradict_position_stripped"
+                continue
+
+        # Different base content OR non-position-bearing field disagreement.
+        # Wave 5.24 fix : DO NOT drop. Keep the longer descriptor — it
+        # usually carries more detail, and any fact is better than nothing
+        # for gpt-image-1's architectural grounding (empirical : 3 facts =
+        # 40% wall invention, 5+ facts = 0%).
+        chosen = a_val if len(a_val) >= len(b_val) else b_val
+        merged_values[f.name] = chosen
+        decisions[f.name] = "kept_a_longer" if chosen is a_val else "kept_b_longer"
+
+    return replace(a, **merged_values), decisions

@@ -1,6 +1,14 @@
 """
 Architectural preservation rules — the structural contract.
 
+Wave 6.3 (2026-06-04) — Temporal Continuity Preservation Rule.
+Adds a preserve-mode-only sentence to MODE_CONTRACT that locks the time-of-day
+and lighting context of the source photo. Users who explicitly request a
+temporal transformation (via user_instruction keywords) bypass the rule.
+Creative mode and architecture-flexible paths are not affected.
+See [[temporal-preservation-rule]] memory entry for the full design notes.
+
+
 DESIGN PRINCIPLE: Structure first, style second.
 
 Wave 4.2.1 COMPRESSION: Three tiers instead of one monolithic block.
@@ -350,7 +358,41 @@ _CREATIVE_MODE_CONTRACT = (
 )
 
 
-def build_mode_contract(generation_mode: str = "preserve") -> str:
+# Wave 6.3 — Temporal Continuity Preservation Rule (preserve-mode only).
+# User-locked wording, do not paraphrase. Appended to _PRESERVE_MODE_CONTRACT
+# at runtime unless the user explicitly requests a temporal transformation.
+_TEMPORAL_CONTINUITY = (
+    "TEMPORAL CONTINUITY — Preserve the time-of-day and lighting context "
+    "visible in the source photo. Daylight scenes remain daylight, evening "
+    "scenes remain evening, and night scenes remain night. Do not transform "
+    "the photographed moment unless the user explicitly requests a different "
+    "lighting or time-of-day ambience."
+)
+
+# Wave 6.3 — keywords that release the temporal lock. Detected on
+# user_instruction case-insensitively, word boundaries (so "morningstar"
+# does not trigger). User-locked list ; expansion requires its own wave.
+import re as _re
+_TEMPORAL_OVERRIDE_RE = _re.compile(
+    r"\b("
+    r"evening|night(?:time)?|sunset|sunrise|morning|daylight|"
+    r"golden\s+hour|cinematic|moody\s+lighting"
+    r")\b",
+    _re.IGNORECASE,
+)
+
+
+def _temporal_override_requested(user_instruction: str) -> bool:
+    """Return True iff user_instruction contains a temporal-transformation
+    keyword. Used to suppress the TEMPORAL CONTINUITY sentence on requests
+    like 'make it evening' or 'cinematic night ambience'."""
+    return bool(_TEMPORAL_OVERRIDE_RE.search(user_instruction or ""))
+
+
+def build_mode_contract(
+    generation_mode: str = "preserve",
+    user_instruction: str = "",
+) -> str:
     """
     Wave 5.13f — single authoritative MODE_CONTRACT for FIRST_VISION.
 
@@ -358,8 +400,21 @@ def build_mode_contract(generation_mode: str = "preserve") -> str:
     only when BIMODAL_ENABLED=1 AND generation_mode == "creative". Frontend
     V1 exposes preserve only; the creative branch is dormant infrastructure
     prepared for V2.
+
+    Wave 6.3 (2026-06-04) — preserve mode now appends a TEMPORAL CONTINUITY
+    sentence that locks the photographed time-of-day. The sentence is
+    suppressed when `user_instruction` contains a temporal-transformation
+    keyword (see _TEMPORAL_OVERRIDE_RE) so explicit user intent ("make it
+    evening", "cinematic night") wins over the default preservation guard.
+    Creative mode is unaffected.
     """
     from .atmosphere_dna.bimodal_classifier import is_creative_mode_active
     if is_creative_mode_active(generation_mode):
         return _CREATIVE_MODE_CONTRACT
-    return _PRESERVE_MODE_CONTRACT
+    if _temporal_override_requested(user_instruction):
+        # User explicitly asked for a temporal transformation : MODE_CONTRACT
+        # stays minimal (architecture preservation only), the model is free
+        # to follow the user's lighting/time-of-day intent.
+        return _PRESERVE_MODE_CONTRACT
+    # Default preserve mode : append the temporal continuity guardrail.
+    return _PRESERVE_MODE_CONTRACT + "\n" + _TEMPORAL_CONTINUITY

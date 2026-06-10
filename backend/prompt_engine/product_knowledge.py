@@ -239,18 +239,17 @@ _FEATURE_TOPICS: dict[str, dict] = {
             "An atmosphere is a complete design language — material palette, "
             "lighting register, decor density, spatial mood — that I apply to "
             "your photographed space. Each atmosphere (Warm Modern, Japandi "
-            "Calm, Soft Luxury, Nordic Warmth, Nature Retreat, Desert Luxe, "
-            "Tropical Escape, Penthouse Contemporary, Wabi Sabi) has its own "
+            "Calm, Soft Luxury, Nordic Warmth, Tropical Escape) has its own "
             "character. The architecture of your space stays anchored ; the "
             "atmosphere is what changes around it."
         ),
         "answer_km": (
             "បរិយាកាសគឺជាភាសារចនាពេញលេញ — សម្ភារៈ ពន្លឺ ដង់ស៊ីតេតុបតែង "
             "អារម្មណ៍លំហ — ដែលខ្ញុំអនុវត្តចំពោះលំនៅដ្ឋានដែលថត។ បរិយាកាសនីមួយៗ "
-            "(Warm Modern, Japandi Calm, Soft Luxury, Nordic Warmth, Nature "
-            "Retreat, Desert Luxe, Tropical Escape, Penthouse Contemporary, "
-            "Wabi Sabi) មានចរិតលក្ខណៈរបស់ខ្លួន។ ស្ថាបត្យកម្មនៃលំនៅដ្ឋានរបស់អ្នក "
-            "នៅដដែល ; បរិយាកាសគឺជាអ្វីដែលប្តូរនៅជុំវិញវា។"
+            "(Warm Modern, Japandi Calm, Soft Luxury, Nordic Warmth, "
+            "Tropical Escape) មានចរិតលក្ខណៈរបស់ខ្លួន។ "
+            "ស្ថាបត្យកម្មនៃលំនៅដ្ឋានរបស់អ្នក នៅដដែល ; "
+            "បរិយាកាសគឺជាអ្វីដែលប្តូរនៅជុំវិញវា។"
         ),
     },
 

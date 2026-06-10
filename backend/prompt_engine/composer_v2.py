@@ -76,6 +76,10 @@ from .edit_intent import (
     classify_edit_mode,
 )
 from .realism_layer import build_compact_realism_block
+# NOTE: build_editorial_realism_block is intentionally NOT imported here.
+# Wave 5.14A Fix — editorial-realism is only emitted by composer.py Path D
+# (FIRST_VISION) when its `editorial_realism_enabled` flag is True. composer_v2
+# controls that flag via the V1 / REBOOT_FRESH delegations below.
 from .wow_layer import build_atmosphere_dna_boundary  # Wave 5.5.4 — propagation of C3 to V2+ path
 from .refinement_memory import (
     build_refinement_block,
@@ -973,6 +977,7 @@ def compose_generation_prompt(
             authorized_user_changes,
             generation_mode,  # Wave 5.5.14c — forward bimodal intent
             edit_mode=edit_mode,  # Wave 5.13d Phase 1 — forward single-source-of-truth edit_mode
+            editorial_realism_enabled=False,  # Restore Best Empirical V1 (2026-06-02 evening) — disables BOTH 5.14A Editorial + 5.14B Photographic on V1 FV. User verdict : these realism escalation layers over-engineered the render (grain, "drawn", "Pinterest-render" feel). V1 falls back to compact_realism only (Wave 4.7.9 anti-CGI minimal). All structural waves (5.19/5.20/5.21/5.21d/BIMODAL/TV anchor) intact.
         )
 
     # ── LOCAL_EDIT — strict differential edit (Wave 5.13c retrofit) ───────────
@@ -1002,6 +1007,9 @@ def compose_generation_prompt(
             sections.append(structural_identity)
         sections.append(edit_block)
         sections.append(build_compact_realism_block())
+        # Wave 5.14A Fix — editorial_realism NOT wired here. LOCAL_EDIT uses
+        # quality=low + fidelity=OMIT (main.py:1788) ; editorial degrades
+        # crispness at those params.
         prompt = "\n\n".join(sections)
         log.info(
             "[ComposerV2] mode=LOCAL_EDIT  size=%d  sections=%d  "
@@ -1041,6 +1049,8 @@ def compose_generation_prompt(
         if partial_dna:
             sections.append(partial_dna)
         sections.append(build_compact_realism_block())
+        # Wave 5.14A Fix — editorial_realism NOT wired here. LAYOUT_CHANGE uses
+        # quality=low + fidelity=OMIT ; see LOCAL_EDIT note above.
         prompt = "\n\n".join(sections)
         log.info(
             "[ComposerV2] mode=LAYOUT_CHANGE  size=%d  sections=%d  "
@@ -1160,6 +1170,7 @@ def compose_generation_prompt(
             structural_negative_anchors,
             "",                                 # authorized_user_changes (none)
             generation_mode,                    # Wave 5.5.14c — forward bimodal intent
+            editorial_realism_enabled=False,    # Wave 5.14A Fix — REBOOT_FRESH keeps main.py's STYLE_REFINEMENT classification → quality=low + fidelity=OMIT ; editorial degrades crispness at those params (V2/V3 anchor pixel input from V1 SL produces muddy/dim output)
         )
 
     # ── 5-section architecture: FV / SR / STRUCTURAL ─────────────────────────
@@ -1298,6 +1309,11 @@ def compose_generation_prompt(
         ("dna_room_context", dna_context_v2),  # Wave 5.5.18 — dormant fields revival
         ("atmosphere_dna_boundary", dna_boundary),
         ("quality_floor", quality_floor),
+        # Wave 5.14A Fix — editorial_realism NOT wired in the V2+ 5-section
+        # path. INCREMENTAL refinements + REBOOT_CUSTOMIZED both keep
+        # main.py's STYLE_REFINEMENT classification → quality=low + fidelity=OMIT
+        # ; editorial degrades crispness at those params. Editorial is
+        # FIRST_VISION-only (V1 direct calls).
         ("user_direction", user_block),
         # Wave 5.5.15c — per-atmosphere creative emotional signal.
         # No priority system in composer_v2 5-section path → if budget

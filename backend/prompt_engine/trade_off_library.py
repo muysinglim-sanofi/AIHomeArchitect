@@ -127,7 +127,7 @@ _TRADE_OFFS: tuple[TradeOffEntry, ...] = (
     # ── Heavier materials in compact rooms ─────────────────────────────
     TradeOffEntry(
         direction_keywords=("more wood", "darker wood", "heavy wood"),
-        atmosphere_filter=("warm_modern", "tropical_escape", "desert_luxe"),
+        atmosphere_filter=("warm_modern", "tropical_escape"),
         clause=(
             "More wood will deepen the warmth nicely — though stacked on "
             "an already-warm atmosphere, it tips toward cabin-dense. A "
@@ -344,7 +344,7 @@ _TRADE_OFFS: tuple[TradeOffEntry, ...] = (
     TradeOffEntry(
         direction_keywords=("cool palette", "cooler tones", "blue palette",
                              "grey palette"),
-        atmosphere_filter=("warm_modern", "tropical_escape", "desert_luxe"),
+        atmosphere_filter=("warm_modern", "tropical_escape"),
         clause=(
             "Cooling this atmosphere down works against its core "
             "register. We can introduce cool accent (a metal, a deep "
@@ -381,7 +381,7 @@ _TRADE_OFFS: tuple[TradeOffEntry, ...] = (
     # ── Atmosphere pivots ──────────────────────────────────────────────
     TradeOffEntry(
         direction_keywords=("more minimalist", "more minimal"),
-        atmosphere_filter=("soft_luxury", "tropical_escape", "desert_luxe"),
+        atmosphere_filter=("soft_luxury", "tropical_escape"),
         clause=(
             "Pushing minimalist erases the depth this atmosphere is "
             "built on. If you want quieter, I'd rather thin out the "
@@ -390,17 +390,9 @@ _TRADE_OFFS: tuple[TradeOffEntry, ...] = (
         ),
         priority=10,
     ),
-    TradeOffEntry(
-        direction_keywords=("more modern", "make it modern", "modernise"),
-        atmosphere_filter=("nature_retreat", "wabi_sabi"),
-        clause=(
-            "Modernising pulls away from this atmosphere's organic / "
-            "patina-led intent. We can integrate cleaner lines in select "
-            "joinery without losing the natural register — full modern "
-            "would be a different atmosphere altogether."
-        ),
-        priority=10,
-    ),
+    # (Nature Retreat / Wabi Sabi "more modern" entry removed 2026-06-04 with
+    # Nature Retreat deregistration. Both atmosphere_filter entries refer to
+    # deregistered / non-existent atmospheres — entry is now defunct.)
 
     # ── More furniture / clutter ───────────────────────────────────────
     TradeOffEntry(

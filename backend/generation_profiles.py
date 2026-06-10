@@ -121,9 +121,9 @@ _PROFILES: dict[str, GenerationProfile] = {
         # both qualities after 5.13b stabilises and either re-add the
         # override or commit medium as the new permanent default.
         quality="medium",
-        quality_overrides=(
-            ("desert_luxe", "low"),
-        ),
+        # Wave 5.13n desert_luxe override removed 2026-06-03 with atmosphere
+        # deregistration. Empty tuple = no per-atmosphere quality override.
+        quality_overrides=(),
         # Wave 5.13n preserve override (in main.py call site): input_fidelity="high"
         # injected for preserve mode regardless of this default. Creative mode
         # (dormant V1) keeps profile.input_fidelity unchanged.

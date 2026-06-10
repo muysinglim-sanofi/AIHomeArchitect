@@ -85,6 +85,107 @@ def build_compact_realism_block() -> str:
     return _COMPACT_REALISM
 
 
+# ── Wave 5.14A — Editorial Realism (additive layer) ───────────────────────────
+#
+# Standalone editorial-realism layer that sits ALONGSIDE _COMPACT_REALISM, not
+# inside it. Wave 4.7.9's _COMPACT_REALISM is contractually length-neutral
+# (≤133 / <200 chars per validate_wave479 assertions 2a / 10d) so the
+# editorial-realism upgrade is delivered as a separate block, leaving
+# _COMPACT_REALISM byte-identical.
+#
+# Wording is REUSED verbatim from:
+#   • _MEDIUM_REALISM (Wave 4.2.4) — material depth + imperfections + light
+#     physics phrases. Module-level constant defined above; never reached
+#     production because every active composer path calls
+#     `build_compact_realism_block()` only.
+#   • _AVOID_AI_ARTIFACTS (Wave 4.2.1) — anti-plastic / anti-sterile /
+#     anti-catalogue-render avoidance list. Bound to `build_realism_block()`
+#     which is itself unused by production (only `validate_wave4*.py`
+#     scripts call it).
+#
+# By emitting these existing strings via a new function we revive the
+# dormant editorial vocabulary without inventing new wording — exactly the
+# Wave 5.14A audit conclusion (Section G: "the cause is dormant vocabulary,
+# not missing concepts").
+#
+# Composer wiring places this block at P3 priority (same tier as
+# compact_realism) immediately after compact_realism in every active path.
+# Under tight budget the priority system drops both together — no path can
+# end up with editorial_realism but no compact_realism.
+_EDITORIAL_REALISM = (
+    "EDITORIAL REALISM — Material depth: visible wood grain, stone veining, "
+    "textile weave. Subtle real-world imperfections — not artificially perfect. "
+    "Natural light physics: accurate shadow fall-off, ambient fill from "
+    "windows. AVOID: plastic-looking or uniformly shiny materials, harsh "
+    "overhead lighting with no shadow variation, sterile over-processed render "
+    "feeling, generic catalogue-render furniture."
+)
+
+
+def build_editorial_realism_block() -> str:
+    """
+    Wave 5.14A — additive editorial-realism layer (~440 chars).
+
+    Sits alongside `build_compact_realism_block()` in every active composer
+    path. Strengthens anti-CGI / anti-catalogue / anti-sterile vocabulary by
+    reusing wording that already existed in the codebase but was bound to
+    `build_medium_realism_block()` / `build_realism_block()` — both of which
+    are imported but never called by any production composer path (only by
+    `validate_wave4*.py` historical scripts).
+
+    Returns a fixed ~440-char string. Production cost: pure prompt growth
+    (no latency, no token billing — gpt-image-1 prompt sizing is dominated
+    by image generation, not text). P3 priority in `_SECTION_PRIORITY` —
+    drops alongside compact_realism under tight LOCAL_EDIT budget.
+    """
+    return _EDITORIAL_REALISM
+
+
+# ── Wave 5.14B — Photographic Credibility (additive layer) ────────────────────
+#
+# Compact photographic-realism cues complementing the Wave 5.14A Editorial
+# Realism block (which focuses on material depth + light physics + anti-CGI
+# avoid list). Wave 5.14B targets the orthogonal photographic axes that
+# Editorial does not address:
+#   • Specular response (matte vs polished surfaces) — anti-CGI uniform shine
+#   • Shadow gradient quality (beyond fall-off — gradient subtlety)
+#   • Scene sharpness uniformity (real-estate convention, anti-bokeh)
+#
+# Deliberately omitted to keep preservation risk LOW :
+#   • Lens specs (focal length / aperture) — could conflict with CAMERA LOCK
+#   • Exposure controls (no clipped highlights) — could neutralize daylit atmos
+#   • AVOID lists — Wave 5.14A learning : bloat without proportional benefit
+#   • Atmosphere-specific photo signatures — deferred to Wave 5.14C
+#   • Lived-in cues (books, dust, clutter) — per task constraint
+#
+# Wired same as Editorial : gated by `editorial_realism_enabled` flag. V1 FV
+# direct emits both ; REBOOT_FRESH delegation passes False so neither fires
+# on the low+OMIT path (or current Wave 5.22c medium+high test). When Wave
+# 5.22c validates, the REBOOT_FRESH flag flip will enable both layers there.
+_PHOTOGRAPHIC_CREDIBILITY = (
+    "PHOTOGRAPHIC CREDIBILITY — Natural specular variation across materials: "
+    "matte stays matte, polished shows subtle directional reflection. Subtle "
+    "shadow gradients. Uniform scene sharpness — no artificial depth-of-field "
+    "bokeh."
+)
+
+
+def build_photographic_credibility_block() -> str:
+    """
+    Wave 5.14B — additive photographic-credibility layer (~220 chars).
+
+    Targets photographic axes orthogonal to Wave 5.14A Editorial Realism
+    (specular response, shadow gradients, scene sharpness uniformity).
+    Same gating as Editorial via `editorial_realism_enabled` flag — V1 FV
+    direct emits, REBOOT_FRESH currently does not (flag=False).
+
+    Returns a fixed ~220-char string. Latency/cost impact negligible.
+    P3 priority — drops with compact_realism + editorial_realism under
+    tight budget.
+    """
+    return _PHOTOGRAPHIC_CREDIBILITY
+
+
 # Minimum interior completeness — ensures no output feels sparse or under-furnished.
 # Injected alongside realism on all generation modes. ~220 chars.
 _INTERIOR_COMPLETENESS = (

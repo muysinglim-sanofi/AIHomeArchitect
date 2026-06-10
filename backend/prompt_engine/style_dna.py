@@ -143,7 +143,7 @@ _STYLES: dict[str, StyleDNA] = {
         avoid=[
             "casual residential informality or personal objects",
             "visible clutter of any kind",
-            "rustic or raw materials (belongs to Nature Retreat or Desert Luxe)",
+            "rustic or raw materials",
             "flat ceilings without architectural detail",
             "cosy Scandinavian or Japandi restraint",
         ],
@@ -281,50 +281,6 @@ _STYLES: dict[str, StyleDNA] = {
             "Scandinavian lightness or Japandi restraint",
             "warm beige Warm Modern aesthetic",
             "polished chrome (use bronze only)",
-        ],
-    ),
-
-    # ── Nature Retreat ────────────────────────────────────────────────────────
-    "Nature Retreat": StyleDNA(
-        name="Nature Retreat",
-        materials=["raw timber slab", "river stone", "bark-textured plaster", "hemp rope", "living moss"],
-        lighting=["green-filtered forest light through canopy", "organic candle warmth", "no artificial dominance — natural light rules", "dappled floor light patterns"],
-        mood=["biophilic immersion — the boundary between inside and outside is dissolved", "forest floor calm", "nature as the architect, human as guest"],
-        furniture=["live-edge timber dining or table", "organic stone bench", "low woven platform", "floor cushions in natural linen"],
-        architectural_elements=["living green wall or ceiling greenery mass", "natural stone floor continuing from outside", "water rill or feature", "raw timber structural column or beam"],
-        color_palette=["forest green", "bark brown", "river stone grey", "cream", "earthy ochre"],
-        composition=[
-            "greenery is the primary volume occupying frame — furniture is subordinate to the natural world",
-            "vertical plant forms balance horizontal stone planes",
-        ],
-        avoid=[
-            "polished artificial surfaces",
-            "hard geometric precision",
-            "synthetic materials of any kind",
-            "clinical minimalism (belongs to Minimal Contemporary)",
-            "urban luxury materials — marble, brass, velvet",
-        ],
-    ),
-
-    # ── Desert Luxe ───────────────────────────────────────────────────────────
-    "Desert Luxe": StyleDNA(
-        name="Desert Luxe",
-        materials=["adobe plaster", "hand-thrown terracotta", "sun-bleached linen", "hammered copper", "hand-knotted Moroccan or Persian wool"],
-        lighting=["golden afternoon desert sunlight as primary source", "warm 2200K lanterns at low level", "deep shadow in niches and recesses", "fire or candle warmth for evening"],
-        mood=["ancient artisanal luxury", "slow desert time and tactile material richness", "sun-dried warmth", "handcraft as the highest luxury"],
-        furniture=["curved adobe bench or built-in seating", "low sheepskin-draped seating", "handwoven large ottoman", "copper-topped or hammered metal side table"],
-        architectural_elements=["curved adobe wall niche with object or candle", "terracotta tile floor", "exposed raw timber lintel over opening", "arched doorway or low arch"],
-        color_palette=["warm sand", "terracotta", "burnt sienna", "hammered copper orange", "cream", "desert sage green"],
-        composition=[
-            "curved forms echo desert erosion — no right angles in furniture or built form",
-            "niches and recesses create depth and shadow — they are not just storage, they are architecture",
-        ],
-        avoid=[
-            "sharp right-angle precision (wrong geometry for adobe)",
-            "cold modern materials — concrete, steel, glass",
-            "Scandinavian lightness or pale palette",
-            "polished marble or metallic luxury",
-            "tropical greenery or humid atmosphere",
         ],
     ),
 

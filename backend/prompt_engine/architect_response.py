@@ -85,28 +85,6 @@ _ATM_TONE: dict[str, dict] = {
             "What would make this feel more like home?",
         ],
     },
-    "nature_retreat": {
-        "adj": "earthy",
-        "quality": "natural and grounded",
-        "direction_word": "organic quality",
-        "material_verb": "grounds",
-        "follow_q": [
-            "Would you add more texture, or let the materials breathe?",
-            "Does the natural quality feel right?",
-            "What element would you bring closer to nature?",
-        ],
-    },
-    "desert_luxe": {
-        "adj": "sculptural",
-        "quality": "mineral and quiet",
-        "direction_word": "weight",
-        "material_verb": "sculpts",
-        "follow_q": [
-            "Would you push the mineral palette further, or add a warm contrast?",
-            "Does the weight feel right?",
-            "What would you refine next?",
-        ],
-    },
     "tropical_escape": {
         "adj": "breezy",
         "quality": "open and light",
@@ -603,16 +581,6 @@ _QUESTION_RESPONSES: dict[str, list[str]] = {
         "This direction works best with materials that look better with use — pine, linen, wool. Things that age well.",
         "With Nordic Warmth, the goal is a space that feels lived-in, not arranged.",
     ],
-    "nature_retreat": [
-        "In Nature Retreat, the material order is: stone, then timber, then textile. Natural over processed.",
-        "This direction reads best when the materials are actually what they look like. No printed wood grain or imitation stone.",
-        "With Nature Retreat, one or two large plants read better than a collection. The space earns the nature.",
-    ],
-    "desert_luxe": [
-        "In Desert Luxe, the texture is the luxury. Tadelakt plaster and sandstone — the quality lives in the surface.",
-        "This direction works best when one material does everything. Multiple materials competing dilutes the feeling.",
-        "With Desert Luxe, the less you add, the stronger it gets.",
-    ],
     "tropical_escape": [
         "In Tropical Escape, the openness is structural — the space should feel like it breathes outward.",
         "This direction works best with a restrained palette. The tropical feeling comes from the openness, not the decoration.",
@@ -642,14 +610,6 @@ _PRAISE_RESPONSES: dict[str, list[str]] = {
     "nordic_warmth": [
         "This feels warm and lived-in — that's exactly the right quality.",
         "The coziness is there. What would make it feel even more like home?",
-    ],
-    "nature_retreat": [
-        "The natural quality is landing well. What would you add or take out?",
-        "This feels grounded. I'd look at the planting next if you want more of that feeling.",
-    ],
-    "desert_luxe": [
-        "The mineral quality reads well — strong without being cold.",
-        "The weight is right. What would you push further?",
     ],
     "tropical_escape": [
         "The openness reads well — casual but considered.",
@@ -687,16 +647,6 @@ _STRUCTURAL_RESPONSES: dict[str, list[str]] = {
         "That changes the zone use — the warmth can stay consistent through the shift.",
         "A real spatial change. The cozy quality transfers to the new zone arrangement.",
         "The zone function changes. The warm Nordic feel holds through it.",
-    ],
-    "nature_retreat": [
-        "That shifts the zone use — the natural quality stays through the change.",
-        "A genuine spatial change. The organic feeling transfers to the new zone.",
-        "The zone function changes. The natural character holds.",
-    ],
-    "desert_luxe": [
-        "That changes the zone logic — the mineral quality stays through the shift.",
-        "A real spatial change. The sculptural weight follows the new zone function.",
-        "The zone purpose shifts. The desert calm transfers.",
     ],
     "tropical_escape": [
         "That shifts how the zone reads — the openness stays through the change.",

@@ -71,8 +71,6 @@ _ATMOSPHERE_QUALITY: dict[str, str] = {
     "tropical_escape":    "lush indoor-outdoor — layered greenery, open, air-filled",
     "warm_modern":        "grounded warmth — architecturally resolved, rich without being heavy",
     "nordic_warmth":      "cosy and layered — hygge warmth, candlelit textiles, not sterile",
-    "nature_retreat":     "biophilic calm — raw organic materials, nature brought fully inside",
-    "desert_luxe":        "sun-drenched luxury — tactile warmth, terracotta richness, artisan craft",
 }
 
 _DEFAULT_QUALITY = "premium, warm, emotionally desirable — lived-in and aspirational"
