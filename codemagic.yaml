@@ -38,13 +38,15 @@ workflows:
     scripts:
       - name: Inject frontend .env (from Codemagic vars — gitignored, written here)
         script: |
-          cat > "$CM_BUILD_DIR/.env" <<EOF
-          API_BASE_URL=$API_BASE_URL
-          SUPABASE_URL=$SUPABASE_URL
-          SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
-          REVENUECAT_PUBLIC_API_KEY_IOS=$REVENUECAT_PUBLIC_API_KEY_IOS
-          REVENUECAT_PUBLIC_API_KEY_ANDROID=$REVENUECAT_PUBLIC_API_KEY_ANDROID
-          EOF
+          # echo (not heredoc): any YAML indentation sits BEFORE `echo`, never
+          # inside the value → the written keys are always flush-left.
+          {
+            echo "API_BASE_URL=$API_BASE_URL"
+            echo "SUPABASE_URL=$SUPABASE_URL"
+            echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+            echo "REVENUECAT_PUBLIC_API_KEY_IOS=$REVENUECAT_PUBLIC_API_KEY_IOS"
+            echo "REVENUECAT_PUBLIC_API_KEY_ANDROID=$REVENUECAT_PUBLIC_API_KEY_ANDROID"
+          } > "$CM_BUILD_DIR/.env"
           echo "✓ .env written (API_BASE_URL=$API_BASE_URL)"
       - name: Flutter pub get
         script: flutter pub get
