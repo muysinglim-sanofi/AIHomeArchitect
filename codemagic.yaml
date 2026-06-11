@@ -27,14 +27,13 @@ workflows:
     integrations:
       app_store_connect: AYDEN App Store      # ← name of YOUR ASC integration in Codemagic
     environment:
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.aydenstudio.app
       groups:
         - ayden_env                            # the 5 .env vars (Secure, set in Codemagic UI)
       flutter: stable
       xcode: latest
       cocoapods: default
+      vars:
+        BUNDLE_ID: "com.aydenstudio.app"
     scripts:
       - name: Inject frontend .env (from Codemagic vars — gitignored, written here)
         script: |
@@ -50,8 +49,14 @@ workflows:
           echo "✓ .env written (API_BASE_URL=$API_BASE_URL)"
       - name: Flutter pub get
         script: flutter pub get
-      - name: Set up iOS code signing (provisioning profiles)
-        script: xcode-project use-profiles
+      - name: Set up iOS code signing (create cert + profile if missing)
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
       - name: Install CocoaPods
         script: find . -name "Podfile" -execdir pod install \;
       - name: Flutter build IPA
