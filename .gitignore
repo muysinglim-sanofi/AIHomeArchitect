@@ -52,3 +52,6 @@ app.*.map.json
 
 .env
 android/build/assets/_source/
+android/build/
+_signing_cert_key.pem
+*.pem

@@ -52,10 +52,14 @@ workflows:
       - name: Set up iOS code signing
         script: |
           keychain initialize
-          # --create makes the App Store provisioning profile (and the
-          # distribution certificate) for the bundle id if they don't exist yet.
+          # CERTIFICATE_PRIVATE_KEY (Codemagic Secure env var) is the RSA key the
+          # iOS Distribution certificate is built from. With it, --create makes the
+          # certificate (first run) + reuses it, plus the App Store provisioning
+          # profile for $BUNDLE_ID. Without it the CLI errors:
+          # "Cannot create resource without certificate private key".
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
             --create
           keychain add-certificates
           xcode-project use-profiles
