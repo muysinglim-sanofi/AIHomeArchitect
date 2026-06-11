@@ -49,16 +49,11 @@ workflows:
           echo "✓ .env written (API_BASE_URL=$API_BASE_URL)"
       - name: Flutter pub get
         script: flutter pub get
-      - name: Set up iOS code signing (create cert + profile if missing)
+      - name: Set up iOS code signing
         script: |
           keychain initialize
-          # fetch-signing-files --create makes the PROFILE but NOT the certificate.
-          # A fresh Apple account has no iOS Distribution cert yet → create one
-          # (saved locally so the keychain can import it). If you hit Apple's
-          # distribution-cert limit on re-runs, revoke an old one in
-          # developer.apple.com → Certificates.
-          app-store-connect certificates create --type IOS_DISTRIBUTION --save \
-            || echo "cert create skipped (already exists / limit reached) — continuing"
+          # --create makes the App Store provisioning profile (and the
+          # distribution certificate) for the bundle id if they don't exist yet.
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create
