@@ -1,0 +1,68 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AYDEN Studio — Codemagic CI/CD → iOS TestFlight (no Mac needed)
+# This file lives at the ROOT of the Flutter project (branch wave4-design-spine).
+#
+# ⚙️  BEFORE the first build, configure in the Codemagic UI:
+#   1. App Store Connect integration (App Store Connect API key)
+#        → rename "AYDEN App Store" below to match YOUR integration name.
+#   2. Environment variable GROUP named "ayden_env" (mark values as Secure),
+#        containing the 5 .env keys:
+#          API_BASE_URL                    = https://ayden-backend.onrender.com
+#          SUPABASE_URL                    = https://<your-project>.supabase.co
+#          SUPABASE_ANON_KEY               = <your supabase anon key>
+#          REVENUECAT_PUBLIC_API_KEY_IOS   = <appl_... or leave empty for now>
+#          REVENUECAT_PUBLIC_API_KEY_ANDROID = <goog_... or leave empty>
+#   3. Register the bundle id  com.aihomearchitect.aiHomeArchitect  in
+#        App Store Connect (create the app there first).
+#
+# The .env is gitignored on purpose — it is INJECTED here at build time from the
+# Codemagic vars (never committed).
+# ─────────────────────────────────────────────────────────────────────────────
+
+workflows:
+  ios-testflight:
+    name: AYDEN — iOS TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    integrations:
+      app_store_connect: AYDEN App Store      # ← name of YOUR ASC integration in Codemagic
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.aihomearchitect.aiHomeArchitect
+      groups:
+        - ayden_env                            # the 5 .env vars (Secure, set in Codemagic UI)
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Inject frontend .env (from Codemagic vars — gitignored, written here)
+        script: |
+          cat > "$CM_BUILD_DIR/.env" <<EOF
+          API_BASE_URL=$API_BASE_URL
+          SUPABASE_URL=$SUPABASE_URL
+          SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+          REVENUECAT_PUBLIC_API_KEY_IOS=$REVENUECAT_PUBLIC_API_KEY_IOS
+          REVENUECAT_PUBLIC_API_KEY_ANDROID=$REVENUECAT_PUBLIC_API_KEY_ANDROID
+          EOF
+          echo "✓ .env written (API_BASE_URL=$API_BASE_URL)"
+      - name: Flutter pub get
+        script: flutter pub get
+      - name: Set up iOS code signing (provisioning profiles)
+        script: xcode-project use-profiles
+      - name: Install CocoaPods
+        script: find . -name "Podfile" -execdir pod install \;
+      - name: Flutter build IPA
+        script: |
+          flutter build ipa --release \
+            --build-number=$BUILD_NUMBER \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        # beta_groups:                # uncomment + set your TestFlight group to auto-assign testers
+        #   - Internal Testers
