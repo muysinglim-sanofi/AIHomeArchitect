@@ -59,17 +59,6 @@
 				<key>CFBundleTypeRole</key>
 				<string>Editor</string>
 				<key>CFBundleURLName</key>
-				<string>google-sign-in</string>
-				<key>CFBundleURLSchemes</key>
-				<array>
-					<!-- TODO Prerequisite C — replace with real reversed iOS client ID from Google Cloud Console -->
-					<string>com.googleusercontent.apps.YOUR_GOOGLE_IOS_CLIENT_ID</string>
-				</array>
-			</dict>
-			<dict>
-				<key>CFBundleTypeRole</key>
-				<string>Editor</string>
-				<key>CFBundleURLName</key>
 				<string>aihomearchitect-auth</string>
 				<key>CFBundleURLSchemes</key>
 				<array>
