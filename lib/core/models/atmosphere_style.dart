@@ -98,7 +98,8 @@ const kAtmospheres = <AtmosphereStyle>[
     tagline: 'Elegant materials and refined evening light',
     heroImagePath: 'assets/atmospheres/soft_luxury.jpg',
     iconImagePath: 'assets/atmospheres/soft_luxury_icon.png',
-    showcaseAsset: 'assets/showcase/facade_after.jpg',
+    // Soft Luxury = a luxe INTERIOR (spa bathroom), not the exterior villa.
+    showcaseAsset: 'assets/showcase/bathroom_after.jpg',
     fallbackImageUrl:
         'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=400&fit=crop&crop=center',
     iconData: Icons.star_border,

@@ -2140,13 +2140,15 @@ class _LoadingBubbleState extends State<_LoadingBubble> with TickerProviderState
                             borderRadius: BorderRadius.circular(1),
                             child: Stack(
                               children: [
+                                // Sprint 2A — brand-gold progress line (visual
+                                // only; timing / asymptote / phrases untouched).
                                 Container(
-                                    color: AppColors.surface
+                                    color: AppColors.accent
                                         .withValues(alpha: 0.22)),
                                 FractionallySizedBox(
                                   widthFactor: _progress.value,
                                   child: Container(
-                                      color: AppColors.surface
+                                      color: AppColors.accent
                                           .withAlpha(breath)),
                                 ),
                               ],

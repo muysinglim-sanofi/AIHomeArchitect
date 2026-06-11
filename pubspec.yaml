@@ -69,6 +69,31 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.3
+
+# Sprint 2A — AYDEN app icon (run: dart run flutter_launcher_icons)
+flutter_launcher_icons:
+  image_path: "assets/branding/app_icon_1024_black.png"
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  min_sdk_android: 21
+  adaptive_icon_background: "#1E161E"
+  adaptive_icon_foreground: "assets/branding/app_icon_1024_black.png"
+
+# Sprint 2A — native launch screen (run: dart run flutter_native_splash:create)
+# Ivory bg + gold compass so the OS launch screen MATCHES the Flutter splash —
+# no more dark app-icon flash before the branded splash.
+flutter_native_splash:
+  color: "#F4F1EC"
+  image: assets/branding/ayden_compass_gold.png
+  android_12:
+    color: "#F4F1EC"
+    image: assets/branding/ayden_compass_gold.png
+  android: true
+  ios: true
+  web: false
 
 flutter:
   uses-material-design: true
@@ -82,4 +107,5 @@ flutter:
     - assets/cards/rooms/
     - assets/cards/atmospheres/
     - assets/examples/
+    - assets/branding/
 

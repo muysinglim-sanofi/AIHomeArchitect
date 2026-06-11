@@ -70,7 +70,7 @@ class App extends ConsumerWidget {
     // what runs POST /purchases/sync on premium signals app-wide.
     ref.listen(meStatusProvider, (_, _) {});
     return MaterialApp.router(
-      title: 'AI Home Architect',
+      title: 'AYDEN Studio',
       theme: AppTheme.light,
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,

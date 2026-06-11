@@ -355,7 +355,7 @@ class _RevealSlideState extends State<_RevealSlide>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                const _SpaceImage(url: 'assets/showcase/smallspace_after.jpg'),
+                const _SpaceImage(url: 'assets/showcase/facade_after.jpg'),
                 Positioned(
                   left: 0, top: 0, bottom: 0,
                   width: divX,
@@ -365,7 +365,7 @@ class _RevealSlideState extends State<_RevealSlide>
                       minWidth: width,
                       maxWidth: width,
                       child: const _SpaceImage(
-                          url: 'assets/showcase/smallspace_before.jpg'),
+                          url: 'assets/showcase/facade_before.jpg'),
                     ),
                   ),
                 ),
@@ -496,8 +496,8 @@ class _ChatDemoSlideState extends State<_ChatDemoSlide> {
             child: _SpaceImage(
               key: ValueKey(_showAfter),
               url: _showAfter
-                  ? 'assets/showcase/villa_after.jpg'
-                  : 'assets/showcase/villa_before.jpg',
+                  ? 'assets/showcase/living_after.jpg'
+                  : 'assets/showcase/living_before.jpg',
             ),
           ),
           // Calmer bottom scrim — the architecture leads; captions read over

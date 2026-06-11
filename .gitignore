@@ -51,4 +51,4 @@ app.*.map.json
 !android/app/src/main/kotlin/**
 
 .env
-android/build/
+android/build/assets/_source/

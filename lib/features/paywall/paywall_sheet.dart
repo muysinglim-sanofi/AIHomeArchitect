@@ -62,6 +62,18 @@ const Color _textMuted = Color(0xFFD8D1C8);
 const Color _textDim = Color(0xFF8C857B);
 const Color _borderSubtle = Color(0xFF2A241D);
 
+/// Removes the Android overscroll STRETCH (and the glow) from the paywall
+/// scroll view. The stretch was distorting the hero layer on overscroll and
+/// briefly exposing the image's bottom edge under the fixed fade.
+class _NoStretchScrollBehavior extends MaterialScrollBehavior {
+  const _NoStretchScrollBehavior();
+
+  @override
+  Widget buildOverscrollIndicator(
+          BuildContext context, Widget child, ScrollableDetails details) =>
+      child;
+}
+
 enum PaywallTrigger {
   quota,    // QUOTA_EXHAUSTED — used all free generations
   freeTier, // FREE_TIER_RESTRICTED — out-of-scope choice
@@ -91,6 +103,9 @@ class _PaywallSheetState extends State<PaywallSheet> {
   bool _loading = true;
   bool _busy = false;
   String? _errorMessage;
+  // Wave 6.17 — single-CTA model: the cards are radio-selectable and one
+  // global CTA purchases the selected plan. Annual = default (best value).
+  bool _annualSelected = true;
 
   @override
   void initState() {
@@ -202,6 +217,8 @@ class _PaywallSheetState extends State<PaywallSheet> {
 
     return Container(
       height: sheetHeight,
+      // clipBehavior so the full-bleed hero's top corners follow the 28px radius.
+      clipBehavior: Clip.antiAlias,
       decoration: const BoxDecoration(
         color: _paywallBg,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -210,6 +227,34 @@ class _PaywallSheetState extends State<PaywallSheet> {
         top: false,
         child: Stack(
           children: [
+            // ── Wave 6.19 — full-background cinematic illusion (V2) ──
+            // The animated image extends to 72% of the screen, BEHIND the
+            // content, with FIXED overlays darkening it into the warm dark
+            // interface. Only the image scales; overlays + content are siblings.
+            if (FeatureFlags.paywallV2) ...[
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: media.size.height * 0.72,
+                child: const _KenBurnsImage(
+                  asset: 'assets/cards/atmospheres/warm_modern.png',
+                  // Center keeps the sofa/table/rug context — less aggressive crop.
+                  alignment: Alignment.center,
+                ),
+              ),
+              const Positioned.fill(
+                child: IgnorePointer(child: _HeroVerticalFade()),
+              ),
+              const Positioned.fill(
+                child: IgnorePointer(child: _HeroWarmDepth()),
+              ),
+              // Subtle top cinematic film so the gold logo reads (separate from
+              // the bottom fade; fixed — never animates with the image).
+              const Positioned.fill(
+                child: IgnorePointer(child: _HeroTopScrim()),
+              ),
+            ],
             _loading
                 ? const Center(
                     child: CircularProgressIndicator(color: _gold),
@@ -219,6 +264,31 @@ class _PaywallSheetState extends State<PaywallSheet> {
                     weekly: weekly,
                     annual: annual,
                   ),
+            // Fixed AYDEN STUDIO logo pinned at the top — the real brand asset
+            // (clean compass + AYDEN + STUDIO crop) on the subtle top scrim.
+            if (FeatureFlags.paywallV2)
+              Positioned(
+                top: (media.viewPadding.top > 0 ? media.viewPadding.top : 24) + 20,
+                left: 0,
+                right: 0,
+                child: IgnorePointer(
+                  child: Center(
+                    child: Opacity(
+                      opacity: 0.90,
+                      child: Image.asset(
+                        // Mixed logo (per-element dosed): WHITE AYDEN + AI
+                        // ARCHITECT ASSISTANT at full, gold compass −28% & STUDIO
+                        // −18% → AYDEN is the visual anchor, compass recedes.
+                        'assets/branding/ayden_logo_mixed.png',
+                        width: (media.size.width * 0.245).clamp(102.0, 138.0),
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.medium,
+                        errorBuilder: (_, _, _) => const _AydenWordmark(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             // Wave 5.17d.2 — explicit dismiss affordance in the top-
             // right. The drag-down gesture is preserved (and the
             // bottom "Not now" button is too), but the explicit X is
@@ -231,6 +301,25 @@ class _PaywallSheetState extends State<PaywallSheet> {
             // Use viewPadding (the REAL notch inset — never zeroed by the modal,
             // unlike padding.top which the bottom-sheet route reports as 0) with
             // a floor so it's always clearly below the system UI.
+            // Subtle drag affordance, centered over the hero (white so it reads
+            // over the artwork). The drag-to-dismiss gesture is unchanged.
+            Positioned(
+              top: (media.viewPadding.top > 0 ? media.viewPadding.top : 24) + 10,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             Positioned(
               top: (media.viewPadding.top > 0 ? media.viewPadding.top : 24) + 14,
               right: 12,
@@ -250,11 +339,7 @@ class _PaywallSheetState extends State<PaywallSheet> {
     required Package? annual,
   }) {
     if (FeatureFlags.paywallV2) {
-      return _buildContentV2(
-        heroHeight: heroHeight,
-        weekly: weekly,
-        annual: annual,
-      );
+      return _buildContentV2(weekly: weekly, annual: annual);
     }
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
@@ -319,44 +404,104 @@ class _PaywallSheetState extends State<PaywallSheet> {
   // Frontend/UI only. Reuses the exact pricing/purchase wiring (onWeekly /
   // onAnnual → _onPurchasePressed) — nothing about subscription logic changes.
   Widget _buildContentV2({
-    required double heroHeight,
     required Package? weekly,
     required Package? annual,
   }) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
-      children: [
-        const _DragHandle(),
-        const SizedBox(height: 16),
-        _HeroPremiumV2(height: heroHeight * 0.92),
-        const SizedBox(height: 22),
-        const _HeadlineV2(),
-        const SizedBox(height: 14),
-        const _SocialProofV2(),
-        const SizedBox(height: 24),
-        _PricingV2(
-          weeklyPackage: weekly,
-          annualPackage: annual,
-          busy: _busy,
-          onWeekly: weekly == null ? null : () => _onPurchasePressed(weekly),
-          onAnnual: annual == null ? null : () => _onPurchasePressed(annual),
-        ),
-        if (_errorMessage != null) ...[
-          const SizedBox(height: 14),
-          _PaywallErrorBox(message: _errorMessage!),
+    final selectedPkg = _annualSelected ? annual : weekly;
+    final screenH = MediaQuery.of(context).size.height;
+    // The hero image + fade + warm depth are FIXED layers BEHIND this scroll
+    // view (built in build()). Here the top is a transparent spacer that reveals
+    // them; the headline sits on the dark fade; the lower section carries its own
+    // warm-charcoal background that scrolls WITH it (covers the image during
+    // scroll) and fades in at the top so it reads as the SAME cinematic fade.
+    // ClampingScrollPhysics + no-stretch kills the overscroll strip exposure.
+    return ScrollConfiguration(
+      behavior: const _NoStretchScrollBehavior(),
+      child: ListView(
+        physics: const ClampingScrollPhysics(),
+        padding: EdgeInsets.zero,
+        children: [
+          // 1. Hero zone — transparent (the FIXED image + fade show through).
+          //    screenH-based + a small fixed nudge so the headline settles a
+          //    touch deeper into the cinematic fade.
+          SizedBox(height: screenH * 0.43 + 32),
+          // 2. Headline + subtitle — emerges from the fixed dark fade.
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            child: _HeadlineV2(),
+          ),
+          // 3. Lower section — warm-charcoal bg (NOT flat black). Fades in from
+          //    transparent at the top (continuous with the fade) → opaque body
+          //    that covers the image during scroll → settles to base #0E0C09.
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                // Warm charcoal (NOT flat black). Transparent at the very top so
+                // the room/fade shows through the transition; opaque WARM body
+                // (covers the image on scroll); settles to base #0E0C09.
+                stops: [0.0, 0.18, 0.55, 1.0],
+                colors: [
+                  Color(0x00120D08),
+                  Color(0xFF1A130C), // warm charcoal (brownish, opaque)
+                  Color(0xFF130F0A),
+                  Color(0xFF0E0C09), // base — exact match
+                ],
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(22, 30, 22, 30),
+              child: Column(
+                children: [
+                  // 4 feature pills — sells the value fast.
+                  const _FeaturesRowV2(),
+                  const SizedBox(height: 28),
+                  // Radio-selectable plan cards — single global CTA below.
+                  _PricingV2(
+                    weeklyPackage: weekly,
+                    annualPackage: annual,
+                    annualSelected: _annualSelected,
+                    onSelectAnnual: () =>
+                        setState(() => _annualSelected = true),
+                    onSelectWeekly: () =>
+                        setState(() => _annualSelected = false),
+                  ),
+                  if (_errorMessage != null) ...[
+                    const SizedBox(height: 16),
+                    _PaywallErrorBox(message: _errorMessage!),
+                  ],
+                  const SizedBox(height: 22),
+                  // ── Single global CTA → purchases the SELECTED plan ──
+                  _PrimaryPaywallButton(
+                    label: context.l10n.pwUnlockPremium,
+                    color: _gold,
+                    enabled: !_busy && selectedPkg != null,
+                    loading: _busy,
+                    onTap: selectedPkg == null
+                        ? null
+                        : () => _onPurchasePressed(selectedPkg),
+                  ),
+                  const SizedBox(height: 11),
+                  Text(
+                    context.l10n.pwCancelAnytime,
+                    style: const TextStyle(color: _textDim, fontSize: 11.5),
+                  ),
+                  const SizedBox(height: 24),
+                  const _PaymentTrustFooter(),
+                  const SizedBox(height: 16),
+                  _RestoreAndDismissActions(
+                    busy: _busy,
+                    onRestore: _onRestorePressed,
+                    onDismiss: () => Navigator.of(context).pop(false),
+                  ),
+                  const SizedBox(height: 4),
+                ],
+              ),
+            ),
+          ),
         ],
-        const SizedBox(height: 30),
-        const _HowItWorks(),
-        const SizedBox(height: 26),
-        const _PaymentTrustFooter(),
-        const SizedBox(height: 18),
-        _RestoreAndDismissActions(
-          busy: _busy,
-          onRestore: _onRestorePressed,
-          onDismiss: () => Navigator.of(context).pop(false),
-        ),
-        const SizedBox(height: 4),
-      ],
+      ),
     );
   }
 }
@@ -575,7 +720,8 @@ class _PlainAssetImage extends StatelessWidget {
 /// window so the slide doesn't feel static. 12-second cycle, reverses.
 class _KenBurnsImage extends StatefulWidget {
   final String asset;
-  const _KenBurnsImage({required this.asset});
+  final Alignment alignment;
+  const _KenBurnsImage({required this.asset, this.alignment = Alignment.center});
 
   @override
   State<_KenBurnsImage> createState() => _KenBurnsImageState();
@@ -594,7 +740,7 @@ class _KenBurnsImageState extends State<_KenBurnsImage>
       vsync: this,
       duration: const Duration(seconds: 12),
     );
-    _scale = Tween<double>(begin: 1.0, end: 1.06).animate(
+    _scale = Tween<double>(begin: 1.0, end: 1.035).animate(
       CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
     );
     _pan = Tween<Offset>(
@@ -612,21 +758,29 @@ class _KenBurnsImageState extends State<_KenBurnsImage>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      builder: (context, child) {
-        return Transform.scale(
-          scale: _scale.value,
-          child: FractionalTranslation(
-            translation: _pan.value,
-            child: child,
-          ),
-        );
-      },
-      child: Image.asset(
-        widget.asset,
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => Container(color: _paywallCardSoft),
+    // ClipRect is ESSENTIAL: the scale (from center) makes the image overflow
+    // its box top & bottom. Without clipping, the bottom edge bleeds DOWN past
+    // the hero, painting over the content below the fixed gradient — which reads
+    // as the dark band "rising" during the zoom. Clipping keeps only the image
+    // pixels moving, fully contained; the gradient/text siblings never move.
+    return ClipRect(
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (context, child) {
+          return Transform.scale(
+            scale: _scale.value,
+            child: FractionalTranslation(
+              translation: _pan.value,
+              child: child,
+            ),
+          );
+        },
+        child: Image.asset(
+          widget.asset,
+          fit: BoxFit.cover,
+          alignment: widget.alignment,
+          errorBuilder: (_, _, _) => Container(color: _paywallCardSoft),
+        ),
       ),
     );
   }
@@ -1285,12 +1439,14 @@ class _PrimaryPaywallButton extends StatelessWidget {
   final String label;
   final Color color;
   final bool enabled;
+  final bool loading;
   final VoidCallback? onTap;
 
   const _PrimaryPaywallButton({
     required this.label,
     required this.color,
     required this.enabled,
+    this.loading = false,
     required this.onTap,
   });
 
@@ -1304,20 +1460,32 @@ class _PrimaryPaywallButton extends StatelessWidget {
         child: Material(
           color: color,
           borderRadius: BorderRadius.circular(14),
+          // Soft elevation — premium weight without a flashy gradient.
+          elevation: enabled ? 6 : 0,
+          shadowColor: color.withValues(alpha: 0.45),
           child: InkWell(
-            onTap: enabled ? onTap : null,
+            onTap: (enabled && !loading) ? onTap : null,
             borderRadius: BorderRadius.circular(14),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.2,
-                ),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: loading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.2, color: Colors.black),
+                      )
+                    : Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
               ),
             ),
           ),
@@ -1524,34 +1692,133 @@ TextStyle _serif({
       letterSpacing: letterSpacing,
     );
 
-class _HeroPremiumV2 extends StatelessWidget {
-  final double height;
-  const _HeroPremiumV2({required this.height});
+/// FIXED full-sheet vertical fade (Wave 6.19). Sibling of the image — never
+/// animates. Darkens the WHOLE paywall progressively so the living-room image
+/// dissolves into the warm dark interface and the pricing sits on the SAME
+/// cinematic fade. Reaches fully-solid #0E0C09 (≈0.74) BEFORE the image layer
+/// ends (0.72 screen ≈ 0.766 of the 0.94 sheet) — the image disappears before
+/// its edge, so no scroll/stretch can expose a raw strip.
+class _HeroVerticalFade extends StatelessWidget {
+  const _HeroVerticalFade();
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: SizedBox(
-        height: height,
-        width: double.infinity,
-        child: const Stack(
-          fit: StackFit.expand,
-          children: [
-            _KenBurnsImage(asset: 'assets/cards/atmospheres/warm_modern.png'),
-            IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment(0, 0.25),
-                    colors: [Color(0x99000000), Color(0x00000000)],
-                  ),
-                ),
-              ),
-            ),
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          // Smoky cinematic "dark glass" — 7 stops for a soft, continuous
+          // transition (no mathematical banding). Starts almost clear (0x08),
+          // never fully opaque (max 0xF2) so it never reads as a black block.
+          // The opaque lower-section bg (which scrolls) hides the image edge in
+          // the pricing area, so the fixed fade can stay translucent.
+          stops: [0.0, 0.24, 0.42, 0.58, 0.74, 0.90, 1.0],
+          colors: [
+            Color(0x080E0C09),
+            Color(0x180E0C09),
+            Color(0x3D0E0C09),
+            Color(0x700E0C09),
+            Color(0xA80E0C09),
+            Color(0xD90E0C09),
+            Color(0xF20E0C09),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// FIXED warm-brown depth overlay (Wave 6.19). Keeps the dark area WARM, not
+/// flat black — a soft brown glow near the top + gentle darkening at the
+/// bottom. Very subtle; sits over the fade for cinematic depth.
+class _HeroWarmDepth extends StatelessWidget {
+  const _HeroWarmDepth();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment.topCenter,
+          radius: 1.2,
+          colors: [
+            Color(0x186B431F), // very subtle warm brown (not orange/gold)
+            Color(0x00000000),
+            Color(0x660E0C09), // gentle bottom depth
+          ],
+          stops: [0.0, 0.45, 1.0],
+        ),
+      ),
+    );
+  }
+}
+
+/// FIXED top cinematic film (Wave 6.21). A very subtle dark scrim at the TOP
+/// only, so the gold AYDEN logo reads over bright artwork. Separate from the
+/// bottom fade; fades to transparent by ~0.34 — no black band.
+class _HeroTopScrim extends StatelessWidget {
+  const _HeroTopScrim();
+
+  @override
+  Widget build(BuildContext context) {
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.center,
+          // Cinematic top film — softened so it reads as "the logo is naturally
+          // legible", not as a visible overlay. Room stays luminous.
+          stops: [0.0, 0.25, 0.45],
+          colors: [
+            Color(0xB30B0B0B),
+            Color(0x4D0B0B0B),
+            Color(0x000B0B0B),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Typographic AYDEN STUDIO signature (Montserrat) — fallback if the logo PNG
+/// is ever unavailable.
+class _AydenWordmark extends StatelessWidget {
+  const _AydenWordmark();
+
+  @override
+  Widget build(BuildContext context) {
+    // A discreet luxury signature — reduced opacity + soft glow so it never
+    // competes with the headline.
+    return Opacity(
+      opacity: 0.72,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'AYDEN',
+            style: GoogleFonts.montserrat(
+              color: Colors.white.withValues(alpha: 0.90),
+              fontSize: 21,
+              fontWeight: FontWeight.w300,
+              letterSpacing: 7,
+              shadows: [
+                Shadow(color: _gold.withValues(alpha: 0.18), blurRadius: 8),
+                const Shadow(color: Color(0x4D000000), blurRadius: 6),
+              ],
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            'STUDIO',
+            style: GoogleFonts.montserrat(
+              color: _gold.withValues(alpha: 0.82),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 5.5,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1562,57 +1829,110 @@ class _HeadlineV2 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    // Editorial serif, white, with the accent word in gold. Stronger shadows so
+    // the text stays legible while the PHOTO shows through behind it (no black
+    // backing). Controlled line breaks come from the localized lead/trail.
+    final base = _serif(fontSize: 33, fontWeight: FontWeight.w600, height: 1.05)
+        .copyWith(
+      color: Colors.white,
+      // Softer, more natural — reads as legible, not "treated" (Wave 6.22).
+      shadows: const [
+        Shadow(color: Color(0x99000000), blurRadius: 10),
+        Shadow(color: Color(0x4D000000), blurRadius: 4),
+      ],
+    );
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          context.l10n.pwHeadline,
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: l10n.pwHeadlineLead),
+              TextSpan(
+                text: l10n.pwHeadlineAccent,
+                style: const TextStyle(color: _gold),
+              ),
+              TextSpan(text: l10n.pwHeadlineTrail),
+            ],
+          ),
           textAlign: TextAlign.center,
-          style: _serif(fontSize: 30, fontWeight: FontWeight.w600, height: 1.05),
+          style: base,
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 9),
         Text(
-          context.l10n.pwSubheadline,
+          l10n.pwSubheadline,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: _textMuted, fontSize: 14, height: 1.4),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            height: 1.4,
+            shadows: [Shadow(color: Color(0x80000000), blurRadius: 8)],
+          ),
         ),
       ],
     );
   }
 }
 
-class _SocialProofV2 extends StatelessWidget {
-  const _SocialProofV2();
+/// 4 feature pills (Wave 6.17) — Unlimited / HD / All Styles & Rooms / No
+/// Watermark. Sells the value fast; replaces the old "how it works" steps.
+class _FeaturesRowV2 extends StatelessWidget {
+  const _FeaturesRowV2();
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final items = <(IconData, String)>[
+      (Icons.auto_awesome, l10n.pwFeatUnlimited),
+      (Icons.high_quality_outlined, l10n.pwFeatHd),
+      (Icons.chair_outlined, l10n.pwFeatAllStyles),
+      (Icons.verified_outlined, l10n.pwFeatNoWatermark),
+    ];
+    // Thin dividers between items give a premium, less-crowded rhythm.
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        ...List.generate(
-          5,
-          (_) => const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 1),
-            child: Icon(Icons.star, color: _gold, size: 14),
-          ),
-        ),
-        const SizedBox(width: 8),
-        RichText(
-          text: TextSpan(children: [
-            TextSpan(
-                text: context.l10n.pwLovedBy,
-                style: const TextStyle(color: _textMuted, fontSize: 12.5)),
-            const TextSpan(
-                text: '12,500+',
-                style: TextStyle(
-                    color: _gold,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w700)),
-            TextSpan(
-                text: context.l10n.pwHomeowners,
-                style: const TextStyle(color: _textMuted, fontSize: 12.5)),
-          ]),
-        ),
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0)
+            Container(
+              width: 1,
+              height: 34,
+              color: Colors.white.withValues(alpha: 0.06),
+            ),
+          Expanded(child: _FeaturePill(icon: items[i].$1, label: items[i].$2)),
+        ],
       ],
+    );
+  }
+}
+
+class _FeaturePill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _FeaturePill({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        children: [
+          // Quieter, more editorial — smaller + softer gold, more breathing.
+          Icon(icon, color: _gold.withValues(alpha: 0.88), size: 18),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _textMuted.withValues(alpha: 0.92),
+              fontSize: 11.5,
+              height: 1.45,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1620,263 +1940,206 @@ class _SocialProofV2 extends StatelessWidget {
 class _PricingV2 extends StatelessWidget {
   final Package? weeklyPackage;
   final Package? annualPackage;
-  final bool busy;
-  final VoidCallback? onWeekly;
-  final VoidCallback? onAnnual;
+  final bool annualSelected;
+  final VoidCallback onSelectAnnual;
+  final VoidCallback onSelectWeekly;
 
   const _PricingV2({
     required this.weeklyPackage,
     required this.annualPackage,
-    required this.busy,
-    required this.onWeekly,
-    required this.onAnnual,
+    required this.annualSelected,
+    required this.onSelectAnnual,
+    required this.onSelectWeekly,
   });
 
   @override
   Widget build(BuildContext context) {
     final annualPrice = annualPackage?.storeProduct.priceString ?? '\$79.99';
     final weeklyPrice = weeklyPackage?.storeProduct.priceString ?? '\$7.99';
-    return Column(
-      children: [
-        // Annual FIRST + emphasized → psychologically pushed as the best choice.
-        _PlanCardV2(
-          accent: _green,
-          badge: context.l10n.pwBestValue,
-          name: context.l10n.pwAnnual,
-          price: annualPrice,
-          period: context.l10n.pwPerYear,
-          positioning: context.l10n.pwAnnualPositioning,
-          benefits: [
-            context.l10n.pwBenefitEveryRoom,
-            context.l10n.pwBenefitUnlimited,
-            context.l10n.pwBenefitPriority,
-          ],
-          savings: context.l10n.pwSavings,
-          fineprint: context.l10n.pwBilledYearly,
-          emphasized: true,
-          enabled: !busy && onAnnual != null,
-          onTap: onAnnual,
-        ),
-        const SizedBox(height: 14),
-        _PlanCardV2(
-          accent: _gold,
-          badge: context.l10n.pwPopular,
-          name: context.l10n.pwWeekly,
-          price: weeklyPrice,
-          period: context.l10n.pwPerWeek,
-          positioning: context.l10n.pwWeeklyPositioning,
-          benefits: [
-            context.l10n.pwBenefitEveryRoom,
-            context.l10n.pwBenefitHd,
-          ],
-          savings: null,
-          fineprint: context.l10n.pwBilledWeekly,
-          emphasized: false,
-          enabled: !busy && onWeekly != null,
-          onTap: onWeekly,
-        ),
-      ],
+    // Horizontal side-by-side — editorial + compact, preserves the hero space
+    // and brings the CTA into view sooner. Annual (left) is the hero option.
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _PlanCardV2(
+              badge: context.l10n.pwBestValue,
+              name: context.l10n.pwAnnual,
+              price: annualPrice,
+              period: context.l10n.pwPerYear,
+              savings: context.l10n.pwSavingsShort,
+              selected: annualSelected,
+              enabled: annualPackage != null,
+              onTap: onSelectAnnual,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _PlanCardV2(
+              badge: context.l10n.pwPopular,
+              name: context.l10n.pwWeekly,
+              price: weeklyPrice,
+              period: context.l10n.pwPerWeek,
+              savings: null,
+              selected: !annualSelected,
+              enabled: weeklyPackage != null,
+              onTap: onSelectWeekly,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
+/// Compact vertical plan card (Wave 6.20). Side-by-side; no per-card button —
+/// a single global CTA purchases the selected plan. Selected = gold border +
+/// soft glow + warmer fill. Faux warm-glass via a subtle vertical sheen (no
+/// BackdropFilter — the bg behind is opaque, a blur would be a no-op).
 class _PlanCardV2 extends StatelessWidget {
-  final Color accent;
   final String badge;
   final String name;
   final String price;
   final String period;
-  final String positioning;
-  final List<String> benefits;
   final String? savings;
-  final String fineprint;
-  final bool emphasized;
+  final bool selected;
   final bool enabled;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
   const _PlanCardV2({
-    required this.accent,
     required this.badge,
     required this.name,
     required this.price,
     required this.period,
-    required this.positioning,
-    required this.benefits,
     required this.savings,
-    required this.fineprint,
-    required this.emphasized,
+    required this.selected,
     required this.enabled,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-      decoration: BoxDecoration(
-        color: emphasized ? _paywallCard : _paywallCardSoft,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: accent.withValues(alpha: emphasized ? 0.7 : 0.3),
-          width: emphasized ? 1.6 : 1.0,
-        ),
-        boxShadow: emphasized
-            ? [
-                BoxShadow(
-                  color: accent.withValues(alpha: 0.14),
-                  blurRadius: 22,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : null,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    // Always full opacity — selection is harmless UI; the real gate is the CTA.
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.fromLTRB(12, 16, 12, 18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: selected
+                  ? const [Color(0xFF241B12), Color(0xFF181109)]
+                  : const [Color(0xFF1A140D), Color(0xFF120D08)],
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? _gold : _borderSubtle,
+              width: selected ? 1.6 : 1.0,
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: _gold.withValues(alpha: 0.14),
+                      blurRadius: 20,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                name,
-                style: TextStyle(
-                  color: accent,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.3,
-                ),
-              ),
-              const Spacer(),
+              _RadioDot(selected: selected),
+              const SizedBox(height: 12),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                 decoration: BoxDecoration(
-                  color: accent,
+                  color: _gold.withValues(alpha: selected ? 0.18 : 0.10),
                   borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                      color: _gold.withValues(alpha: selected ? 0.5 : 0.28)),
                 ),
                 child: Text(
                   badge,
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontSize: 9.5,
+                  style: TextStyle(
+                    color: _gold.withValues(alpha: selected ? 1.0 : 0.8),
+                    fontSize: 8.5,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.5,
                   ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
+              const SizedBox(height: 11),
               Text(
-                price,
+                name,
                 style: const TextStyle(
                   color: _textPrimary,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w900,
-                  height: 1.0,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2,
                 ),
               ),
-              const SizedBox(width: 5),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 5),
-                child: Text(period,
-                    style: const TextStyle(color: _textMuted, fontSize: 13)),
+              const SizedBox(height: 6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  price,
+                  style: const TextStyle(
+                    color: _textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(period,
+                  style: const TextStyle(color: _textMuted, fontSize: 11.5)),
+              const SizedBox(height: 8),
+              // Reserve the savings line in BOTH cards so they stay aligned.
+              Text(
+                savings ?? '',
+                style: const TextStyle(
+                  color: _gold,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 3),
-          Text(
-            positioning,
-            style: TextStyle(
-                color: accent, fontSize: 12, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 12),
-          _CheckList(accent: accent, fontSize: 12.5, items: benefits),
-          if (savings != null) ...[
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.10),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: accent.withValues(alpha: 0.3)),
-              ),
-              child: Text(
-                savings!,
-                style: TextStyle(
-                    color: accent, fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
-          const SizedBox(height: 14),
-          _PrimaryPaywallButton(
-            label: '${context.l10n.pwChoose} $name',
-            color: accent,
-            enabled: enabled,
-            onTap: onTap,
-          ),
-          const SizedBox(height: 6),
-          Center(
-            child: Text(fineprint,
-                style: const TextStyle(color: _textDim, fontSize: 10.5)),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _HowItWorks extends StatelessWidget {
-  const _HowItWorks();
-
-  static const _icons = <IconData>[
-    Icons.add_a_photo_outlined,
-    Icons.palette_outlined,
-    Icons.chat_bubble_outline,
-    Icons.auto_awesome,
-  ];
+/// Filled-check radio indicator for the selectable plan cards.
+class _RadioDot extends StatelessWidget {
+  final bool selected;
+  const _RadioDot({required this.selected});
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final labels = [l10n.pwStep1, l10n.pwStep2, l10n.pwStep3, l10n.pwStep4];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(l10n.pwHowItWorks,
-            style: _serif(fontSize: 22, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 14),
-        for (var i = 0; i < _icons.length; i++) ...[
-          if (i > 0) const SizedBox(height: 14),
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: _gold.withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: _gold.withValues(alpha: 0.4)),
-                ),
-                child: Icon(_icons[i], color: _gold, size: 18),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Text(
-                  labels[i],
-                  style: const TextStyle(
-                    color: _textMuted,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    height: 1.3,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      width: 22,
+      height: 22,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: selected ? _gold : Colors.transparent,
+        border: Border.all(color: selected ? _gold : _textDim, width: 2),
+      ),
+      child: selected
+          ? const Icon(Icons.check, size: 14, color: Colors.black)
+          : null,
     );
   }
 }

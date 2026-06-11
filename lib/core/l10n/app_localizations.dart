@@ -32,6 +32,8 @@ class AppLocalizations {
   String get appName => _get('appName');
   String get tagline => _get('tagline');
   String get taglineSub => _get('taglineSub');
+  String get brandSignature => _get('brandSignature');
+  String get brandDesigningSpace => _get('brandDesigningSpace');
 
   // ── Onboarding ────────────────────────────────────────────────────────────
   String get onboarding1Title => _get('onboarding1Title');
@@ -207,6 +209,9 @@ class AppLocalizations {
 
   // ── Paywall (V2) ──────────────────────────────────────────────────────────
   String get pwHeadline => _get('pwHeadline');
+  String get pwHeadlineLead => _get('pwHeadlineLead');
+  String get pwHeadlineAccent => _get('pwHeadlineAccent');
+  String get pwHeadlineTrail => _get('pwHeadlineTrail');
   String get pwSubheadline => _get('pwSubheadline');
   String get pwLovedBy => _get('pwLovedBy');
   String get pwHomeowners => _get('pwHomeowners');
@@ -223,6 +228,7 @@ class AppLocalizations {
   String get pwBenefitPriority => _get('pwBenefitPriority');
   String get pwBenefitHd => _get('pwBenefitHd');
   String get pwSavings => _get('pwSavings');
+  String get pwSavingsShort => _get('pwSavingsShort');
   String get pwChoose => _get('pwChoose');
   String get pwBilledYearly => _get('pwBilledYearly');
   String get pwBilledWeekly => _get('pwBilledWeekly');
@@ -234,6 +240,12 @@ class AppLocalizations {
   String get pwGuarantee => _get('pwGuarantee');
   String get pwGuaranteeSub => _get('pwGuaranteeSub');
   String get pwSecurePayments => _get('pwSecurePayments');
+  String get pwFeatUnlimited => _get('pwFeatUnlimited');
+  String get pwFeatHd => _get('pwFeatHd');
+  String get pwFeatAllStyles => _get('pwFeatAllStyles');
+  String get pwFeatNoWatermark => _get('pwFeatNoWatermark');
+  String get pwUnlockPremium => _get('pwUnlockPremium');
+  String get pwCancelAnytime => _get('pwCancelAnytime');
   String get pwAlreadySubscribed => _get('pwAlreadySubscribed');
   String get pwRestore => _get('pwRestore');
   String get pwNotNow => _get('pwNotNow');

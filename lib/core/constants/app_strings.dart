@@ -1,5 +1,5 @@
 abstract class AppStrings {
-  static const appName = 'AI Home Architect';
+  static const appName = 'AYDEN Studio';
   static const tagline = 'Your personal AI architect companion.';
   static const taglineSub = 'Interior · Exterior · Architecture';
 

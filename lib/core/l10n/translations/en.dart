@@ -1,8 +1,11 @@
 const Map<String, String> enTranslations = {
   // App
-  'appName': 'AI Home Architect',
+  'appName': 'AYDEN Studio',
   'tagline': 'Your personal AI architect companion.',
   'taglineSub': 'Interior · Exterior · Architecture',
+  // Sprint 2A — brand signature lines (splash + generation loading)
+  'brandSignature': 'YOUR PERSONAL AI ARCHITECT',
+  'brandDesigningSpace': 'Designing your dream space…',
 
   // Onboarding
   'onboarding1Title': 'Your space.\nTransformed.',
@@ -146,8 +149,8 @@ const Map<String, String> enTranslations = {
   'ftueBefore': 'Before',
   'ftueAfter': 'After',
   'ftueAiVision': 'AI Vision',
-  'ftueDemoUser': 'Renew my villa, add a swimming pool, surprise me',
-  'ftueDemoAi': 'Modern architecture — warmer, swimming pool and playground',
+  'ftueDemoUser': 'Make my living room warm and inviting, surprise me',
+  'ftueDemoAi': 'Warm Modern — wood accents, soft evening light',
   'ftueDemoRefining': 'Refining the space…',
 
   // Atmosphere taglines + subtitles (NAMES stay English brand — option A)
@@ -164,6 +167,10 @@ const Map<String, String> enTranslations = {
 
   // Paywall (V2)
   'pwHeadline': 'Bring your dream home to life',
+  // V2 hero — split for the controlled line break + gold accent word.
+  'pwHeadlineLead': 'Bring your dream\nhome to ',
+  'pwHeadlineAccent': 'life',
+  'pwHeadlineTrail': '',
   'pwSubheadline': 'Redesign your space with your personal AI architect.',
   'pwLovedBy': 'Loved by ',
   'pwHomeowners': ' homeowners',
@@ -180,6 +187,7 @@ const Map<String, String> enTranslations = {
   'pwBenefitPriority': 'Priority support',
   'pwBenefitHd': 'HD exports',
   'pwSavings': 'Save 65% · just \$1.55 / week',
+  'pwSavingsShort': 'Save 65%',
   'pwChoose': 'Choose',
   'pwBilledYearly': 'Billed yearly · Cancel anytime',
   'pwBilledWeekly': 'Billed weekly · Cancel anytime',
@@ -191,6 +199,12 @@ const Map<String, String> enTranslations = {
   'pwGuarantee': '7-day satisfaction guarantee',
   'pwGuaranteeSub': 'Not in love? Get a full refund within 7 days.',
   'pwSecurePayments': 'Secure payments',
+  'pwFeatUnlimited': 'Unlimited Generations',
+  'pwFeatHd': 'High Quality Renders',
+  'pwFeatAllStyles': 'All Styles & Rooms',
+  'pwFeatNoWatermark': 'No Watermark',
+  'pwUnlockPremium': 'Unlock Premium',
+  'pwCancelAnytime': 'Cancel anytime. No commitment.',
   'pwAlreadySubscribed': 'Already subscribed? ',
   'pwRestore': 'Restore Purchase',
   'pwNotNow': 'Not now',
@@ -285,7 +299,7 @@ const Map<String, String> enTranslations = {
   'spPrivacyComingSoon':
       'More privacy controls coming soon. We\'re committed to giving you full ownership of your data.',
   'spHelpSubtitle': 'Everything you need to create your dream space.',
-  'spFaq1Q': 'How does AIHomeArchitect work?',
+  'spFaq1Q': 'How does AYDEN Studio work?',
   'spFaq1A':
       'Upload a photo of your space, choose an atmosphere direction, and describe what you feel. Our AI architect transforms your space into a cinematic before & after vision.',
   'spFaq2Q': 'What\'s included in Premium?',
@@ -307,7 +321,7 @@ const Map<String, String> enTranslations = {
   'spAboutVersion': 'Version 1.0 · MVP Preview',
   'spAboutTagline':
       'Your personal AI architect companion.\nImagine. Refine. Reveal.',
-  'spCopyright': '© 2026 AI Home Architect. All rights reserved.',
+  'spCopyright': '© 2026 AYDEN Studio. All rights reserved.',
 
   // Generation loading phrases (ordered narrative)
   'genInit1': 'Reading your space…',

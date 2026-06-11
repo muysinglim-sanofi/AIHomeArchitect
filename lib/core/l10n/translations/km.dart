@@ -1,9 +1,12 @@
-// Khmer (ភាសាខ្មែរ) translations for AI Home Architect
+// Khmer (ភាសាខ្មែរ) translations for AYDEN Studio
 const Map<String, String> kmTranslations = {
   // App — brand name stays English
-  'appName': 'AI Home Architect',
+  'appName': 'AYDEN Studio',
   'tagline': 'ស្ថបត្យករ AI ផ្ទាល់ខ្លួនរបស់អ្នក',
   'taglineSub': 'ខាងក្នុង · ខាងក្រៅ · ស្ថាបត្យកម្ម',
+  // Sprint 2A — brand signature lines (splash + generation loading)
+  'brandSignature': 'ស្ថបត្យករ AI ផ្ទាល់ខ្លួន​របស់​អ្នក',
+  'brandDesigningSpace': 'កំពុង​រចនា​លំហ​ក្ដី​ស្រមៃ​របស់​អ្នក…',
 
   // Onboarding
   'onboarding1Title': 'ផ្ទះ​ក្នុង​ស្រមៃ\nចាប់ផ្ដើម​នៅ​ទីនេះ',
@@ -143,8 +146,8 @@ const Map<String, String> kmTranslations = {
   'ftueBefore': 'មុន',
   'ftueAfter': 'ក្រោយ',
   'ftueAiVision': 'ទស្សនៈ AI',
-  'ftueDemoUser': 'ធ្វើ​ឲ្យ​វីឡា​ស្រស់​ឡើង​វិញ បន្ថែម​អាង​ហែល​ទឹក ធ្វើ​ឲ្យ​ភ្ញាក់​ផ្អើល',
-  'ftueDemoAi': 'ស្ថាបត្យកម្ម​ទំនើប — កក់ក្ដៅ​ជាង អាង​ហែល​ទឹក និង​កន្លែង​លេង',
+  'ftueDemoUser': 'ធ្វើ​ឲ្យ​បន្ទប់​ទទួល​ភ្ញៀវ​កក់ក្ដៅ និង​ស្រួល​ស្វាគមន៍ ធ្វើ​ឲ្យ​ភ្ញាក់​ផ្អើល',
+  'ftueDemoAi': 'Warm Modern — បន្ទះ​ឈើ ពន្លឺ​ល្ងាច​ទន់ភ្លន់',
   'ftueDemoRefining': 'កំពុង​ប្រណិត​ទីកន្លែង…',
 
   // Atmosphere taglines + subtitles — KHMER V1, needs native review (names stay EN)
@@ -161,6 +164,10 @@ const Map<String, String> kmTranslations = {
 
   // Paywall (V2) — KHMER V1, needs native review (marketing) before production
   'pwHeadline': 'នាំ​ផ្ទះ​ក្នុង​ក្ដី​ស្រមៃ​របស់​អ្នក​មក​ឲ្យ​មាន​ជីវិត',
+  // V2 hero — split for the controlled line break + gold accent word.
+  'pwHeadlineLead': 'នាំ​ផ្ទះ​ក្នុង​ក្ដី​ស្រមៃ​\nរបស់​អ្នក​មក​ឲ្យ​មាន​',
+  'pwHeadlineAccent': 'ជីវិត',
+  'pwHeadlineTrail': '',
   'pwSubheadline': 'រចនា​ទីកន្លែង​របស់​អ្នក​ឡើង​វិញ​ជាមួយ​ស្ថបត្យករ AI ផ្ទាល់ខ្លួន',
   'pwLovedBy': 'ស្រឡាញ់​ដោយ ',
   'pwHomeowners': ' ម្ចាស់​ផ្ទះ',
@@ -177,6 +184,7 @@ const Map<String, String> kmTranslations = {
   'pwBenefitPriority': 'ជំនួយ​អាទិភាព',
   'pwBenefitHd': 'នាំ​ចេញ HD',
   'pwSavings': 'សន្សំ 65% · ត្រឹម​តែ \$1.55 / សប្ដាហ៍',
+  'pwSavingsShort': 'សន្សំ 65%',
   'pwChoose': 'ជ្រើស',
   'pwBilledYearly': 'គិត​ប្រាក់​ប្រចាំ​ឆ្នាំ · បោះបង់​បាន​គ្រប់​ពេល',
   'pwBilledWeekly': 'គិត​ប្រាក់​ប្រចាំ​សប្ដាហ៍ · បោះបង់​បាន​គ្រប់​ពេល',
@@ -188,6 +196,12 @@ const Map<String, String> kmTranslations = {
   'pwGuarantee': 'ធានា​ការ​ពេញ​ចិត្ត ៧ ថ្ងៃ',
   'pwGuaranteeSub': 'មិន​ពេញ​ចិត្ត? សង​ប្រាក់​វិញ​ពេញ​លេញ​ក្នុង ៧ ថ្ងៃ។',
   'pwSecurePayments': 'ការ​ទូទាត់​សុវត្ថិភាព',
+  'pwFeatUnlimited': 'ការ​បង្កើត​គ្មាន​កំណត់',
+  'pwFeatHd': 'រូបភាព​គុណភាព​ខ្ពស់',
+  'pwFeatAllStyles': 'គ្រប់​រចនាប័ទ្ម និង​បន្ទប់',
+  'pwFeatNoWatermark': 'គ្មាន​ស្លាក​ទឹក',
+  'pwUnlockPremium': 'ដោះ​សោ Premium',
+  'pwCancelAnytime': 'បោះបង់​បាន​គ្រប់​ពេល។ គ្មាន​កិច្ច​សន្យា។',
   'pwAlreadySubscribed': 'បាន​ជាវ​រួច? ',
   'pwRestore': 'ស្ដារ​ការ​ទិញ',
   'pwNotNow': 'មិន​ឥឡូវ',
@@ -282,7 +296,7 @@ const Map<String, String> kmTranslations = {
   'spPrivacyComingSoon':
       'ការ​គ្រប់​គ្រង​ឯកជនភាព​បន្ថែម​នឹង​មក​ដល់​ឆាប់ៗ។ យើង​ប្ដេជ្ញា​ផ្ដល់​ឲ្យ​អ្នក​នូវ​កម្មសិទ្ធិ​ពេញ​លេញ​លើ​ទិន្នន័យ​របស់​អ្នក។',
   'spHelpSubtitle': 'អ្វី​គ្រប់​យ៉ាង​ដែល​អ្នក​ត្រូវ​ការ​ដើម្បី​បង្កើត​ផ្ទះ​ក្នុង​ក្ដី​ស្រមៃ។',
-  'spFaq1Q': 'តើ AIHomeArchitect ដំណើរ​ការ​យ៉ាង​ណា?',
+  'spFaq1Q': 'តើ AYDEN Studio ដំណើរ​ការ​យ៉ាង​ណា?',
   'spFaq1A':
       'ផ្ទុក​រូបថត​ទីកន្លែង​របស់​អ្នក ជ្រើស​ទិសដៅ​បរិយាកាស និង​ពណ៌នា​អារម្មណ៍​របស់​អ្នក។ ស្ថបត្យករ AI របស់​យើង​បំប្លែង​ទីកន្លែង​ទៅ​ជា​ទស្សនៈ​មុន/ក្រោយ​បែប​ភាពយន្ត។',
   'spFaq2Q': 'តើ Premium មាន​អ្វី​ខ្លះ?',
@@ -303,7 +317,7 @@ const Map<String, String> kmTranslations = {
   'spClose': 'បិទ',
   'spAboutVersion': 'កំណែ 1.0 · មើល​ជា​មុន MVP',
   'spAboutTagline': 'ស្ថបត្យករ AI ផ្ទាល់ខ្លួន​របស់​អ្នក។\nស្រមៃ។ កែ​លម្អ។ បង្ហាញ។',
-  'spCopyright': '© 2026 AI Home Architect. រក្សា​សិទ្ធិ​គ្រប់​យ៉ាង។',
+  'spCopyright': '© 2026 AYDEN Studio. រក្សា​សិទ្ធិ​គ្រប់​យ៉ាង។',
 
   // Generation loading phrases — KHMER V1
   'genInit1': 'កំពុង​អាន​ទីកន្លែង​របស់​អ្នក…',

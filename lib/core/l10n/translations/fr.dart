@@ -1,11 +1,14 @@
-// French (Français) translations for AI Home Architect.
+// French (Français) translations for AYDEN Studio.
 // Phase 1 i18n — native French (launch market). Double-quoted values so French
 // apostrophes need no escaping.
 const Map<String, String> frTranslations = {
   // App — brand name stays as-is
-  'appName': 'AI Home Architect',
+  'appName': 'AYDEN Studio',
   'tagline': "Votre architecte d'intérieur IA personnel.",
   'taglineSub': "Intérieur · Extérieur · Architecture",
+  // Sprint 2A — brand signature lines (splash + generation loading)
+  'brandSignature': "VOTRE ARCHITECTE IA PERSONNEL",
+  'brandDesigningSpace': "Conception de votre espace de rêve…",
 
   // Onboarding
   'onboarding1Title': "Votre espace.\nTransformé.",
@@ -144,9 +147,8 @@ const Map<String, String> frTranslations = {
   'ftueBefore': "Avant",
   'ftueAfter': "Après",
   'ftueAiVision': "Vision IA",
-  'ftueDemoUser': "Rénovez ma villa, ajoutez une piscine, surprenez-moi",
-  'ftueDemoAi':
-      "Architecture moderne — plus chaleureuse, piscine et aire de jeux",
+  'ftueDemoUser': "Rendez mon salon chaleureux et accueillant, surprenez-moi",
+  'ftueDemoAi': "Warm Modern — bois, lumière douce du soir",
   'ftueDemoRefining': "Affinement de l'espace…",
 
   // Atmosphere taglines + subtitles (noms gardés en anglais — option A)
@@ -167,6 +169,10 @@ const Map<String, String> frTranslations = {
 
   // Paywall (V2)
   'pwHeadline': "Donnez vie à la maison de vos rêves",
+  // V2 hero — découpé pour le retour ligne + le mot accent en or.
+  'pwHeadlineLead': "Donnez ",
+  'pwHeadlineAccent': "vie",
+  'pwHeadlineTrail': " à la maison\nde vos rêves",
   'pwSubheadline':
       "Redessinez votre espace avec votre architecte IA personnel.",
   'pwLovedBy': "Adoré par ",
@@ -184,6 +190,7 @@ const Map<String, String> frTranslations = {
   'pwBenefitPriority': "Support prioritaire",
   'pwBenefitHd': "Exports HD",
   'pwSavings': "Économisez 65 % · seulement 1,55 \$ / semaine",
+  'pwSavingsShort': "−65 %",
   'pwChoose': "Choisir",
   'pwBilledYearly': "Facturé annuellement · Annulable à tout moment",
   'pwBilledWeekly': "Facturé chaque semaine · Annulable à tout moment",
@@ -195,6 +202,12 @@ const Map<String, String> frTranslations = {
   'pwGuarantee': "Satisfaction garantie 7 jours",
   'pwGuaranteeSub': "Pas convaincu ? Remboursement intégral sous 7 jours.",
   'pwSecurePayments': "Paiements sécurisés",
+  'pwFeatUnlimited': "Générations illimitées",
+  'pwFeatHd': "Rendus haute qualité",
+  'pwFeatAllStyles': "Tous styles et pièces",
+  'pwFeatNoWatermark': "Sans filigrane",
+  'pwUnlockPremium': "Débloquer Premium",
+  'pwCancelAnytime': "Annulable à tout moment. Sans engagement.",
   'pwAlreadySubscribed': "Déjà abonné ? ",
   'pwRestore': "Restaurer l'achat",
   'pwNotNow': "Plus tard",
@@ -296,7 +309,7 @@ const Map<String, String> frTranslations = {
   'spPrivacyComingSoon':
       "D'autres contrôles de confidentialité arrivent bientôt. Nous nous engageons à vous donner la pleine propriété de vos données.",
   'spHelpSubtitle': "Tout ce qu'il vous faut pour créer la maison de vos rêves.",
-  'spFaq1Q': "Comment fonctionne AIHomeArchitect ?",
+  'spFaq1Q': "Comment fonctionne AYDEN Studio ?",
   'spFaq1A':
       "Importez une photo de votre espace, choisissez une direction d'ambiance, et décrivez ce que vous ressentez. Notre architecte IA transforme votre espace en une vision avant/après cinématique.",
   'spFaq2Q': "Qu'inclut le Premium ?",
@@ -319,7 +332,7 @@ const Map<String, String> frTranslations = {
   'spAboutVersion': "Version 1.0 · Aperçu MVP",
   'spAboutTagline':
       "Votre architecte IA personnel.\nImaginez. Affinez. Révélez.",
-  'spCopyright': "© 2026 AI Home Architect. Tous droits réservés.",
+  'spCopyright': "© 2026 AYDEN Studio. Tous droits réservés.",
 
   // Generation loading phrases (ordered narrative)
   'genInit1': "Lecture de votre espace…",
