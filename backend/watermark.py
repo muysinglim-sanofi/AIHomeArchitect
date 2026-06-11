@@ -1,4 +1,4 @@
-"""AYDEN Studio — server-side free-tier watermark (Sprint 1).
+"""AYDEN Studio — server-side free-tier watermark (Sprint 1 · Sprint 2A brand).
 
 Applied to the actual image BEFORE the JPEG bytes are uploaded to Supabase
 Storage, so the *stored and served* image carries the mark. This is
@@ -7,23 +7,47 @@ free-tier render.
 
 Premium / admin users (decided by the server-authoritative
 `quota.has_admin_role`) receive a CLEAN image — `apply_watermark` is simply
-not called for them in main.py.
+not called for them in main.py.  ← that gating is UNCHANGED by Sprint 2A.
 
-Design goals: premium, subtle, elegant, hard to crop out cleanly, without
-destroying the "wow". Text-based ("AYDEN STUDIO") — no external asset needed:
-  • a faint diagonal tiling across the whole frame (can't be cropped away), and
-  • a single refined corner wordmark (brand presence, legible on light OR dark
-    renders thanks to a soft shadow).
+Sprint 2A (brand) : the watermark is now the compact AYDEN **compass mark** in
+the bottom corner, low opacity — luxury branding, NOT anti-theft aggression.
+The mark is `assets/branding/ayden_compass_gold.png` with a soft shadow so it
+reads on light OR dark renders. If the asset is ever missing, we fall back to
+the previous text wordmark so a free render is never left unmarked.
 """
 from __future__ import annotations
 
 import logging
+import os
 
 from PIL import Image, ImageDraw, ImageFont
 
 log = logging.getLogger("watermark")
 
 WATERMARK_TEXT = "AYDEN STUDIO"
+
+# Compact compass mark (bottom corner). Opacity kept in the luxury 0.12-0.18
+# band so it stays elegant / almost invisible but still recognisable.
+_MARK_PATH = os.path.join(
+    os.path.dirname(__file__), "assets", "branding", "ayden_compass_gold.png"
+)
+_MARK_OPACITY = 0.16
+_mark_cache: "Image.Image | None" = None
+_mark_loaded = False
+
+
+def _load_mark() -> "Image.Image | None":
+    """Load + cache the compass RGBA once. None if unavailable."""
+    global _mark_cache, _mark_loaded
+    if _mark_loaded:
+        return _mark_cache
+    _mark_loaded = True
+    try:
+        _mark_cache = Image.open(_MARK_PATH).convert("RGBA")
+    except Exception as e:  # pragma: no cover - packaging slip
+        log.warning("watermark mark asset unavailable (%s) — text fallback", e)
+        _mark_cache = None
+    return _mark_cache
 
 # Try real TTFs first (crisp), fall back to Pillow's scalable default.
 _FONT_CANDIDATES = (
@@ -54,9 +78,46 @@ def _letterspace(text: str, gap: int = 1) -> str:
 
 
 def apply_watermark(img: "Image.Image") -> "Image.Image":
-    """Return a watermarked **RGB** copy of `img`. Input may be any mode."""
+    """Return a watermarked **RGB** copy of `img`. Input may be any mode.
+
+    Sprint 2A: the compact AYDEN compass mark in the bottom-right corner, low
+    opacity, with a faint shadow for legibility. Falls back to the legacy text
+    watermark if the asset is unavailable.
+    """
     base = img.convert("RGBA")
     w, h = base.size
+
+    mark = _load_mark()
+    if mark is None:
+        return _apply_text_watermark(base, w, h)
+
+    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    # Compact, proportional to image width.
+    target = max(56, w // 9)
+    scale = target / max(mark.size)
+    m = mark.resize(
+        (max(1, int(mark.width * scale)), max(1, int(mark.height * scale))),
+        resample=Image.Resampling.LANCZOS,
+    )
+    src_alpha = m.getchannel("A")
+    m.putalpha(src_alpha.point(lambda a: int(a * _MARK_OPACITY)))
+
+    margin = max(14, w // 60)
+    px = w - m.width - margin
+    py = h - m.height - margin
+
+    # Faint dark shadow (1px offset) so the gold mark reads on light renders.
+    shadow_alpha = src_alpha.point(lambda a: int(a * _MARK_OPACITY * 0.7))
+    shadow = Image.new("RGBA", m.size, (0, 0, 0, 0))
+    shadow.paste((8, 6, 6, 255), (0, 0, m.width, m.height), shadow_alpha)
+    overlay.alpha_composite(shadow, (px + 1, py + 1))
+    overlay.alpha_composite(m, (px, py))
+
+    return Image.alpha_composite(base, overlay).convert("RGB")
+
+
+def _apply_text_watermark(base: "Image.Image", w: int, h: int) -> "Image.Image":
+    """Legacy text watermark — fallback when the compass asset is missing."""
     overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
 
     # ── 1) Faint diagonal tiling — impossible to crop out completely ────────
