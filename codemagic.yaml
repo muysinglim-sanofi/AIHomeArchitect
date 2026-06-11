@@ -12,7 +12,7 @@
 #          SUPABASE_ANON_KEY               = <your supabase anon key>
 #          REVENUECAT_PUBLIC_API_KEY_IOS   = <appl_... or leave empty for now>
 #          REVENUECAT_PUBLIC_API_KEY_ANDROID = <goog_... or leave empty>
-#   3. Register the bundle id  com.aihomearchitect.aiHomeArchitect  in
+#   3. Register the bundle id  com.aydenstudio.app  in
 #        App Store Connect (create the app there first).
 #
 # The .env is gitignored on purpose — it is INJECTED here at build time from the
@@ -29,7 +29,7 @@ workflows:
     environment:
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.aihomearchitect.aiHomeArchitect
+        bundle_identifier: com.aydenstudio.app
       groups:
         - ayden_env                            # the 5 .env vars (Secure, set in Codemagic UI)
       flutter: stable
