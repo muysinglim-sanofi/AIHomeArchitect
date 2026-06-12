@@ -72,3 +72,10 @@ class MessageModel {
     required this.createdAt,
   });
 }
+
+/// CHANTIER A — room lock. True once the session has produced at least one
+/// generated vision. After this the room is IMMUTABLE for the lineage: an
+/// atmosphere switch — or a re-upload (which keeps the prior visions in the
+/// chat) — must never change it. Pure → unit-testable.
+bool sessionHasVision(Iterable<MessageModel> messages) =>
+    messages.any((m) => m.type == MessageType.imageResult);

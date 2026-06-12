@@ -1544,8 +1544,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         initialStyle: _currentStyle,
         onReplace: _replaceSourcePhoto,
         onDirectionChanged: (roomType, style) {
+          // CHANTIER A — Room lock. The room is settable ONLY before the first
+          // vision exists; once the lineage has any generated vision the room is
+          // IMMUTABLE. An atmosphere switch — or a re-upload, which keeps the
+          // prior visions in the chat — must never drift it (the Living Room →
+          // Home Office bug). Style stays freely changeable.
+          final hasVision = sessionHasVision(_messages);
           setState(() {
-            _currentRoomType = roomType;
+            if (!hasVision) _currentRoomType = roomType;
             _currentStyle = style;
           });
           // Wave 4.10g — room/atmosphere selection survives restart.
