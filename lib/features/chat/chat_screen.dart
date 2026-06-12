@@ -609,8 +609,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     return List.generate(16, (_) => rand.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
   }
 
-  void _exploreDirection(String style) {
-    setState(() => _currentStyle = style);
+  // Atmosphere switch INITIATED FROM a specific vision (reveal "Generate
+  // <atmosphere>"). Re-binds the generation source + room to THAT vision before
+  // generating, so a multi-upload session can't reuse an older vision's source
+  // or room (fixes wrong-source + wrong-room atmosphere swaps). The reveal is
+  // single-vision, so [vision] is exactly the render the user acted on.
+  void _exploreDirectionFromVision(GeneratedResult vision, String style) {
+    final target =
+        resolveAtmosphereSwitchTarget(vision, fallbackRoom: _currentRoomType);
+    setState(() {
+      if (target.sourceUrl != null) _generationSourceUrl = target.sourceUrl;
+      if (target.room != null) _currentRoomType = target.room!;
+      _currentStyle = style;
+    });
     _persistSession(); // Wave 4.10g — survive atmosphere swap
     _generate(overridePrompt: 'Redesign this space in the $style style.');
   }
@@ -635,7 +646,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     if (returned is GeneratedResult) {
       _continueFromVision(returned);
     } else if (returned is String) {
-      _exploreDirection(returned);
+      // BUG FIX — bind the atmosphere switch to the vision that was opened
+      // (`result`), not the stale session globals. The reveal is single-vision,
+      // so `result` is exactly the render the user changed atmosphere on.
+      _exploreDirectionFromVision(result, returned);
     }
     // else: null → back navigation, no change.
   }
@@ -1241,6 +1255,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
             afterImageUrl: afterUrl,
             styleLabel: styleLabel,
             projectId: _project.id,
+            // Bind the room to this vision so a later atmosphere switch on it
+            // restores ITS room, not a stale session global (cross-vision leak).
+            roomType: _currentRoomType,
           ),
           createdAt: DateTime.now(),
         ));
