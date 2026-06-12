@@ -496,90 +496,106 @@ class _ContinueCard extends ConsumerWidget {
       pendingGenerationsProvider.select((m) => m[project.id]),
     );
 
+    // CHANTIER D (premium pass) — full-bleed image + warm-dark cinematic scrim
+    // + overlaid meta, mirroring the Redesigns ProjectCard so the home strip
+    // and the Projects grid read as one consistent premium system (was: fixed
+    // image band on top + flat text block below).
+    final title =
+        project.roomType.isNotEmpty ? project.roomType : project.title;
+
     return _TapScaleWidget(
       onTap: () => context.push('/chat/${project.id}'),
       child: Container(
         width: 168,
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: AppColors.shimmerBase,
           borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
           border: Border.all(color: AppColors.border),
         ),
         clipBehavior: Clip.antiAlias,
-        // Fixed image band + flexible text region. The text sits in an
-        // Expanded so the card total height is pinned to the strip height
-        // (214) regardless of font scaling — no vertical overflow, no
-        // clipped/hidden text (each line keeps maxLines + ellipsis).
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            SizedBox(
-              height: 120,
-              width: double.infinity,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  previewUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: previewUrl,
-                          fit: BoxFit.cover,
-                          placeholder: (_, _) =>
-                              Container(color: AppColors.shimmerBase),
-                          errorWidget: (_, _, _) =>
-                              Container(color: AppColors.shimmerBase),
-                        )
-                      : Container(color: AppColors.shimmerBase),
-                  if (pendingState != null)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: _PendingBadge(state: pendingState),
-                    ),
-                ],
+            // ── Full-bleed preview ──
+            if (previewUrl != null)
+              CachedNetworkImage(
+                imageUrl: previewUrl,
+                fit: BoxFit.cover,
+                placeholder: (_, _) =>
+                    const ColoredBox(color: AppColors.shimmerBase),
+                errorWidget: (_, _, _) =>
+                    const ColoredBox(color: AppColors.shimmerBase),
+              )
+            else
+              const ColoredBox(
+                color: AppColors.shimmerBase,
+                child: Center(
+                  child: Icon(Icons.image_outlined,
+                      color: AppColors.textTertiary, size: 28),
+                ),
+              ),
+            // ── Warm-dark cinematic scrim ──
+            const IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment(0, -0.05),
+                    colors: [Color(0xE60C0906), Color(0x000C0906)],
+                  ),
+                ),
               ),
             ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          project.title,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          project.style,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(color: AppColors.textSecondary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+            // ── Pending generation badge (functional, unchanged) ──
+            if (pendingState != null)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: _PendingBadge(state: pendingState),
+              ),
+            // ── Overlaid meta ──
+            Positioned(
+              left: 11,
+              right: 11,
+              bottom: 10,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.1,
                     ),
+                  ),
+                  if (project.style.isNotEmpty) ...[
+                    const SizedBox(height: 1),
                     Text(
-                      meta,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppColors.textTertiary,
-                            fontSize: 10,
-                          ),
+                      project.style,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.78),
+                        fontSize: 11.5,
+                      ),
                     ),
                   ],
-                ),
+                  const SizedBox(height: 3),
+                  Text(
+                    meta,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.55),
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
