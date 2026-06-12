@@ -1187,6 +1187,7 @@ class _RoomScroller extends ConsumerWidget {
                       child: AiActionCard(
                         title: context.l10n.uplAiDecide,
                         subtitle: context.l10n.uplAiDecideSub,
+                        selected: aiDecideSelected,
                         locked: aiLockedNow,
                         onTap: onAi,
                       ),
