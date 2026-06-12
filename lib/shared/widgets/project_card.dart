@@ -42,22 +42,41 @@ class ProjectCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // CHANTIER D #4 — title leads the hierarchy.
                   Text(
                     project.title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    project.style,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
                         ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 8),
+                  // CHANTIER D #13 — room badge + atmosphere chip make each card
+                  // scannable at a glance (vs the old identical-looking rows).
+                  Row(
+                    children: [
+                      if (project.roomType.isNotEmpty)
+                        Flexible(
+                          child: _MetaChip(
+                            icon: Icons.meeting_room_outlined,
+                            label: project.roomType,
+                          ),
+                        ),
+                      if (project.roomType.isNotEmpty &&
+                          project.style.isNotEmpty)
+                        const SizedBox(width: 6),
+                      if (project.style.isNotEmpty)
+                        Flexible(
+                          child: _MetaChip(
+                            icon: Icons.auto_awesome,
+                            label: project.style,
+                            accent: true,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   Text(
                     '${l10n.lastUpdated} ${_timeAgo(project.lastUpdatedAt)}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -70,6 +89,51 @@ class ProjectCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// CHANTIER D #13 — compact meta chip. Neutral for the room, gold-accented for
+/// the atmosphere, so the two read distinctly without crowding the card.
+class _MetaChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool accent;
+  const _MetaChip({required this.icon, required this.label, this.accent = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = accent ? AppColors.accent : AppColors.textSecondary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: accent
+            ? AppColors.accent.withValues(alpha: 0.10)
+            : AppColors.border.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(50),
+        border: accent
+            ? Border.all(color: AppColors.accent.withValues(alpha: 0.30))
+            : null,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
