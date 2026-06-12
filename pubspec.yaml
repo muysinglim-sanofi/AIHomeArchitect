@@ -82,13 +82,14 @@ flutter_launcher_icons:
   adaptive_icon_background: "#000000"
   adaptive_icon_foreground: "assets/branding/app_icon_1024_black.png"
 
-# CHANTIER E — native launch screen. Warm-dark bg + gold compass so the OS
-# launch screen MATCHES the new dark/premium Flutter splash (no light flash).
+# CHANTIER E (v2) — native launch screen. Light ivory bg + gold compass so the
+# OS launch screen MATCHES the new LIGHT architectural Flutter splash (the photo
+# scene is light beige — a dark native bg would flash dark→light at handoff).
 flutter_native_splash:
-  color: "#1A1512"
+  color: "#EDE4D8"
   image: assets/branding/ayden_compass_gold.png
   android_12:
-    color: "#1A1512"
+    color: "#EDE4D8"
     image: assets/branding/ayden_compass_gold.png
   android: true
   ios: true
@@ -100,6 +101,7 @@ flutter:
   assets:
     - .env
     - assets/images/
+    - assets/images/splash/
     - assets/showcase/
     - assets/atmospheres/
     - assets/atmospheres/ftue/

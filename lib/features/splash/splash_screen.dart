@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../shared/branding/ayden_brand.dart';
 
-/// CHANTIER E — premium architectural splash. A warm, full-bleed architectural
-/// backdrop with a warm-depth scrim, the gold compass-house mark + white AYDEN ·
-/// gold STUDIO wordmark slightly above centre, and a gold progress line with the
-/// "Designing your dream space…" line in brand gold around the lower third.
-/// (Was an empty ivory canvas — too flat / not premium.)
+/// CHANTIER E (v2) — premium architectural splash, faithful to the AYDEN
+/// "AFTER" reference: the light beige arch scene full-bleed, the gold compass
+/// mark + a centred AYDEN · STUDIO wordmark, and a fine gold progress line with
+/// "Designing your dream space…" near the bottom.
+///
+/// The backdrop is LIGHT, so the wordmark reads in dark ink (not white) and the
+/// only scrim is a soft warm wash at the very bottom for loader legibility — the
+/// luminous scene is otherwise left untouched.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -22,9 +26,9 @@ class _SplashScreenState extends State<SplashScreen>
   late final AnimationController _controller;
   late final Animation<double> _fadeAnim;
 
-  // Warm near-black — the canvas behind the photo (and the fallback if the
-  // backdrop asset is ever missing). Matches the native launch screen colour.
-  static const Color _warmDark = Color(0xFF1A1512);
+  // Warm ivory — the canvas behind the photo (and the fallback if the backdrop
+  // asset is ever missing).
+  static const Color _ivory = Color(0xFFEDE4D8);
 
   @override
   void initState() {
@@ -47,96 +51,148 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final size = MediaQuery.sizeOf(context);
-    final w = size.width;
-    final h = size.height;
+    final w = MediaQuery.sizeOf(context).width;
 
-    final markSize = (w * 0.30).clamp(108.0, 168.0);
+    final markSize = (w * 0.34).clamp(120.0, 150.0);
+    final aydenSize = (w * 0.105).clamp(34.0, 44.0);
 
-    return Scaffold(
-      backgroundColor: _warmDark,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          // ── Warm architectural backdrop (full-bleed, behind the status bar).
-          // Swap for a dedicated splash background asset later if desired.
-          Image.asset(
-            'assets/showcase/living_after.jpg',
-            fit: BoxFit.cover,
-            filterQuality: FilterQuality.medium,
-            errorBuilder: (_, _, _) => const ColoredBox(color: _warmDark),
-          ),
-          // ── Warm-depth scrim: darker at top & bottom for legibility, soft in
-          // the middle so the room keeps its light and atmosphere.
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xD9140F09), // warm dark top
-                  Color(0x59140F09), // soft middle (room breathes)
-                  Color(0xF2100B06), // deep warm bottom
-                ],
-                stops: [0.0, 0.44, 1.0],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      // Light backdrop ⇒ dark status-bar icons.
+      value: SystemUiOverlayStyle.dark,
+      child: Scaffold(
+        backgroundColor: _ivory,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            // ── Architectural backdrop (full-bleed, behind the status bar) ──
+            Image.asset(
+              'assets/images/splash/splash_background.png',
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.medium,
+              errorBuilder: (_, _, _) => const ColoredBox(color: _ivory),
+            ),
+            // ── Soft warm wash at the very bottom (loader legibility only) ──
+            const IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.center,
+                    colors: [Color(0x66100B06), Color(0x00100B06)],
+                    stops: [0.0, 0.34],
+                  ),
+                ),
               ),
             ),
-          ),
-          FadeTransition(
-            opacity: _fadeAnim,
-            child: SafeArea(
-              child: Stack(
-                children: [
-                  // ── Logo block — slightly above centre ──
-                  Positioned(
-                    top: h * 0.27,
-                    left: 0,
-                    right: 0,
-                    child: Column(
-                      children: [
-                        AydenMark(gold: true, size: markSize),
-                        const SizedBox(height: 20),
-                        const AydenWordmark(onDark: true, scale: 1.12),
-                        const SizedBox(height: 22),
-                        Text(
-                          l10n.brandSignature.toUpperCase(),
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.montserrat(
-                            fontSize: 11,
-                            letterSpacing: 3.4,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white.withValues(alpha: 0.58),
+            FadeTransition(
+              opacity: _fadeAnim,
+              child: SafeArea(
+                child: Stack(
+                  children: [
+                    // ── Logo block — centred (vertically + horizontally) ──
+                    Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AydenMark(gold: true, size: markSize),
+                          const SizedBox(height: 22),
+                          _Wordmark(aydenSize: aydenSize),
+                          const SizedBox(height: 20),
+                          Text(
+                            l10n.brandSignature.toUpperCase(),
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.montserrat(
+                              fontSize: 11,
+                              letterSpacing: 3.2,
+                              fontWeight: FontWeight.w400,
+                              color: const Color(0xFF8C7E66),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  // ── Loading — lower third, in brand gold ──
-                  Positioned(
-                    top: h * 0.79,
-                    left: 0,
-                    right: 0,
-                    child: Column(
-                      children: [
-                        const BrandProgressLine(width: 96),
-                        const SizedBox(height: 16),
-                        Text(
-                          l10n.brandDesigningSpace,
-                          style: GoogleFonts.inter(
-                            fontSize: 12.5,
-                            letterSpacing: 0.3,
-                            color: AppColors.brandGold.withValues(alpha: 0.92),
-                          ),
+                    // ── Loading — near the bottom, in brand gold ──
+                    Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 44),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const BrandProgressLine(width: 96),
+                            const SizedBox(height: 16),
+                            Text(
+                              l10n.brandDesigningSpace,
+                              style: GoogleFonts.inter(
+                                fontSize: 12.5,
+                                letterSpacing: 0.3,
+                                color:
+                                    AppColors.brandGold.withValues(alpha: 0.95),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+}
+
+/// AYDEN (dark ink) + STUDIO (gold, with a thin gold rule on each side), per the
+/// reference. Kept local to the splash because the shared [AydenWordmark] has no
+/// flanking rules and uses on-dark tones — this surface is light.
+class _Wordmark extends StatelessWidget {
+  final double aydenSize;
+  const _Wordmark({required this.aydenSize});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'AYDEN',
+          style: GoogleFonts.montserrat(
+            color: AppColors.textPrimary,
+            fontSize: aydenSize,
+            fontWeight: FontWeight.w300,
+            letterSpacing: aydenSize * 0.24,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _goldRule(),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                'STUDIO',
+                style: GoogleFonts.montserrat(
+                  color: AppColors.brandGold,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 6,
+                ),
+              ),
+            ),
+            _goldRule(),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _goldRule() => Container(
+        width: 26,
+        height: 1,
+        color: AppColors.brandGold.withValues(alpha: 0.85),
+      );
 }
