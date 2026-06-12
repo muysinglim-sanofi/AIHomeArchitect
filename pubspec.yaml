@@ -79,17 +79,16 @@ flutter_launcher_icons:
   ios: true
   remove_alpha_ios: true
   min_sdk_android: 21
-  adaptive_icon_background: "#1E161E"
+  adaptive_icon_background: "#000000"
   adaptive_icon_foreground: "assets/branding/app_icon_1024_black.png"
 
-# Sprint 2A — native launch screen (run: dart run flutter_native_splash:create)
-# Ivory bg + gold compass so the OS launch screen MATCHES the Flutter splash —
-# no more dark app-icon flash before the branded splash.
+# CHANTIER E — native launch screen. Warm-dark bg + gold compass so the OS
+# launch screen MATCHES the new dark/premium Flutter splash (no light flash).
 flutter_native_splash:
-  color: "#F4F1EC"
+  color: "#1A1512"
   image: assets/branding/ayden_compass_gold.png
   android_12:
-    color: "#F4F1EC"
+    color: "#1A1512"
     image: assets/branding/ayden_compass_gold.png
   android: true
   ios: true
