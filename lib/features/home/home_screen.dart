@@ -322,6 +322,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           height: 214,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
+            // CHANTIER F #18 — livelier, smoother Continue Designing scroll:
+            // elastic bouncing physics (consistent iOS↔Android) instead of the
+            // flat Android clamp. The page padding already peeks the next card.
+            physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics()),
             padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.pagePadding),
             itemCount: sessions.length,

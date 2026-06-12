@@ -69,6 +69,13 @@ class _AtmosphereHeroCardState extends State<AtmosphereHeroCard> {
                 Image.asset(
                   widget.asset,
                   fit: widget.compact ? BoxFit.cover : BoxFit.contain,
+                  // CHANTIER F #14 — normalize the compact crop toward the
+                  // architectural focal point (upper-mid). Interior photos read
+                  // best framed on the room/openings; the lower edge is covered
+                  // by the title scrim anyway, so center-crop wasted the subject.
+                  alignment: widget.compact
+                      ? const Alignment(0, -0.18)
+                      : Alignment.center,
                   errorBuilder: (_, _, _) =>
                       const ColoredBox(color: Color(0xFF1A1A1C)),
                 ),
