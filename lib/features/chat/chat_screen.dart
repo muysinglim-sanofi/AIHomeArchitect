@@ -983,9 +983,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     // generation source, so this generation runs as a fresh FIRST_VISION on the
     // new photo (iteration == 1).
     if (_sourceReplaced) {
+      // CHANTIER C — instant source preview. The loading bubble renders
+      // _sourceImageFile from the LOCAL file, so showing it BEFORE the network
+      // upload makes the user's new photo + the cinematic wait appear
+      // immediately instead of after the Supabase round-trip (no perceived
+      // freeze). The later loading-bubble add is guarded, so no duplicate.
+      if (!_messages.any((m) => m.type == MessageType.loading)) {
+        setState(() {
+          _messages.add(MessageModel(
+            id: 'loading_${DateTime.now().millisecondsSinceEpoch}',
+            content: '1|$_currentStyle', // re-upload → fresh V1 (init phrases)
+            isAi: true,
+            type: MessageType.loading,
+            createdAt: DateTime.now(),
+          ));
+        });
+        _scrollToBottom();
+      }
       final ok = await _applyReplacedSource();
       if (!ok) {
         if (!mounted) return;
+        // Upload failed — drop the optimistic loading bubble we just showed.
+        setState(() =>
+            _messages.removeWhere((m) => m.type == MessageType.loading));
         if (overridePrompt == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
