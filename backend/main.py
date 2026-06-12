@@ -1672,8 +1672,14 @@ async def generate(
             #     is unreachable after a custom edit.
             # Robustness: select by vision_number == 1 (not index [0]) to
             # survive parse_versions silent-skip on corrupt entries.
+            # Multi-upload fix (2026-06-12): scan the ledger REVERSED so we pin
+            # the V1 of the CURRENT lineage. A mid-session re-upload resets the
+            # iteration counter, so its fresh V1 is ALSO vision_number==1 — the
+            # ledger then holds several vn==1 entries. The forward scan pinned
+            # the FIRST (the original upload's V1 → wrong space); reversed pins
+            # the most recent V1 = the re-uploaded lineage the user is in.
             _v1 = next(
-                (v for v in _versions if v.vision_number == 1),
+                (v for v in reversed(_versions) if v.vision_number == 1),
                 None,
             )
             if _v1 and _v1.generated_image_url:
