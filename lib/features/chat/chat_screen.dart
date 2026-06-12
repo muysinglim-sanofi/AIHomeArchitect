@@ -15,6 +15,8 @@ import '../cards/widgets/room_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import '../../shared/widgets/image_picker_sheet.dart';
 import 'package:intl/intl.dart';
 import 'widgets/chat_input_bar.dart';
 import '../../core/constants/app_colors.dart';
@@ -1620,14 +1622,58 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   // sheet can update its own preview; the sheet only closes on quit or on
   // "Generate Design".
   Future<File?> _replaceSourcePhoto() async {
-    final picked = await _picker.pickImage(source: ImageSource.gallery);
-    if (picked == null || !mounted) return null;
-    final file = File(picked.path);
+    // CHANTIER C #1 — same premium picker as New Design (Camera / Gallery /
+    // Examples) via the SHARED ImagePickerSheet. Returns the picked file so the
+    // Design Direction sheet refreshes its preview.
+    final file = await showModalBottomSheet<File?>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => ImagePickerSheet(
+        onCamera: () async {
+          final f = await _pickReplacementFile(ImageSource.camera);
+          if (sheetCtx.mounted) Navigator.pop(sheetCtx, f);
+        },
+        onGallery: () async {
+          final f = await _pickReplacementFile(ImageSource.gallery);
+          if (sheetCtx.mounted) Navigator.pop(sheetCtx, f);
+        },
+        onExample: (asset) async {
+          final f = await _exampleToFile(asset);
+          if (sheetCtx.mounted) Navigator.pop(sheetCtx, f);
+        },
+      ),
+    );
+    if (file == null || !mounted) return null;
     setState(() {
       _sourceImageFile = file;
       _sourceReplaced = true; // next generation = fresh V1 from this photo
     });
     return file;
+  }
+
+  Future<File?> _pickReplacementFile(ImageSource source) async {
+    final picked = await _picker.pickImage(source: source, imageQuality: 85);
+    return picked == null ? null : File(picked.path);
+  }
+
+  // Example photo (bundled asset) → temp file, exactly like a Camera/Gallery
+  // pick, so the re-upload flow stays identical downstream.
+  Future<File?> _exampleToFile(String assetPath) async {
+    try {
+      final data = await rootBundle.load(assetPath);
+      final file = File(
+        '${Directory.systemTemp.path}/ayden_example_'
+        '${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      await file.writeAsBytes(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+      );
+      return file;
+    } catch (e) {
+      debugPrint('[Chat] example photo load failed: $e');
+      return null;
+    }
   }
 
   // Mid-session source change → re-upload the new photo, make it the new
