@@ -45,7 +45,17 @@ class AppButton extends StatelessWidget {
     Widget button;
     switch (variant) {
       case AppButtonVariant.primary:
-        button = ElevatedButton(onPressed: loading ? null : onPressed, child: child);
+        button = ElevatedButton(
+          onPressed: loading ? null : onPressed,
+          // CHANTIER C — clearer disabled state. The theme default reads as a
+          // near-invisible flat grey ("broken?"); a muted-but-present accent
+          // says "not ready yet" while keeping a premium feel.
+          style: ElevatedButton.styleFrom(
+            disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.32),
+            disabledForegroundColor: AppColors.surface.withValues(alpha: 0.85),
+          ),
+          child: child,
+        );
       case AppButtonVariant.secondary:
         button = OutlinedButton(onPressed: loading ? null : onPressed, child: child);
       case AppButtonVariant.ghost:
@@ -66,6 +76,8 @@ class AppButton extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.accent,
             foregroundColor: AppColors.surface,
+            disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.32),
+            disabledForegroundColor: AppColors.surface.withValues(alpha: 0.85),
             elevation: 0,
             padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
             shape: RoundedRectangleBorder(

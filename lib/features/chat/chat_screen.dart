@@ -110,6 +110,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   String? _generationSourceUrl;
 
   late String _sessionTitle;
+  // CHANTIER C — once true, the user renamed the session manually, so the
+  // room+atmosphere auto-naming backs off and never overrides their choice.
+  bool _titleManuallySet = false;
   bool _isEditingTitle = false;
   final _titleEditController = TextEditingController();
   final _titleFocusNode = FocusNode();
@@ -831,11 +834,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   void _applyTitleEdit() {
     final trimmed = _titleEditController.text.trim();
     setState(() {
-      if (trimmed.isNotEmpty) _sessionTitle = trimmed;
+      if (trimmed.isNotEmpty) {
+        _sessionTitle = trimmed;
+        _titleManuallySet = true; // user's name wins — stop auto-naming
+      }
       _isEditingTitle = false;
     });
     if (trimmed.isNotEmpty && _project.id != 'new') {
       ref.read(sessionProvider.notifier).updateTitle(_project.id, trimmed);
+    }
+  }
+
+  // CHANTIER C — auto-name an un-renamed session from its room + latest
+  // atmosphere ("Living Room — Warm Modern") so the Projects list is scannable
+  // and premium instead of a wall of "New Design Session". Backs off the moment
+  // the user renames manually.
+  void _maybeAutoNameSession() {
+    if (_titleManuallySet) return;
+    final room = _currentRoomType.trim();
+    final style = _currentStyle.split('·').first.trim(); // drop "· Vision N"
+    if (room.isEmpty || style.isEmpty) return;
+    final auto = '$room — $style';
+    if (auto == _sessionTitle) return;
+    setState(() => _sessionTitle = auto);
+    if (_project.id != 'new') {
+      ref.read(sessionProvider.notifier).updateTitle(_project.id, auto);
     }
   }
 
@@ -1265,6 +1288,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       // Wave 4.10g — protocol tokens were just refreshed by the /generate
       // response. Persist NOW so the next app restart skips re-capture and
       // the V2+ lineage stays intact.
+      _maybeAutoNameSession(); // CHANTIER C — name the session from room + atmo
       _persistSession();
       _scrollToBottom();
 
