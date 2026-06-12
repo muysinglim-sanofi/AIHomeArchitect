@@ -14,75 +14,126 @@ String _timeAgo(DateTime date) {
   return '${diff.inDays}d ago';
 }
 
+/// CHANTIER D (premium pass) — full-bleed image card with a warm-dark scrim and
+/// the meta OVERLAID (room as title · atmosphere · updated-ago), plus a "…" menu.
+/// The cinematic scrim unifies the redesigns into one premium, consistent grid
+/// (was: image on top + flat white text block below).
 class ProjectCard extends StatelessWidget {
   final ProjectModel project;
   final VoidCallback? onTap;
+  final VoidCallback? onMenu;
 
-  const ProjectCard({super.key, required this.project, this.onTap});
+  const ProjectCard({super.key, required this.project, this.onTap, this.onMenu});
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final previewUrl = project.afterImageUrl ?? project.beforeImageUrl;
+    // Room leads the title (AFTER mock); fall back to the session title.
+    final title =
+        project.roomType.isNotEmpty ? project.roomType : project.title;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: AppColors.shimmerBase,
           borderRadius: BorderRadius.circular(AppSpacing.cardRadius),
           border: Border.all(color: AppColors.border),
         ),
         clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            _ImageArea(url: previewUrl, iterationCount: project.iterationCount),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            // ── Full-bleed preview ──
+            if (previewUrl != null)
+              CachedNetworkImage(
+                imageUrl: previewUrl,
+                fit: BoxFit.cover,
+                placeholder: (_, _) => const ColoredBox(color: AppColors.shimmerBase),
+                errorWidget: (_, _, _) => const ColoredBox(
+                  color: AppColors.shimmerBase,
+                  child: Icon(Icons.broken_image_outlined,
+                      color: AppColors.textTertiary),
+                ),
+              )
+            else
+              const ColoredBox(
+                color: AppColors.shimmerBase,
+                child: Center(
+                  child: Icon(Icons.image_outlined,
+                      color: AppColors.textTertiary, size: 30),
+                ),
+              ),
+            // ── Warm-dark cinematic scrim (premium readability + unifies the grid) ──
+            const IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment(0, -0.05),
+                    colors: [Color(0xE60C0906), Color(0x000C0906)],
+                  ),
+                ),
+              ),
+            ),
+            // ── Visions count chip ──
+            if (project.iterationCount > 0)
+              Positioned(top: 9, left: 9, child: _VisionsChip(project.iterationCount)),
+            // ── "…" menu ──
+            if (onMenu != null)
+              Positioned(
+                bottom: 4,
+                right: 2,
+                child: IconButton(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.all(6),
+                  constraints: const BoxConstraints(),
+                  onPressed: onMenu,
+                  icon: Icon(Icons.more_horiz,
+                      size: 20, color: Colors.white.withValues(alpha: 0.85)),
+                ),
+              ),
+            // ── Overlaid meta ──
+            Positioned(
+              left: 12,
+              right: onMenu != null ? 40 : 12,
+              bottom: 11,
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // CHANTIER D #4 — title leads the hierarchy.
                   Text(
-                    project.title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                    title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.1,
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  // CHANTIER D #13 — room badge + atmosphere chip make each card
-                  // scannable at a glance (vs the old identical-looking rows).
-                  Row(
-                    children: [
-                      if (project.roomType.isNotEmpty)
-                        Flexible(
-                          child: _MetaChip(
-                            icon: Icons.meeting_room_outlined,
-                            label: project.roomType,
-                          ),
-                        ),
-                      if (project.roomType.isNotEmpty &&
-                          project.style.isNotEmpty)
-                        const SizedBox(width: 6),
-                      if (project.style.isNotEmpty)
-                        Flexible(
-                          child: _MetaChip(
-                            icon: Icons.auto_awesome,
-                            label: project.style,
-                            accent: true,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
+                  if (project.style.isNotEmpty) ...[
+                    const SizedBox(height: 1),
+                    Text(
+                      project.style,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.78),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 3),
                   Text(
                     '${l10n.lastUpdated} ${_timeAgo(project.lastUpdatedAt)}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textTertiary,
-                          fontSize: 10,
-                        ),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.55),
+                      fontSize: 10,
+                    ),
                   ),
                 ],
               ),
@@ -94,106 +145,31 @@ class ProjectCard extends StatelessWidget {
   }
 }
 
-/// CHANTIER D #13 — compact meta chip. Neutral for the room, gold-accented for
-/// the atmosphere, so the two read distinctly without crowding the card.
-class _MetaChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool accent;
-  const _MetaChip({required this.icon, required this.label, this.accent = false});
+class _VisionsChip extends StatelessWidget {
+  final int count;
+  const _VisionsChip(this.count);
 
   @override
   Widget build(BuildContext context) {
-    final color = accent ? AppColors.accent : AppColors.textSecondary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: accent
-            ? AppColors.accent.withValues(alpha: 0.10)
-            : AppColors.border.withValues(alpha: 0.45),
+        color: Colors.black.withValues(alpha: 0.42),
         borderRadius: BorderRadius.circular(50),
-        border: accent
-            ? Border.all(color: AppColors.accent.withValues(alpha: 0.30))
-            : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: color),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
+          const Icon(Icons.auto_awesome, size: 9, color: Colors.white),
+          const SizedBox(width: 3),
+          Text(
+            '$count ${count == 1 ? context.l10n.vision : context.l10n.visions}',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ImageArea extends StatelessWidget {
-  final String? url;
-  final int iterationCount;
-  const _ImageArea({this.url, required this.iterationCount});
-
-  @override
-  Widget build(BuildContext context) {
-    return AspectRatio(
-      aspectRatio: 4 / 3,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          url != null
-              ? CachedNetworkImage(
-                  imageUrl: url!,
-                  fit: BoxFit.cover,
-                  placeholder: (_, _) => Container(color: AppColors.shimmerBase),
-                  errorWidget: (_, _, _) => Container(
-                    color: AppColors.shimmerBase,
-                    child: const Icon(Icons.broken_image_outlined, color: AppColors.textTertiary),
-                  ),
-                )
-              : Container(
-                  color: AppColors.shimmerBase,
-                  child: const Center(
-                    child: Icon(Icons.image_outlined, color: AppColors.textTertiary, size: 32),
-                  ),
-                ),
-          if (iterationCount > 0)
-            Positioned(
-              top: 10,
-              right: 10,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.textPrimary.withAlpha(180),
-                  borderRadius: BorderRadius.circular(50),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.auto_awesome, size: 9, color: AppColors.surface),
-                    const SizedBox(width: 3),
-                    Text(
-                      '$iterationCount ${iterationCount == 1 ? context.l10n.vision : context.l10n.visions}',
-                      style: const TextStyle(
-                        color: AppColors.surface,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
         ],
       ),
     );

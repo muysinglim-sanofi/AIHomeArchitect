@@ -67,6 +67,12 @@ class SessionNotifier extends StateNotifier<List<ProjectModel>> {
     _svc.updateSessionTitle(id, title); // fire-and-forget
   }
 
+  /// CHANTIER D — remove a session optimistically, then delete it server-side.
+  void deleteSession(String id) {
+    if (mounted) state = [for (final p in state) if (p.id != id) p];
+    _svc.deleteSession(id); // fire-and-forget (RLS-scoped to the current user)
+  }
+
   void updateLatestPreview(String id, String previewUrl) {
     _applyToState(id, (p) => p.copyWith(afterImageUrl: previewUrl, lastUpdatedAt: DateTime.now()));
     _svc.updateLatestPreview(id, previewUrl); // fire-and-forget

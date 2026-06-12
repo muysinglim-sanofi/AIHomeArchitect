@@ -49,6 +49,14 @@ class SupabaseService {
     debugPrint('[DB] updateSessionTitle() — done');
   }
 
+  /// CHANTIER D — delete a design session. RLS scopes the delete to the current
+  /// user's own rows, so this can only ever remove the caller's sessions.
+  Future<void> deleteSession(String sessionId) async {
+    debugPrint('[DB] deleteSession() — id: $sessionId');
+    await _db.from('sessions').delete().eq('id', sessionId);
+    debugPrint('[DB] deleteSession() — done');
+  }
+
   Future<void> updateLatestPreview(String sessionId, String previewUrl) async {
     debugPrint('[DB] updateLatestPreview() — id: $sessionId');
     await _db.from('sessions').update({'latest_preview': previewUrl}).eq('id', sessionId);
