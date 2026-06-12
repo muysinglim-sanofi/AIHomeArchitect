@@ -1606,6 +1606,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         _project = _project.copyWith(beforeImageUrl: newUrl);
         _generationSourceUrl = null; // new root → generationSource == new anchor
         _iterationCount = 0; // → iteration == 1 → FIRST_VISION
+        // New photo = new architecture → drop the old structural identity so the
+        // re-upload's V1 (iteration==1, empty identity) re-analyses THIS photo.
+        // Without this the backend reuses the original upload's identity and the
+        // model destroys the new room's real openings (door/AC) on atmosphere
+        // switches (where input_fidelity=low lets the identity text dominate).
+        _structuralIdentity = '';
         _sourceReplaced = false;
         _messages.add(MessageModel(
           id: 'sys_${DateTime.now().millisecondsSinceEpoch}',
