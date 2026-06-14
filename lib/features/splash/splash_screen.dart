@@ -89,26 +89,39 @@ class _SplashScreenState extends State<SplashScreen>
               child: SafeArea(
                 child: Stack(
                   children: [
-                    // ── Logo block — centred (vertically + horizontally) ──
-                    Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AydenMark(gold: true, size: markSize),
-                          const SizedBox(height: 22),
-                          _Wordmark(aydenSize: aydenSize),
-                          const SizedBox(height: 20),
-                          Text(
-                            l10n.brandSignature.toUpperCase(),
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.montserrat(
-                              fontSize: 11,
-                              letterSpacing: 3.2,
-                              fontWeight: FontWeight.w400,
-                              color: const Color(0xFF8C7E66),
-                            ),
+                    // ── Logo lockup — full AYDEN STUDIO mark (single asset),
+                    // centred (slightly above middle to match the reference) ──
+                    Align(
+                      alignment: const Alignment(0, -0.10),
+                      child: SizedBox(
+                        width: (w * 0.64).clamp(220.0, 340.0),
+                        child: Image.asset(
+                          'assets/branding/ayden_logo_full.png',
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                          // Until the transparent lockup PNG lands, fall back to
+                          // the composed mark + wordmark so the splash never
+                          // renders empty.
+                          errorBuilder: (_, _, _) => Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              AydenMark(gold: true, size: markSize),
+                              const SizedBox(height: 22),
+                              _Wordmark(aydenSize: aydenSize),
+                              const SizedBox(height: 20),
+                              Text(
+                                l10n.brandSignature.toUpperCase(),
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.montserrat(
+                                  fontSize: 11,
+                                  letterSpacing: 3.2,
+                                  fontWeight: FontWeight.w400,
+                                  color: const Color(0xFF8C7E66),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                     // ── Loading — near the bottom, in brand gold ──
