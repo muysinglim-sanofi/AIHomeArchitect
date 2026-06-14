@@ -149,6 +149,8 @@ class GenerationService {
     String structuralIdentity = '',
     String versions = '',
     String generationMode = 'preserve', // Wave 5.5.14c — bimodal intent
+    String sourceMode = '',        // BUG A fix — '' | ORIGINAL | LATEST | SPECIFIC_VERSION
+    String sourceVersionId = '',   // BUG A fix — target version_id when sourceMode=SPECIFIC_VERSION
   }) async {
     // Wave 5.13c perf diag — measure client-side click→response latency.
     // Pairs with the backend `[PERF SUMMARY] request_id=...` line via
@@ -181,6 +183,11 @@ class GenerationService {
           'structural_identity': structuralIdentity,
           'versions': versions,
           'generation_mode': generationMode,
+          // BUG A fix — let "Continue this vision" actually rebranch the backend
+          // source (resolve_source ignores before_image_url; it needs source_mode
+          // + source_version_id). Empty => backend keeps its V2+ LATEST default.
+          'source_mode': sourceMode,
+          'source_version_id': sourceVersionId,
         }),
       );
       sw.stop();

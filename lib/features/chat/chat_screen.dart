@@ -111,6 +111,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   // advances to each new generation so refinements build on the last output.
   String? _generationSourceUrl;
 
+  // BUG A fix — one-shot branch pin: the version_id the user chose via
+  // "Continue this vision". When set, the next /generate sends
+  // source_mode=SPECIFIC_VERSION so the backend actually rebranches the source
+  // (resolve_source ignores before_image_url). Cleared after that generation.
+  String? _branchSourceVersionId;
+
   late String _sessionTitle;
   // CHANTIER C — once true, the user renamed the session manually, so the
   // room+atmosphere auto-naming backs off and never overrides their choice.
@@ -381,6 +387,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
           snapshot.generationSourceUrl!.isNotEmpty) {
         _generationSourceUrl = snapshot.generationSourceUrl;
       }
+      // BUG A fix — restore a pending branch pin so "Continue this vision"
+      // survives a reload that happens before the next generation.
+      _branchSourceVersionId = snapshot.branchSourceVersionId;
       if (snapshot.iterationCount > _iterationCount) {
         _iterationCount = snapshot.iterationCount;
       }
@@ -419,6 +428,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       structuralIdentity: _structuralIdentity,
       versions: _versions,
       generationSourceUrl: _generationSourceUrl,
+      branchSourceVersionId: _branchSourceVersionId,
       iterationCount: _iterationCount,
       currentRoomType: _currentRoomType,
       currentStyle: _currentStyle,
@@ -678,6 +688,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   // card would be redundant and would falsely suggest a branch where
   // none occurred. _generationSourceUrl is still updated in both cases
   // so the next refinement evolves from the selected source.
+  // BUG A fix — look up the backend version_id for a given render URL inside
+  // the round-tripped `_versions` ledger (JSON list of {version_id,
+  // generated_image_url, ...}). Returns null if not found (older sessions).
+  String? _versionIdForUrl(String afterUrl) {
+    if (_versions.isEmpty || afterUrl.isEmpty) return null;
+    try {
+      final list = jsonDecode(_versions);
+      if (list is! List) return null;
+      for (final v in list) {
+        if (v is Map && v['generated_image_url'] == afterUrl) {
+          return v['version_id'] as String?;
+        }
+      }
+    } catch (_) {/* malformed ledger → fall back to LATEST default */}
+    return null;
+  }
+
   void _continueFromVision(GeneratedResult result) {
     final afterUrl = result.afterImageUrl;
     if (afterUrl.isEmpty) return;
@@ -712,6 +739,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
 
     setState(() {
       _generationSourceUrl = afterUrl;
+      // BUG A fix — pin the chosen vision's version_id so the next /generate
+      // sends source_mode=SPECIFIC_VERSION and the backend truly rebranches
+      // (before_image_url alone is ignored by resolve_source). Null if the
+      // url isn't in the ledger yet (pre-persistence sessions) → backend keeps
+      // its LATEST default, i.e. the prior behaviour.
+      _branchSourceVersionId = _versionIdForUrl(afterUrl);
       if (branchMessage != null) _messages.add(branchMessage);
     });
     _persistSession();
@@ -1225,6 +1258,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         // Wave 5.5.14c — per-generation bimodal intent. Default "preserve"
         // matches today's behaviour; backend no-ops unless BIMODAL_ENABLED=1.
         generationMode: _generationMode,
+        // BUG A fix — when a branch pin is set ("Continue this vision"), tell
+        // the backend to resolve the source from that exact version. Empty
+        // otherwise → backend keeps its V2+ LATEST default (linear chain).
+        sourceMode: _branchSourceVersionId != null ? 'SPECIFIC_VERSION' : '',
+        sourceVersionId: _branchSourceVersionId ?? '',
       );
 
       _longGenerationTimer?.cancel();
@@ -1276,6 +1314,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         _hasGenerated = true;
         _iterationCount = newCount;
         _generationSourceUrl = afterUrl;  // next refinement edits this output
+        _branchSourceVersionId = null;    // BUG A fix — one-shot pin consumed
         if (returnedIdentity != null && returnedIdentity.isNotEmpty) {
           _structuralIdentity = returnedIdentity;
         }

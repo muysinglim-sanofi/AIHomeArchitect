@@ -84,6 +84,13 @@ class SessionState {
   /// upload (V1 or REBOOT_FRESH path).
   final String? generationSourceUrl;
 
+  /// BUG A fix — one-shot branch pin. When the user taps "Continue this vision"
+  /// on a vision, this holds that vision's `version_id` so the NEXT /generate
+  /// sends source_mode=SPECIFIC_VERSION (the backend's resolve_source ignores
+  /// the source URL — it needs the version id). Consumed (cleared) after that
+  /// generation; persisted so a branch survives a reload before generating.
+  final String? branchSourceVersionId;
+
   /// Next vision's iteration number (1-indexed). V1 = 1, V2 = 2, etc.
   final int iterationCount;
 
@@ -119,6 +126,7 @@ class SessionState {
     this.structuralIdentity = '',
     this.versions = '',
     this.generationSourceUrl,
+    this.branchSourceVersionId,
     this.iterationCount = 0,
     this.currentRoomType = '',
     this.currentStyle = '',
@@ -158,6 +166,7 @@ class SessionState {
       structuralIdentity: (json['structuralIdentity'] as String?) ?? '',
       versions: (json['versions'] as String?) ?? '',
       generationSourceUrl: json['generationSourceUrl'] as String?,
+      branchSourceVersionId: json['branchSourceVersionId'] as String?,
       iterationCount: (json['iterationCount'] as int?) ?? 0,
       currentRoomType: (json['currentRoomType'] as String?) ?? '',
       currentStyle: (json['currentStyle'] as String?) ?? '',
@@ -175,6 +184,7 @@ class SessionState {
         'structuralIdentity': structuralIdentity,
         'versions': versions,
         'generationSourceUrl': generationSourceUrl,
+        'branchSourceVersionId': branchSourceVersionId,
         'iterationCount': iterationCount,
         'currentRoomType': currentRoomType,
         'currentStyle': currentStyle,
@@ -191,6 +201,8 @@ class SessionState {
     String? versions,
     String? generationSourceUrl,
     bool clearGenerationSourceUrl = false,
+    String? branchSourceVersionId,
+    bool clearBranchSourceVersionId = false,
     int? iterationCount,
     String? currentRoomType,
     String? currentStyle,
@@ -207,6 +219,9 @@ class SessionState {
         generationSourceUrl: clearGenerationSourceUrl
             ? null
             : (generationSourceUrl ?? this.generationSourceUrl),
+        branchSourceVersionId: clearBranchSourceVersionId
+            ? null
+            : (branchSourceVersionId ?? this.branchSourceVersionId),
         iterationCount: iterationCount ?? this.iterationCount,
         currentRoomType: currentRoomType ?? this.currentRoomType,
         currentStyle: currentStyle ?? this.currentStyle,
