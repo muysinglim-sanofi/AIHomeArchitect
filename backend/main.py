@@ -100,6 +100,7 @@ from prompt_engine.intent_classifier import (
     IntentClassification,
 )
 from prompt_engine.edit_intent import EditMode
+from prompt_engine.preservation import HIGH_FIDELITY_ATMOSPHERES  # PHASE 1.2 — shared with composer's contract-light decision (single source of truth)
 from prompt_engine.mask_generator import build_structural_mask
 from prompt_engine.structural_identity import (
     ApartmentStructuralIdentity,
@@ -595,6 +596,18 @@ async def _capture_structural_text(image_bytes: bytes) -> str:
             # Wave 5.19 — bumped 150 → 200 to accommodate the expanded
             # 11-bucket output (up to ~120 words ≈ 180 tokens).
             max_tokens=200,
+            # PHASE 0.1 (post-build, 2026-06-13) — VISION_DETERMINISTIC.
+            # The default gpt-4o temperature (1.0) made this capture stochastic:
+            # the SAME apartment yielded 6 different structural tokens across a
+            # 6-atmosphere bench (facts=3 vs 5; secondary door / glass partition
+            # / ceiling section captured at random). That token is the lineage's
+            # structural guard (inherited by every switch), so a missed feature
+            # is unprotected for the whole session — pure luck of the read.
+            # temperature=0 (+ seed) makes the read repeatable. Flagged for A/B:
+            # set VISION_DETERMINISTIC=0 to restore the stochastic baseline.
+            # Rollback = delete the unpack below.
+            **({"temperature": 0, "seed": 42}
+               if os.environ.get("VISION_DETERMINISTIC", "1") != "0" else {}),
         )
         _raw = (resp.choices[0].message.content or "").strip()
         # Wave 5.13g+ debug — log raw gpt-4o output so we can audit which
@@ -2157,6 +2170,11 @@ async def generate(
     log.info("[PERF] stage=prompt_composition  duration_ms=%.0f  chars=%d",
              _prompt_s * 1000, len(design_prompt))
     log.debug("  prompt:\n%s", design_prompt)
+    # Observability (2026-06-14) — dump the EXACT composed prompt (= what is sent
+    # to images.edit) at INFO, clearly delimited, so it is always log-extractable
+    # without enabling the OpenAI SDK's DEBUG (which would also log image b64).
+    log.info("===PROMPT_DUMP_BEGIN [%s | %s | %d chars]===\n%s\n===PROMPT_DUMP_END===",
+             style_label, room_type or "(none)", len(design_prompt), design_prompt)
 
     # ── Step 6: call OpenAI image edit ────────────────────────────────────────
     # PROD: size matched to source aspect ratio (preserves room proportions).
@@ -2299,7 +2317,19 @@ async def generate(
             # V8 "more luxurious"). STRUCTURAL_TRANSFORMATION and STYLE_SWITCH
             # customized are NOT touched in Phase A — empirical validation
             # of Phase A drives the next step.
-            if edit_mode in (EditMode.LOCAL_EDIT, EditMode.STYLE_REFINEMENT):
+            # PHASE EXP (2026-06-13, user-requested) — LOCAL_EDIT_QUALITY_MEDIUM.
+            # LOCAL_EDIT was low (pictorial smoothing to mask cascade grain). But
+            # its source is LATEST = often a clean render (e.g. V1 at iter2), so
+            # low just over-smooths / loses detail with no grain to mask. Bump to
+            # medium. STYLE_REFINEMENT stays low for now. ⚠️ On DEEP local-edit
+            # chains where LATEST is a degraded AI image, medium may re-surface
+            # grain — watch it. LOCAL_EDIT_QUALITY_MEDIUM=0 restores low.
+            if edit_mode == EditMode.LOCAL_EDIT:
+                _quality_override = (
+                    "medium" if os.environ.get("LOCAL_EDIT_QUALITY_MEDIUM", "1") != "0"
+                    else "low"
+                )
+            elif edit_mode == EditMode.STYLE_REFINEMENT:
                 _quality_override = "low"
             # Wave 5.22a EXPERIMENT (2026-06-02) — REBOOT_FRESH quality bump.
             # Wave 5.21 V1 anchor eliminates the source=LATEST cascade chain
@@ -2380,13 +2410,24 @@ async def generate(
             # internal priors instead of pixel-anchoring to a potentially
             # noisy AI source. structural_identity + structural_permission
             # in the V3 prompt still constrain WHAT can change.
-            if edit_mode in (
+            # PHASE EXP (2026-06-13, user-requested) — EDIT_FIDELITY_LOW.
+            # LOCAL_EDIT / LAYOUT_CHANGE / STYLE_REFINEMENT move from OMIT to a
+            # light pixel anchor (low) for tighter structural preservation on
+            # refinements. STRUCTURAL_TRANSFORMATION stays OMIT (large semantic
+            # changes need latitude). ⚠️ Re-introduces the cascade-grain risk
+            # OMIT was designed to mask on source=LATEST AI images
+            # (Wave 5.13c/d / cascade_noise_recipe). EDIT_FIDELITY_LOW=0 = OMIT.
+            if edit_mode == EditMode.STRUCTURAL_TRANSFORMATION:
+                _fidelity_override = None
+            elif edit_mode in (
                 EditMode.LOCAL_EDIT,
                 EditMode.LAYOUT_CHANGE,
                 EditMode.STYLE_REFINEMENT,
-                EditMode.STRUCTURAL_TRANSFORMATION,
             ):
-                _fidelity_override = None
+                _fidelity_override = (
+                    "low" if os.environ.get("EDIT_FIDELITY_LOW", "1") != "0"
+                    else None
+                )
             # Wave 5.14A Last-Chance Step 6 (2026-06-02 evening) — V1 FV
             # configured to quality=low + fidelity=HIGH (per user request).
             # Step 1 already sets quality=low for V1 FV ; this block (Step
@@ -2458,11 +2499,16 @@ async def generate(
                 # (lush atmosphere drama / permissive core — do NOT promote).
                 # REVERT (WM back to low/airy) = drop "warm_modern" from the tuple
                 # and restore the per-room clause above.
-                if atmosphere_id in ("soft_luxury", "japandi_calm",
-                                     "nordic_warmth", "warm_modern"):
-                    _fidelity_override = "high"
-                else:
-                    _fidelity_override = "low"
+                # PHASE 1.2 — shared allow-list with composer's contract-light
+                # decision (prompt_engine.preservation.HIGH_FIDELITY_ATMOSPHERES)
+                # so fidelity=high and the compact contract can never desync.
+                # Consolidated 2026-06-14 — all 5 MVP atmospheres are in
+                # HIGH_FIDELITY_ATMOSPHERES (Tropical promoted to the tuple), so
+                # the former TROPICAL_V1_HIGH else-branch flag is now dead and
+                # removed. Any future non-listed atmosphere defaults to low.
+                _fidelity_override = (
+                    "high" if atmosphere_id in HIGH_FIDELITY_ATMOSPHERES else "low"
+                )
             # Wave 5.22b EXPERIMENT (2026-06-02) — REBOOT_FRESH fidelity bump.
             # Pairs with Wave 5.22a quality=medium. Wave 5.21 V1 anchor source
             # is a clean medium+high render (single-edit-from-photo), not a

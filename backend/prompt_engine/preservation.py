@@ -335,6 +335,25 @@ def build_simplified_fv_contract(
 # V1 ships preserve only (creative dormant — gated by frontend, but contract
 # is present in the architecture for V2).
 
+import os as _os
+
+# PHASE 1.1 (post-build, 2026-06-13) — PROMPT_FURNITURE_FIX.
+# The old closing line listed "furniture" among the things to *redesign
+# through*, while every atmosphere DNA says "on the existing sofa / existing
+# low table…". Two opposite signals on furniture (replace vs keep) → diffusion
+# uncertainty. The fix makes the contract agree with the DNA: restyle the
+# EXISTING furniture (same pieces, same footprint); decor/textiles stay free to
+# enrich (richness preserved — cushions/throws/rug/plant/art are decor, not
+# furniture). Flagged for A/B; PROMPT_FURNITURE_FIX=0 restores the old wording.
+# Rollback = set the env var to 0 (or delete this clause).
+_FURNITURE_CLAUSE = (
+    "Restyle only through materials, lighting, decor, textiles, colours, and "
+    "atmosphere — on the existing furniture (same pieces, same footprint)."
+    if _os.environ.get("PROMPT_FURNITURE_FIX", "1") != "0"
+    else "Redesign only through materials, "
+    "furniture, lighting, decor, textiles, colours, and atmosphere styling."
+)
+
 _PRESERVE_MODE_CONTRACT = (
     "PRESERVE MODE — SAME APARTMENT CONTRACT:\n"
     "Preserve the exact photographed architecture and the full proportions "
@@ -345,8 +364,38 @@ _PRESERVE_MODE_CONTRACT = (
     "depth, camera angle, and perspective stay exact. "
     "Do not add, remove, resize, relocate, reinterpret, or redesign "
     "architectural elements. Material finishes wrap around existing openings, "
-    "they never substitute for them. Redesign only through materials, "
-    "furniture, lighting, decor, textiles, colours, and atmosphere styling."
+    "they never substitute for them. " + _FURNITURE_CLAUSE
+)
+
+# PHASE 1.2 (post-build, 2026-06-13) — PROMPT_CONTRACT_LIGHT.
+# SINGLE SOURCE OF TRUTH for which V1 atmospheres ship fidelity=high. main.py
+# imports THIS tuple for its FIRST_VISION fidelity decision, so the "is the
+# image pixel-anchored?" question can NEVER desync from the contract choice.
+# Why it's safety-critical: the light contract below drops the verbose opening
+# lock — that is only safe when the architecture is pixel-anchored (high
+# fidelity) AND already listed in structural_identity. Using it on a
+# low-fidelity path (Tropical, switches) would remove the only guard.
+HIGH_FIDELITY_ATMOSPHERES = (
+    "soft_luxury", "japandi_calm", "nordic_warmth", "warm_modern",
+    # Tropical promoted 2026-06-13 (user-validated walls=0 at high) — now in the
+    # shared list so it gets fidelity=high (via main.py's `if` branch) AND the
+    # light contract + trust-pixels, exactly like the others. Supersedes the
+    # separate TROPICAL_V1_HIGH else-branch flag (now redundant for Tropical).
+    "tropical_escape",
+)
+
+# Compact contract: at fidelity=high the 4-sentence opening lock of
+# _PRESERVE_MODE_CONTRACT is redundant (pixels + structural_identity already
+# anchor the architecture) → collapse to ONE anchor sentence. Keeps the
+# furniture clause (PHASE 1.1); TEMPORAL is appended like the full contract.
+_PRESERVE_MODE_CONTRACT_LIGHT = (
+    "PRESERVE MODE — SAME APARTMENT CONTRACT:\n"
+    "Reproduce the photographed architecture exactly — every wall, opening, "
+    "door, window, the ceiling, proportions, circulation, camera angle and "
+    "perspective stay exactly as photographed. Add nothing, remove nothing, "
+    "fill nothing in: do not invent walls, doors or partitions, and never turn "
+    "an existing opening into a wall. Highest priority: preserve the structure "
+    "before any styling. " + _FURNITURE_CLAUSE
 )
 
 _CREATIVE_MODE_CONTRACT = (
@@ -392,6 +441,7 @@ def _temporal_override_requested(user_instruction: str) -> bool:
 def build_mode_contract(
     generation_mode: str = "preserve",
     user_instruction: str = "",
+    pixel_anchored: bool = False,
 ) -> str:
     """
     Wave 5.13f — single authoritative MODE_CONTRACT for FIRST_VISION.
@@ -411,10 +461,19 @@ def build_mode_contract(
     from .atmosphere_dna.bimodal_classifier import is_creative_mode_active
     if is_creative_mode_active(generation_mode):
         return _CREATIVE_MODE_CONTRACT
+    # PHASE 1.2 — use the compact contract ONLY when the caller says the image
+    # is pixel-anchored (V1 high-fidelity atmospheres; the caller passes the
+    # shared HIGH_FIDELITY_ATMOSPHERES membership). Flag PROMPT_CONTRACT_LIGHT=0
+    # forces the full contract everywhere (A/B + rollback).
+    _use_light = (
+        pixel_anchored
+        and _os.environ.get("PROMPT_CONTRACT_LIGHT", "1") != "0"
+    )
+    _base = _PRESERVE_MODE_CONTRACT_LIGHT if _use_light else _PRESERVE_MODE_CONTRACT
     if _temporal_override_requested(user_instruction):
         # User explicitly asked for a temporal transformation : MODE_CONTRACT
         # stays minimal (architecture preservation only), the model is free
         # to follow the user's lighting/time-of-day intent.
-        return _PRESERVE_MODE_CONTRACT
+        return _base
     # Default preserve mode : append the temporal continuity guardrail.
-    return _PRESERVE_MODE_CONTRACT + "\n" + _TEMPORAL_CONTINUITY
+    return _base + "\n" + _TEMPORAL_CONTINUITY

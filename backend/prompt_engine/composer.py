@@ -239,7 +239,55 @@ ORDERING PRINCIPLE: Constraints appear before transformation instructions.
 """
 
 import logging
+import os  # TRUST_PIXELS_V1 validation toggle (Phase C A/B; Phase D will grave it)
+import re  # P2 — DNA_SPATIAL_LIGHT strip of spatial micro-management
 log = logging.getLogger("aih")
+
+# ── DNA_CLEANUP_V1 (2026-06-13) — grouped DNA cleanup ─────────────────────────
+# Goal: reduce CONTRADICTIONS + spatial micro-rules that make gpt-image-1
+# "recompute the room" — WITHOUT reducing richness. Keeps every decor item,
+# materials, palette, lighting, textiles + the atmosphere identity. Supersedes
+# P2 (DNA_SPATIAL_LIGHT). Flagged: DNA_CLEANUP_V1.
+#   1. decor spatial micro-rules removed (anchored corner / never floating /
+#      else-omit conditional). These are pure placement fluff for plant/art.
+#   2. light "existing" reduction — only before FURNITURE nouns (the contract's
+#      furniture-fix already guards them); KEEP "existing walls/window/glazing"
+#      (architecture preservation signal).
+# DELIBERATELY KEPT (do NOT strip — load-bearing, not micro-management):
+#   • The TV placement clause "clearly present on an existing wall or low media
+#     console, never a new wall…". Stripping it caused DOUBLE TVs (2026-06-14):
+#     it is the SINGULAR placement anchor (one TV, one surface) AND the
+#     anti-faux-mur guard (engineered over many waves). "include a television
+#     as the focal point" alone is count-ambiguous → the model renders a wall TV
+#     + a console TV when staging an empty room. Keeping the clause is the PROPER
+#     fix (a positive placement spec), NOT a "never two TVs" band-aid.
+# NOT done: no "never show two televisions" rule, no mood-adjective trim.
+_SPATIAL_MICRORULE_PATTERNS = (
+    re.compile(r",?\s*never floating in the room", re.IGNORECASE),
+    re.compile(r"\s*anchored in the existing corner[^—\-,;]*", re.IGNORECASE),
+    re.compile(r"\s*[—\-]?\s*only if (?:that )?wall is (?:solid and )?free,?\s*else omit", re.IGNORECASE),
+)
+# Light "existing" reduction — furniture nouns only (NOT walls/window/glazing).
+_EXISTING_FURNITURE_RE = re.compile(
+    r"\bexisting ((?:low |coffee |side |dining |media )?(?:sofa|table|console|"
+    r"sideboard|armchair|chair|chaise|bed|desk))\b",
+    re.IGNORECASE,
+)
+
+
+def _dna_cleanup_v1(text: str) -> str:
+    """DNA_CLEANUP_V1 — strip contradictions/spatial micro-rules + lighten
+    'existing'; KEEP every decor item, materials, lighting, identity + newlines.
+    No negative band-aids (no never-two-TV, no adjective trim)."""
+    if not text:
+        return text
+    for _pat in _SPATIAL_MICRORULE_PATTERNS:
+        text = _pat.sub("", text)
+    text = _EXISTING_FURNITURE_RE.sub(r"\1", text)   # lighten "existing" (furniture only)
+    text = re.sub(r" {2,}", " ", text)               # collapse double spaces (NOT newlines)
+    text = re.sub(r" +([;,.])", r"\1", text)         # space before punctuation
+    text = re.sub(r"—\s*([;,])", r"\1", text)        # dangling em-dash before separator
+    return text
 
 from .style_dna import StyleDNA, get_style
 from .preservation import (
@@ -249,6 +297,7 @@ from .preservation import (
     build_atmosphere_switch_contract,
     build_simplified_fv_contract,
     build_mode_contract,  # Wave 5.13f — single MODE_CONTRACT replaces 6 layers in FIRST_VISION
+    HIGH_FIDELITY_ATMOSPHERES,  # PHASE 1.2 — shared fidelity allow-list (also used by main.py)
 )
 from .anchor_detector import detect_anchors
 from .dream_scene_completion import (
@@ -886,7 +935,19 @@ def compose_generation_prompt(
     # Wave 6.3 — user_instruction is forwarded so the TEMPORAL CONTINUITY
     # guardrail can be suppressed when the user explicitly requests a
     # temporal transformation (evening / night / cinematic / etc.).
-    mode_contract = build_mode_contract(generation_mode, user_instruction)
+    # PHASE 1.2 — the light contract is safe only where the image is pixel-
+    # anchored = V1 (FIRST_VISION) preserve on a fidelity=high atmosphere. Uses
+    # the SAME shared tuple as main.py's fidelity decision → cannot desync, so
+    # we never ship the light contract on a low-fidelity path. Tropical (low)
+    # and every switch (non-FIRST_VISION) keep the full contract.
+    _pixel_anchored = (
+        mode == EditMode.FIRST_VISION
+        and generation_mode == "preserve"
+        and atmosphere_id in HIGH_FIDELITY_ATMOSPHERES
+    )
+    mode_contract = build_mode_contract(
+        generation_mode, user_instruction, pixel_anchored=_pixel_anchored
+    )
 
     # Wave 5.13f — compact STRUCTURAL_IDENTITY wrapper for FIRST_VISION only.
     # render_clause emits "STRUCTURAL IDENTITY — this apartment already contains
@@ -896,7 +957,21 @@ def compose_generation_prompt(
     # already covers the "reproduce exactly / do not modify" intent, so the
     # verbose wrapper is replaced inline by "PHOTO FACTS TO RESPECT: [facts]".
     # Saves ~150 chars per prompt. V2/V3 paths keep the original wording.
-    structural_identity_fv = _compact_structural_identity_wrapper(structural_identity)
+    # TRUST PIXELS (2026-06-13) — at V1 fidelity=high the source IS the
+    # architectural truth (pixel-anchored), and the MODE_CONTRACT already
+    # carries the generic preservation rule. Injecting the per-photo enumerated
+    # facts only adds a hallucination vector: a mis-read "painted door" / "wall"
+    # in the token overrides the clean pixels. So DROP the enumeration on
+    # pixel-anchored V1 — rely on pixels + the generic contract. The token is
+    # still captured + persisted for the low-fidelity SWITCH paths (where text
+    # is the only guard).
+    _trust_pixels = (
+        _pixel_anchored and os.environ.get("TRUST_PIXELS_V1", "1") != "0"
+    )
+    structural_identity_fv = (
+        "" if _trust_pixels
+        else _compact_structural_identity_wrapper(structural_identity)
+    )
 
     # Wave 4.7.1 R1: concrete image-specific structural anchors for FIRST_VISION.
     # detect_anchors() is deterministic text matching (no ML, no latency, no vision
@@ -913,6 +988,11 @@ def compose_generation_prompt(
     # destroying fidelity. input_fidelity=high + image upload makes the image the source of truth.
     source = ""
     intel_block, used_dna = _design_intelligence_block(atmosphere_id, room_type, dna, style_label, generation_mode)
+    # DNA_CLEANUP_V1 — strip spatial micro-rules + de-dup TV + lighten "existing"
+    # in the DNA room text (keep all decor items). Reduces the "recompute the
+    # room" pressure that closes openings / invents walls. FIRST_VISION, all rooms.
+    if os.environ.get("DNA_CLEANUP_V1", "1") != "0":
+        intel_block = _dna_cleanup_v1(intel_block)
 
     # DEV compact mode: skip all P4 enrichments, use compact realism.
     # Wave 5.13f: wow_directive (TRANSFORMATION AMBITION) and natural_enrichment
@@ -950,6 +1030,10 @@ def compose_generation_prompt(
     fv_room_dna = get_room_dna(atmosphere_id, room_type)
     dna_context_fv = build_dna_room_context_signal(fv_room_dna, generation_mode)
     dna_context_fv = apply_bimodal(dna_context_fv, atmosphere_id, generation_mode)
+    # DNA_CLEANUP_V1 — also clean the ROOM CONTEXT (TV placement micro-rule +
+    # TV de-duplication).
+    if os.environ.get("DNA_CLEANUP_V1", "1") != "0":
+        dna_context_fv = _dna_cleanup_v1(dna_context_fv)
 
     # Wave 5.13f — FIRST_VISION assembly:
     # MODE_CONTRACT (single authoritative preserve/creative contract) +
