@@ -862,6 +862,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         }
       }
 
+      // #21b — a generation started on a now-disposed screen (user left the
+      // chat mid-generation and came back) shows nothing here, because the DB
+      // has no "loading" row. Detect the still-in-flight state from the
+      // (app-alive) lifecycle provider and re-show the loading bubble so the
+      // user sees the source + progress phrases again instead of a blank chat.
+      final inFlightResume =
+          ref.read(pendingGenerationsProvider)[_project.id] ==
+              GenerationLifecycle.inFlight;
+
       setState(() {
         _messages = msgs;
         _iterationCount = imageCount;
@@ -869,7 +878,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         if (lastGeneratedUrl != null && lastGeneratedUrl.isNotEmpty) {
           _generationSourceUrl = lastGeneratedUrl;
         }
+        if (inFlightResume) {
+          _isGenerating = true;
+          // Rebuilt in the SAME setState as the DB replace → no flicker. The
+          // bubble renders the source via backdropUrl (beforeImageUrl) below.
+          _messages.add(MessageModel(
+            id: 'loading_resumed',
+            content: '${imageCount + 1}|$_currentStyle',
+            isAi: true,
+            type: MessageType.loading,
+            createdAt: DateTime.now(),
+          ));
+        }
       });
+      // Reconcile from the DB until the result lands (the original await lives
+      // in the disposed screen and won't update this instance). Idempotent —
+      // the poll no-ops if one is already running.
+      if (inFlightResume) {
+        _startReconciliationPolling(sessionId: _project.id);
+      }
       // #20 — keep session.latest_preview (the Projects card image) in sync
       // with the DB source of truth on every (re)load: reopen, reconciliation
       // poll AND foreground resume all flow through here. Guarded so we only
@@ -1617,7 +1644,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   void _startReconciliationPolling({required String sessionId}) {
     if (_reconcileTimer != null) return; // already polling — never stack
     const pollInterval = Duration(seconds: 5);
-    const maxAttempts = 18; // 18 × 5s = 90s
+    const maxAttempts = 36; // 36 × 5s = 180s (matches the Dio gen timeout)
     final startSeq = _genSeq;
     int attempt = 0;
 
@@ -1650,7 +1677,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         _genSeq++;
         _longGenerationTimer?.cancel();
         _longGenerationTimer = null;
-        setState(() => _isGenerating = false);
+        // Result shown → drop the (possibly re-injected) loading bubble and
+        // clear the lifecycle flag so it never re-injects or badges again.
+        ref.read(pendingGenerationsProvider.notifier).clear(sessionId);
+        setState(() {
+          _isGenerating = false;
+          _messages.removeWhere((m) => m.type == MessageType.loading);
+        });
         return;
       }
 
@@ -1658,6 +1691,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         stop(timer);
         _genSeq++;
         if (!mounted) return;
+        // Give up → clear the lifecycle flag so the spinner can't re-inject.
+        ref.read(pendingGenerationsProvider.notifier).clear(sessionId);
         const failMsg = 'Your design took longer than expected. It may arrive shortly — or tap the button to try again.';
         setState(() {
           _isGenerating = false;
