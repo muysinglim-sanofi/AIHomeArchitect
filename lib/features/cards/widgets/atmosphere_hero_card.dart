@@ -41,6 +41,14 @@ class _AtmosphereHeroCardState extends State<AtmosphereHeroCard> {
 
   @override
   Widget build(BuildContext context) {
+    // Selected affordance scales with the card size: the small compact
+    // thumbnails (Full Reveal / re-upload strips) get a lighter border + ring
+    // + halo so the chrome never crowds the tiny image; the large carousel
+    // card keeps the bold treatment.
+    final bool c = widget.compact;
+    final double selBorderW = c ? 2.5 : 3.5;
+    final double selPad = c ? 1.5 : 2.5;
+    final double selInnerRadius = 18 - selBorderW - selPad;
     return GestureDetector(
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) => setState(() => _pressed = false),
@@ -52,13 +60,21 @@ class _AtmosphereHeroCardState extends State<AtmosphereHeroCard> {
         curve: Curves.easeOutCubic,
         child: Container(
           decoration: BoxDecoration(
+            // White ground shows as a crisp inner ring (via the padding below)
+            // so the selected state contrasts on ANY photo, including warm
+            // beige interiors where the muted gold border blended in.
+            color: widget.selected ? Colors.white : null,
             borderRadius: BorderRadius.circular(18),
             border: widget.selected
-                ? Border.all(color: AppColors.accent, width: 2)
+                ? Border.all(color: AppColors.accent, width: selBorderW)
                 : null,
           ),
+          padding: widget.selected
+              ? EdgeInsets.all(selPad)
+              : EdgeInsets.zero,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(widget.selected ? 16 : 18),
+            borderRadius:
+                BorderRadius.circular(widget.selected ? selInnerRadius : 18),
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -133,7 +149,11 @@ class _AtmosphereHeroCardState extends State<AtmosphereHeroCard> {
                   const Positioned(top: 12, right: 12, child: _LockChip()),
                 ],
                 if (widget.selected && !widget.locked)
-                  const Positioned(top: 10, right: 10, child: _Check()),
+                  Positioned(
+                    top: c ? 7 : 10,
+                    right: c ? 7 : 10,
+                    child: _Check(compact: c),
+                  ),
               ],
             ),
           ),
@@ -161,18 +181,28 @@ class _LockChip extends StatelessWidget {
 }
 
 class _Check extends StatelessWidget {
-  const _Check();
+  final bool compact;
+  const _Check({this.compact = false});
 
   @override
   Widget build(BuildContext context) {
+    final double size = compact ? 22 : 30;
     return Container(
-      width: 24,
-      height: 24,
-      decoration: const BoxDecoration(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
         color: AppColors.accent,
         shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: compact ? 1.5 : 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.28),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: const Icon(Icons.check, size: 15, color: Colors.white),
+      child: Icon(Icons.check, size: compact ? 13 : 17, color: Colors.white),
     );
   }
 }

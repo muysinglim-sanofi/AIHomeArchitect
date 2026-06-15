@@ -3291,23 +3291,30 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
+                        // #24 — larger, UNCROPPED source preview (was a tiny
+                        // 40×40 cover chip that cut the room). Full room shown,
+                        // letterboxed on a neutral frame.
                         child: SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: _sourceFile != null
-                              ? Image.file(_sourceFile!,
-                                  fit: BoxFit.cover,
-                                  filterQuality: FilterQuality.medium)
-                              : widget.project.beforeImageUrl != null
-                                  ? CachedNetworkImage(
-                                      imageUrl: widget.project.beforeImageUrl!,
-                                      fit: BoxFit.cover,
-                                      placeholder: (_, _) => Container(
-                                          color: AppColors.shimmerBase),
-                                      errorWidget: (_, _, _) => Container(
-                                          color: AppColors.shimmerBase),
-                                    )
-                                  : Container(color: AppColors.shimmerBase),
+                          width: 76,
+                          height: 57,
+                          child: ColoredBox(
+                            color: const Color(0xFF0B0B0C),
+                            child: _sourceFile != null
+                                ? Image.file(_sourceFile!,
+                                    fit: BoxFit.contain,
+                                    filterQuality: FilterQuality.medium)
+                                : widget.project.beforeImageUrl != null
+                                    ? CachedNetworkImage(
+                                        imageUrl:
+                                            widget.project.beforeImageUrl!,
+                                        fit: BoxFit.contain,
+                                        placeholder: (_, _) => Container(
+                                            color: AppColors.shimmerBase),
+                                        errorWidget: (_, _, _) => Container(
+                                            color: AppColors.shimmerBase),
+                                      )
+                                    : Container(color: AppColors.shimmerBase),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),

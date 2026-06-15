@@ -1002,7 +1002,11 @@ class _UploadZone extends StatelessWidget {
               : Stack(
                   fit: StackFit.expand,
                   children: [
-                    Image.file(image!, fit: BoxFit.cover),
+                    // #24 — show the FULL source room, never crop it out of
+                    // view. Letterboxed on a neutral cinematic frame instead
+                    // of cover-cropping a portrait/wide photo to 4:3.
+                    const ColoredBox(color: Color(0xFF0B0B0C)),
+                    Image.file(image!, fit: BoxFit.contain),
                     Positioned(
                       top: 12,
                       right: 12,

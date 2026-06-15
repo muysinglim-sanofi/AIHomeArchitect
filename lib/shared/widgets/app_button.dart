@@ -47,13 +47,9 @@ class AppButton extends StatelessWidget {
       case AppButtonVariant.primary:
         button = ElevatedButton(
           onPressed: loading ? null : onPressed,
-          // CHANTIER C — clearer disabled state. The theme default reads as a
-          // near-invisible flat grey ("broken?"); a muted-but-present accent
-          // says "not ready yet" while keeping a premium feel.
-          style: ElevatedButton.styleFrom(
-            disabledBackgroundColor: AppColors.accent.withValues(alpha: 0.32),
-            disabledForegroundColor: AppColors.surface.withValues(alpha: 0.85),
-          ),
+          // Disabled state = the standard greyed look (user pref 2026-06-15).
+          // Reverted from the CHANTIER C muted-accent (beige) fill back to the
+          // neutral grey disabled style.
           child: child,
         );
       case AppButtonVariant.secondary:

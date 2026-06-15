@@ -318,11 +318,17 @@ class _ExamplePhotoCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: Image.asset(
-                  example.asset,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) =>
-                      const ColoredBox(color: _pkCreamBorder),
+                // #24/#1 — show the FULL example room, never crop it. The
+                // photo is letterboxed on a neutral frame instead of being
+                // cover-cropped to fill the thumbnail.
+                child: ColoredBox(
+                  color: const Color(0xFF0B0B0C),
+                  child: Image.asset(
+                    example.asset,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, _, _) =>
+                        const ColoredBox(color: _pkCreamBorder),
+                  ),
                 ),
               ),
               Container(

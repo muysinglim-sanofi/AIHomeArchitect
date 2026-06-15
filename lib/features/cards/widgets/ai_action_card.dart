@@ -57,7 +57,7 @@ class _AiActionCardState extends State<AiActionCard> {
               color: widget.selected
                   ? AppColors.accent
                   : AppColors.accent.withValues(alpha: 0.22),
-              width: widget.selected ? 2 : 1,
+              width: widget.selected ? 3.5 : 1,
             ),
           ),
           child: Stack(
@@ -109,13 +109,21 @@ class _AiActionCardState extends State<AiActionCard> {
                   top: 8,
                   right: 8,
                   child: Container(
-                    width: 22,
-                    height: 22,
-                    decoration: const BoxDecoration(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
                       color: AppColors.accent,
                       shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.28),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    child: const Icon(Icons.check, size: 14, color: Colors.white),
+                    child: const Icon(Icons.check, size: 16, color: Colors.white),
                   ),
                 ),
             ],

@@ -43,13 +43,19 @@ class _RoomCardState extends State<RoomCard> {
         curve: Curves.easeOutCubic,
         child: Container(
           decoration: BoxDecoration(
+            // White ground shows as a crisp inner ring (via the padding below)
+            // between the gold border and the photo — guarantees the selected
+            // state contrasts on ANY image, including warm beige interiors.
+            color: widget.selected ? Colors.white : null,
             borderRadius: BorderRadius.circular(16),
             border: widget.selected
-                ? Border.all(color: AppColors.accent, width: 2)
+                ? Border.all(color: AppColors.accent, width: 3.5)
                 : null,
           ),
+          padding:
+              widget.selected ? const EdgeInsets.all(2.5) : EdgeInsets.zero,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(widget.selected ? 14 : 16),
+            borderRadius: BorderRadius.circular(widget.selected ? 10 : 16),
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -134,13 +140,21 @@ class _Check extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 22,
-      height: 22,
-      decoration: const BoxDecoration(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
         color: AppColors.accent,
         shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.28),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: const Icon(Icons.check, size: 14, color: Colors.white),
+      child: const Icon(Icons.check, size: 16, color: Colors.white),
     );
   }
 }
