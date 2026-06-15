@@ -5,11 +5,13 @@
 /// active Supabase JWT (anonymous OR signed-in) so the backend can resolve
 /// the user via the existing `get_current_user` dependency.
 ///
-/// Fail-closed for UI gating : any network/parse/auth error returns false,
-/// degrading the UI to free-tier behaviour. Backend bypass remains
-/// authoritative if the admin actually attempts a privileged generation
-/// (Wave 5.17d `check_restrictions` honours the `user_roles.admin` row
-/// directly via `has_admin_role`, independent of this endpoint).
+/// Returns a TRI-STATE (true/false/null) — see [fetchIsAdmin]. Errors map to
+/// `null` ("unknown"), NOT false, so the provider keeps the last known admin
+/// state across transient failures instead of revoking access in the UI.
+/// Backend bypass remains authoritative if the admin actually attempts a
+/// privileged generation (Wave 5.17d `check_restrictions` honours the
+/// `user_roles.admin` row directly via `has_admin_role`, independent of this
+/// endpoint).
 library;
 
 import 'package:dio/dio.dart';
@@ -43,23 +45,33 @@ class AccessService {
     ));
   }
 
-  /// Fetch the admin status for the current user.
+  /// Fetch the admin status for the current user — TRI-STATE.
   ///
-  /// Returns false on any error (network timeout, 401 expired token, 503
-  /// backend misconfigured, malformed response). The provider that wraps
-  /// this service interprets the false as "no admin privileges" — the UI
-  /// renders the standard free/premium gating which is the safe default.
-  Future<bool> fetchIsAdmin() async {
+  ///   true  → backend confirmed the user IS admin
+  ///   false → backend confirmed the user is NOT admin (explicit response)
+  ///   null  → status UNKNOWN (no valid session yet, network error, 401 during
+  ///           token rotation, 5xx, malformed body)
+  ///
+  /// The provider MUST treat `null` as "keep the last known state" and never as
+  /// "not admin". Failing closed to false here was the root cause of admin
+  /// access vanishing on a transient resume/token-refresh error (a fresh cold
+  /// start re-fetched successfully and restored it).
+  Future<bool?> fetchIsAdmin() async {
+    // Skip the call entirely while there is no usable token (e.g. the brief
+    // session-rotation window on app resume). Querying with no/expired token
+    // would 401 and previously flipped admin off.
+    final token = Supabase.instance.client.auth.currentSession?.accessToken;
+    if (token == null || token.isEmpty) return null;
     try {
       final response = await _dio.get('/me/access');
       final data = response.data;
-      if (data is Map<String, dynamic>) {
+      if (data is Map<String, dynamic> && data.containsKey('is_admin')) {
         return data['is_admin'] == true;
       }
-      return false;
+      return null; // malformed → unknown, do NOT fail closed
     } catch (e) {
-      debugPrint('[AccessService] fetchIsAdmin failed: $e');
-      return false;
+      debugPrint('[AccessService] fetchIsAdmin unknown (keeping last state): $e');
+      return null;
     }
   }
 }

@@ -28,19 +28,36 @@ import '../../data/services/access_service.dart';
 class AccessNotifier extends StateNotifier<bool> {
   AccessNotifier() : super(false) {
     _refresh();
-    // Re-fetch on every auth lifecycle event (sign-in, sign-out, token
-    // refresh, anonymous→signed-in upgrade). The admin row in user_roles
-    // is keyed by user_id, which may change across these transitions.
     _authSub = Supabase
-        .instance.client.auth.onAuthStateChange.listen((_) => _refresh());
+        .instance.client.auth.onAuthStateChange.listen(_onAuthEvent);
   }
 
   final AccessService _service = AccessService();
   late final StreamSubscription _authSub;
+  // Last-wins guard: each refresh captures a sequence number; a result is
+  // applied only if it's still the latest. Stops an out-of-order transient
+  // failure (resolving after a good fetch) from clobbering admin=true.
+  int _seq = 0;
+
+  void _onAuthEvent(AuthState data) {
+    // Sign-out is the ONLY event that revokes admin in the UI. Everything else
+    // (tokenRefreshed, initialSession, signedIn, userUpdated) does a guarded
+    // refresh that never downgrades on a transient error — the bug was a
+    // resume-time token-rotation 401 flipping admin off until a cold start.
+    if (data.event == AuthChangeEvent.signedOut) {
+      _seq++; // invalidate any in-flight refresh so it can't re-grant
+      if (mounted) state = false;
+      return;
+    }
+    _refresh();
+  }
 
   Future<void> _refresh() async {
+    final mySeq = ++_seq;
     final isAdmin = await _service.fetchIsAdmin();
-    if (mounted) state = isAdmin;
+    if (!mounted || mySeq != _seq) return; // superseded → ignore
+    if (isAdmin == null) return; // unknown (error / no token) → KEEP last state
+    state = isAdmin; // only an explicit backend response flips the flag
   }
 
   @override

@@ -24,7 +24,7 @@ class MeStatusNotifier extends StateNotifier<MeStatus?> {
     // backend in case the webhook lagged (broadcast stream won't replay).
     _bootstrap();
     _authSub = Supabase.instance.client.auth.onAuthStateChange
-        .listen((_) => refresh());
+        .listen(_onAuthEvent);
     _premiumSub =
         RevenuecatService.instance.premiumStream.listen(_onPremiumSignal);
   }
@@ -32,6 +32,19 @@ class MeStatusNotifier extends StateNotifier<MeStatus?> {
   final StatusService _svc = StatusService();
   late final StreamSubscription _authSub;
   late final StreamSubscription _premiumSub;
+  // Last-wins guard (same rationale as accessProvider): a transient failed
+  // refresh on resume must never overwrite a good status out of order.
+  int _seq = 0;
+
+  void _onAuthEvent(AuthState data) {
+    // Sign-out clears the entitlement (promo/quota) of the previous user.
+    if (data.event == AuthChangeEvent.signedOut) {
+      _seq++; // invalidate any in-flight refresh
+      if (mounted) state = null;
+      return;
+    }
+    refresh();
+  }
 
   Future<void> _bootstrap() async {
     if (RevenuecatService.instance.isPremium) {
@@ -50,9 +63,12 @@ class MeStatusNotifier extends StateNotifier<MeStatus?> {
   }
 
   /// Re-fetch GET /me/status. On error, KEEP the previous state (graceful).
+  /// Last-wins: a stale/superseded refresh result is dropped.
   Future<void> refresh() async {
+    final mySeq = ++_seq;
     final s = await _svc.fetchStatus();
-    if (mounted && s != null) state = s;
+    if (!mounted || mySeq != _seq) return; // superseded → ignore
+    if (s != null) state = s; // keep prior on null (graceful)
   }
 
   @override
