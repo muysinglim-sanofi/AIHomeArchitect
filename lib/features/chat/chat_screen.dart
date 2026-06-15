@@ -25,6 +25,7 @@ import '../../core/constants/free_tier.dart';
 import '../../core/constants/room_type_images.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/models/atmosphere_style.dart';
+import '../../core/providers/locale_provider.dart';
 import '../../core/providers/me_status_provider.dart';
 import '../../core/providers/pending_generations_provider.dart';
 import '../../core/providers/premium_provider.dart';
@@ -1035,6 +1036,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         roomType: _currentRoomType,
         iteration: _iterationCount + 1,
         history: history,
+        uiLocale: ref.read(localeProvider).languageCode,
       );
 
       if (!mounted) return;
@@ -1364,6 +1366,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         // otherwise → backend keeps its V2+ LATEST default (linear chain).
         sourceMode: _branchSourceVersionId != null ? 'SPECIFIC_VERSION' : '',
         sourceVersionId: _branchSourceVersionId ?? '',
+        uiLocale: ref.read(localeProvider).languageCode,
       );
 
       _longGenerationTimer?.cancel();

@@ -92,6 +92,7 @@ class GenerationService {
     int iteration = 1,
     String history = '',
     String secondarySpaces = '[]',
+    String uiLocale = 'en', // Phase 1 — authoritative reply language
   }) async {
     final res = await _dio.post<Map<String, dynamic>>(
       '/chat',
@@ -103,6 +104,7 @@ class GenerationService {
         'iteration': iteration.toString(),
         'history': history,
         'secondary_spaces': secondarySpaces,
+        'ui_locale': uiLocale,
       }),
     );
     return res.data!;
@@ -151,6 +153,7 @@ class GenerationService {
     String generationMode = 'preserve', // Wave 5.5.14c — bimodal intent
     String sourceMode = '',        // BUG A fix — '' | ORIGINAL | LATEST | SPECIFIC_VERSION
     String sourceVersionId = '',   // BUG A fix — target version_id when sourceMode=SPECIFIC_VERSION
+    String uiLocale = 'en',        // Phase 1 — authoritative reply language (NOT the generation prompt)
   }) async {
     // Wave 5.13c perf diag — measure client-side click→response latency.
     // Pairs with the backend `[PERF SUMMARY] request_id=...` line via
@@ -188,6 +191,7 @@ class GenerationService {
           // + source_version_id). Empty => backend keeps its V2+ LATEST default.
           'source_mode': sourceMode,
           'source_version_id': sourceVersionId,
+          'ui_locale': uiLocale,
         }),
       );
       sw.stop();

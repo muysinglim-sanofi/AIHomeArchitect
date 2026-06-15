@@ -112,7 +112,7 @@ class ProfileScreen extends ConsumerWidget {
                         builder: (_) => _LanguageSelectorSheet(
                           currentLocale: currentLocale,
                           onSelect: (locale) {
-                            ref.read(localeProvider.notifier).state = locale;
+                            ref.read(localeProvider.notifier).setLocale(locale);
                             Navigator.of(context).pop();
                           },
                         ),
