@@ -91,10 +91,20 @@ class ChatScreen extends ConsumerStatefulWidget {
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProviderStateMixin {
+class _ChatScreenState extends ConsumerState<ChatScreen>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
   bool _isGenerating = false;
+  // #21 — monotonic generation guard. Bumped at each /generate start; the
+  // in-flight call captures its value and every completion path bails if it no
+  // longer matches (the gen was superseded — e.g. a foreground-resume
+  // reconciliation adopted the DB result first). Prevents a late await from
+  // appending a DUPLICATE vision after the timeline was already rebuilt.
+  int _genSeq = 0;
+  // #21 — single reconciliation poll timer (stored so it can be cancelled on
+  // dispose and never stacked across resumes / transport retries).
+  Timer? _reconcileTimer;
   // Wave 6.15 — perceived-latency: true while the V1 loading bubble is shown
   // EARLY (source image visible instantly) but the Supabase init chain
   // (createSession + source upload) is still running, before _generate fires.
@@ -202,6 +212,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
+    // #21 — observe app lifecycle so a generation that finished while the app
+    // was backgrounded gets reconciled from the DB on resume (the in-flight
+    // HTTP future can silently never complete after the OS drops the socket).
+    WidgetsBinding.instance.addObserver(this);
     _svc = ref.read(supabaseServiceProvider);
 
     // Wave 4.10g — kick off async persistence init. Hydration for existing
@@ -339,13 +353,46 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _longGenerationTimer?.cancel();
+    _reconcileTimer?.cancel();
     _inputController.dispose();
     _scrollController.dispose();
     _entryController.dispose();
     _titleEditController.dispose();
     _titleFocusNode.dispose();
     super.dispose();
+  }
+
+  // #21 — foreground reconciliation. While the app is backgrounded, Dart timers
+  // are suspended and the in-flight /generate HTTP future can silently never
+  // complete (the OS drops the socket). On resume we treat the DB as the source
+  // of truth and reconcile, instead of trusting the local widget state.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state != AppLifecycleState.resumed) return;
+    if (!mounted || _project.id == 'new') return;
+
+    final pending = ref.read(pendingGenerationsProvider)[_project.id];
+    // Returning to the chat acknowledges any ready/error badge for this session.
+    if (pending == GenerationLifecycle.readyUnseen ||
+        pending == GenerationLifecycle.errorUnseen) {
+      ref.read(pendingGenerationsProvider.notifier).clear(_project.id);
+    }
+
+    // Only reconcile when something is actually pending — a live spinner or a
+    // session still flagged in-flight/ready. Avoids a needless DB refetch (and
+    // any flicker) on every ordinary app resume.
+    final needsReconcile = _isGenerating ||
+        pending == GenerationLifecycle.inFlight ||
+        pending == GenerationLifecycle.readyUnseen;
+    if (!needsReconcile) return;
+
+    // Reuse the hardened poll: it loads the DB truth, clears the spinner only
+    // when an image_result actually exists (no phantom clear if the gen is
+    // genuinely still running), and fails gracefully after 90s.
+    _startReconciliationPolling(sessionId: _project.id);
   }
 
   // ── Local persistence (Wave 4.10g) ────────────────────────────────────────
@@ -1251,6 +1298,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     // returns HTTP 402 on Gen #4 attempts — caught below.
 
     pendingNotifier.markInFlight(sessionIdForLifecycle);
+    // #21 — this generation's identity. Every completion path below bails if it
+    // no longer matches (superseded by a foreground-resume reconciliation or a
+    // user-restarted generation), so a late/duplicate await can't mutate state.
+    final mySeq = ++_genSeq;
 
     try {
       // Wave 4.8.5: the AI-intent flags are only meaningful for the FIRST
@@ -1304,6 +1355,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         pendingNotifier.markReadyUnseen(sessionIdForLifecycle);
         return;
       }
+      // #21 — superseded (a resume reconciliation already adopted the DB result,
+      // or the user restarted): drop this completion so it can't append a
+      // duplicate vision over the already-rebuilt timeline.
+      if (mySeq != _genSeq) return;
       // Wave 5.6c — user is still on the chat screen at completion; clear
       // any pending state for this session (result will render inline).
       pendingNotifier.clear(sessionIdForLifecycle);
@@ -1448,6 +1503,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         pendingNotifier.markErrorUnseen(sessionIdForLifecycle);
         return;
       }
+      // #21 — superseded (resume reconciliation found the real result, or the
+      // user restarted): don't surface this stale failure over a fresh timeline.
+      if (mySeq != _genSeq) return;
       // Wave 5.6c — failure shown inline; clear pending state.
       pendingNotifier.clear(sessionIdForLifecycle);
 
@@ -1522,6 +1580,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
         pendingNotifier.markReadyUnseen(sessionIdForLifecycle);
         return;
       }
+      // #21 — superseded by a resume reconciliation / restart: stop here.
+      if (mySeq != _genSeq) return;
 
       if (_project.id == 'new') {
         // No session to reconcile against — surface gracefully.
@@ -1544,39 +1604,59 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     }
   }
 
-  /// Polls `_loadMessages()` every 5s for up to 90s (18 attempts).
-  /// Exits early if a result appears or generation is restarted.
-  /// Shows a graceful failure message only after all polls are exhausted.
+  /// Polls `_loadMessages()` every 5s for up to 90s (18 attempts) until an
+  /// image_result appears in the DB (the source of truth), then clears the
+  /// spinner. Used by BOTH the transport-error fallback and the #21
+  /// foreground-resume reconciliation.
+  ///
+  /// #21 — hardened: the timer is stored (cancelled on dispose, never stacked),
+  /// and the "abandon" condition is keyed on `_genSeq` instead of the old
+  /// `_isGenerating` check. The old check was dead-on-arrival: the transport
+  /// path leaves `_isGenerating == true`, so the first tick bailed immediately
+  /// and the poll never ran — a direct cause of the stuck spinner.
   void _startReconciliationPolling({required String sessionId}) {
+    if (_reconcileTimer != null) return; // already polling — never stack
     const pollInterval = Duration(seconds: 5);
     const maxAttempts = 18; // 18 × 5s = 90s
+    final startSeq = _genSeq;
     int attempt = 0;
 
-    Timer.periodic(pollInterval, (timer) async {
-      attempt++;
-      if (!mounted || _project.id != sessionId) {
-        timer.cancel();
-        return;
-      }
+    void stop(Timer t) {
+      t.cancel();
+      _reconcileTimer = null;
+    }
 
-      // If generation was restarted, bail out.
-      if (_isGenerating) {
-        timer.cancel();
+    _reconcileTimer = Timer.periodic(pollInterval, (timer) async {
+      attempt++;
+      // Abandon if the screen is gone, the session changed, or a NEWER
+      // generation superseded this one (user restarted).
+      if (!mounted || _project.id != sessionId || _genSeq != startSeq) {
+        stop(timer);
         return;
       }
 
       await _loadMessages();
+      if (!mounted || _genSeq != startSeq) {
+        stop(timer);
+        return;
+      }
 
-      // Check if a result arrived.
+      // Result landed in the DB → adopt it as truth, clear the spinner, and
+      // bump _genSeq so any still-in-flight original await bails instead of
+      // appending a duplicate vision.
       final hasResult = _messages.any((m) => m.type == MessageType.imageResult);
       if (hasResult) {
-        timer.cancel();
+        stop(timer);
+        _genSeq++;
+        _longGenerationTimer?.cancel();
+        _longGenerationTimer = null;
         setState(() => _isGenerating = false);
         return;
       }
 
       if (attempt >= maxAttempts) {
-        timer.cancel();
+        stop(timer);
+        _genSeq++;
         if (!mounted) return;
         const failMsg = 'Your design took longer than expected. It may arrive shortly — or tap the button to try again.';
         setState(() {
