@@ -1058,6 +1058,7 @@ async def chat(
     iteration: int = Form(1),
     history: str = Form(""),           # JSON-encoded list of {role, content} messages
     secondary_spaces: str = Form(""),  # JSON-encoded list of secondary room type keys
+    ui_locale: str = Form("en"),       # Phase 1 — authoritative reply language (en|fr|km)
     current_user: CurrentUser = Depends(get_current_user),  # Wave 5.17a
 ):
     """
@@ -1107,7 +1108,10 @@ async def chat(
     # a series of generations with no chat messages).
     _early_session_memory = build_session_memory(
         history=history_messages,
-        detected_language=meta.language,
+        # Phase 1 — the UI locale (the language the user chose in the app) is the
+        # authoritative reply language; per-message detection is the fallback.
+        # In-chat explicit LANGUAGE_SWITCH still wins via the override below.
+        detected_language=(ui_locale.strip() or meta.language),
         session_language_override=meta.target_language if meta.target_language != meta.language else "",
         atmosphere_id_hint=atmosphere_id,
         room_type_hint=room_type,
@@ -1477,6 +1481,7 @@ async def generate(
     source_version_id: str = Form(""),    # Wave 4.7.3 — target version id when source_mode=SPECIFIC_VERSION
     versions: str = Form(""),             # Wave 4.7.3 — JSON ledger of prior versions (client round-trip)
     generation_mode: str = Form("preserve"),  # Wave 5.5.14b.1 — bimodal intent: "preserve" | "creative". Default matches today's behaviour. NOT YET ROUTED — read & logged only; composer wiring lands in Wave 5.5.14c.
+    ui_locale: str = Form("en"),          # Phase 1 — authoritative reply/caption language (en|fr|km). Does NOT touch the generation prompt (English-internal).
     current_user: CurrentUser = Depends(get_current_user),  # Wave 5.17a
 ):
     # ── Step 0: resolve generation profile ───────────────────────────────────
@@ -2812,10 +2817,13 @@ async def generate(
     # ── Step 8: compose architect response + suggestion chips ─────────────────
     atmosphere_id = label_to_atmosphere_id(style_label)
 
-    # Wave 3.4.1: detect session language for bilingual caption
+    # Wave 3.4.1: detect session language for bilingual caption.
+    # Phase 1 — the caption/architect-reply language now follows the UI locale
+    # (was hardcoded "en"). EN clients send "en" → byte-identical to before.
+    # This does NOT affect the English-internal generation prompt.
     _gen_session_memory = build_session_memory(
         history=history_messages,
-        detected_language="en",
+        detected_language=(ui_locale.strip() or "en"),
         atmosphere_id_hint=atmosphere_id,
         room_type_hint=room_type,
     )
