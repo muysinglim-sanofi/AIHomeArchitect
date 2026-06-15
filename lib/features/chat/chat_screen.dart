@@ -823,6 +823,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
           _generationSourceUrl = lastGeneratedUrl;
         }
       });
+      // #20 — keep session.latest_preview (the Projects card image) in sync
+      // with the DB source of truth on every (re)load: reopen, reconciliation
+      // poll AND foreground resume all flow through here. Guarded so we only
+      // write when the URL actually changed (no redundant write, no rebuild
+      // loop) — covers the case where the user left during generation and the
+      // result was persisted server-side without the inline write-back.
+      if (lastGeneratedUrl != null && lastGeneratedUrl.isNotEmpty) {
+        final current = ref
+            .read(sessionProvider)
+            .where((p) => p.id == _project.id)
+            .firstOrNull
+            ?.afterImageUrl;
+        if (current != lastGeneratedUrl) {
+          ref
+              .read(sessionProvider.notifier)
+              .updateLatestPreview(_project.id, lastGeneratedUrl);
+        }
+      }
       // Wave 4.10g — capture the inferred state so a future restart skips
       // re-inferring from the message stream. Handles backfill for sessions
       // that pre-date the persistence layer.
@@ -1216,6 +1234,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
     // itself is a long-lived ProviderScope singleton, so holding a reference
     // outlives the widget's dispose().
     final pendingNotifier = ref.read(pendingGenerationsProvider.notifier);
+    // #20 — capture the session notifier BEFORE the await. After the widget is
+    // disposed (user left during generation) `ref.read` is invalid, but this
+    // StateNotifier is an app-scoped singleton, so the captured reference stays
+    // usable to write the finished preview back even when !mounted.
+    final sessionNotifier = ref.read(sessionProvider.notifier);
     final sessionIdForLifecycle = _project.id;
 
     // ── Wave 5.17b — Gen #2 sign-in gate REMOVED ──────────────────────────
@@ -1268,6 +1291,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> with SingleTickerProvid
       _longGenerationTimer?.cancel();
       _longGenerationTimer = null;
       if (!mounted) {
+        // #20 — write the finished preview back even though the widget is gone,
+        // so the Projects card reflects this vision WITHOUT needing a chat
+        // reopen. Uses the pre-captured singleton notifier (ref is dead here).
+        final afterUrl = result['after_image_url'] as String?;
+        if (afterUrl != null && afterUrl.isNotEmpty) {
+          sessionNotifier.updateLatestPreview(sessionIdForLifecycle, afterUrl);
+        }
         // Wave 5.6c — user navigated away during the generation. Flag the
         // session as "result ready, not yet seen" so the home screen shows
         // a badge + snackbar via the pending generations provider.
