@@ -300,6 +300,7 @@ from .preservation import (
     HIGH_FIDELITY_ATMOSPHERES,  # PHASE 1.2 — shared fidelity allow-list (also used by main.py)
 )
 from .anchor_detector import detect_anchors
+from .switch_redesign import build_switch_hero_block  # SWITCH_REDESIGN_PILOT (R3)
 from .dream_scene_completion import (
     build_scene_completion,
     build_dream_addendum,
@@ -682,6 +683,7 @@ def compose_generation_prompt(
     generation_mode: str = "preserve",  # Wave 5.5.14c — bimodal intent; passed to _design_intelligence_block. No-op unless BIMODAL_ENABLED env var is truthy.
     edit_mode: "EditMode | None" = None,  # Wave 5.13d Phase 1 — single source of truth for edit_mode (passed from main.py).
     editorial_realism_enabled: bool = True,  # Wave 5.14A — gate the editorial-realism layer (FIRST_VISION only ; REBOOT_FRESH delegation passes False). Default True preserves direct V1 callers (main.py iteration=1).
+    switch_redesign: bool = False,  # SWITCH_REDESIGN_PILOT — set True ONLY by composer_v2's REBOOT_FRESH delegation (switch). Injects in-place furniture-replacement (R1) + hero signatures (R3) into FIRST_VISION. Default False → real V1 byte-identical.
 ) -> str:
     """
     Build the complete generation prompt from all intelligence layers.
@@ -948,6 +950,29 @@ def compose_generation_prompt(
     mode_contract = build_mode_contract(
         generation_mode, user_instruction, pixel_anchored=_pixel_anchored
     )
+
+    # SWITCH_REDESIGN_PILOT (R1+R3) — switch-only (forwarded True ONLY by
+    # composer_v2's REBOOT_FRESH delegation; never on a real V1). Append an
+    # in-place furniture-REPLACEMENT directive + the atmosphere's hero signatures
+    # to the kept (P1) mode_contract so the budget assembler can't drop them, and
+    # the switch reads as a distinct STYLE instead of a recolor of V1's furniture.
+    if switch_redesign:
+        _hero = build_switch_hero_block(atmosphere_id)
+        mode_contract = (
+            mode_contract
+            + " SWITCH REDESIGN — keep the existing furniture LAYOUT and positions"
+            " (each piece stays in place, same footprint and scale), but REPLACE"
+            " each piece's design/identity with this atmosphere's signature pieces;"
+            " do NOT keep the previous atmosphere's furniture style; keep"
+            " architecture (walls, windows, doors, openings, ceiling)"
+            " pixel-identical."
+            + ((" " + _hero) if _hero else "")
+        )
+        log.info(
+            "[SWITCH_REDESIGN_PILOT] composer Path D — switch_redesign=True "
+            "atmosphere=%s hero_injected=%s",
+            atmosphere_id, bool(_hero),
+        )
 
     # Wave 5.13f — compact STRUCTURAL_IDENTITY wrapper for FIRST_VISION only.
     # render_clause emits "STRUCTURAL IDENTITY — this apartment already contains

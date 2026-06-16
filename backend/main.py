@@ -2267,8 +2267,23 @@ async def generate(
     # STRUCTURAL_TRANSFORMATION and LOCAL_EDIT skip the mask — they need free
     # editing of zones that overlap the perimeter.
     _MASK_MODES = {EditMode.FIRST_VISION, EditMode.STYLE_REFINEMENT}
+    # SWITCH_REDESIGN_PILOT (R2) — force the architecture-protection mask ON for a
+    # redesign SWITCH (REBOOT_FRESH V1-anchor, never a real V1: _switch_override_-
+    # applied is only True on iteration>1 switches). The mask lets the low-fidelity
+    # switch swap furniture WITHOUT drifting walls/openings (the bug where V2-V4
+    # closed the back openings). Independent of the profile/env mask flags.
+    _switch_redesign = (
+        os.environ.get("SWITCH_REDESIGN_PILOT", "0") == "1"
+        and _switch_override_applied
+    )
+    log.info(
+        "[SWITCH_REDESIGN_PILOT] %s — switch_redesign=%s mask_forced=%s "
+        "source_version_id=%s",
+        "ON" if os.environ.get("SWITCH_REDESIGN_PILOT", "0") == "1" else "OFF",
+        _switch_redesign, _switch_redesign, source_version_id or "(none)",
+    )
     mask_bytes = None
-    if ENABLE_STRUCTURAL_MASK and profile.use_mask and edit_mode in _MASK_MODES:
+    if _switch_redesign or (ENABLE_STRUCTURAL_MASK and profile.use_mask and edit_mode in _MASK_MODES):
         # Run mask generation in thread pool — avoids blocking the async event loop.
         # Wave 4.4.0: old synchronous pixel loop was the root cause of RemoteProtocolError.
         _t_mask = time.monotonic()

@@ -47,6 +47,7 @@ main.py can flip via a single env-var dispatch (`COMPOSER_VERSION`).
 from __future__ import annotations
 
 import logging
+import os
 import re
 from enum import Enum
 from typing import Optional
@@ -1148,6 +1149,17 @@ def compose_generation_prompt(
             "block emitted in composer.py with the actual switch instruction "
             "(e.g. 'Redesign this space in the Japandi style.'))"
         )
+        # SWITCH_REDESIGN_PILOT — switch-only by construction (this branch is
+        # REBOOT_FRESH, an atmosphere switch; a real V1 takes the iteration==1
+        # delegation above which never sets this). Read the flag here and forward
+        # it to composer.py Path D, so the switch redesigns furniture in place
+        # while real V1 stays byte-identical.
+        _redesign = os.environ.get("SWITCH_REDESIGN_PILOT", "0") == "1"
+        log.info(
+            "[SWITCH_REDESIGN_PILOT] %s — REBOOT_FRESH delegation switch_redesign=%s "
+            "(prev=%s new=%s)",
+            "ON" if _redesign else "OFF", _redesign, prev_atmosphere_id, atmosphere_id,
+        )
         return _v1_compose(
             style_label, room_type, room_description,
             # Wave 5.5.14h — user_instruction NO LONGER sanitized. Backend
@@ -1171,6 +1183,7 @@ def compose_generation_prompt(
             "",                                 # authorized_user_changes (none)
             generation_mode,                    # Wave 5.5.14c — forward bimodal intent
             editorial_realism_enabled=False,    # Wave 5.14A Fix — REBOOT_FRESH keeps main.py's STYLE_REFINEMENT classification → quality=low + fidelity=OMIT ; editorial degrades crispness at those params (V2/V3 anchor pixel input from V1 SL produces muddy/dim output)
+            switch_redesign=_redesign,          # SWITCH_REDESIGN_PILOT — switch-only (R1+R3 in composer.py Path D)
         )
 
     # ── 5-section architecture: FV / SR / STRUCTURAL ─────────────────────────
