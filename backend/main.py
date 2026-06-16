@@ -2196,21 +2196,6 @@ async def generate(
         len(structural_identity_clause),
     )
 
-    # SWITCH_REDESIGN_PILOT — switch-only bundle (R1 redesign contract + R3 hero
-    # signatures + R2 architecture mask). Gated on the REBOOT_FRESH V1-anchor
-    # switch discriminator (_switch_override_applied) which is NEVER True for V1
-    # / FIRST_VISION → V1 is byte-identical. Flag off → baseline unchanged.
-    _switch_redesign = (
-        os.environ.get("SWITCH_REDESIGN_PILOT", "0") == "1"
-        and _switch_override_applied
-    )
-    if _switch_redesign:
-        log.info(
-            "[SWITCH_REDESIGN_PILOT] ACTIVE atmosphere=%s — redesign contract (R1) "
-            "+ hero signatures (R3) + architecture mask (R2), switch-only",
-            atmosphere_id,
-        )
-
     design_prompt = compose_generation_prompt(
         style_label=style_label,
         room_type=room_type,
@@ -2226,7 +2211,6 @@ async def generate(
         authorized_user_changes=authorized_changes_clause,
         generation_mode=generation_mode,  # Wave 5.5.14c — no-op unless BIMODAL_ENABLED=1
         edit_mode=edit_mode,  # Wave 5.13d Phase 1 — single source of truth (main.py classified + elevated)
-        switch_redesign=_switch_redesign,  # SWITCH_REDESIGN_PILOT — switch-only (R1+R3)
     )
     _prompt_s = time.monotonic() - _t_prompt
     log.info(
@@ -2283,13 +2267,8 @@ async def generate(
     # STRUCTURAL_TRANSFORMATION and LOCAL_EDIT skip the mask — they need free
     # editing of zones that overlap the perimeter.
     _MASK_MODES = {EditMode.FIRST_VISION, EditMode.STYLE_REFINEMENT}
-    # SWITCH_REDESIGN_PILOT (R2) — force the architecture-protection mask ON for a
-    # redesign switch (independent of the profile/env flags so V1 is unaffected:
-    # _switch_redesign is never True for FIRST_VISION). The mask lets the low-
-    # fidelity redesign change furniture WITHOUT drifting walls/windows.
-    _pilot_mask = _switch_redesign
     mask_bytes = None
-    if _pilot_mask or (ENABLE_STRUCTURAL_MASK and profile.use_mask and edit_mode in _MASK_MODES):
+    if ENABLE_STRUCTURAL_MASK and profile.use_mask and edit_mode in _MASK_MODES:
         # Run mask generation in thread pool — avoids blocking the async event loop.
         # Wave 4.4.0: old synchronous pixel loop was the root cause of RemoteProtocolError.
         _t_mask = time.monotonic()

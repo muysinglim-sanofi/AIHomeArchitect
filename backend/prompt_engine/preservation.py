@@ -196,9 +196,7 @@ def build_continuation_contract(room_type: str) -> str:
     return f"{core} {_COMPACT_ATMOSPHERE_BOUNDARY}"
 
 
-def build_atmosphere_switch_contract(
-    room_type: str, anchor_clause: str = "", redesign: bool = False
-) -> str:
+def build_atmosphere_switch_contract(room_type: str, anchor_clause: str = "") -> str:
     """
     Tier 3.5 — strengthened preservation contract for STYLE_REFINEMENT.
     Wave 4.3.0: Preservation Intelligence.
@@ -216,40 +214,17 @@ def build_atmosphere_switch_contract(
       Always within STYLE_REFINEMENT budget (2400 chars) when combined with
       header (~300), source (~100), DNA (~850), compact_realism (~133).
     """
-    if redesign:
-        # SWITCH_REDESIGN_PILOT (R1) — switch-only. Same architecture + same
-        # furniture LAYOUT/positions, but the furniture IDENTITY/style is
-        # replaced with the new atmosphere's signature pieces (vs the standard
-        # contract which only restyles surfaces → a recolor). Never used by
-        # FIRST_VISION / V1.
-        base = (
-            "SAME APARTMENT — ATMOSPHERE REDESIGN: apply this atmosphere to THIS exact apartment. "
-            "DO NOT generate a new apartment in this style. "
-            "FROZEN: camera, focal length, vanishing points, proportions, "
-            "walls, windows, doors, ceiling, floor plan — locked. "
-            "TOPOLOGY LOCKED: zone count, spatial openness, multi-zone visibility, "
-            "depth relationships — non-negotiable. "
-            "KEEP LAYOUT: every furniture piece stays in its EXACT position, footprint and scale "
-            "(seating, table, media unit, bed, rug, lighting — same place, same size). "
-            "REDESIGN THE FURNISHING: replace each piece's DESIGN/identity with this atmosphere's "
-            "signature equivalent — new silhouettes, materials and finishes — keeping its position. "
-            "Do NOT keep the previous atmosphere's furniture style. "
-            "Also change surfaces, lighting, colours and textiles. "
-            "Do not collapse multi-zone layouts. Do not flatten spatial depth. "
-            "Moving furniture, changing the layout, or altering architecture = failure."
-        )
-    else:
-        base = (
-            "SAME APARTMENT — ATMOSPHERE SWITCH: apply this atmosphere to THIS exact apartment. "
-            "DO NOT generate a new apartment in this style. "
-            "FROZEN: camera, focal length, vanishing points, proportions, "
-            "walls, windows, doors, ceiling — locked. "
-            "TOPOLOGY LOCKED: zone count, spatial openness, multi-zone visibility, "
-            "depth relationships — non-negotiable. "
-            "Do not collapse multi-zone layouts. Do not flatten spatial depth. "
-            "CHANGE ONLY: materials, surfaces, lighting, colours, textiles, styling. "
-            "Simplification of topology or geometry = failure."
-        )
+    base = (
+        "SAME APARTMENT — ATMOSPHERE SWITCH: apply this atmosphere to THIS exact apartment. "
+        "DO NOT generate a new apartment in this style. "
+        "FROZEN: camera, focal length, vanishing points, proportions, "
+        "walls, windows, doors, ceiling — locked. "
+        "TOPOLOGY LOCKED: zone count, spatial openness, multi-zone visibility, "
+        "depth relationships — non-negotiable. "
+        "Do not collapse multi-zone layouts. Do not flatten spatial depth. "
+        "CHANGE ONLY: materials, surfaces, lighting, colours, textiles, styling. "
+        "Simplification of topology or geometry = failure."
+    )
     note = _room_note(room_type)
     parts = [base]
     if note:
