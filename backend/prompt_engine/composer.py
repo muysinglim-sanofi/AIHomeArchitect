@@ -300,6 +300,7 @@ from .preservation import (
     HIGH_FIDELITY_ATMOSPHERES,  # PHASE 1.2 — shared fidelity allow-list (also used by main.py)
 )
 from .anchor_detector import detect_anchors
+from .switch_redesign import build_switch_hero_block  # SWITCH_REDESIGN_PILOT (R3)
 from .dream_scene_completion import (
     build_scene_completion,
     build_dream_addendum,
@@ -682,6 +683,7 @@ def compose_generation_prompt(
     generation_mode: str = "preserve",  # Wave 5.5.14c — bimodal intent; passed to _design_intelligence_block. No-op unless BIMODAL_ENABLED env var is truthy.
     edit_mode: "EditMode | None" = None,  # Wave 5.13d Phase 1 — single source of truth for edit_mode (passed from main.py).
     editorial_realism_enabled: bool = True,  # Wave 5.14A — gate the editorial-realism layer (FIRST_VISION only ; REBOOT_FRESH delegation passes False). Default True preserves direct V1 callers (main.py iteration=1).
+    switch_redesign: bool = False,  # SWITCH_REDESIGN_PILOT — switch-only: redesign furniture identity in place (R1) + inject hero signatures (R3). Default False = byte-identical baseline (never set for FIRST_VISION/V1).
 ) -> str:
     """
     Build the complete generation prompt from all intelligence layers.
@@ -806,7 +808,17 @@ def compose_generation_prompt(
                 "[AnchorDetect] mode=STYLE_REFINEMENT  anchors=%s",
                 list(anchor_profile.anchors),
             )
-        contract = build_atmosphere_switch_contract(room_type, anchor_profile.clause)
+        contract = build_atmosphere_switch_contract(
+            room_type, anchor_profile.clause, redesign=switch_redesign
+        )
+        # SWITCH_REDESIGN_PILOT (R3) — inject the atmosphere's hero furnishing
+        # signatures so the switch reads as a distinct STYLE, not a recolor.
+        # Appended to the (kept, high-priority) contract section so the budget
+        # assembler never drops it. Switch-only; no-op when off/unknown atmosphere.
+        if switch_redesign:
+            _hero = build_switch_hero_block(atmosphere_id)
+            if _hero:
+                contract = f"{contract} {_hero}"
 
         intel_block, used_dna = _design_intelligence_block(atmosphere_id, room_type, dna, style_label, generation_mode)
 
@@ -845,6 +857,7 @@ def compose_generation_prompt(
             ("header", header),
             ("source_continuity", source_continuity),  # P1 — Wave 4.7.3: continue from current design vs restart
             ("atmosphere_contract", contract),
+
             ("structural_identity", structural_identity),  # P1 — Wave 4.7.2: same persistent identity as V1
             ("structural_negative_anchors", structural_negative_anchors),  # P1 — Wave 4.7.4: no-new-wall topology
             ("authorized_user_changes", authorized_user_changes),  # P1.5 — Wave 4.7.5: local user authority
