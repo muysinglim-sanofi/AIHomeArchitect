@@ -579,11 +579,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       if (_pendingMessages.isNotEmpty) {
         debugPrint('[DB] _initNewSession() flushing ${_pendingMessages.length} pending messages');
         for (final msg in _pendingMessages) {
+          // #25 — a buffered branch event persists as a 'system' message that
+          // carries its after_image_url (same encoding as the live path), so it
+          // reconstructs as a branchEvent on reload instead of being downgraded
+          // to plain text.
+          final isBranch = msg.type == MessageType.branchEvent;
           await _svc.insertMessage(
             sessionId: realProject.id,
-            role: msg.isAi ? 'ai' : 'user',
+            role: (msg.isAi || isBranch) ? 'ai' : 'user',
             content: msg.content,
-            messageType: msg.type == MessageType.imageResult ? 'image_result' : 'text',
+            messageType: isBranch
+                ? 'system'
+                : (msg.type == MessageType.imageResult ? 'image_result' : 'text'),
+            afterImageUrl: isBranch ? msg.result?.afterImageUrl : null,
+            styleLabel: isBranch ? msg.result?.styleLabel : null,
           );
         }
         _pendingMessages.clear();
@@ -707,7 +716,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     );
     if (!mounted) return;
     if (returned is GeneratedResult) {
-      _continueFromVision(returned);
+      await _continueFromVision(returned);
     } else if (returned is String) {
       // BUG FIX — bind the atmosphere switch to the vision that was opened
       // (`result`), not the stale session globals. The reveal is single-vision,
@@ -753,7 +762,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     return null;
   }
 
-  void _continueFromVision(GeneratedResult result) {
+  Future<void> _continueFromVision(GeneratedResult result) async {
     final afterUrl = result.afterImageUrl;
     if (afterUrl.isEmpty) return;
 
@@ -801,14 +810,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
     _scrollToBottom();
     if (_project.id != 'new') {
-      _svc.insertMessage(
-        sessionId: _project.id,
-        role: 'system',
-        content: branchMessage.content,
-        messageType: 'branch_event',
-        afterImageUrl: afterUrl,
-        styleLabel: result.styleLabel,
-      );
+      // #25 — persist within the schema's allowed values (role in user/ai,
+      // message_type in text/image_result/system). A branch is encoded as a
+      // 'system' message that CARRIES an after_image_url; _rowToMessage rebuilds
+      // it as a branchEvent on reload (plain system messages have no after url).
+      // await + log: the old fire-and-forget with role='system' /
+      // message_type='branch_event' was SILENTLY REJECTED by the CHECK
+      // constraints, so the card vanished on reload.
+      try {
+        await _svc.insertMessage(
+          sessionId: _project.id,
+          role: 'ai',
+          content: branchMessage.content,
+          messageType: 'system',
+          afterImageUrl: afterUrl,
+          styleLabel: result.styleLabel,
+        );
+      } catch (e) {
+        debugPrint('[branch] persist failed: $e');
+      }
     } else {
       _pendingMessages.add(branchMessage);
     }
@@ -930,10 +950,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   MessageModel _rowToMessage(Map<String, dynamic> row) {
     final typeStr = (row['message_type'] as String?) ?? 'text';
     final isImageResult = typeStr == 'image_result';
-    // Wave 5.12b — branchEvent rows are persisted with the SOURCE vision's
-    // afterImageUrl + styleLabel so the card can render the thumbnail and
-    // "Continuing from Vision N" header without re-resolving the source.
-    final isBranchEvent = typeStr == 'branch_event';
+    final afterUrl = (row['after_image_url'] as String?) ?? '';
+    // Wave 5.12b — branchEvent rows carry the SOURCE vision's afterImageUrl +
+    // styleLabel so the card can render the thumbnail + "Continuing from Vision
+    // N" header. #25 — the schema's message_type CHECK only allows
+    // text/image_result/system, so a branch is now persisted as a 'system'
+    // message that CARRIES an after_image_url. Reconstruct it as a branchEvent
+    // (plain system messages have none). Legacy 'branch_event' rows still honored.
+    final isBranchEvent =
+        typeStr == 'branch_event' || (typeStr == 'system' && afterUrl.isNotEmpty);
     final type = isImageResult
         ? MessageType.imageResult
         : isBranchEvent
@@ -944,7 +969,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final result = (isImageResult || isBranchEvent)
         ? GeneratedResult(
             beforeImageUrl: (row['before_image_url'] as String?) ?? '',
-            afterImageUrl: (row['after_image_url'] as String?) ?? '',
+            afterImageUrl: afterUrl,
             styleLabel: (row['style_label'] as String?) ?? '',
             projectId: _project.id,
           )
