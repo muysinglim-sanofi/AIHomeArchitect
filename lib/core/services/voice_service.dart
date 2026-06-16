@@ -52,6 +52,52 @@ class VoiceService {
   // device default when null — premium safe default for an international app.
   String? _activeLocale;
 
+  // Cache of the device's supported STT locale ids (resolved once after init).
+  List<String>? _availableLocaleIds;
+
+  /// Phase 4 — map a UI language code (en|fr|km) to its preferred STT locale id.
+  /// The actual availability is resolved per-device in [_resolveLocale]; this is
+  /// only the preference.
+  static String sttLocaleForLanguage(String code) {
+    switch (code) {
+      case 'fr':
+        return 'fr_FR';
+      case 'km':
+        return 'km_KH';
+      default:
+        return 'en_US';
+    }
+  }
+
+  /// Resolve a requested locale id against what the device actually supports:
+  /// exact match → same-language match (e.g. km_KH → any km_*) → null (device
+  /// default). Khmer STT is frequently absent, so the graceful null fallback
+  /// keeps the mic working in the device default rather than failing.
+  Future<String?> _resolveLocale(String? requested) async {
+    if (requested == null || requested.isEmpty) return null;
+    try {
+      _availableLocaleIds ??=
+          (await _stt.locales()).map((l) => l.localeId).toList();
+    } catch (_) {
+      return requested; // can't enumerate → trust caller (plugin self-falls-back)
+    }
+    final ids = _availableLocaleIds!;
+    String norm(String s) => s.replaceAll('-', '_').toLowerCase();
+    final want = norm(requested);
+    for (final id in ids) {
+      if (norm(id) == want) return id;
+    }
+    final lang = want.split('_').first;
+    for (final id in ids) {
+      if (norm(id).split('_').first == lang) return id;
+    }
+    if (kDebugMode) {
+      debugPrint(
+          '[VoiceService] locale "$requested" unsupported → device default');
+    }
+    return null;
+  }
+
   // ── Public state ───────────────────────────────────────────────────────
 
   /// True once `initialize()` has confirmed real STT is available on this
@@ -110,7 +156,9 @@ class VoiceService {
     _onFinal = onFinal;
     _onStop = onStop;
     _onError = onError;
-    _activeLocale = localeId;
+    // Phase 4 — resolve the requested locale to one the device actually
+    // supports (or null = device default) so e.g. Khmer degrades gracefully.
+    _activeLocale = await _resolveLocale(localeId);
     try {
       await _stt.listen(
         onResult: (result) {

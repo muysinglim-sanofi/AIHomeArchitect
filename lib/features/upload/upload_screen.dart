@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/providers/locale_provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/app_colors.dart';
@@ -800,15 +801,15 @@ class _StepperNode extends StatelessWidget {
 // Wave 4.8.7: calm free-text architectural direction with real voice
 // dictation via the shared VoiceService + MicButton.
 
-class _DescriptionField extends StatefulWidget {
+class _DescriptionField extends ConsumerStatefulWidget {
   final TextEditingController controller;
   const _DescriptionField({required this.controller});
 
   @override
-  State<_DescriptionField> createState() => _DescriptionFieldState();
+  ConsumerState<_DescriptionField> createState() => _DescriptionFieldState();
 }
 
-class _DescriptionFieldState extends State<_DescriptionField>
+class _DescriptionFieldState extends ConsumerState<_DescriptionField>
     with SingleTickerProviderStateMixin {
   final VoiceService _voice = VoiceService();
   bool _voiceAvailable = false;
@@ -863,6 +864,9 @@ class _DescriptionFieldState extends State<_DescriptionField>
       onFinal: _applyTranscript,
       onStop: _handleStop,
       onError: (_) => _handleStop(),
+      // Phase 4 — dictate in the user's UI language (resolved/fallback inside).
+      localeId: VoiceService.sttLocaleForLanguage(
+          ref.read(localeProvider).languageCode),
     );
   }
 

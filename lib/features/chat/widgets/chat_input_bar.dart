@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/providers/locale_provider.dart';
 import '../../../core/services/voice_service.dart';
 
 /// Wave 4.8 — Chat conversational input bar (extracted from the inline
@@ -22,7 +24,7 @@ import '../../../core/services/voice_service.dart';
 ///   • on `silence` / `done` the listening state exits cleanly — no stuck mic,
 ///   • on `permissionDenied` / `failed` the UI quietly exits listening (the
 ///     mic stays visible; users can retry — we never auto-prompt repeatedly).
-class ChatInputBar extends StatefulWidget {
+class ChatInputBar extends ConsumerStatefulWidget {
   final TextEditingController controller;
   final ValueChanged<String> onSend;
   final bool enabled;
@@ -34,10 +36,10 @@ class ChatInputBar extends StatefulWidget {
   });
 
   @override
-  State<ChatInputBar> createState() => _ChatInputBarState();
+  ConsumerState<ChatInputBar> createState() => _ChatInputBarState();
 }
 
-class _ChatInputBarState extends State<ChatInputBar>
+class _ChatInputBarState extends ConsumerState<ChatInputBar>
     with SingleTickerProviderStateMixin {
   final VoiceService _voice = VoiceService();
   bool _voiceAvailable = false;
@@ -99,6 +101,9 @@ class _ChatInputBarState extends State<ChatInputBar>
       onFinal: _applyTranscript,
       onStop: _handleStop,
       onError: (_) => _handleStop(),
+      // Phase 4 — dictate in the user's UI language (resolved/fallback inside).
+      localeId: VoiceService.sttLocaleForLanguage(
+          ref.read(localeProvider).languageCode),
     );
   }
 
