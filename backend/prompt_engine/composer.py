@@ -990,8 +990,15 @@ def compose_generation_prompt(
     # pixel-anchored V1 — rely on pixels + the generic contract. The token is
     # still captured + persisted for the low-fidelity SWITCH paths (where text
     # is the only guard).
+    # SWITCH_REDESIGN_PILOT — on a redesign SWITCH, KEEP the structural-identity
+    # enumeration (the openings/facts text guard). The switch runs at LOW fidelity
+    # on V1's AI render, so dropping the enumeration (TRUST_PIXELS, meant for the
+    # pixel-anchored real V1) left the back openings unguarded → they got closed
+    # (V2-V4). Forcing it back is switch-only; real V1 keeps trust-pixels.
     _trust_pixels = (
-        _pixel_anchored and os.environ.get("TRUST_PIXELS_V1", "1") != "0"
+        _pixel_anchored
+        and os.environ.get("TRUST_PIXELS_V1", "1") != "0"
+        and not switch_redesign
     )
     structural_identity_fv = (
         "" if _trust_pixels

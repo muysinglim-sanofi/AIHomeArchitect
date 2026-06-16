@@ -194,6 +194,12 @@ if _COMPOSER_V2_ACTIVE:
 # Set ENABLE_STRUCTURAL_MASK=false in .env to disable for debugging.
 ENABLE_STRUCTURAL_MASK: bool = os.environ.get("ENABLE_STRUCTURAL_MASK", "true").lower() == "true"
 
+# SWITCH_REDESIGN_PILOT perf — in-process mask cache keyed by source_version_id.
+# Every atmosphere switch reuses the SAME V1 render as its mask source → the
+# mask is identical, so it's computed once per V1 lineage. Bounded; cleared on
+# restart (re-warms cheaply). Mask is deterministic per source → never stale.
+_MASK_CACHE: dict[str, bytes] = {}
+
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s  %(levelname)-8s  %(message)s",
@@ -2286,13 +2292,22 @@ async def generate(
     if _switch_redesign or (ENABLE_STRUCTURAL_MASK and profile.use_mask and edit_mode in _MASK_MODES):
         # Run mask generation in thread pool — avoids blocking the async event loop.
         # Wave 4.4.0: old synchronous pixel loop was the root cause of RemoteProtocolError.
+        # Perf (2026-06-16) — cache the mask by source_version_id: every atmosphere
+        # switch shares the SAME V1 render as its source, so the mask is identical;
+        # compute it once per V1 lineage instead of ~1s every switch.
         _t_mask = time.monotonic()
-        _loop = asyncio.get_running_loop()
-        mask_bytes = await _loop.run_in_executor(None, build_structural_mask, image_bytes)
+        _mask_cache_hit = bool(source_version_id) and source_version_id in _MASK_CACHE
+        if _mask_cache_hit:
+            mask_bytes = _MASK_CACHE[source_version_id]
+        else:
+            _loop = asyncio.get_running_loop()
+            mask_bytes = await _loop.run_in_executor(None, build_structural_mask, image_bytes)
+            if mask_bytes and source_version_id and len(_MASK_CACHE) < 64:
+                _MASK_CACHE[source_version_id] = mask_bytes
         _mask_s = time.monotonic() - _t_mask
         _timer.record("mask_generation", _mask_s, generated=bool(mask_bytes))
-        log.info("[PERF] stage=mask_generation  duration_ms=%.0f  mask_generated=%s",
-                 _mask_s * 1000, bool(mask_bytes))
+        log.info("[PERF] stage=mask_generation  duration_ms=%.0f  mask_generated=%s  cache_hit=%s",
+                 _mask_s * 1000, bool(mask_bytes), _mask_cache_hit)
         if mask_bytes:
             # Diagnostic: verify mask properties before sending
             try:

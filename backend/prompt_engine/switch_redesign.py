@@ -14,11 +14,12 @@ Unknown atmosphere id -> "" (no hero block injected -> safe no-op).
 
 _SWITCH_HERO_SIGNATURES: dict[str, str] = {
     "warm_modern": (
-        "HERO FURNISHING — Warm Modern: replace the seating with a low-profile "
-        "boucle or tan-leather sofa with soft rounded arms; the table with a "
-        "sculptural travertine or warm-oak coffee table; the lighting with a "
-        "slim arched floor lamp + warm dimmable spots; the rug with a thick "
-        "wool-blend rug in caramel; brass and warm-wood accents."
+        "HERO FURNISHING — Warm Modern: replace the seating with a LOW, MODULAR "
+        "sofa, clean straight lines and a light oatmeal boucle, on slim wood "
+        "legs (relaxed, casual); the table with a chunky warm-oak or travertine "
+        "block coffee table; the lighting with a slim arched floor lamp + warm "
+        "dimmable spots; the rug with a flat caramel wool-blend rug; brass and "
+        "warm-wood accents. Understated, grounded, daytime-warm."
     ),
     "japandi_calm": (
         "HERO FURNISHING — Japandi: replace the seating with a low oak-frame "
@@ -28,11 +29,13 @@ _SWITCH_HERO_SIGNATURES: dict[str, str] = {
         "mat; ceramic, bamboo and paper accents. Restrained, handcrafted, calm."
     ),
     "soft_luxury": (
-        "HERO FURNISHING — Soft Luxury: replace the seating with a deep velvet "
-        "or cashmere-wool sofa; the table with a marble or smoked-glass coffee "
-        "table; the lighting with a sculptural alabaster/brass lamp + concealed "
-        "warm cove light; the rug with a high-pile silk-blend rug; polished "
-        "metal and stone accents. Plush, refined, hushed."
+        "HERO FURNISHING — Soft Luxury: replace the seating with a DEEP, CURVED "
+        "sofa, plush rounded volumes and channel tufting in rich taupe velvet, "
+        "on a recessed or polished-metal base (enveloping, generous depth); the "
+        "table with a rounded marble or smoked-glass coffee table; the lighting "
+        "with a sculptural alabaster/brass lamp + concealed warm cove light; the "
+        "rug with a high-pile silk-blend rug; polished metal and stone accents. "
+        "Plush, opulent, hushed — clearly richer and curvier than Warm Modern."
     ),
     "nordic_warmth": (
         "HERO FURNISHING — Nordic Warmth: replace the seating with a light-oak "
