@@ -89,6 +89,7 @@ from prompt_engine.transformation_state_builder import (
     build_clean_instruction,
 )
 from prompt_engine.atmosphere_dna import label_to_atmosphere_id
+from prompt_engine.normalization import normalize_to_english  # Phase 2 — FR/KM->EN seam
 from prompt_engine.intent_classifier import (
     ConversationIntent,
     SubIntent,
@@ -1246,7 +1247,17 @@ async def chat(
         }
 
     # ── Wave 2.5: design intent routing ───────────────────────────────────────
-    intent_class = classify_intent(message, iteration)
+    # Phase 2: design intent routing runs on canonical English (FR/KM -> EN).
+    # classify_meta_intent above stays on the ORIGINAL message (language + FR/KM
+    # meta replies); only this design router receives the normalized text.
+    # EN / flag-off -> strict passthrough (message_en IS message).
+    message_en = await normalize_to_english(
+        openai, message, ui_locale,
+        enabled=os.environ.get("MULTILINGUAL_NORMALIZE", "0") == "1",
+    )
+    if message_en is not message:
+        log.info("  [normalize] %s->en  %r -> %r", ui_locale, message[:60], message_en[:60])
+    intent_class = classify_intent(message_en, iteration)
 
     # ── Wave 4.11a: PRODUCT_HELP / SUPPORT direct routing — the pre-filter
     # inside classify_intent returns one of these when the user is asking
@@ -2006,11 +2017,24 @@ async def generate(
         except Exception:
             log.warning("  Could not parse secondary_spaces JSON — ignoring")
 
+    # ── Phase 2: multilingual normalization seam (FR/KM -> English) ──────────
+    # Translate the user instruction to canonical English BEFORE any classifier
+    # or prompt composition, so the generation engine stays English-internal.
+    # EN / flag-off -> strict passthrough (prompt_en IS prompt -> byte-identical).
+    # The ORIGINAL `prompt` is kept for reply/caption display (build_vision_caption
+    # echoes it in the user's language); only the design pipeline uses prompt_en.
+    prompt_en = await normalize_to_english(
+        openai, prompt, ui_locale,
+        enabled=os.environ.get("MULTILINGUAL_NORMALIZE", "0") == "1",
+    )
+    if prompt_en is not prompt:
+        log.info("  [normalize] %s->en  %r -> %r", ui_locale, prompt[:60], prompt_en[:60])
+
     if let_ai_decide and room_description:
         log.info("--- Let AI Decide: classifying room from vision ---")
         classification = classify_room(
             vision_description=room_description,
-            user_prompt=prompt,
+            user_prompt=prompt_en,
             room_type_hint=room_type,
         )
         room_type = classification.primary_room
@@ -2028,7 +2052,7 @@ async def generate(
         selected_atmosphere = surprise_me(
             room_type=room_type,
             vision_description=room_description,
-            user_prompt=prompt,
+            user_prompt=prompt_en,
         )
         log.info("  selected atmosphere: %s", selected_atmosphere)
         style_label = selected_atmosphere.replace("_", " ").title()
@@ -2041,18 +2065,18 @@ async def generate(
     log.info("  atmosphere_id: %s", atmosphere_id)
 
     # ── Step 5b: classify intent for response generation ─────────────────────
-    intent_class = classify_intent(prompt, iteration)
+    intent_class = classify_intent(prompt_en, iteration)
     log.info(
         "  intent: %s  sub_intent: %s",
         intent_class.intent.value, intent_class.sub_intent.value,
     )
 
     # ── Step 5c: Wave 3.4.1 — classify transformation + clean + enrich ──────────
-    transformation_type = classify_transformation(prompt, iteration)
+    transformation_type = classify_transformation(prompt_en, iteration)
     log.info("--- transformation: %s ---", transformation_type.value)
 
     # Clean the raw user instruction before injecting into the prompt
-    clean_instruction = build_clean_instruction(prompt, transformation_type)
+    clean_instruction = build_clean_instruction(prompt_en, transformation_type)
 
     # Build spatial preservation addendum (appended after cleaned instruction)
     spatial_addendum = build_spatial_preservation_addendum(
@@ -2067,7 +2091,7 @@ async def generate(
     log.info("  addendum: %d chars  enriched: %d chars", len(spatial_addendum), len(enriched_instruction))
 
     # ── Step 5d: compose design prompt via engine ─────────────────────────────
-    edit_mode = classify_edit_mode(prompt, iteration)
+    edit_mode = classify_edit_mode(prompt_en, iteration)
     _t_prompt = time.monotonic()
 
     # Override: LOCAL_EDIT and LAYOUT_CHANGE bypass the structural contract and
@@ -2122,8 +2146,8 @@ async def generate(
     # the latest overwriting the prior. Bounded, deterministic, history-only.
     # Wave 4.7.5: localized authorized-change authority (V2+ only). Composer
     # injects it only on Path B/C; LOCAL_EDIT already authorizes via build_local_edit_prompt.
-    _acc = accumulate_refinements(history_messages, prompt)
-    _acc_src = _acc.text or prompt  # fallback to current prompt → zero regression
+    _acc = accumulate_refinements(history_messages, prompt_en)
+    _acc_src = _acc.text or prompt_en  # fallback to current prompt → zero regression
     _refine_detected, _refine_zone = detect_refinement(_acc_src)
     authorized_changes_clause = build_authorized_changes_clause(_acc_src, iteration)
     log.info(
