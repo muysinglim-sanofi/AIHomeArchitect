@@ -14,9 +14,14 @@ The actual FR/KM->EN translation quality is a needs-device-validation item
 
 import asyncio
 
-from prompt_engine.normalization import normalize_to_english
+from prompt_engine.normalization import (
+    normalize_to_english,
+    normalize_history_to_english,
+    _TRANSLATION_CACHE,
+)
 from prompt_engine.edit_intent import classify_edit_mode, EditMode
 from prompt_engine.preservation import _temporal_override_requested
+from prompt_engine.refinement_memory import parse_history
 
 failures = []
 
@@ -68,9 +73,50 @@ def test_routing_on_normalized_english():
           _temporal_override_requested("add a rug") is False)
 
 
+async def test_history_passthrough():
+    print("[3] Phase 3 — history passthrough (English freeze guard)")
+    hist = [
+        {"role": "user", "content": "make it warmer"},
+        {"role": "ai", "content": "Done."},
+    ]
+    # EN locale -> identical object (no rebuild)
+    check("EN history returns identical object",
+          (await normalize_history_to_english(None, hist, "en", enabled=True)) is hist)
+    # flag off -> identical object
+    check("flag-off history returns identical object",
+          (await normalize_history_to_english(None, hist, "fr", enabled=False)) is hist)
+    # empty -> identical
+    check("empty history returns identical object",
+          (await normalize_history_to_english(None, [], "fr", enabled=True)) == [])
+
+
+async def test_history_fr_multiturn():
+    print("[4] Phase 3 — FR multi-turn -> English history -> correct refinement_state")
+    # Pre-seed the cache so no LLM/client is needed (client=None).
+    _TRANSLATION_CACHE[("fr", "ajoute une plante")] = "add a plant"
+    fr_hist = [
+        {"role": "user", "content": "ajoute une plante"},
+        {"role": "ai", "content": "Bien reçu."},
+    ]
+    out = await normalize_history_to_english(None, fr_hist, "fr", enabled=True)
+    check("FR user message translated in history",
+          out[0]["content"] == "add a plant")
+    check("assistant message left untouched (same object)",
+          out[1] is fr_hist[1])
+    # Normalized English now parses correctly; raw FR did not.
+    rs_en = parse_history(out, 2)
+    rs_raw = parse_history(fr_hist, 2)
+    check("refinement_state.add populated on normalized EN history",
+          len(rs_en.add) > 0)
+    check("refinement_state.add EMPTY on raw FR (proves the fix matters)",
+          len(rs_raw.add) == 0)
+
+
 async def main():
     await test_passthrough()
     test_routing_on_normalized_english()
+    await test_history_passthrough()
+    await test_history_fr_multiturn()
     print()
     if failures:
         print(f"FAILED: {len(failures)} -> {failures}")

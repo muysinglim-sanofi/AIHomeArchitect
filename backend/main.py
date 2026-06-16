@@ -89,7 +89,10 @@ from prompt_engine.transformation_state_builder import (
     build_clean_instruction,
 )
 from prompt_engine.atmosphere_dna import label_to_atmosphere_id
-from prompt_engine.normalization import normalize_to_english  # Phase 2 — FR/KM->EN seam
+from prompt_engine.normalization import (  # Phase 2/3 — FR/KM->EN seam
+    normalize_to_english,
+    normalize_history_to_english,
+)
 from prompt_engine.intent_classifier import (
     ConversationIntent,
     SubIntent,
@@ -1084,7 +1087,13 @@ async def chat(
         except Exception:
             log.warning("  Could not parse history JSON — ignoring")
 
-    refinement_state = parse_history(history_messages, iteration)
+    # Phase 3 — normalize FR/KM user history to English for the keyword-matching
+    # consumers (parse_history). EN / flag-off -> SAME object (byte-identical).
+    history_messages_en = await normalize_history_to_english(
+        openai, history_messages, ui_locale,
+        enabled=os.environ.get("MULTILINGUAL_NORMALIZE", "0") == "1",
+    )
+    refinement_state = parse_history(history_messages_en, iteration)
 
     # Parse secondary spaces
     secondary_visible_spaces: list[str] = []
@@ -1786,7 +1795,14 @@ async def generate(
         except Exception:
             log.warning("  Could not parse history JSON — ignoring")
 
-    refinement_state = parse_history(history_messages, iteration)
+    # Phase 3 — normalize FR/KM user history to English for the keyword-matching
+    # consumers (parse_history + accumulate_refinements below). EN / flag-off ->
+    # SAME object (history byte-identical, English-freeze preserved).
+    history_messages_en = await normalize_history_to_english(
+        openai, history_messages, ui_locale,
+        enabled=os.environ.get("MULTILINGUAL_NORMALIZE", "0") == "1",
+    )
+    refinement_state = parse_history(history_messages_en, iteration)
     log.info(
         "  refinement — keep:%d add:%d remove:%d directions:%d",
         len(refinement_state.keep), len(refinement_state.add),
@@ -2146,7 +2162,7 @@ async def generate(
     # the latest overwriting the prior. Bounded, deterministic, history-only.
     # Wave 4.7.5: localized authorized-change authority (V2+ only). Composer
     # injects it only on Path B/C; LOCAL_EDIT already authorizes via build_local_edit_prompt.
-    _acc = accumulate_refinements(history_messages, prompt_en)
+    _acc = accumulate_refinements(history_messages_en, prompt_en)
     _acc_src = _acc.text or prompt_en  # fallback to current prompt → zero regression
     _refine_detected, _refine_zone = detect_refinement(_acc_src)
     authorized_changes_clause = build_authorized_changes_clause(_acc_src, iteration)
