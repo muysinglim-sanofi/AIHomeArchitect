@@ -89,10 +89,16 @@ from prompt_engine.transformation_state_builder import (
     build_clean_instruction,
 )
 from prompt_engine.atmosphere_dna import label_to_atmosphere_id
-from prompt_engine.normalization import (  # Phase 2/3 — FR/KM->EN seam
+from prompt_engine.normalization import (  # Phase 2/3/5 — FR/KM<->EN seam
     normalize_to_english,
     normalize_history_to_english,
+    localize_reply,
 )
+
+
+def _norm_enabled() -> bool:
+    """Phase 2/3/5 — master multilingual-normalize flag (MULTILINGUAL_NORMALIZE)."""
+    return os.environ.get("MULTILINGUAL_NORMALIZE", "0") == "1"
 from prompt_engine.intent_classifier import (
     ConversationIntent,
     SubIntent,
@@ -1149,7 +1155,7 @@ async def chat(
         log.info("  meta ai_message: %s", ai_message)
         log.info("=== /chat META SUCCESS === %s", meta.intent.value)
         return {
-            "ai_message": ai_message,
+            "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": False,
             "intent": "conversation",
@@ -1221,7 +1227,7 @@ async def chat(
         log.info("=== /chat WAVE 4.11d GENERATE DOMINANCE (%s) ===",
                  _wave411d_reason)
         return {
-            "ai_message": ai_message,
+            "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": True,
             "intent": intent_class.intent.value,
@@ -1247,7 +1253,7 @@ async def chat(
         )
         log.info("=== /chat AMBIGUITY CLARIFY SUCCESS ===")
         return {
-            "ai_message": _clarification.clarification_text,
+            "ai_message": await localize_reply(openai, _clarification.clarification_text, ui_locale, enabled=_norm_enabled()),
             "suggestions": [],
             "should_generate": False,
             "intent": "design_discussion",
@@ -1295,7 +1301,7 @@ async def chat(
         )
         log.info("=== /chat PRODUCT_HELP / SUPPORT SUCCESS ===")
         return {
-            "ai_message": ai_message,
+            "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": [],
             "should_generate": False,
             "intent": intent_class.intent.value,
@@ -1319,7 +1325,7 @@ async def chat(
         log.info("  [Wave 4.11e] design brief summary emitted")
         log.info("=== /chat WAVE 4.11e SUMMARIZE_DESIGN_BRIEF SUCCESS ===")
         return {
-            "ai_message": ai_message,
+            "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": [],
             "should_generate": False,
             "intent": intent_class.intent.value,
@@ -1385,7 +1391,7 @@ async def chat(
         log.info("  human_soft ai_message: %s", ai_message)
         log.info("=== /chat HUMAN_SOFT SUCCESS ===")
         return {
-            "ai_message": ai_message,
+            "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": False,
             "intent": "conversation",
@@ -1414,7 +1420,7 @@ async def chat(
         log.info("  architect_light ai_message [%s/%s]: %s", emotional_ctx.value, resp_length.value, ai_message)
         log.info("=== /chat ARCHITECT_LIGHT SUCCESS ===")
         return {
-            "ai_message": ai_message,
+            "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": False,
             "intent": "conversation",
@@ -1467,7 +1473,7 @@ async def chat(
     log.info("=== /chat SUCCESS ===")
 
     return {
-        "ai_message": ai_message,
+        "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
         "suggestions": suggestions,
         "should_generate": should_generate,
         "intent": intent_class.intent.value,
@@ -3043,7 +3049,7 @@ async def generate(
     payload = {
         "after_image_url": public_url,
         "thumbnail_url": public_url,
-        "ai_message": ai_message,
+        "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
         "suggestions": suggestions,
         "request_id": request_id,
         # Wave 4.7.2: client persists this in session state and echoes it back

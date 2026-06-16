@@ -17,7 +17,9 @@ import asyncio
 from prompt_engine.normalization import (
     normalize_to_english,
     normalize_history_to_english,
+    localize_reply,
     _TRANSLATION_CACHE,
+    _REPLY_CACHE,
 )
 from prompt_engine.edit_intent import classify_edit_mode, EditMode
 from prompt_engine.preservation import _temporal_override_requested
@@ -112,11 +114,35 @@ async def test_history_fr_multiturn():
           len(rs_raw.add) == 0)
 
 
+async def test_reply_localization():
+    print("[5] Phase 5 — reply localization seam (localize_reply)")
+    en_reply = "The Warm Modern direction is in."
+    # No-op: EN target / flag off / empty -> SAME object (freeze guard)
+    check("EN target returns identical object",
+          (await localize_reply(None, en_reply, "en", enabled=True)) is en_reply)
+    check("flag-off returns identical object",
+          (await localize_reply(None, en_reply, "fr", enabled=False)) is en_reply)
+    check("empty returns identical object",
+          (await localize_reply(None, "", "fr", enabled=True)) == "")
+    # Skip: reply already hand-crafted in target language -> untouched
+    fr_reply = "Votre vision est prête."  # accented -> detected fr
+    check("already-FR reply skipped (preserve hand-crafted template)",
+          (await localize_reply(None, fr_reply, "fr", enabled=True)) is fr_reply)
+    # Fallback gap: EN reply -> translated (cache pre-seeded so client unused)
+    _REPLY_CACHE[("fr", en_reply)] = "La direction Warm Modern est en place."
+    out = await localize_reply(None, en_reply, "fr", enabled=True)
+    check("EN reply translated via fallback (cache hit)",
+          out == "La direction Warm Modern est en place.")
+    check("translated reply preserves proper noun 'Warm Modern'",
+          "Warm Modern" in out)
+
+
 async def main():
     await test_passthrough()
     test_routing_on_normalized_english()
     await test_history_passthrough()
     await test_history_fr_multiturn()
+    await test_reply_localization()
     print()
     if failures:
         print(f"FAILED: {len(failures)} -> {failures}")

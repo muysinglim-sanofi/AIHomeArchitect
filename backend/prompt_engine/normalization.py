@@ -19,6 +19,8 @@ The original user text is preserved by the caller for display / history.
 import asyncio
 import logging
 
+from prompt_engine.meta_intent import _detect_language  # reuse the language detector
+
 log = logging.getLogger("ayden")
 
 # Phase 3 — in-process translation cache: (lang, original_text) -> english.
@@ -30,6 +32,10 @@ _CACHE_MAX = 1024
 
 # Languages that get translated. Everything else (notably "en") is passthrough.
 _NORMALIZE_LANGS = {"fr", "km"}
+
+# Phase 5 — reply-localization cache: (target_lang, english_reply) -> localized.
+_REPLY_CACHE: dict[tuple[str, str], str] = {}
+_LANG_NAMES = {"fr": "French", "km": "Khmer"}
 
 _SYSTEM_PROMPT = (
     "You are a translation layer for an interior-design app. Translate the "
@@ -136,3 +142,53 @@ async def normalize_history_to_english(client, history_messages, lang, *, enable
                 continue
         out.append(m)
     return out
+
+
+async def localize_reply(client, text, target_lang, *, enabled):
+    """Phase 5 — translate a FINAL assistant reply into the user's language, but
+    ONLY when it is still English (i.e. an EN template fallback). Replies already
+    written in the target language (hand-crafted FR/KM templates) are detected
+    and returned UNCHANGED — no double-translation, no quality loss.
+
+    Strict passthrough (SAME object) for EN target / flag-off / empty, so the
+    English path stays byte-identical. Errors fall back to the original + log.
+    """
+    if not enabled or target_lang not in _NORMALIZE_LANGS or not text or not text.strip():
+        return text
+    detected = _detect_language(text)
+    if detected == target_lang:
+        return text  # already localized (hand-crafted template) — preserve it
+    if detected != "en":
+        return text  # unknown / mixed — don't risk mistranslating
+
+    key = (target_lang, text)
+    if key in _REPLY_CACHE:
+        return _REPLY_CACHE[key]
+
+    lang_name = _LANG_NAMES.get(target_lang, target_lang)
+    try:
+        resp = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0,
+            max_tokens=400,
+            messages=[
+                {"role": "system", "content": (
+                    "You are a translation layer for an interior-design app. "
+                    f"Translate the assistant's chat message into natural, concise {lang_name}.\n"
+                    "RULES:\n"
+                    "- Translation ONLY. Keep the same meaning, tone and length.\n"
+                    "- Preserve atmosphere/style/room names and proper nouns "
+                    "verbatim (e.g. 'Japandi', 'Warm Modern', 'Nordic').\n"
+                    f"- If the text is already in {lang_name}, return it unchanged.\n"
+                    "- Output ONLY the translated message: no quotes, no preamble."
+                )},
+                {"role": "user", "content": text},
+            ],
+        )
+        out = (resp.choices[0].message.content or "").strip() or text
+        if out != text and len(_REPLY_CACHE) < _CACHE_MAX:
+            _REPLY_CACHE[key] = out
+        return out
+    except Exception as e:  # network / timeout / API — never block the reply
+        log.warning("[localize_reply] en->%s failed (keeping original): %s", target_lang, e)
+        return text
