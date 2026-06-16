@@ -748,13 +748,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   // BUG A fix — look up the backend version_id for a given render URL inside
   // the round-tripped `_versions` ledger (JSON list of {version_id,
   // generated_image_url, ...}). Returns null if not found (older sessions).
+  // Compare signed Supabase URLs by PATH only: the query string (token/expiry)
+  // is re-issued and differs between when the evolution strip rendered a vision
+  // and when the ledger entry was stored, so exact-string equality silently
+  // failed → the pin fell back to LATEST → "continue from V1" landed on the
+  // wrong lineage after a re-upload. The path identifies the storage object.
+  static String _urlPath(String u) {
+    final q = u.indexOf('?');
+    return q >= 0 ? u.substring(0, q) : u;
+  }
+
   String? _versionIdForUrl(String afterUrl) {
     if (_versions.isEmpty || afterUrl.isEmpty) return null;
+    final wantPath = _urlPath(afterUrl);
     try {
       final list = jsonDecode(_versions);
       if (list is! List) return null;
       for (final v in list) {
-        if (v is Map && v['generated_image_url'] == afterUrl) {
+        if (v is Map &&
+            v['generated_image_url'] is String &&
+            _urlPath(v['generated_image_url'] as String) == wantPath) {
           return v['version_id'] as String?;
         }
       }
