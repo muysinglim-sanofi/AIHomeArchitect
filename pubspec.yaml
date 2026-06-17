@@ -81,16 +81,23 @@ flutter_launcher_icons:
   remove_alpha_ios: true
   min_sdk_android: 21
   adaptive_icon_background: "#000000"
-  adaptive_icon_foreground: "assets/branding/app_icon_1024_black.png"
+  # Android masks app icons to the launcher shape (circle/squircle), so the
+  # adaptive FOREGROUND must be the logo on TRANSPARENT — a full opaque square
+  # here made launchers draw an ugly gold ring. This frame-less, safe-zone-
+  # padded logo (gold compass + AYDEN, keyed off the black master) gives a clean
+  # black icon with the centred logo. iOS keeps the full square via image_path.
+  adaptive_icon_foreground: "assets/branding/app_icon_foreground.png"
 
 # CHANTIER E (v2) — native launch screen. Light ivory bg + gold compass so the
 # OS launch screen MATCHES the new LIGHT architectural Flutter splash (the photo
 # scene is light beige — a dark native bg would flash dark→light at handoff).
 flutter_native_splash:
-  color: "#EDE4D8"
+  # Pale cream — matches the iOS-rendered launch tone so Android & iOS read the
+  # same (was #EDE4D8, which iOS colour-management displayed noticeably lighter).
+  color: "#F1EDE6"
   image: assets/branding/ayden_compass_gold.png
   android_12:
-    color: "#EDE4D8"
+    color: "#F1EDE6"
     image: assets/branding/ayden_compass_gold.png
   android: true
   ios: true
