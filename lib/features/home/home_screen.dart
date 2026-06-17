@@ -520,6 +520,8 @@ class _ContinueCard extends ConsumerWidget {
             if (previewUrl != null)
               CachedNetworkImage(
                 imageUrl: previewUrl,
+                memCacheWidth: 400, // startup perf — card is 168px wide; decode
+                                    // at 400 instead of the 1536px source
                 fit: BoxFit.cover,
                 placeholder: (_, _) =>
                     const ColoredBox(color: AppColors.shimmerBase),

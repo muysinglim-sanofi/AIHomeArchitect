@@ -9,10 +9,15 @@ class SupabaseService {
   Future<List<Map<String, dynamic>>> fetchSessions() async {
     final userId = _db.auth.currentUser?.id;
     debugPrint('[DB] fetchSessions() — user_id: $userId');
+    // Startup perf — cap the unbounded session load (was fetching ALL rows;
+    // a heavy-testing account reached ~627, slowing every cold start). The 50
+    // most-recent cover the home "Continue" strip; older sessions can be
+    // paginated later if a full history view needs them.
     final res = await _db
         .from('sessions')
         .select()
-        .order('updated_at', ascending: false);
+        .order('updated_at', ascending: false)
+        .limit(50);
     final rows = List<Map<String, dynamic>>.from(res as List);
     debugPrint('[DB] fetchSessions() — returned ${rows.length} rows');
     return rows;
