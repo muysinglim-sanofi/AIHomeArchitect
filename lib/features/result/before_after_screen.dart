@@ -19,6 +19,7 @@ import '../../data/mock/mock_projects.dart';
 import '../../data/models/message_model.dart';
 import '../../shared/widgets/app_pill.dart';
 import '../../shared/widgets/atmosphere_card.dart';
+import '../../shared/widgets/pinch_zoom.dart';
 import '../../shared/widgets/reveal_hero.dart';
 import '../../core/feature_flags.dart';
 import '../../shared/reveal/reveal_controller.dart';
@@ -731,7 +732,12 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                                       duration:
                                           const Duration(milliseconds: 150),
                                       curve: Curves.easeOut,
-                                      child: _hasBefore
+                                      // Pinch (2 fingers) zooms in place, snaps
+                                      // back on release. Pan disabled so the
+                                      // 1-finger RevealHero slider drag, tap and
+                                      // long-press-peek all still pass through.
+                                      child: PinchZoom(
+                                        child: _hasBefore
                                           // AYDEN Part A (A2) — behind a
                                           // feature flag (OFF by default). When
                                           // on, the cinematic RevealWidget
@@ -769,6 +775,7 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                                                   showLabels: false,
                                                 ))
                                           : _RevealImage(url: _afterUrl),
+                                      ),
                                     ),
                                     // Original upload cross-fade — wrapped
                                     // inside the same ShaderMask so peek

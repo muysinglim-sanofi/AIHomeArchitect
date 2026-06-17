@@ -44,6 +44,7 @@ import '../../core/widgets/scrim.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_pill.dart';
 import '../../shared/widgets/atmosphere_card.dart';
+import '../../shared/widgets/pinch_zoom.dart';
 import '../../shared/widgets/reveal_canvas.dart';
 import '../../shared/widgets/room_type_card.dart';
 import '../../shared/widgets/sticky_action_bar.dart';
@@ -2916,14 +2917,19 @@ class _GeneratedImageCardState extends State<_GeneratedImageCard> {
                 ambientImage: _provider,
                 focalAspectRatio: _aspectRatio,
                 bottomScrim: false,
-                child: CachedNetworkImage(
-                  imageUrl: result.afterImageUrl,
-                  fit: BoxFit.cover,
-                  width: double.infinity,
-                  height: double.infinity,
-                  placeholder: (_, _) => const _ShimmerPlaceholder(),
-                  errorWidget: (_, _, _) =>
-                      const ColoredBox(color: AppColors.shimmerBase),
+                // Pinch (2 fingers) zooms the render in place and snaps back on
+                // release. Pan disabled so 1-finger drag still scrolls the chat
+                // and a single tap still opens the reveal (GestureDetector above).
+                child: PinchZoom(
+                  child: CachedNetworkImage(
+                    imageUrl: result.afterImageUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    placeholder: (_, _) => const _ShimmerPlaceholder(),
+                    errorWidget: (_, _, _) =>
+                        const ColoredBox(color: AppColors.shimmerBase),
+                  ),
                 ),
               ),
               // Subtle interactivity affordance — top-right corner,
