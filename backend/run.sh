@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 # ── AYDEN backend — CANONICAL perf-safe launch ────────────────────────────────
-# The engine-wave flags below keep the V1 prompt SMALL (~3081 chars for WM Living)
-# which is the fast path. Running WITHOUT them produces the verbose contract +
-# structural-identity enumeration (~3500-3745 chars) → ~+20s on the gpt-image-1
-# call (A/B confirmed 2026-06-17). NEVER launch the backend without these.
+# The engine-wave flags below are the BENCHED config that produced the V1 renders
+# the user validated (15/06) — small prompt (~3081 chars for WM Living). It is
+# also the fast path empirically: an A/B on 2026-06-17 (same morning, matched
+# prompt size) showed HEAD-benched == the 15/06 code (~28-31s openai), i.e. no
+# code regression. Running WITHOUT these flags produces the verbose contract +
+# structural-identity enumeration (~3500-3745 chars). NOTE: latency is dominated
+# by OpenAI server load (identical prompt observed 26s..61s), so the size→latency
+# link is NOT cleanly isolated (the big-prompt samples were evening/high-load).
+# Regardless, keep these ON: it is the validated config and keeps the prompt lean.
 #
 # PERF CANARY: in each "[PERF SUMMARY]" line, prompt_chars for a WM Vision-1
-# should be ~3081. If it climbs above ~3200, something bloated the prompt → a
-# flag is off or a verbose block crept back in. Investigate before shipping.
+# should be ~3081. If it climbs above ~3200, a flag is off or a verbose block
+# crept back in (e.g. PRESERVE_FURNISH_SCOPE) → investigate before shipping.
 #
 # Single process, NO --reload (Windows --reload orphans multiprocessing workers
 # that serve stale DNA). Log is APPENDED (never overwrite — preserves history).
