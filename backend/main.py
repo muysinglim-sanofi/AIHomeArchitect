@@ -99,6 +99,28 @@ from prompt_engine.normalization import (  # Phase 2/3/5 — FR/KM<->EN seam
 def _norm_enabled() -> bool:
     """Phase 2/3/5 — master multilingual-normalize flag (MULTILINGUAL_NORMALIZE)."""
     return os.environ.get("MULTILINGUAL_NORMALIZE", "0") == "1"
+
+
+async def _localize_chip_list(chips, ui_locale):
+    """Phase 5b — localize AI suggestion chips to the UI locale (FR/KM).
+
+    Chips are curated English strings (suggestion_engine); route them through the
+    same localize_reply seam (cached per (lang, text)). EN / flag-off -> list
+    returned UNCHANGED (no API call). Chat/generate response only — never the
+    image prompt. A tapped FR chip re-normalizes to EN on the way back, so intent
+    routing is unaffected.
+    """
+    if not chips or not _norm_enabled():
+        return chips
+    return [await localize_reply(openai, c, ui_locale, enabled=True) for c in chips]
+
+
+async def _suggest_localized(ui_locale, **kw):
+    return await _localize_chip_list(get_suggestion_chips(**kw), ui_locale)
+
+
+async def _contextual_localized(ui_locale, **kw):
+    return await _localize_chip_list(get_contextual_chips(**kw), ui_locale)
 from prompt_engine.intent_classifier import (
     ConversationIntent,
     SubIntent,
@@ -1145,7 +1167,7 @@ async def chat(
             ai_message = generate_project_aware_greeting(meta, _early_session_memory, seed_extra=session_id[:8])
         else:
             ai_message = generate_meta_response(meta, seed_extra=session_id[:8])
-        suggestions = get_suggestion_chips(
+        suggestions = await _suggest_localized(ui_locale,
             atmosphere_id=atmosphere_id,
             room_type=room_type,
             iteration=iteration,
@@ -1217,7 +1239,7 @@ async def chat(
                 language=session_memory.session_language,
                 seed_extra=session_id[:8],
             )
-        suggestions = get_suggestion_chips(
+        suggestions = await _suggest_localized(ui_locale,
             atmosphere_id=atmosphere_id,
             room_type=room_type,
             iteration=iteration,
@@ -1381,7 +1403,7 @@ async def chat(
             sub_intent=intent_class.sub_intent,
             seed_extra=session_id[:8],
         )
-        suggestions = get_suggestion_chips(
+        suggestions = await _suggest_localized(ui_locale,
             atmosphere_id=atmosphere_id,
             room_type=room_type,
             iteration=iteration,
@@ -1410,7 +1432,7 @@ async def chat(
             language=session_memory.session_language,
             seed_extra=session_id[:8],
         )
-        suggestions = get_suggestion_chips(
+        suggestions = await _suggest_localized(ui_locale,
             atmosphere_id=atmosphere_id,
             room_type=room_type,
             iteration=iteration,
@@ -1455,7 +1477,7 @@ async def chat(
     }
     edit_mode_for_chips = sub_to_edit.get(intent_class.sub_intent, EditMode.STYLE_REFINEMENT)
 
-    suggestions = get_suggestion_chips(
+    suggestions = await _suggest_localized(ui_locale,
         atmosphere_id=atmosphere_id,
         room_type=room_type,
         iteration=iteration,
@@ -2047,7 +2069,12 @@ async def generate(
     # echoes it in the user's language); only the design pipeline uses prompt_en.
     prompt_en = await normalize_to_english(
         openai, prompt, ui_locale,
-        enabled=os.environ.get("MULTILINGUAL_NORMALIZE", "0") == "1",
+        # Perf — iteration==1 (V1) is ALWAYS the English auto-instruction
+        # ("Generate the first architectural vision…"), never user FR/KM text, so
+        # translating it is a wasted ~1-2s gpt-4o-mini call on the pre-image
+        # critical path. Only normalize user-typed V2+ instructions. (Safe: the
+        # detector-based skip was rejected — it mislabels accent-less French.)
+        enabled=(os.environ.get("MULTILINGUAL_NORMALIZE", "0") == "1" and iteration > 1),
     )
     if prompt_en is not prompt:
         log.info("  [normalize] %s->en  %r -> %r", ui_locale, prompt[:60], prompt_en[:60])
@@ -2986,7 +3013,7 @@ async def generate(
         ai_message = f"{caption} {follow_up}"
 
     # Wave 3.4: contextual chips use transformation type + secondary spaces
-    suggestions = get_contextual_chips(
+    suggestions = await _contextual_localized(ui_locale,
         atmosphere_id=atmosphere_id,
         room_type=room_type,
         iteration=iteration,
