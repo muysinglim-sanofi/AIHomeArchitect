@@ -1933,6 +1933,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         // model destroys the new room's real openings (door/AC) on atmosphere
         // switches (where input_fidelity=low lets the identity text dominate).
         _structuralIdentity = '';
+        // Option A (2026-06-16) — re-upload = clean NEW lineage. Purge the
+        // version ledger + any branch pin. Without this, the old apartment's
+        // visions stay clickable in chat history and `_versionIdForUrl` matched
+        // an old-lineage URL by path → pinned the WRONG apartment's V1 image
+        // (source_mode=SPECIFIC_VERSION) while structural_identity followed the
+        // new root → image/identity desync → "completely different apartment"
+        // on continue-from-vision. The ledger repopulates from this lineage's
+        // first generation; a click on an old vision now resolves to the current
+        // lineage (LATEST) instead of a stale cross-lineage pin.
+        _versions = '';
+        _branchSourceVersionId = null;
         _sourceReplaced = false;
         _messages.add(MessageModel(
           id: 'sys_${DateTime.now().millisecondsSinceEpoch}',
