@@ -90,6 +90,10 @@ final appRouter = GoRouter(
         // Absent / unknown values fall back to "preserve" (today's behaviour).
         final modeParam = q['mode'];
         final initialMode = modeParam == 'creative' ? 'creative' : 'preserve';
+        // Phase A — entered via a "vision ready" notification deep-link. Lets
+        // the chat screen bounce cleanly to home if the session was deleted
+        // between completion and the tap.
+        final fromNotification = q['from'] == 'notif';
         final sourceImageFile = state.extra as File?;
         return _slideUpPage(
           ChatScreen(
@@ -101,6 +105,7 @@ final appRouter = GoRouter(
             initialDescription: description,
             initialMode: initialMode,
             sourceImageFile: sourceImageFile,
+            fromNotification: fromNotification,
           ),
           state,
         );

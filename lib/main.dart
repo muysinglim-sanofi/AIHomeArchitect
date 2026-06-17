@@ -7,6 +7,7 @@ import 'core/l10n/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
 import 'core/providers/me_status_provider.dart';
 import 'core/router/app_router.dart';
+import 'core/services/local_notification_service.dart';
 import 'core/theme/app_theme.dart';
 import 'data/services/revenuecat_service.dart';
 
@@ -54,6 +55,15 @@ Future<void> main() async {
       debugPrint('[RevenuecatService] configure() failed at boot: $e');
       rethrow;
     }
+  }
+
+  // Phase A — init local notifications (channel + permission) and capture any
+  // cold-start launch payload, AFTER auth is ready and BEFORE runApp so the
+  // splash can consume the deep-link target on first frame.
+  try {
+    await LocalNotificationService.instance.init();
+  } catch (e) {
+    debugPrint('[Notif] init() failed (non-fatal): $e');
   }
 
   runApp(const ProviderScope(child: App()));

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/l10n/app_localizations.dart';
+import '../../core/services/local_notification_service.dart';
 import '../../shared/branding/ayden_brand.dart';
 
 /// CHANTIER E (v2) — premium architectural splash, faithful to the AYDEN
@@ -38,7 +39,18 @@ class _SplashScreenState extends State<SplashScreen>
     _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
     _controller.forward();
     Future.delayed(const Duration(milliseconds: 2400), () {
-      if (mounted) context.go('/onboarding');
+      if (!mounted) return;
+      // Phase A — if the app was COLD-STARTED by tapping a "vision ready"
+      // notification, deep-link straight to that session (home-first so back
+      // returns to home) instead of running the onboarding flow.
+      final deepLinkSessionId =
+          LocalNotificationService.instance.consumePendingDeepLink();
+      if (deepLinkSessionId != null && deepLinkSessionId.isNotEmpty) {
+        context.go('/home');
+        context.push('/chat/$deepLinkSessionId?from=notif');
+        return;
+      }
+      context.go('/onboarding');
     });
   }
 

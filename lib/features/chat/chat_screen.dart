@@ -31,6 +31,7 @@ import '../../core/providers/pending_generations_provider.dart';
 import '../../core/providers/premium_provider.dart';
 import '../../core/providers/access_provider.dart';
 import '../../core/providers/session_provider.dart';
+import '../../core/services/local_notification_service.dart';
 import '../../core/services/session_persistence_service.dart';
 import '../../data/mock/mock_projects.dart';
 import '../../data/services/generation_service.dart';
@@ -76,6 +77,10 @@ class ChatScreen extends ConsumerStatefulWidget {
   // the source-photo sheet; this seeds the initial value for V1.
   final String initialMode;
   final File? sourceImageFile;
+  // Phase A — entered via a "vision ready" notification deep-link. When the
+  // target session no longer exists (deleted between completion and tap),
+  // _loadMessages bounces cleanly to home instead of showing an empty chat.
+  final bool fromNotification;
   const ChatScreen({
     super.key,
     required this.projectId,
@@ -86,6 +91,7 @@ class ChatScreen extends ConsumerStatefulWidget {
     this.initialDescription,
     this.initialMode = 'preserve',
     this.sourceImageFile,
+    this.fromNotification = false,
   });
 
   @override
@@ -876,7 +882,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     try {
       final rows = await _svc.fetchMessages(_project.id);
       debugPrint('[DB] _loadMessages() — got ${rows.length} rows');
-      if (!mounted || rows.isEmpty) return;
+      if (!mounted) return;
+      // Phase A — a notification deep-link to a session that has no messages
+      // means it was deleted between generation-complete and the tap. Bounce
+      // cleanly to home rather than stranding the user on an empty chat.
+      // (Scoped to fromNotification: a normally-opened empty session is left
+      // alone — generated sessions always carry messages anyway.)
+      if (rows.isEmpty) {
+        if (widget.fromNotification) {
+          context.go('/home');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('That session is no longer available.')),
+          );
+        }
+        return;
+      }
       final msgs = rows.map(_rowToMessage).toList();
       final imageCount = msgs.where((m) => m.type == MessageType.imageResult).length;
 
@@ -1421,6 +1441,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         // session as "result ready, not yet seen" so the home screen shows
         // a badge + snackbar via the pending generations provider.
         pendingNotifier.markReadyUnseen(sessionIdForLifecycle);
+        // Phase A — fire an OS notification (no-op in foreground; the home
+        // snackbar covers that). Deep-links back to this session on tap.
+        LocalNotificationService.instance
+            .notifyReady(sessionId: sessionIdForLifecycle);
         return;
       }
       // #21 — superseded (a resume reconciliation already adopted the DB result,
@@ -1569,6 +1593,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         // Wave 5.6c — failure arrived after user navigated away.
         // Mark the session as "error, not yet seen" so home shows a badge.
         pendingNotifier.markErrorUnseen(sessionIdForLifecycle);
+        // Phase A — OS notification for the failure (background only).
+        LocalNotificationService.instance
+            .notifyFailed(sessionId: sessionIdForLifecycle);
         return;
       }
       // #21 — superseded (resume reconciliation found the real result, or the
@@ -1646,6 +1673,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         // user still sees feedback (an error message instead of an image)
         // — either way, the session deserves a badge for re-attention.
         pendingNotifier.markReadyUnseen(sessionIdForLifecycle);
+        // Phase A — optimistic "ready" OS notification (background only); the
+        // tap re-opens the session where _loadMessages hydrates the real result.
+        LocalNotificationService.instance
+            .notifyReady(sessionId: sessionIdForLifecycle);
         return;
       }
       // #21 — superseded by a resume reconciliation / restart: stop here.

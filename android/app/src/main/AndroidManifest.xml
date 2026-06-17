@@ -1,5 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Phase A — local "your vision is ready" notification (Android 13+ runtime
+         permission). Immediate show() only; no scheduling, so no SCHEDULE_EXACT_ALARM
+         / boot-receiver needed. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="AYDEN"
         android:name="${applicationName}"
