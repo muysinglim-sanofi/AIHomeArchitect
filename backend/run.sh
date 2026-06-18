@@ -35,6 +35,5 @@ LOCAL_EDIT_QUALITY_MEDIUM=1 \
 STYLE_REFINE_QUALITY_MEDIUM=1 \
 STRUCT_FIDELITY_LOW=1 \
 STRUCT_ID_CACHE=1 \
-TV_SOFT_PRESERVE=1 \
 DNA_CLEANUP_V1=1 \
 .venv/Scripts/python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 >> logs/backend.log 2>&1

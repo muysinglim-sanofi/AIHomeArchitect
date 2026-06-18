@@ -641,15 +641,6 @@ def _layout_change_intel_block(atmosphere_id: str, room_type: str) -> str:
             )
         if room_dna.room_specific_constraints:
             ctx = "; ".join(room_dna.room_specific_constraints[:2])
-            # Wave 4.9.3 (TV_SOFT_PRESERVE) — soften the TV constraint: KEEP its
-            # presence + "never convert glazing into a wall" guard, DROP "as the
-            # living-room focal point, seating arranged toward it" which nudged
-            # spatial recomposition (seat reorientation) in preserve mode. Flag
-            # off → string unchanged (byte-identical).
-            if os.environ.get("TV_SOFT_PRESERVE", "0") == "1":
-                ctx = ctx.replace(
-                    " as the living-room focal point, seating arranged toward it", ""
-                )
             lines.append(f"ROOM CONTEXT: {ctx}.")
     return "\n".join(lines)
 
