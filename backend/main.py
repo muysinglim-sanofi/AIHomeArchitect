@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import hashlib
 import io
 import json
 import logging
@@ -99,6 +100,38 @@ from prompt_engine.normalization import (  # Phase 2/3/5 — FR/KM<->EN seam
 def _norm_enabled() -> bool:
     """Phase 2/3/5 — master multilingual-normalize flag (MULTILINGUAL_NORMALIZE)."""
     return os.environ.get("MULTILINGUAL_NORMALIZE", "0") == "1"
+
+
+# ── Wave 4.9.3 perf — structural-identity capture cache ───────────────────────
+# The V1 vision capture (~5-7s, 2× gpt-4o-mini) is a PURE function of the source
+# image bytes (architecture-only, atmosphere/room-independent, fixed capture
+# prompt), so the same photo always yields the same identity. We cache the
+# to_token() string keyed by SHA-256(image_bytes); on hit we from_token() it —
+# the EXACT round-trip V2+ already trusts every iteration — so the prompt stays
+# byte-identical (zero quality change), we just skip the vision calls.
+# In-memory, bounded, per-process. Flag STRUCT_ID_CACHE (default off).
+_STRUCT_ID_CACHE: "dict[str, str]" = {}
+_STRUCT_ID_CACHE_MAX = 128
+
+
+def _struct_id_cache_enabled() -> bool:
+    return os.environ.get("STRUCT_ID_CACHE", "0") == "1"
+
+
+def _struct_id_cache_key(image_bytes: bytes) -> str:
+    return hashlib.sha256(image_bytes).hexdigest()
+
+
+def _struct_id_cache_get(key: str):
+    return _STRUCT_ID_CACHE.get(key)
+
+
+def _struct_id_cache_put(key: str, token: str) -> None:
+    if not token or key in _STRUCT_ID_CACHE:
+        return
+    if len(_STRUCT_ID_CACHE) >= _STRUCT_ID_CACHE_MAX:
+        _STRUCT_ID_CACHE.pop(next(iter(_STRUCT_ID_CACHE)), None)  # evict oldest
+    _STRUCT_ID_CACHE[key] = token
 
 
 async def _localize_chip_list(chips, ui_locale):
@@ -1950,62 +1983,91 @@ async def generate(
         if structural_id_obj.is_present:
             _si_source = "text_v1"
         else:
-            # Wave 5.24 (2026-06-03) — run 2× full structural captures in
-            # parallel + safe-union merge. Supersedes Wave 5.23 mini
-            # orientation consensus on the V1 FV path : 2 full captures
-            # naturally provide a 2-vote orientation consensus AND enrich
-            # the complementary architectural facts (interior door, kitchen
-            # visibility, ceiling signature, etc.) — empirically these
-            # additional facts correlate inversely with wall hallucination
-            # rate (3 facts = 40%, 5+ facts = 0%).
-            #
-            # Wave 5.23 mini consensus remains in code as rollback assets
-            # and is still wired in the recovery path below.
-            #
-            # Cost : +$0.0025 per V1 (~6% of total V1 cost). Latency : zero
-            # via parallel asyncio.gather. Merge logic in
-            # structural_identity.safe_union_merge — drops contradictory
-            # facts (missing > wrong principle).
-            _cap_a, _cap_b = await asyncio.gather(
-                _capture_structural_text(image_bytes),
-                _capture_structural_text(image_bytes),
+            # Wave 4.9.3 perf — structural-identity capture cache (flag-gated).
+            # Same source photo → reuse the cached identity token and skip the
+            # ~5-7s vision capture below. from_token() is the exact round-trip
+            # V2+ already trusts, so the prompt stays byte-identical.
+            _v1_cached = False
+            _img_key = (
+                _struct_id_cache_key(image_bytes)
+                if (_struct_id_cache_enabled() and image_bytes) else None
             )
-            _identity_a = extract_from_description(_cap_a)
-            _identity_b = extract_from_description(_cap_b)
-            structural_id_obj, _merge_decisions = safe_union_merge(
-                _identity_a, _identity_b,
-            )
-            # Telemetry — empirical validation depends on these logs.
-            log.info(
-                "[Wave5.24] capture_A facts=%d capture_B facts=%d merged facts=%d",
-                _identity_a.fact_count,
-                _identity_b.fact_count,
-                structural_id_obj.fact_count,
-            )
-            _added = [
-                k for k, v in _merge_decisions.items()
-                if v in ("additive_a", "additive_b")
-            ]
-            _stripped = [
-                k for k, v in _merge_decisions.items()
-                if v == "contradict_position_stripped"
-            ]
-            _kept = [
-                k for k, v in _merge_decisions.items()
-                if v in ("kept_a_longer", "kept_b_longer")
-            ]
-            if _added:
-                log.info("[Wave5.24] additive merged fields: %s", _added)
-            if _stripped:
-                log.info(
-                    "[Wave5.24] contradict position stripped: %s", _stripped,
+            if _img_key is not None:
+                _cached_tok = _struct_id_cache_get(_img_key)
+                if _cached_tok is not None:
+                    structural_id_obj = from_token(_cached_tok)
+                    _si_source = (
+                        "vision_capture_v1_cached"
+                        if structural_id_obj.is_present else "none"
+                    )
+                    _v1_cached = True
+                    log.info(
+                        "[StructIdCache] HIT key=%s facts=%d (skipped ~5-7s capture)",
+                        _img_key[:12], structural_id_obj.fact_count,
+                    )
+            if not _v1_cached:
+                # Wave 5.24 (2026-06-03) — run 2× full structural captures in
+                # parallel + safe-union merge. Supersedes Wave 5.23 mini
+                # orientation consensus on the V1 FV path : 2 full captures
+                # naturally provide a 2-vote orientation consensus AND enrich
+                # the complementary architectural facts (interior door, kitchen
+                # visibility, ceiling signature, etc.) — empirically these
+                # additional facts correlate inversely with wall hallucination
+                # rate (3 facts = 40%, 5+ facts = 0%).
+                #
+                # Wave 5.23 mini consensus remains in code as rollback assets
+                # and is still wired in the recovery path below.
+                #
+                # Cost : +$0.0025 per V1 (~6% of total V1 cost). Latency : zero
+                # via parallel asyncio.gather. Merge logic in
+                # structural_identity.safe_union_merge — drops contradictory
+                # facts (missing > wrong principle).
+                _cap_a, _cap_b = await asyncio.gather(
+                    _capture_structural_text(image_bytes),
+                    _capture_structural_text(image_bytes),
                 )
-            if _kept:
-                log.info(
-                    "[Wave5.24] non-position disagreement, kept longer: %s",
-                    _kept,
+                _identity_a = extract_from_description(_cap_a)
+                _identity_b = extract_from_description(_cap_b)
+                structural_id_obj, _merge_decisions = safe_union_merge(
+                    _identity_a, _identity_b,
                 )
-            _si_source = "vision_capture_v1" if structural_id_obj.is_present else "none"
+                # Telemetry — empirical validation depends on these logs.
+                log.info(
+                    "[Wave5.24] capture_A facts=%d capture_B facts=%d merged facts=%d",
+                    _identity_a.fact_count,
+                    _identity_b.fact_count,
+                    structural_id_obj.fact_count,
+                )
+                _added = [
+                    k for k, v in _merge_decisions.items()
+                    if v in ("additive_a", "additive_b")
+                ]
+                _stripped = [
+                    k for k, v in _merge_decisions.items()
+                    if v == "contradict_position_stripped"
+                ]
+                _kept = [
+                    k for k, v in _merge_decisions.items()
+                    if v in ("kept_a_longer", "kept_b_longer")
+                ]
+                if _added:
+                    log.info("[Wave5.24] additive merged fields: %s", _added)
+                if _stripped:
+                    log.info(
+                        "[Wave5.24] contradict position stripped: %s", _stripped,
+                    )
+                if _kept:
+                    log.info(
+                        "[Wave5.24] non-position disagreement, kept longer: %s",
+                        _kept,
+                    )
+                _si_source = "vision_capture_v1" if structural_id_obj.is_present else "none"
+                if _img_key is not None and structural_id_obj.is_present:
+                    _struct_id_cache_put(_img_key, to_token(structural_id_obj))
+                    log.info(
+                        "[StructIdCache] STORE key=%s facts=%d",
+                        _img_key[:12], structural_id_obj.fact_count,
+                    )
     else:
         structural_id_obj = extract_from_description(room_description)
         if structural_id_obj.is_present:
