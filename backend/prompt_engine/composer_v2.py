@@ -894,6 +894,13 @@ def _layout_change_intel_block(atmosphere_id: str, room_type: str) -> str:
             )
         if room_dna.room_specific_constraints:
             ctx = "; ".join(room_dna.room_specific_constraints[:2])
+            # Wave 4.9.3 (TV_SOFT_PRESERVE) — see composer.py: keep TV presence +
+            # glazing guard, drop the focal-point / seating-orientation nudge.
+            # Flag off → unchanged.
+            if os.environ.get("TV_SOFT_PRESERVE", "0") == "1":
+                ctx = ctx.replace(
+                    " as the living-room focal point, seating arranged toward it", ""
+                )
             lines.append(f"ROOM CONTEXT: {ctx}.")
     return "\n".join(lines)
 
