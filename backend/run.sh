@@ -32,5 +32,7 @@ PROMPT_CONTRACT_LIGHT=1 \
 TRUST_PIXELS_V1=1 \
 EDIT_FIDELITY_LOW=1 \
 LOCAL_EDIT_QUALITY_MEDIUM=1 \
+STYLE_REFINE_QUALITY_MEDIUM=1 \
+STRUCT_FIDELITY_LOW=1 \
 DNA_CLEANUP_V1=1 \
 .venv/Scripts/python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 >> logs/backend.log 2>&1

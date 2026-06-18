@@ -2422,7 +2422,15 @@ async def generate(
                     else "low"
                 )
             elif edit_mode == EditMode.STYLE_REFINEMENT:
-                _quality_override = "low"
+                # User-requested 2026-06-17 — STYLE_REFINEMENT quality low→medium.
+                # ⚠️ Re-introduces the cascade-grain risk that low's pictorial
+                # smoothing masked on source=LATEST AI images (Wave 5.13d Phase A
+                # / cascade_noise_recipe), esp. on deep refinement chains.
+                # STYLE_REFINE_QUALITY_MEDIUM=0 restores low.
+                _quality_override = (
+                    "medium" if os.environ.get("STYLE_REFINE_QUALITY_MEDIUM", "1") != "0"
+                    else "low"
+                )
             # Wave 5.22a EXPERIMENT (2026-06-02) — REBOOT_FRESH quality bump.
             # Wave 5.21 V1 anchor eliminates the source=LATEST cascade chain
             # that Wave 5.13d Phase A's quality=low was designed to mask. With
@@ -2510,7 +2518,16 @@ async def generate(
             # OMIT was designed to mask on source=LATEST AI images
             # (Wave 5.13c/d / cascade_noise_recipe). EDIT_FIDELITY_LOW=0 = OMIT.
             if edit_mode == EditMode.STRUCTURAL_TRANSFORMATION:
-                _fidelity_override = None
+                # User-requested 2026-06-17 — STRUCT fidelity omit→low (light
+                # pixel anchor for tighter architecture preservation during
+                # structural edits). ⚠️ Less latitude for large semantic changes
+                # (open a wall / remove a partition) — the model may under-apply
+                # or refuse the transformation (Wave 5.13c Plan B symptom on
+                # LAYOUT). STRUCT_FIDELITY_LOW=0 restores OMIT (None).
+                _fidelity_override = (
+                    "low" if os.environ.get("STRUCT_FIDELITY_LOW", "1") != "0"
+                    else None
+                )
             elif edit_mode in (
                 EditMode.LOCAL_EDIT,
                 EditMode.LAYOUT_CHANGE,
