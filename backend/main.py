@@ -1826,11 +1826,13 @@ async def generate(
     # Phase 3 — normalize FR/KM user history to English for the keyword-matching
     # consumers (parse_history + accumulate_refinements below). EN / flag-off ->
     # SAME object (history byte-identical, English-freeze preserved).
+    _t_hist = time.monotonic()
     history_messages_en = await normalize_history_to_english(
         openai, history_messages, ui_locale,
         enabled=os.environ.get("MULTILINGUAL_NORMALIZE", "0") == "1",
     )
     refinement_state = parse_history(history_messages_en, iteration)
+    _timer.record("history_norm", time.monotonic() - _t_hist)  # PERF: multilingual history normalize + parse
     log.info(
         "  refinement — keep:%d add:%d remove:%d directions:%d",
         len(refinement_state.keep), len(refinement_state.add),
@@ -2067,6 +2069,7 @@ async def generate(
     # EN / flag-off -> strict passthrough (prompt_en IS prompt -> byte-identical).
     # The ORIGINAL `prompt` is kept for reply/caption display (build_vision_caption
     # echoes it in the user's language); only the design pipeline uses prompt_en.
+    _t_norm = time.monotonic()
     prompt_en = await normalize_to_english(
         openai, prompt, ui_locale,
         # Perf — iteration==1 (V1) is ALWAYS the English auto-instruction
@@ -2076,16 +2079,19 @@ async def generate(
         # detector-based skip was rejected — it mislabels accent-less French.)
         enabled=(os.environ.get("MULTILINGUAL_NORMALIZE", "0") == "1" and iteration > 1),
     )
+    _timer.record("normalize", time.monotonic() - _t_norm)  # PERF: multilingual prompt normalize (gated iter>1)
     if prompt_en is not prompt:
         log.info("  [normalize] %s->en  %r -> %r", ui_locale, prompt[:60], prompt_en[:60])
 
     if let_ai_decide and room_description:
         log.info("--- Let AI Decide: classifying room from vision ---")
+        _t_cr = time.monotonic()
         classification = classify_room(
             vision_description=room_description,
             user_prompt=prompt_en,
             room_type_hint=room_type,
         )
+        _timer.record("classify_room", time.monotonic() - _t_cr)  # PERF
         room_type = classification.primary_room
         log.info(
             "  classified: %s (confidence=%.2f) secondary=%s reason=%s",
@@ -2114,14 +2120,18 @@ async def generate(
     log.info("  atmosphere_id: %s", atmosphere_id)
 
     # ── Step 5b: classify intent for response generation ─────────────────────
+    _t_ci = time.monotonic()
     intent_class = classify_intent(prompt_en, iteration)
+    _timer.record("classify_intent", time.monotonic() - _t_ci)  # PERF
     log.info(
         "  intent: %s  sub_intent: %s",
         intent_class.intent.value, intent_class.sub_intent.value,
     )
 
     # ── Step 5c: Wave 3.4.1 — classify transformation + clean + enrich ──────────
+    _t_ct = time.monotonic()
     transformation_type = classify_transformation(prompt_en, iteration)
+    _timer.record("classify_transformation", time.monotonic() - _t_ct)  # PERF
     log.info("--- transformation: %s ---", transformation_type.value)
 
     # Clean the raw user instruction before injecting into the prompt
@@ -2140,7 +2150,9 @@ async def generate(
     log.info("  addendum: %d chars  enriched: %d chars", len(spatial_addendum), len(enriched_instruction))
 
     # ── Step 5d: compose design prompt via engine ─────────────────────────────
+    _t_ce = time.monotonic()
     edit_mode = classify_edit_mode(prompt_en, iteration)
+    _timer.record("classify_edit_mode", time.monotonic() - _t_ce)  # PERF
     _t_prompt = time.monotonic()
 
     # Override: LOCAL_EDIT and LAYOUT_CHANGE bypass the structural contract and
@@ -2195,7 +2207,9 @@ async def generate(
     # the latest overwriting the prior. Bounded, deterministic, history-only.
     # Wave 4.7.5: localized authorized-change authority (V2+ only). Composer
     # injects it only on Path B/C; LOCAL_EDIT already authorizes via build_local_edit_prompt.
+    _t_acc = time.monotonic()
     _acc = accumulate_refinements(history_messages_en, prompt_en)
+    _timer.record("accumulate", time.monotonic() - _t_acc)  # PERF
     _acc_src = _acc.text or prompt_en  # fallback to current prompt → zero regression
     _refine_detected, _refine_zone = detect_refinement(_acc_src)
     authorized_changes_clause = build_authorized_changes_clause(_acc_src, iteration)

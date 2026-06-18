@@ -146,20 +146,39 @@ class PipelineTimer:
 
     def log_summary(self, logger, total_elapsed_s: float, payload_bytes: int,
                     prompt_chars: int, est_cost_usd: float) -> None:
-        """Emit a single [PERF SUMMARY] line with all stage timings."""
+        """Emit a single [PERF SUMMARY] line with all stage timings.
+
+        2026-06-18 — added the pre-image stages (history_norm, normalize, the 4
+        classifiers, accumulate) so the multilingual + routing overhead is
+        measured, not assumed. backend_ms = total minus the OpenAI image call =
+        everything our code spends; the openai_ms / backend_ms split answers
+        "our code or OpenAI?". Pure instrumentation — no behaviour change.
+        """
+        _total_ms = total_elapsed_s * 1000
+        _openai_ms = self.total_openai_ms()
         logger.info(
-            "[PERF SUMMARY] request_id=%s  total_ms=%.0f"
-            "  fetch_ms=%.0f  vision_ms=%.0f  prompt_ms=%.0f  mask_ms=%.0f"
+            "[PERF SUMMARY] request_id=%s  total_ms=%.0f  backend_ms=%.0f"
+            "  fetch_ms=%.0f  history_ms=%.0f  normalize_ms=%.0f"
+            "  cls_room_ms=%.0f  cls_intent_ms=%.0f  cls_transform_ms=%.0f  cls_editmode_ms=%.0f"
+            "  accumulate_ms=%.0f  vision_ms=%.0f  prompt_ms=%.0f  mask_ms=%.0f"
             "  openai_ms=%.0f (x%d attempts)  upload_ms=%.0f"
             "  payload_bytes=%d  prompt_chars=%d"
             "  est_cost_usd=%.3f  cost_risk=%s",
             self.request_id,
-            total_elapsed_s * 1000,
+            _total_ms,
+            _total_ms - _openai_ms,
             self.stage_ms("image_fetch"),
+            self.stage_ms("history_norm"),
+            self.stage_ms("normalize"),
+            self.stage_ms("classify_room"),
+            self.stage_ms("classify_intent"),
+            self.stage_ms("classify_transformation"),
+            self.stage_ms("classify_edit_mode"),
+            self.stage_ms("accumulate"),
             self.stage_ms("vision_analysis"),
             self.stage_ms("prompt_composition"),
             self.stage_ms("mask_generation"),
-            self.total_openai_ms(),
+            _openai_ms,
             self.openai_attempt_count(),
             self.stage_ms("supabase_upload"),
             payload_bytes,
