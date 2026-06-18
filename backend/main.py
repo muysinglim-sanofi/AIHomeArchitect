@@ -1939,6 +1939,7 @@ async def generate(
     #           Wave 5.3 forces source_mode=ORIGINAL on REBOOT_FRESH pure
     #           switches, so the capture is V1-equivalent.
     # Graceful: EMPTY_IDENTITY -> "" clause -> falls back to Wave 4.7.1 behaviour.
+    _t_sid = time.monotonic()  # PERF: time the full structural-identity resolution
     _si_source = "none"
     structural_id_obj: ApartmentStructuralIdentity = EMPTY_IDENTITY
     if structural_identity.strip():
@@ -2049,6 +2050,9 @@ async def generate(
             )
 
     structural_identity_token = to_token(structural_id_obj)
+    # PERF: V1 = the ~7s parallel vision capture (vision_capture_v1); V2+ =
+    # near-0 token decode; recovery path = a re-capture when the token was lost.
+    _timer.record("struct_id", time.monotonic() - _t_sid)
     log.info(
         "[StructuralIdentity] present=%s  source=%s  facts=%d  token_chars=%d  iteration=%d",
         structural_id_obj.is_present, _si_source,

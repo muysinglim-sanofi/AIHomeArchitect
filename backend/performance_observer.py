@@ -160,7 +160,7 @@ class PipelineTimer:
             "[PERF SUMMARY] request_id=%s  total_ms=%.0f  backend_ms=%.0f"
             "  fetch_ms=%.0f  history_ms=%.0f  normalize_ms=%.0f"
             "  cls_room_ms=%.0f  cls_intent_ms=%.0f  cls_transform_ms=%.0f  cls_editmode_ms=%.0f"
-            "  accumulate_ms=%.0f  vision_ms=%.0f  prompt_ms=%.0f  mask_ms=%.0f"
+            "  accumulate_ms=%.0f  struct_id_ms=%.0f  vision_ms=%.0f  prompt_ms=%.0f  mask_ms=%.0f"
             "  openai_ms=%.0f (x%d attempts)  upload_ms=%.0f"
             "  payload_bytes=%d  prompt_chars=%d"
             "  est_cost_usd=%.3f  cost_risk=%s",
@@ -175,6 +175,7 @@ class PipelineTimer:
             self.stage_ms("classify_transformation"),
             self.stage_ms("classify_edit_mode"),
             self.stage_ms("accumulate"),
+            self.stage_ms("struct_id"),
             self.stage_ms("vision_analysis"),
             self.stage_ms("prompt_composition"),
             self.stage_ms("mask_generation"),
