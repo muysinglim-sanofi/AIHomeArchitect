@@ -311,6 +311,10 @@ class AppLocalizations {
   String get continuingFromVision => _get('continuingFromVision');
   String get homeDesignReady => _get('homeDesignReady');
   String get homeDesignFailed => _get('homeDesignFailed');
+  String get notifReadyTitle => _get('notifReadyTitle');
+  String get notifReadyBody => _get('notifReadyBody');
+  String get notifFailedTitle => _get('notifFailedTitle');
+  String get notifFailedBody => _get('notifFailedBody');
 
   // ── Premium / quota status card ───────────────────────────────────────────
   String get stFreePlan => _get('stFreePlan');

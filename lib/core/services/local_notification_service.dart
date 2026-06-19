@@ -1,7 +1,9 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../router/app_router.dart';
+import '../l10n/app_localizations.dart';
 
 /// Phase A — OS-level "your vision is ready" local notification + deep-link.
 ///
@@ -117,6 +119,18 @@ class LocalNotificationService {
     final state = WidgetsBinding.instance.lifecycleState;
     if (state == AppLifecycleState.resumed) return;
 
+    // #7 — localize the OS notification. This service is BuildContext-free
+    // (runs in the !mounted completion branch / cold-start), so we read the
+    // persisted UI locale ('ui_locale', written by LocaleNotifier) and build an
+    // AppLocalizations off it instead of context.l10n. Falls back to English.
+    String langCode = 'en';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final code = prefs.getString('ui_locale');
+      if (code != null && code.isNotEmpty) langCode = code;
+    } catch (_) {/* default 'en' */}
+    final l10n = AppLocalizations(Locale(langCode));
+
     const androidDetails = AndroidNotificationDetails(
       _channelId,
       _channelName,
@@ -135,10 +149,8 @@ class LocalNotificationService {
     final notifId = sessionId.hashCode & 0x7fffffff;
     await _plugin.show(
       id: notifId,
-      title: isError ? 'Generation failed' : 'Your vision is ready',
-      body: isError
-          ? 'Tap to open the session and see what happened.'
-          : 'Tap to view your new design.',
+      title: isError ? l10n.notifFailedTitle : l10n.notifReadyTitle,
+      body: isError ? l10n.notifFailedBody : l10n.notifReadyBody,
       notificationDetails: details,
       payload: sessionId,
     );

@@ -84,6 +84,10 @@ const Map<String, String> enTranslations = {
   'continuingFromVision': 'Continuing from this vision. Describe the next change, or open Design Direction to explore another atmosphere.',
   'homeDesignReady': 'A design is ready — tap the session to view it.',
   'homeDesignFailed': 'A design generation failed — tap the session to see details.',
+  'notifReadyTitle': 'Your vision is ready',
+  'notifReadyBody': 'Tap to view your new design.',
+  'notifFailedTitle': 'Generation failed',
+  'notifFailedBody': 'Tap to open the session and see what happened.',
   'generateButton': 'Generate',
   'generatingInChat': 'Generating your transformation...',
 

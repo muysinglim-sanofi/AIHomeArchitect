@@ -89,6 +89,10 @@ const Map<String, String> frTranslations = {
   'continuingFromVision': "On continue à partir de cette vision. Décrivez le prochain changement, ou ouvrez Direction artistique pour explorer une autre ambiance.",
   'homeDesignReady': "Un design est prêt — touchez la session pour le voir.",
   'homeDesignFailed': "Une génération a échoué — touchez la session pour voir les détails.",
+  'notifReadyTitle': "Votre vision est prête",
+  'notifReadyBody': "Touchez pour voir votre nouveau design.",
+  'notifFailedTitle': "Échec de la génération",
+  'notifFailedBody': "Touchez pour ouvrir la session et voir ce qui s'est passé.",
   'generateButton': "Générer",
   'generatingInChat': "Génération de votre transformation...",
 
