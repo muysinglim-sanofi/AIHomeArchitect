@@ -1185,7 +1185,10 @@ class _RoomScroller extends ConsumerWidget {
       final id = RoomTypeImages.idForLabel(l10n, label);
       return id == null || !kFreeRoomIds.contains(id);
     }
-    bool aiLocked() => !entitled;
+    // #8 — Ayden Decide is free (no premium lock) when aydenDecideFree is on;
+    // only the normal free quota applies (enforced backend-side). Flag off →
+    // legacy premium lock.
+    bool aiLocked() => FeatureFlags.aydenDecideFree ? false : !entitled;
 
     // Tap router : locked → paywall, else → original onSelected/onAiDecide.
     void onRoomTap(String label) {

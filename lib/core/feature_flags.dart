@@ -117,4 +117,11 @@ class FeatureFlags {
   /// the cascade-free V1 anchor (Wave 5.21). When false: the legacy ledger purge
   /// runs (instant rollback). V1 first-vision path unchanged → V1 impact: NONE.
   static const bool reuploadKeepLineage = true;
+
+  /// #8 (2026-06-19) — Ayden Decide (Let-AI-Decide) is available to FREE users
+  /// (no premium lock); only the normal free generation quota applies. Mirrors
+  /// the backend AYDEN_DECIDE_FREE env flag (free_tier.check_restrictions).
+  /// Surprise Me stays premium. When false: the old premium lock + paywall on
+  /// tap. Keep both sides in lockstep. UI gating only — backend enforces.
+  static const bool aydenDecideFree = true;
 }
