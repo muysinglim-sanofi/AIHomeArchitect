@@ -34,6 +34,7 @@ reference + future drift detection.
 """
 from __future__ import annotations
 import logging
+import os
 from typing import Optional
 
 from fastapi import HTTPException, status
@@ -94,10 +95,19 @@ async def check_restrictions(
     if await has_admin_role(user_id, supa=supa):
         return
 
-    # Free users cannot delegate the choice — Let-AI-Decide and Surprise-
-    # Me are premium affordances. Without this gate they could pass an
-    # empty room_type_id ("AI infers") and slip past the membership test.
-    if let_ai_decide or surprise_me:
+    # #8 (2026-06-19) — Ayden Decide (let_ai_decide) is FREE when
+    # AYDEN_DECIDE_FREE is on (default): it delegates only the ROOM, and the
+    # atmosphere free-check + quota below still gate the generation, so it can
+    # never be a paid-feature bypass. Surprise Me stays premium (it delegates the
+    # ATMOSPHERE → could pick a premium style). AYDEN_DECIDE_FREE=0 restores the
+    # old lock (instant rollback).
+    _ayden_decide_free = os.environ.get("AYDEN_DECIDE_FREE", "1") != "0"
+    # Free users cannot delegate the ATMOSPHERE (surprise_me); let_ai_decide is
+    # allowed when the flag is on. Without a gate, delegation could pass an empty
+    # room_type_id and slip past the membership test — so for a free let_ai_decide
+    # we deliberately SKIP the room check (the room is delegated) but keep the
+    # atmosphere check.
+    if surprise_me or (let_ai_decide and not _ayden_decide_free):
         log.info(
             "[Wave 5.17d] free-tier blocked — user=%s reason=delegated_choice "
             "(let_ai_decide=%s surprise_me=%s)",
@@ -118,7 +128,7 @@ async def check_restrictions(
             },
         )
 
-    if room_type_id not in FREE_ROOMS:
+    if not (let_ai_decide and _ayden_decide_free) and room_type_id not in FREE_ROOMS:
         log.info(
             "[Wave 5.17d] free-tier blocked — user=%s reason=room "
             "received=%r allowed=%s",
