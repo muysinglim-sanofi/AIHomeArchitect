@@ -2216,9 +2216,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   Widget build(BuildContext context) {
     final l10n = context.l10n;
 
+    // #8 Option B — when the room was delegated to Ayden Decide (no explicit
+    // room picked), surface "Ayden Decide" in the header so the user knows the
+    // room is AI-chosen (cosmetic; no real detection on this profile). Normal
+    // sessions are unchanged.
+    final aiDecidePrefix = (_letAiDecide && _currentRoomType.trim().isEmpty)
+        ? '${l10n.uplAiDecide} · '
+        : '';
     final headerSubtitle = _iterationCount > 0
-        ? '$_currentStyle · ${l10n.visionCount(_iterationCount)}'
-        : '$_currentStyle · ${l10n.readyToCreate}';
+        ? '$aiDecidePrefix$_currentStyle · ${l10n.visionCount(_iterationCount)}'
+        : '$aiDecidePrefix$_currentStyle · ${l10n.readyToCreate}';
 
     return Scaffold(
       backgroundColor: AppColors.background,
