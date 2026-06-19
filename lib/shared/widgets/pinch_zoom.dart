@@ -22,11 +22,21 @@ class PinchZoom extends StatefulWidget {
 class _PinchZoomState extends State<PinchZoom>
     with SingleTickerProviderStateMixin {
   final TransformationController _controller = TransformationController();
-  late final AnimationController _reset = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 220),
-  )..addListener(_onResetTick);
+  // Created in initState (NOT a lazy `late` initializer): a lazy field would be
+  // constructed on first access — and if the widget is disposed before any
+  // pinch, that first access happens inside dispose(), where createTicker()
+  // looks up the (now deactivated) TickerMode ancestor → crash.
+  late final AnimationController _reset;
   Animation<Matrix4>? _resetAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _reset = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    )..addListener(_onResetTick);
+  }
 
   void _onResetTick() {
     final anim = _resetAnim;
