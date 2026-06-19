@@ -295,6 +295,23 @@ class AppLocalizations {
   String uplStepBadge(int n) =>
       '${_get('uplStepWord')} $n ${_get('uplStepOf4')}';
 
+  // ── Generation messages (#7 localization — were hardcoded English) ──────────
+  String get genReadyAiSurprise => _get('genReadyAiSurprise');
+  String get genReadySurprise => _get('genReadySurprise');
+  String genReadyAiDecide(String style) =>
+      _get('genReadyAiDecide').replaceAll('{style}', style);
+  String genReadyDefault(String style) =>
+      _get('genReadyDefault').replaceAll('{style}', style);
+  String get genStartError => _get('genStartError');
+  String get sessionUnavailable => _get('sessionUnavailable');
+  String get reuploadError => _get('reuploadError');
+  String get genLongWait => _get('genLongWait');
+  String get genTransportInterrupted => _get('genTransportInterrupted');
+  String get genTookLonger => _get('genTookLonger');
+  String get continuingFromVision => _get('continuingFromVision');
+  String get homeDesignReady => _get('homeDesignReady');
+  String get homeDesignFailed => _get('homeDesignFailed');
+
   // ── Premium / quota status card ───────────────────────────────────────────
   String get stFreePlan => _get('stFreePlan');
   String get stPremiumActive => _get('stPremiumActive');

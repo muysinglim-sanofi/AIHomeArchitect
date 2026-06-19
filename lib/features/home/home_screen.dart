@@ -89,8 +89,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       SnackBar(
         content: Text(
           isError
-              ? 'A design generation failed — tap the session to see details.'
-              : 'A design is ready — tap the session to view it.',
+              ? context.l10n.homeDesignFailed
+              : context.l10n.homeDesignReady,
         ),
         backgroundColor:
             isError ? AppColors.error : AppColors.textPrimary,

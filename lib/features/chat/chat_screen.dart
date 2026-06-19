@@ -277,20 +277,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           ? "AI's choice"
           : (widget.initialStyle ?? 'Modern Minimalist');
 
+      // #7 localization — context.l10n is illegal in initState (InheritedWidget
+      // lookup), so build AppLocalizations from the Riverpod locale (ref.read is
+      // legal here) to localize the V1 greeting (FR/KM regression fix).
+      final greetL10n = AppLocalizations(Locale(ref.read(localeProvider).languageCode));
       final greeting = () {
         if (_letAiDecide && _surpriseMe) {
-          return 'Your space is ready. I’ll read the architecture, choose a '
-              'fitting direction, and generate your first vision now.';
+          return greetL10n.genReadyAiSurprise;
         }
         if (_surpriseMe) {
-          return 'Your space is ready. I’ll choose an atmosphere that suits '
-              'this space and generate your first vision now.';
+          return greetL10n.genReadySurprise;
         }
         if (_letAiDecide) {
-          return 'Your space is ready. I’ll read your space and generate your '
-              'first $style vision now.';
+          return greetL10n.genReadyAiDecide(style);
         }
-        return 'Your space is ready. Generating your first $style vision now.';
+        return greetL10n.genReadyDefault(style);
       }();
 
       _project = ProjectModel(
@@ -688,7 +689,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Could not start the generation. Please try again.'),
+        content: Text(context.l10n.genStartError),
         backgroundColor: AppColors.accentDark,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -1037,7 +1038,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         if (widget.fromNotification) {
           context.go('/home');
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('That session is no longer available.')),
+            SnackBar(content: Text(context.l10n.sessionUnavailable)),
           );
         }
         return;
@@ -1341,8 +1342,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         if (overridePrompt == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text(
-                  'Could not upload the new photo. Please try again.'),
+              content: Text(context.l10n.reuploadError),
               backgroundColor: AppColors.accentDark,
               behavior: SnackBarBehavior.floating,
               shape:
@@ -1498,7 +1498,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       if (!mounted || !_isGenerating) return;
       final reassurance = MessageModel(
         id: 'long_gen_${DateTime.now().millisecondsSinceEpoch}',
-        content: 'Your vision is taking a little longer than usual, but I\'m still working on it.',
+        content: context.l10n.genLongWait,
         isAi: true,
         createdAt: DateTime.now(),
       );
@@ -1853,7 +1853,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           _messages.removeWhere((m) => m.type == MessageType.loading);
           _messages.add(MessageModel(
             id: 'gen_err_${DateTime.now().millisecondsSinceEpoch}',
-            content: 'Something interrupted the connection. Your design may still be on its way — please wait a moment.',
+            content: context.l10n.genTransportInterrupted,
             isAi: true,
             createdAt: DateTime.now(),
           ));
@@ -1929,7 +1929,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         if (!mounted) return;
         // Give up → clear the lifecycle flag so the spinner can't re-inject.
         ref.read(pendingGenerationsProvider.notifier).clear(sessionId);
-        const failMsg = 'Your design took longer than expected. It may arrive shortly — or tap the button to try again.';
+        final failMsg = context.l10n.genTookLonger;
         setState(() {
           _isGenerating = false;
           _messages.removeWhere((m) => m.type == MessageType.loading);
@@ -2002,9 +2002,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
             }
             _messages.add(MessageModel(
               id: 'sys_${DateTime.now().millisecondsSinceEpoch}',
-              content:
-                  'Continuing from this vision. Describe the next change, '
-                  'or open Design Direction to explore another atmosphere.',
+              content: context.l10n.continuingFromVision,
               isAi: false,
               type: MessageType.system,
               createdAt: DateTime.now(),
