@@ -1627,6 +1627,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // any pending state for this session (result will render inline).
       pendingNotifier.clear(sessionIdForLifecycle);
 
+      // OS notification when the app is BACKGROUNDED but this chat is still
+      // mounted (the user backgrounded the app mid-generation, so the completion
+      // runs HERE — not in the !mounted/navigated-away branch). Without this the
+      // "ready" OS notification never fired for the most common case: stay in the
+      // chat, lock/leave the phone. No-op in the foreground via the service's own
+      // resumed-guard (so the foreground-viewing case still shows nothing).
+      if (FeatureFlags.genLifecycleV2 &&
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        pendingNotifier.markReadyUnseen(sessionIdForLifecycle);
+        LocalNotificationService.instance
+            .notifyReady(sessionId: sessionIdForLifecycle);
+      }
+
       // A successful generation consumed quota — refresh the status snapshot so
       // the profile card's "free generations left" stays accurate.
       ref.read(meStatusProvider.notifier).refresh();
