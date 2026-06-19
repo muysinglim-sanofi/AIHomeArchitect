@@ -1707,6 +1707,14 @@ async def generate(
 
     # ── Step 1: log request ───────────────────────────────────────────────────
     request_id = client_request_id.strip() or uuid.uuid4().hex
+    # [RETRY-PROOF] (logging-only) — whether the client supplied an idempotency
+    # key. Two generations sharing one client_request_id ⇒ frontend double-fire
+    # of the SAME action; two different ids around one user action ⇒ a timeout
+    # re-trigger created a duplicate generation. Lets us tell them apart in prod.
+    log.info(
+        "[RETRY-PROOF] request_id=%s  client_supplied=%s  iteration=%d  session=%s",
+        request_id, bool(client_request_id.strip()), iteration, session_id or "(none)",
+    )
 
     # ── Wave 5.17b — Reserve quota slot BEFORE the OpenAI call ──────────────
     # INSERTs a 'in_progress' usage_log row. Counts immediately against the
@@ -1863,6 +1871,22 @@ async def generate(
         _resolved.source_type, _resolved.mode_requested or "(none)",
         _resolved.mode_resolved, _resolved.source_version_id or "(n/a)",
         iteration, bool(original_image_url), len(_versions),
+    )
+    # [LINEAGE-PROOF] (logging-only) — show the URL TAILS so a cross-lineage leak
+    # is visible: if resolved_url != before_url/original_url for an edit the user
+    # pinned via Edit-From-Vision, the wrong apartment was selected. implicit_latest
+    # = LATEST was chosen as a SILENT default (no explicit pin) on iteration>1 —
+    # the suspected root cause when a re-upload purged the version ledger.
+    _implicit_latest = (
+        _resolved.mode_resolved == "LATEST"
+        and (_resolved.mode_requested or "").strip().upper() != "LATEST"
+    )
+    log.info(
+        "  [LINEAGE-PROOF] resolved_url=…%s before_url=…%s original_url=…%s "
+        "source_version_id=%r implicit_latest=%s request_id=%s",
+        (generation_image_url or "")[-48:], (before_image_url or "")[-48:],
+        (original_image_url or "")[-48:], source_version_id or "(none)",
+        _implicit_latest, request_id,
     )
     _t_stage = time.monotonic()
     try:
@@ -2818,6 +2842,14 @@ async def generate(
 
             generated_bytes = base64.b64decode(b64)
             log.info("  generated: %d bytes (%.1f KB)", len(generated_bytes), len(generated_bytes) / 1024)
+            # [RETRY-PROOF] (logging-only) — which attempt succeeded. "N>1" means
+            # ONE backend generation retried internally (expected); two SEPARATE
+            # [RETRY-PROOF] success lines with DIFFERENT request_ids ⇒ a real
+            # double generation (the timeout-retrigger bug).
+            log.info(
+                "[RETRY-PROOF] request_id=%s SUCCESS on attempt %d/%d",
+                request_id, _attempt, _MAX_ATTEMPTS,
+            )
 
             # Wave 5.17b — quota CONFIRM. OpenAI succeeded → cost incurred →
             # the reservation is committed. From this point on, any
