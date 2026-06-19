@@ -12,6 +12,7 @@ import '../../core/feature_flags.dart';
 import '../cards/card_catalog.dart';
 import '../cards/widgets/atmosphere_hero_card.dart';
 import '../cards/widgets/room_card.dart';
+import '../cards/widgets/ai_action_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -2044,15 +2045,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         initialRoomType: _currentRoomType,
         initialStyle: _currentStyle,
         onReplace: _replaceSourcePhoto,
-        onDirectionChanged: (roomType, style) {
+        onDirectionChanged: (roomType, style, aiDecide) {
           // CHANTIER A — Room lock. The room is settable ONLY before the first
           // vision exists; once the lineage has any generated vision the room is
-          // IMMUTABLE. An atmosphere switch — or a re-upload, which keeps the
-          // prior visions in the chat — must never drift it (the Living Room →
-          // Home Office bug). Style stays freely changeable.
+          // IMMUTABLE (the Living Room → Home Office bug). Style stays freely
+          // changeable.
+          // #8b — EXCEPTION: a pending re-upload (_sourceReplaced) starts a fresh
+          // V1 lineage (a NEW apartment), so the room — or Ayden Decide — may
+          // legitimately change. Scoped to the re-upload case so the mid-lineage
+          // lock still holds for a plain direction change.
           final hasVision = sessionHasVision(_messages);
+          final canSetRoom = !hasVision || _sourceReplaced;
           setState(() {
-            if (!hasVision) _currentRoomType = roomType;
+            if (canSetRoom) {
+              if (aiDecide) {
+                // Delegate the room to the AI on the next (fresh) V1. Honored by
+                // _generate via `_letAiDecide && isFirstVision` (re-upload resets
+                // the iteration → isFirstVision true).
+                _letAiDecide = true;
+              } else {
+                _letAiDecide = false;
+                _currentRoomType = roomType;
+              }
+            }
             _currentStyle = style;
           });
           // Wave 4.10g — room/atmosphere selection survives restart.
@@ -3504,7 +3519,10 @@ class _SourcePhotoSheet extends ConsumerStatefulWidget {
   final String initialRoomType;
   final String initialStyle;
   final Future<File?> Function() onReplace;
-  final void Function(String roomType, String style) onDirectionChanged;
+  // #8b — aiDecide carries the "Ayden Decide" choice (delegate the room) out of
+  // the sheet so the next generation can set let_ai_decide.
+  final void Function(String roomType, String style, bool aiDecide)
+      onDirectionChanged;
   // Wave 5.16b — bimodal toggle removed (preserve-only UI in V1).
   // `initialMode` + `onModeChanged` params dropped ; parent no longer
   // needs to seed the sheet or react to a flip.
@@ -3528,6 +3546,8 @@ class _SourcePhotoSheet extends ConsumerStatefulWidget {
 class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
   late String _selectedRoomType;
   late String _selectedStyle;
+  // #8b — "Ayden Decide" (delegate the room to the AI) chosen in this sheet.
+  bool _aiDecide = false;
   // Wave 5.16b — `_selectedMode` field removed with the MODE toggle.
 
   // Local source preview — lets "Replace photo" update the sheet in place
@@ -3548,10 +3568,26 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
   }
 
   void _apply() {
-    // Contract preserved verbatim: chat consumes (roomType, style) then the
-    // sheet pops.
-    widget.onDirectionChanged(_selectedRoomType, _selectedStyle);
+    // chat consumes (roomType, style, aiDecide) then the sheet pops.
+    widget.onDirectionChanged(_selectedRoomType, _selectedStyle, _aiDecide);
     Navigator.of(context).pop();
+  }
+
+  // #8b — Ayden Decide free unlock (mirror of upload screen + aydenDecideFree).
+  bool _aiLockedSheet() {
+    if (FeatureFlags.aydenDecideFree) return false;
+    final isPremium = ref.read(premiumProvider);
+    final isAdmin = ref.read(accessProvider);
+    final hasPromo = ref.read(meStatusProvider)?.hasActivePromo ?? false;
+    return !(isPremium || isAdmin || hasPromo);
+  }
+
+  void _onAiDecideTap() {
+    if (_aiLockedSheet()) {
+      _openSheetPaywall('delegated_choice');
+      return;
+    }
+    setState(() => _aiDecide = !_aiDecide);
   }
 
   // Wave 5.17d — lock policy for the re-upload / direction sheet. Mirrors
@@ -3574,7 +3610,10 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
       _openSheetPaywall('room');
       return;
     }
-    setState(() => _selectedRoomType = label);
+    setState(() {
+      _selectedRoomType = label;
+      _aiDecide = false; // explicit room → not AI-delegated
+    });
   }
 
   Future<void> _openSheetPaywall(String restrictedField) async {
@@ -3627,7 +3666,20 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
               childAspectRatio: 6 / 5,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              children: [for (final r in kHeroRooms) card(r)],
+              children: [
+                // #8b — Ayden Decide leads the choices here too (same card art
+                // as the upload screen). Tapping it delegates the room to the AI.
+                AiActionCard(
+                  title: context.l10n.uplAiDecide,
+                  subtitle: context.l10n.uplAiDecideSub,
+                  selected: _aiDecide,
+                  locked: _aiLockedSheet(),
+                  onTap: _onAiDecideTap,
+                  backgroundImageAsset:
+                      'assets/branding/ayden_decide_card.png',
+                ),
+                for (final r in kHeroRooms) card(r),
+              ],
             ),
             const SizedBox(height: 12),
             Row(
