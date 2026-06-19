@@ -31,7 +31,6 @@ const kHeroRooms = <RoomCardData>[
   RoomCardData('kitchen', 'Kitchen', 'assets/cards/rooms/kitchen.png'),
   RoomCardData('bathroom', 'Bathroom', 'assets/cards/rooms/bathroom.png'),
   RoomCardData('terrace', 'Terrace', 'assets/cards/rooms/terrace.png'),
-  RoomCardData('poolArea', 'Pool Area', 'assets/cards/rooms/pool_area.png'),
 ];
 
 const kMoreRooms = <RoomCardData>[
@@ -39,6 +38,7 @@ const kMoreRooms = <RoomCardData>[
   RoomCardData('homeOffice', 'Home Office', 'assets/cards/rooms/home_office.png'),
   RoomCardData('balcony', 'Balcony', 'assets/cards/rooms/balcony.png'),
   RoomCardData('entranceHall', 'Entrance Hall', 'assets/cards/rooms/entrance_hall.png'),
+  RoomCardData('poolArea', 'Pool Area', 'assets/cards/rooms/pool_area.png'),
   RoomCardData('garden', 'Garden', 'assets/cards/rooms/garden.png'),
   RoomCardData('houseFacade', 'House Facade', 'assets/cards/rooms/house_facade.png'),
   RoomCardData('driveway', 'Driveway', 'assets/cards/rooms/driveway.png'),

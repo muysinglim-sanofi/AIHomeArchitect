@@ -316,20 +316,24 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
   // Wave 5.13b — _subtitle field dropped : the AppBar title slot no
   // longer exists in the reveal screen, and _title is still kept since
   // Share uses it ("Check out my AI home redesign — $_title!").
+  // Wave 4.9.3 — display label for the compare SOURCE (left pill), passed by
+  // chat_screen._openReveal ("Original" / an atmosphere name). Null → the left
+  // pill falls back to the generic "Original" label.
+  String? _sourceDisplayLabel;
   String? _selectedAtmosphere;
 
-  // Cinematic immersive mode (controls fade away → pure image). Hybrid: tap
-  // toggles; back is always reachable (AppBar leading chip stays).
-  bool _immersive = false;
+  // Wave 4.9.3 — the current vision's atmosphere for the RIGHT compare pill,
+  // parsed from the style label ("Warm Modern · Vision 3" → "Warm Modern").
+  // Falls back to the legacy "AI Vision" when no style is available (mock /
+  // showcase rows).
+  String get _currentAtmosphereLabel {
+    final s = _title.split('·').first.trim();
+    return s.isNotEmpty ? s : 'AI Vision';
+  }
+
   // While the user holds, the original is shown full-bleed (temporary
   // override — NOT a second compare system).
   bool _holdingOriginal = false;
-
-  // Wave 5.13c polish v3 — scroll controller for the editorial controls
-  // column. Used to auto-scroll the Generate button into view when an
-  // atmosphere is selected (otherwise the CTA appears off-screen on
-  // smaller phones and the user thinks nothing happened).
-  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -377,6 +381,7 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
       _originalUploadUrl = originalUpload;
       _afterUrl = after;
       _title = extra.styleLabel;
+      _sourceDisplayLabel = extra.sourceDisplayLabel;
     } else {
       // Fallback: mock / featured data (showcase usage)
       final project = widget.projectId.startsWith('featured')
@@ -421,33 +426,16 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _entryController.dispose();
     _revealController?.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
-  // Wave 5.15d — pull down toward the freshly-revealed CTA. The Generate
-  // CTA is once again BELOW the carousel (revert of the 5.15b position
-  // swap — device-test showed the eye naturally drops after tapping a
-  // card, not climbs). When a card is selected the column grows under
-  // the carousel by the CTA's height ; we animate the scroll to the new
-  // maxScrollExtent so the CTA lands inside the viewport on small phones
-  // without forcing the user to hunt for it. Toggling OFF (re-tap of
-  // the selected card) does nothing — the slot collapses in place.
+  // Wave 4.9.3 — toggle the selected atmosphere. The Generate CTA now lives
+  // in a fixed reserved slot below the carousel (no vertical scroll), so the
+  // old counter-scroll-to-CTA is gone — re-tap deselects in place.
   void _selectAtmosphere(String name) {
-    final wasSelected = _selectedAtmosphere == name;
     setState(() {
-      _selectedAtmosphere = wasSelected ? null : name;
+      _selectedAtmosphere = _selectedAtmosphere == name ? null : name;
     });
-    if (!wasSelected) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_scrollController.hasClients) return;
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 320),
-          curve: Curves.easeOutCubic,
-        );
-      });
-    }
   }
 
   // Wave 5.17d — locked-card tap in the Full Reveal atmosphere
@@ -499,18 +487,6 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
     );
   }
 
-  // Wave 5.10 — toggle cinematic immersive mode + system chrome together.
-  // Tapping the image hides the status + navigation bars (Android) and
-  // the home indicator (iOS) so the render owns the full screen ;
-  // tapping again restores them. `immersiveSticky` lets the user pull
-  // them back transiently with an edge swipe without exiting our mode.
-  void _setImmersive(bool value) {
-    setState(() => _immersive = value);
-    SystemChrome.setEnabledSystemUIMode(
-      value ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
-    );
-  }
-
   // Slider availability (previous-source-vision → current). Gates the
   // RevealHero before-image + its compare wipe.
   bool get _hasBefore => _beforeUrl != null && _beforeUrl!.isNotEmpty;
@@ -534,7 +510,15 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
     // : enough matte to feel cinematic, not so much that the foreground
     // photo collapses on small phones. Clamp 360…540 keeps SE usable
     // and avoids over-scaling on tablets.
-    final imageH = (screenH * 0.56).clamp(360.0, 540.0);
+    // Wave 4.9.3 — 0.56 → 0.50: give the enlarged atmosphere carousel more
+    // vertical room while the image stays clearly dominant. Then minus the
+    // section-header allowance (the "Explore other atmospheres" title moved out
+    // of the hero overlay into the cards section): trimming the hero by exactly
+    // that height keeps the controls Expanded — and thus the card size —
+    // identical to the validated layout.
+    const sectionHeaderH = 34.0;
+    final imageH =
+        (screenH * 0.50).clamp(340.0, 500.0) - sectionHeaderH;
 
     return Scaffold(
       backgroundColor: AppColors.textPrimary,
@@ -641,7 +625,10 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                         borderRadius: BorderRadius.circular(22),
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: () => _setImmersive(!_immersive),
+                          // Wave 4.9.3 — tapping the photo now ENLARGES it
+                          // (opens the fullscreen reveal), replacing the old
+                          // immersive-chrome toggle + the removed expand button.
+                          onTap: _openFullscreenReveal,
                           onLongPressStart: _hasOriginal
                               ? (_) =>
                                   setState(() => _holdingOriginal = true)
@@ -855,8 +842,13 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                                         duration: const Duration(
                                             milliseconds: 150),
                                         curve: Curves.easeOut,
+                                        // Wave 4.9.3 — contextual SOURCE label
+                                        // ("Original" / "Warm Modern" / …)
+                                        // instead of generic "Before"; falls
+                                        // back to the localized "Original".
                                         child: AppPill(
-                                            text: context.l10n.ftueBefore),
+                                            text: _sourceDisplayLabel ??
+                                                context.l10n.beforeLabel),
                                       ),
                                     ),
                                   ),
@@ -869,8 +861,12 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                                       duration:
                                           const Duration(milliseconds: 150),
                                       curve: Curves.easeOut,
-                                      child: const AppPill(
-                                          text: 'AI Vision', dark: true),
+                                      // Wave 4.9.3 — the current vision's
+                                      // atmosphere instead of generic "AI
+                                      // Vision".
+                                      child: AppPill(
+                                          text: _currentAtmosphereLabel,
+                                          dark: true),
                                     ),
                                   ),
                                 ),
@@ -975,67 +971,12 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(height: 11),
+                                        // Wave 4.9.3 — the hint stays at the
+                                        // image bottom; "Explore other
+                                        // atmospheres" moved OUT of this overlay
+                                        // into the section header above the
+                                        // cards (see _buildControls).
                                       ],
-                                      // Wave 5.15i — inline ElevatedButton
-                                      // (instead of the shared AppButton)
-                                      // so this single hero callsite can
-                                      // own its sizing without touching
-                                      // the design-system widget : the
-                                      // in-hero CTAs read tighter than
-                                      // the other accent CTAs on purpose
-                                      // (height 58 → 48, font 14, icon 14)
-                                      // — matches the target's compact
-                                      // pair.
-                                      SizedBox(
-                                        height: 38,
-                                        child: ElevatedButton(
-                                          onPressed: _continueAction,
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor:
-                                                AppColors.accent,
-                                            foregroundColor:
-                                                AppColors.surface,
-                                            elevation: 0,
-                                            padding: const EdgeInsets
-                                                .symmetric(horizontal: 20),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(22),
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              const Icon(
-                                                Icons.auto_awesome,
-                                                size: 11,
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                'Continue this vision',
-                                                style: TextStyle(
-                                                  color: AppColors.surface,
-                                                  fontSize: 11,
-                                                  fontWeight:
-                                                      FontWeight.w600,
-                                                  letterSpacing: 0.2,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                      // Wave 5.15m — Refine this direction
-                                      // in chat removed (redundant with
-                                      // Continue this vision which already
-                                      // returns to chat). Gap above (8 dp)
-                                      // and the OutlinedButton block both
-                                      // dropped ; Column collapses
-                                      // naturally so Continue sits as the
-                                      // single in-hero CTA.
                                     ],
                                   ),
                                 ),
@@ -1045,31 +986,23 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                         ),
                       ),
                     ),
-                  // ── Editorial content below image (scrollable) ───────────
+                  // ── Editorial content below image ────────────────────────
                   // No own decoration — the warm walnut gradient is applied
                   // full-bleed by the Positioned.fill above so the canvas
                   // is continuous from the top of the image block down to
                   // the bottom safe-area edge.
-                  if (!_immersive)
-                    Expanded(
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
-                        // Wave 5.15 — horizontal page padding moves into
-                        // each section so the atmosphere carousel can
-                        // run edge-to-edge (cinematic strip with cards
-                        // peeking past the right edge), while CTAs +
-                        // text keep their inset.
+                  // Wave 4.9.3 — the whole Full Reveal fits on ONE page (no
+                  // vertical scroll): _buildControls is a bounded column whose
+                  // carousel Expands to fill this remaining height. Horizontal
+                  // scroll of the carousel is preserved.
+                  Expanded(
+                      child: Padding(
                         padding: EdgeInsets.only(
                           top: 12,
-                          // Wave 5.15l — bottom 14 → 28 so the footer
-                          // microcopy "Generations use your latest image…"
-                          // clears the home indicator / gesture bar on
-                          // Android (where MediaQuery.padding.bottom can
-                          // round to ~0 with system gestures). The extra
-                          // 14 dp guarantees breathing room above the
-                          // indicator regardless of the platform's safe-
-                          // area reporting.
-                          bottom: 28 + MediaQuery.of(context).padding.bottom,
+                          // Wave 4.9.3 — 28 → 8: push the Generate CTA lower,
+                          // closer to the home indicator (safeArea.bottom still
+                          // keeps it clear of the gesture bar).
+                          bottom: 8 + MediaQuery.of(context).padding.bottom,
                         ),
                         child: _buildControls(context, l10n, screenH),
                       ),
@@ -1137,33 +1070,38 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                 ),
               ),
             ),
-            // AYDEN Part A (A4) — floating Fullscreen (expand) control
-            // (flag-gated). Opens the immersive fullscreen reveal route. Sits
-            // right of Back, same visual language.
-            if (FeatureFlags.cinematicReveal && _hasBefore)
-              Positioned(
-                top: MediaQuery.paddingOf(context).top + 8,
-                left: 52,
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: _openFullscreenReveal,
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface.withValues(alpha: 0.65),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.fullscreen,
-                        size: 16,
-                        color: AppColors.textPrimary,
-                      ),
+            // Wave 4.9.3 — "Refine in chat" pencil. Replaces the old in-hero
+            // "Continue this vision" CTA (same _continueAction → pop back to
+            // chat to keep editing this vision). Top-LEFT, right of Back, in
+            // the slot freed by the removed expand button (right:52 was hidden
+            // behind the Replay control). Same floating visual language.
+            Positioned(
+              top: MediaQuery.paddingOf(context).top + 8,
+              left: 52,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _continueAction,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface.withValues(alpha: 0.65),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.edit_outlined,
+                      size: 16,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                 ),
               ),
+            ),
+            // Wave 4.9.3 — the floating Fullscreen (expand) button is removed.
+            // Tapping the photo now opens the fullscreen reveal (see the image
+            // GestureDetector onTap), and the freed left:52 slot holds the
+            // Refine pencil above.
             // AYDEN Part A — floating Replay control (flag-gated). Re-triggers
             // the cinematic reveal in place so the user never has to leave and
             // re-enter Full Reveal. Sits left of Share, same visual language.
@@ -1281,120 +1219,117 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
   // bottom safe area.
   Widget _buildControls(
       BuildContext context, AppLocalizations l10n, double screenH) {
-    // Wave 5.15e — responsive premium carousel. Target 3.3–4 cards
-    // visible on Pixel (~393 dp) instead of the 5.15b/d's ~1.7. The
-    // formula reserves 72 dp for inset + bleed, divides by 3.4 to land
-    // 3 fully visible cards plus one peeking past the right edge. Clamp
-    // 96…128 keeps cards readable on small phones and prevents tablets
-    // from inflating them. Strip height drops 160 → 130 so the rhythm
-    // stays editorial-thumbnail, not feed-tile.
     final screenW = MediaQuery.sizeOf(context).width;
-    final cardWidth = ((screenW - 64) / 3.3).clamp(95.0, 125.0);
+    // Wave 4.9.3 — section = header title + carousel + Generate slot. The
+    // "Explore other atmospheres" title now lives HERE (above the cards) as the
+    // section header, not in the hero overlay. The hero image was trimmed by
+    // sectionHeaderH so the carousel Expanded — and thus the card size — is
+    // unchanged from the validated layout.
     return Column(
-      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── Section title — Explore other atmospheres ────────────────────
-        // Pushed visually below the CTAs : the reveal + CTAs form the
-        // emotional climax, this header opens the secondary "discover"
-        // language. Subtle alpha so it sits as a label, not a heading
-        // that competes with the reveal.
+        // ── Section header — "Explore other atmospheres" (localized) ──────
         Padding(
           padding: const EdgeInsets.fromLTRB(
-              AppSpacing.pagePadding, 0, AppSpacing.pagePadding, 0),
+              AppSpacing.pagePadding, 0, AppSpacing.pagePadding, 10),
           child: Text(
-            'Explore other atmospheres',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.surface.withValues(alpha: 0.92),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0.2,
-                ),
+            context.l10n.exploreOtherAtmospheres,
+            textAlign: TextAlign.left,
+            style: const TextStyle(
+              color: AppColors.surface,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+            ),
           ),
         ),
-        const SizedBox(height: 18),
-        // ── Horizontal atmosphere carousel (Wave 5.15e) ──────────────────
-        // Premium editorial strip. cardWidth is responsive (see
-        // _buildControls top) so ~3.3 cards land on Pixel and ~3 on iPhone
-        // Pro Max ; the next card peeks past the right edge to invite
-        // scroll. Strip height 130 → AtmosphereCard auto-resolves to
-        // `semi` mode (name ~15 dp, no tagline thanks to
-        // AtmosphereCardVariant.compact). Compact thumbnails, not feed
-        // tiles.
-        SizedBox(
-          height: 105,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.pagePadding),
-            itemCount: AppLocalizations.atmospheres.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 8),
-            itemBuilder: (_, i) {
-              final a = AppLocalizations.atmospheres[i];
-              // Wave 5.17d — full-reveal atmosphere carousel respects
-              // the free-tier scope. Non-premium users see Nordic
-              // Warmth + Soft Luxury as tappable ; everything else
-              // dimmed with a lock chip ; locked tap → paywall sheet.
-              final isPremium = ref.watch(premiumProvider);
-              // Wave 5.18 — admin bypass. Sprint 1B — promo grant unlocks too.
-              final isAdmin = ref.watch(accessProvider);
-              final hasPromo =
-                  ref.watch(meStatusProvider)?.hasActivePromo ?? false;
-              final locked = !isPremium && !isAdmin && !hasPromo
-                  && !kFreeAtmosphereIds.contains(a.id);
-              final onTap = locked
-                  ? () => _openCarouselPaywall(context, 'atmosphere')
-                  : () => _selectAtmosphere(a.name);
-              return SizedBox(
-                width: cardWidth,
-                child: FeatureFlags.newDesignCards
-                    ? AtmosphereHeroCard(
-                        compact: true,
-                        name: a.name,
-                        subtitle: context.l10n.atmosphereSubtitle(a.id),
-                        asset: kAtmosphereCardById[a.id]?.asset ??
-                            'assets/cards/atmospheres/${a.id}.png',
-                        selected: _selectedAtmosphere == a.name,
-                        locked: locked,
-                        onTap: onTap,
-                      )
-                    : AtmosphereCard(
-                        atmosphere: a,
-                        selected: _selectedAtmosphere == a.name,
-                        dark: true,
-                        variant: AtmosphereCardVariant.compact,
-                        locked: locked,
-                        onTap: onTap,
-                      ),
+        // ── Enlarged atmosphere carousel — fills the section height ───────
+        // The whole Full Reveal stays on ONE page (no vertical scroll), so the
+        // carousel Expands to fill the available height. Card width is
+        // proportional to that height (new-design ~1.2 w/h), capped at 80% of
+        // the screen so a card never exceeds the viewport. HORIZONTAL scroll
+        // preserved — the next card peeks past the right edge.
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, c) {
+              // Wave 4.9.3 (hierarchy rebalance) — cards fill ~82% of the
+              // section height (was 100%) so the generated vision stays the
+              // hero. WIDTH unchanged (still derived from the FULL section
+              // height), only the height shrinks ~18%; the shorter strip is
+              // centred so the freed space reads as calm breathing room.
+              final cardW = (c.maxHeight * 1.35).clamp(170.0, screenW * 0.86);
+              final cardH = c.maxHeight * 0.82;
+              return Align(
+                alignment: Alignment.center,
+                child: SizedBox(
+                  height: cardH,
+                  child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.pagePadding),
+                itemCount: AppLocalizations.atmospheres.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (_, i) {
+                  final a = AppLocalizations.atmospheres[i];
+                  // Wave 5.17d — free-tier scope: non-premium users get
+                  // Nordic Warmth + Soft Luxury tappable; the rest dimmed
+                  // with a lock chip; locked tap → paywall. Admin / promo
+                  // grant bypass the lock.
+                  final isPremium = ref.watch(premiumProvider);
+                  final isAdmin = ref.watch(accessProvider);
+                  final hasPromo =
+                      ref.watch(meStatusProvider)?.hasActivePromo ?? false;
+                  final locked = !isPremium && !isAdmin && !hasPromo
+                      && !kFreeAtmosphereIds.contains(a.id);
+                  final onTap = locked
+                      ? () => _openCarouselPaywall(context, 'atmosphere')
+                      : () => _selectAtmosphere(a.name);
+                  return SizedBox(
+                    width: cardW,
+                    child: FeatureFlags.newDesignCards
+                        ? AtmosphereHeroCard(
+                            name: a.name,
+                            subtitle: context.l10n.atmosphereSubtitle(a.id),
+                            asset: kAtmosphereCardById[a.id]?.asset ??
+                                'assets/cards/atmospheres/${a.id}.png',
+                            selected: _selectedAtmosphere == a.name,
+                            locked: locked,
+                            // Wave 4.9.3 — photo fills the card (no black
+                            // letterbox frame), corners stay rounded via the
+                            // card's ClipRRect; type dialed down for these
+                            // mid-size cards.
+                            fillPhoto: true,
+                            nameFontSize: 16,
+                            subtitleFontSize: 11,
+                            onTap: onTap,
+                          )
+                        : AtmosphereCard(
+                            atmosphere: a,
+                            selected: _selectedAtmosphere == a.name,
+                            dark: true,
+                            variant: AtmosphereCardVariant.compact,
+                            locked: locked,
+                            onTap: onTap,
+                          ),
+                  );
+                },
+                  ),
+                ),
               );
             },
           ),
         ),
-        // ── Generate CTA — appears BELOW the carousel (Wave 5.15d) ──────
-        // Returned to its pre-5.15b position. Device-test showed the
-        // 5.15b "above the carousel" placement felt disconnected : tap
-        // a card → look down to find the action → CTA was UP. Now the
-        // tap → eyes-down → CTA flow is one continuous motion. Counter-
-        // scroll in _selectAtmosphere brings the freshly-revealed CTA
-        // into the viewport on small phones. Behaviour identical : pops
-        // with the atmosphere name, chat fires the generation.
-        AnimatedSize(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
+        // ── Generate CTA — fixed reserved slot below the carousel ────────
+        // Wave 4.9.3 — a constant-height slot (not AnimatedSize) so picking
+        // a card reveals the CTA WITHOUT shrinking the carousel above. Same
+        // behaviour: pops with the atmosphere name, chat fires the switch.
+        SizedBox(
+          height: 52,
           child: _selectedAtmosphere != null
               ? Padding(
                   padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.pagePadding,
-                      24,
-                      AppSpacing.pagePadding,
-                      0),
-                  // Wave 5.15k — inline ElevatedButton mirrors the
-                  // hero's Continue CTA dimensions exactly (h38, font
-                  // 11, padding 20, radius 22) so the two champagne
-                  // accents share one visual language across the
-                  // screen — the compact pair, not one tall + one
-                  // tall + one heavier orphan.
+                      AppSpacing.pagePadding, 14, AppSpacing.pagePadding, 0),
                   child: SizedBox(
                     height: 38,
                     child: ElevatedButton(
@@ -1403,8 +1338,7 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                         backgroundColor: AppColors.accent,
                         foregroundColor: AppColors.surface,
                         elevation: 0,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(22),
                         ),
@@ -1423,12 +1357,6 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                 )
               : const SizedBox.shrink(),
         ),
-        // Wave 5.15m — technical footer "Generations use your latest
-        // image as the starting point" removed (reads as engineering
-        // noise, not user-facing copy). The 18 dp preceding gap goes
-        // with it ; bottom safe area padding on the scroll view (28 +
-        // safeArea.bottom) is enough to keep the carousel + Generate
-        // clear of the home indicator without an explicit closing note.
       ],
     );
   }

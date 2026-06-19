@@ -15,6 +15,18 @@ class AiActionCard extends StatefulWidget {
   final bool locked;
   final VoidCallback? onTap;
 
+  // Optional brand watermark (e.g. the gold Ayden compass). When set, a large
+  // low-opacity logo + a soft gold radial glow render behind the content, for
+  // a more premium, branded feel. Left null on generic action cards (Surprise
+  // Me / Custom) so they keep the plain look.
+  final String? watermarkAsset;
+
+  // Optional full-bleed image that REPLACES the icon/title/subtitle layout —
+  // the card becomes just this image (cover-filled), keeping the selection
+  // border + check + lock overlay. Used for the pre-composed "Ayden Decide"
+  // card art. Takes precedence over [watermarkAsset].
+  final String? backgroundImageAsset;
+
   const AiActionCard({
     super.key,
     required this.title,
@@ -23,6 +35,8 @@ class AiActionCard extends StatefulWidget {
     this.selected = false,
     this.locked = false,
     this.onTap,
+    this.watermarkAsset,
+    this.backgroundImageAsset,
   });
 
   @override
@@ -60,20 +74,61 @@ class _AiActionCardState extends State<AiActionCard> {
               width: widget.selected ? 3.5 : 1,
             ),
           ),
+          clipBehavior: Clip.antiAlias,
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Center(
+              // ── Full-bleed card art (replaces the icon/title/subtitle).
+              if (widget.backgroundImageAsset != null)
+                Positioned.fill(
+                  child: Image.asset(
+                    widget.backgroundImageAsset!,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.centerLeft,
+                  ),
+                ),
+              // ── Design B — soft gold glow behind content (depth).
+              if (widget.backgroundImageAsset == null &&
+                  widget.watermarkAsset != null)
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(widget.radius),
+                      gradient: RadialGradient(
+                        center: const Alignment(0, -0.15),
+                        radius: 0.95,
+                        colors: [
+                          AppColors.accent.withValues(alpha: 0.18),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              if (widget.backgroundImageAsset == null)
+                Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      widget.locked ? Icons.lock_outline : Icons.auto_awesome,
-                      size: 22,
-                      color: widget.locked
-                          ? Colors.white.withValues(alpha: 0.5)
-                          : AppColors.accent,
-                    ),
+                    // Brand mark as the icon (visible) when provided ; thin
+                    // gold line-art doesn't read as a faint watermark, so the
+                    // compass leads instead. Falls back to the sparkle.
+                    if (widget.watermarkAsset != null && !widget.locked)
+                      Image.asset(
+                        widget.watermarkAsset!,
+                        height: 46,
+                        fit: BoxFit.contain,
+                      )
+                    else
+                      Icon(
+                        widget.locked
+                            ? Icons.lock_outline
+                            : Icons.auto_awesome,
+                        size: 22,
+                        color: widget.locked
+                            ? Colors.white.withValues(alpha: 0.5)
+                            : AppColors.accent,
+                      ),
                     const SizedBox(height: 10),
                     Text(
                       widget.title.toUpperCase(),
@@ -103,6 +158,18 @@ class _AiActionCardState extends State<AiActionCard> {
                   ],
                 ),
               ),
+              // Locked overlay for the full-bleed art (the gated content's lock
+              // icon is hidden when an image replaces it).
+              if (widget.backgroundImageAsset != null && widget.locked)
+                Positioned.fill(
+                  child: ColoredBox(
+                    color: Colors.black.withValues(alpha: 0.5),
+                    child: const Center(
+                      child: Icon(Icons.lock_outline,
+                          size: 24, color: Colors.white),
+                    ),
+                  ),
+                ),
               // Selected check — same gold chip as RoomCard.
               if (widget.selected && !widget.locked)
                 Positioned(

@@ -19,6 +19,19 @@ class AtmosphereHeroCard extends StatefulWidget {
   /// FTUE): cover fit + tighter type & padding. Default false = the large
   /// mini-hero (contain, full photo) used by the upload carousel.
   final bool compact;
+
+  /// Force the photo to COVER the card (fill edge-to-edge, cropping a little)
+  /// instead of CONTAIN (which letterboxes with dark bands). Independent of
+  /// [compact] so a large card can still fill its frame. The Full Reveal
+  /// carousel sets this to drop the black frames around its cards.
+  final bool fillPhoto;
+
+  /// Optional type-size overrides. When null they fall back to the
+  /// compact-aware defaults. The Full Reveal carousel uses these to keep the
+  /// full-photo (contain) look while dialing the title/subtitle down so the
+  /// name isn't oversized/truncated on its mid-size cards.
+  final double? nameFontSize;
+  final double? subtitleFontSize;
   final VoidCallback? onTap;
 
   const AtmosphereHeroCard({
@@ -29,6 +42,9 @@ class AtmosphereHeroCard extends StatefulWidget {
     this.selected = false,
     this.locked = false,
     this.compact = false,
+    this.fillPhoto = false,
+    this.nameFontSize,
+    this.subtitleFontSize,
     this.onTap,
   });
 
@@ -81,15 +97,17 @@ class _AtmosphereHeroCardState extends State<AtmosphereHeroCard> {
                 // Dark frame behind the contained photo so any letterbox band
                 // reads as an intentional cinematic frame, never a "gap".
                 const ColoredBox(color: Color(0xFF0B0B0C)),
-                // Large = full photo (contain); compact thumbnail = cover.
+                // Large = full photo (contain); compact / fillPhoto = cover.
                 Image.asset(
                   widget.asset,
-                  fit: widget.compact ? BoxFit.cover : BoxFit.contain,
-                  // CHANTIER F #14 — normalize the compact crop toward the
+                  fit: (widget.compact || widget.fillPhoto)
+                      ? BoxFit.cover
+                      : BoxFit.contain,
+                  // CHANTIER F #14 — normalize the cover crop toward the
                   // architectural focal point (upper-mid). Interior photos read
                   // best framed on the room/openings; the lower edge is covered
                   // by the title scrim anyway, so center-crop wasted the subject.
-                  alignment: widget.compact
+                  alignment: (widget.compact || widget.fillPhoto)
                       ? const Alignment(0, -0.18)
                       : Alignment.center,
                   errorBuilder: (_, _, _) =>
@@ -119,7 +137,8 @@ class _AtmosphereHeroCardState extends State<AtmosphereHeroCard> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTheme.atmosphereTitle(
-                          fontSize: widget.compact ? 15 : 22,
+                          fontSize:
+                              widget.nameFontSize ?? (widget.compact ? 15 : 22),
                           fontWeight: FontWeight.w500,
                           color: Colors.white,
                           height: 1.1,
@@ -131,7 +150,8 @@ class _AtmosphereHeroCardState extends State<AtmosphereHeroCard> {
                         maxLines: widget.compact ? 1 : 2,
                         overflow: TextOverflow.ellipsis,
                         style: AppTheme.atmosphereTitle(
-                          fontSize: widget.compact ? 10.5 : 13,
+                          fontSize: widget.subtitleFontSize ??
+                              (widget.compact ? 10.5 : 13),
                           fontWeight: FontWeight.w400,
                           color: Colors.white.withValues(alpha: 0.82),
                           height: 1.2,

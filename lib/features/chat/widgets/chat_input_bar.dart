@@ -5,6 +5,7 @@ import '../../../core/constants/app_spacing.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../../core/providers/locale_provider.dart';
 import '../../../core/services/voice_service.dart';
+import '../../../core/feature_flags.dart';
 
 /// Wave 4.8 — Chat conversational input bar (extracted from the inline
 /// `_InputBar` in `chat_screen.dart`).
@@ -48,6 +49,10 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar>
   // Prefix captured at the moment the user pressed the mic, so partials are
   // appended cleanly rather than overwriting existing text.
   String _dictationPrefix = '';
+
+  // Continuous mode (FeatureFlags.voiceContinuous): live preview text shown
+  // while listening — NOT written to the controller (committed only at stop).
+  String _preview = '';
 
   late final AnimationController _pulseCtrl;
   late final Animation<double> _pulseScale;
@@ -94,11 +99,20 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar>
         : ' ';
     _dictationPrefix = _dictationPrefix + separator;
 
-    setState(() => _isListening = true);
+    final continuous = FeatureFlags.voiceContinuous;
+    // Don't force/keep the keyboard open while dictating.
+    if (continuous) FocusScope.of(context).unfocus();
+    setState(() {
+      _isListening = true;
+      _preview = '';
+    });
     _pulseCtrl.repeat();
     await _voice.start(
-      onPartial: _applyTranscript,
-      onFinal: _applyTranscript,
+      continuous: continuous,
+      // Continuous: onPartial = preview only (no write); onFinal = commit once.
+      // Legacy: both write live (original behaviour).
+      onPartial: continuous ? _onPreview : _applyTranscript,
+      onFinal: continuous ? _onCommit : _applyTranscript,
       onStop: _handleStop,
       onError: (_) => _handleStop(),
       // Phase 4 — dictate in the user's UI language (resolved/fallback inside).
@@ -107,9 +121,26 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar>
     );
   }
 
+  // Legacy live transcription (flag off) — writes straight to the controller.
   void _applyTranscript(String words) {
     if (!mounted) return;
     final combined = _dictationPrefix + words;
+    widget.controller.text = combined;
+    widget.controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: combined.length),
+    );
+  }
+
+  // Continuous: live preview only — never touches the controller.
+  void _onPreview(String content) {
+    if (!mounted) return;
+    setState(() => _preview = content);
+  }
+
+  // Continuous: commit the accumulated transcript once, at stop.
+  void _onCommit(String full) {
+    if (!mounted) return;
+    final combined = _dictationPrefix + full;
     widget.controller.text = combined;
     widget.controller.selection = TextSelection.fromPosition(
       TextPosition(offset: combined.length),
@@ -120,7 +151,10 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar>
     if (!mounted) return;
     _pulseCtrl.stop();
     _pulseCtrl.reset();
-    setState(() => _isListening = false);
+    setState(() {
+      _isListening = false;
+      _preview = '';
+    });
   }
 
   @override
@@ -129,6 +163,54 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar>
     _pulseCtrl.dispose();
     _voice.dispose();
     super.dispose();
+  }
+
+  // Read-only listening state shown in place of the text field while the mic
+  // is active (continuous mode): "Listening… Tap to stop" + the live preview.
+  // The committed text lands in the controller only when the user stops.
+  Widget _buildListeningPreview(AppLocalizations l10n) {
+    final text = (_dictationPrefix + _preview).trim();
+    return Container(
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.accent.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.mic, size: 13, color: AppColors.accent),
+              const SizedBox(width: 5),
+              Text(
+                l10n.voiceListening,
+                style: const TextStyle(
+                  color: AppColors.accent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          if (text.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              text,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: AppColors.textPrimary),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -149,22 +231,24 @@ class _ChatInputBarState extends ConsumerState<ChatInputBar>
       child: Row(
         children: [
           Expanded(
-            child: TextField(
-              controller: widget.controller,
-              enabled: widget.enabled,
-              decoration: InputDecoration(
-                hintText: _isListening
-                    ? 'Listening…'
-                    : widget.enabled
-                        ? l10n.chatPlaceholder
-                        : l10n.chatGeneratingHint,
-                filled: true,
-                fillColor: AppColors.background,
-              ),
-              onSubmitted: widget.enabled ? widget.onSend : null,
-              textInputAction: TextInputAction.send,
-              maxLines: null,
-            ),
+            child: (_isListening && FeatureFlags.voiceContinuous)
+                ? _buildListeningPreview(l10n)
+                : TextField(
+                    controller: widget.controller,
+                    enabled: widget.enabled,
+                    decoration: InputDecoration(
+                      hintText: _isListening
+                          ? 'Listening…'
+                          : widget.enabled
+                              ? l10n.chatPlaceholder
+                              : l10n.chatGeneratingHint,
+                      filled: true,
+                      fillColor: AppColors.background,
+                    ),
+                    onSubmitted: widget.enabled ? widget.onSend : null,
+                    textInputAction: TextInputAction.send,
+                    maxLines: null,
+                  ),
           ),
           const SizedBox(width: 8),
           if (_voiceAvailable) ...[

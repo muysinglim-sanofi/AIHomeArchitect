@@ -716,10 +716,47 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   //   String         → "Explore another direction" (existing) : trigger
   //     a new generation in the selected atmosphere.
   //   null           → back navigation (existing) : no state change.
+  // Wave 4.9.3 — resolve the DISPLAY label for the comparison SOURCE (left
+  // side of the Full Reveal before/after) from the in-memory timeline, so the
+  // reveal can show "Original | Warm Modern" / "Warm Modern | Japandi" instead
+  // of generic "Before | AI Vision". Pure read of `_messages` + the session
+  // upload — no persistence, recomputed each open (survives reload because the
+  // timeline is rebuilt from the DB). Returns null when the source is unknown
+  // (the screen then falls back to its default label).
+  String? _sourceDisplayLabelFor(GeneratedResult vision) {
+    final before = vision.beforeImageUrl;
+    if (before.isEmpty) return null;
+    // The immutable initial upload → "Original" (localized).
+    final original = _project.beforeImageUrl;
+    if (original != null && original.isNotEmpty && before == original) {
+      return context.l10n.beforeLabel;
+    }
+    // Otherwise the source is a PREVIOUS vision in the timeline → its
+    // atmosphere name (styleLabel minus the "· Vision N" suffix).
+    for (final m in _messages) {
+      final r = m.result;
+      if (r != null && r.afterImageUrl.isNotEmpty && r.afterImageUrl == before) {
+        final label = r.styleLabel.split('·').first.trim();
+        return label.isNotEmpty ? label : null;
+      }
+    }
+    return null;
+  }
+
   Future<void> _openReveal(GeneratedResult result) async {
+    // Enrich the nav payload with the source label (the model field is null
+    // everywhere else; only the reveal needs it).
+    final extra = GeneratedResult(
+      beforeImageUrl: result.beforeImageUrl,
+      afterImageUrl: result.afterImageUrl,
+      styleLabel: result.styleLabel,
+      projectId: result.projectId,
+      roomType: result.roomType,
+      sourceDisplayLabel: _sourceDisplayLabelFor(result),
+    );
     final returned = await context.push<Object?>(
       '/result/${result.projectId}',
-      extra: result,
+      extra: extra,
     );
     if (!mounted) return;
     if (returned is GeneratedResult) {
@@ -798,11 +835,26 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final isLatestVision =
         latestImageResult?.result?.afterImageUrl == afterUrl;
 
-    final branchMessage = isLatestVision
+    // Wave 4.9.3 fix — suppress the branch card ONLY when the selection is
+    // ALREADY the active source (truly redundant). The old rule suppressed it
+    // whenever the LATEST vision was picked — but after the user had branched
+    // to an older vision, returning to the latest IS a real change, and left
+    // the stale older-branch card looking active (the reported bug). Now every
+    // genuine source change drops a fresh card; the copy adapts (back-to-latest
+    // vs earlier-direction). The source pin (below) was already correct in both
+    // cases, so this is a visual-only fix. Compare by URL PATH (signed-token
+    // query strings differ across reloads — same reason as _versionIdForUrl).
+    final src = _generationSourceUrl;
+    final alreadyActive =
+        src != null && src.isNotEmpty && _urlPath(src) == _urlPath(afterUrl);
+
+    final branchMessage = alreadyActive
         ? null
         : MessageModel(
             id: 'branch_${DateTime.now().millisecondsSinceEpoch}',
-            content: "We're now evolving from this earlier direction.",
+            content: isLatestVision
+                ? "We're now evolving from your latest vision."
+                : "We're now evolving from this earlier direction.",
             isAi: false,
             type: MessageType.branchEvent,
             result: GeneratedResult(
@@ -826,7 +878,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     });
     _persistSession();
 
-    if (branchMessage == null) return; // latest-vision path : silent state update
+    if (branchMessage == null) return; // already-active selection : silent no-op
 
     _scrollToBottom();
     if (_project.id != 'new') {

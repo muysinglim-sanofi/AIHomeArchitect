@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:speech_to_text/speech_recognition_error.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 /// Wave 4.8 — the centralized voice-capability layer.
@@ -41,6 +42,24 @@ class VoiceService {
   bool _initialized = false;
   bool _available = false;
   bool _isListening = false;
+
+  // ── Continuous mode (Option A) ───────────────────────────────────────────
+  // When true, the session survives engine self-stops (silence / OS time cap)
+  // by auto-restarting until the user manually stops. Partials feed a PREVIEW
+  // only; final segments accumulate in [_segments] and are committed once at
+  // the real end (manual stop or permanent error).
+  bool _continuous = false;
+  bool _manualStop = false;
+  bool _restarting = false;
+  bool _sawSpeechThisSession = false;
+  final List<String> _segments = <String>[];
+  String _livePartial = '';
+  DateTime? _sessionStart;
+  int _emptyRestarts = 0;
+
+  // Hard safety bounds so a forgotten or broken session can't run forever.
+  static const Duration _maxSession = Duration(minutes: 5);
+  static const int _maxEmptyRestarts = 20;
 
   // Active session callbacks (rebound on every start()).
   ValueChanged<String>? _onPartial;
@@ -137,12 +156,23 @@ class VoiceService {
   /// safety). Lazily initializes on first call. The consumer is expected to
   /// update its own `TextEditingController` from [onPartial]/[onFinal] —
   /// VoiceService deliberately does NOT touch UI state.
+  /// [continuous] (Option A) — keep listening through pauses and OS self-stops
+  /// via auto-restart, accumulate final segments, and deliver them ONCE at the
+  /// real end. In continuous mode the callbacks change meaning :
+  ///   • [onPartial] → live PREVIEW string (accumulated segments + current
+  ///     partial). The consumer must NOT write this into its controller — it
+  ///     is a throwaway preview.
+  ///   • [onFinal]   → the committed full transcript, fired ONCE when the user
+  ///     stops (or on a permanent error). The consumer commits this.
+  /// In legacy mode (continuous=false) the original semantics are preserved
+  /// (partials live, per-session finals).
   Future<void> start({
     required ValueChanged<String> onPartial,
     required ValueChanged<String> onFinal,
     VoidCallback? onStop,
     ValueChanged<VoiceErrorKind>? onError,
     String? localeId,
+    bool continuous = false,
   }) async {
     if (_isListening) return;
     if (!_initialized) {
@@ -156,28 +186,20 @@ class VoiceService {
     _onFinal = onFinal;
     _onStop = onStop;
     _onError = onError;
+    // Reset continuous-session state.
+    _continuous = continuous;
+    _manualStop = false;
+    _restarting = false;
+    _sawSpeechThisSession = false;
+    _segments.clear();
+    _livePartial = '';
+    _emptyRestarts = 0;
+    _sessionStart = DateTime.now();
     // Phase 4 — resolve the requested locale to one the device actually
     // supports (or null = device default) so e.g. Khmer degrades gracefully.
     _activeLocale = await _resolveLocale(localeId);
     try {
-      await _stt.listen(
-        onResult: (result) {
-          final words = result.recognizedWords;
-          if (result.finalResult) {
-            _onFinal?.call(words);
-          } else {
-            _onPartial?.call(words);
-          }
-        },
-        listenFor: const Duration(seconds: 30),
-        pauseFor: const Duration(seconds: 3),
-        localeId: _activeLocale,
-        listenOptions: SpeechListenOptions(
-          partialResults: true,
-          cancelOnError: true,
-          listenMode: ListenMode.dictation,
-        ),
-      );
+      await _listen();
       _isListening = true;
     } catch (_) {
       _isListening = false;
@@ -186,14 +208,110 @@ class VoiceService {
     }
   }
 
+  /// The raw `_stt.listen` call — shared by [start] and the auto-restart loop.
+  /// In continuous mode [cancelOnError] is OFF so a benign silence error does
+  /// not tear the session down (we drive restarts from status/error handlers).
+  Future<void> _listen() async {
+    await _stt.listen(
+      onResult: _handleResult,
+      listenFor: _continuous ? _maxSession : const Duration(seconds: 30),
+      pauseFor: _continuous
+          ? const Duration(seconds: 30)
+          : const Duration(seconds: 3),
+      localeId: _activeLocale,
+      listenOptions: SpeechListenOptions(
+        partialResults: true,
+        cancelOnError: !_continuous,
+        listenMode: ListenMode.dictation,
+      ),
+    );
+  }
+
+  void _handleResult(SpeechRecognitionResult result) {
+    final words = result.recognizedWords;
+    if (!_continuous) {
+      // Legacy: partials live, per-session finals.
+      if (result.finalResult) {
+        _onFinal?.call(words);
+      } else {
+        _onPartial?.call(words);
+      }
+      return;
+    }
+    // Continuous: accumulate finals, partial is preview-only.
+    if (words.trim().isNotEmpty) _sawSpeechThisSession = true;
+    if (result.finalResult) {
+      final w = words.trim();
+      if (w.isNotEmpty && (_segments.isEmpty || _segments.last != w)) {
+        _segments.add(w);
+      }
+      _livePartial = '';
+    } else {
+      _livePartial = words;
+    }
+    _onPartial?.call(_previewText());
+  }
+
+  // Preview = accumulated final segments + the current (uncommitted) partial.
+  String _previewText() {
+    final parts = <String>[
+      ..._segments,
+      if (_livePartial.trim().isNotEmpty) _livePartial.trim(),
+    ];
+    return parts.join(' ');
+  }
+
+  // Re-open a listening session after an engine self-stop, unless the user
+  // stopped manually or a safety bound was hit. A short delay lets the
+  // platform settle (avoids a stuck recognizer on Android).
+  void _scheduleRestart() {
+    if (_restarting) return;
+    _restarting = true;
+    _emptyRestarts = _sawSpeechThisSession ? 0 : _emptyRestarts + 1;
+    _sawSpeechThisSession = false;
+    Future.delayed(const Duration(milliseconds: 150), () async {
+      if (!_continuous || _manualStop || !_isListening) {
+        _restarting = false;
+        return;
+      }
+      try {
+        await _listen();
+      } catch (_) {
+        _restarting = false;
+        _finalize();
+        return;
+      }
+      _restarting = false;
+    });
+  }
+
+  // Real end of a continuous session: fold any leftover partial, commit the
+  // accumulated transcript via [onFinal], then [onStop]. Idempotent-ish: guarded
+  // by callers checking _isListening.
+  void _finalize() {
+    _isListening = false;
+    if (_continuous) {
+      final tail = _livePartial.trim();
+      if (tail.isNotEmpty && (_segments.isEmpty || _segments.last != tail)) {
+        _segments.add(tail);
+      }
+      _livePartial = '';
+      _onFinal?.call(_segments.join(' ').trim());
+    }
+    _onStop?.call();
+  }
+
   /// User-initiated stop. The current partial becomes the final result
   /// (via the plugin's own onResult flow). No-op if not listening.
   Future<void> stop() async {
     if (!_isListening) return;
+    // Mark the stop as user-initiated FIRST so the auto-restart loop and the
+    // status handler know not to re-open the session.
+    _manualStop = true;
     try {
       await _stt.stop();
     } catch (_) {/* swallow — _handleStatus will still resolve state */}
-    // `_handleStatus` flips _isListening false + fires onStop when the
+    // `_handleStatus` flips _isListening false + fires onStop/onFinal when the
     // platform confirms; we do NOT mutate _isListening here to keep one
     // source of truth (avoids racing the platform).
   }
@@ -201,6 +319,7 @@ class VoiceService {
   /// Discard the current session without finalising the transcript.
   Future<void> cancel() async {
     if (!_isListening) return;
+    _manualStop = true; // prevent the continuous auto-restart loop
     try {
       await _stt.cancel();
     } catch (_) {/* swallow */}
@@ -212,6 +331,7 @@ class VoiceService {
     _onFinal = null;
     _onStop = null;
     _onError = null;
+    _manualStop = true; // stop any pending auto-restart
     try {
       _stt.cancel();
     } catch (_) {/* swallow */}
@@ -224,19 +344,51 @@ class VoiceService {
     // Plugin emits: 'listening', 'notListening', 'done'.
     if (status == 'listening') {
       _isListening = true;
-    } else if (status == 'notListening' || status == 'done') {
-      if (_isListening) {
-        _isListening = false;
-        _onStop?.call();
+      return;
+    }
+    if (status != 'notListening' && status != 'done') return;
+    if (!_isListening) return;
+    // Continuous: the engine self-stopped (silence / OS time cap). Re-open
+    // unless the user stopped manually or a safety bound was hit.
+    if (_continuous && !_manualStop) {
+      final elapsed = _sessionStart == null
+          ? Duration.zero
+          : DateTime.now().difference(_sessionStart!);
+      if (elapsed < _maxSession && _emptyRestarts < _maxEmptyRestarts) {
+        _scheduleRestart();
+        return;
+      }
+      if (kDebugMode) {
+        debugPrint('[VoiceService] continuous end '
+            '(elapsed=$elapsed emptyRestarts=$_emptyRestarts)');
       }
     }
+    _finalize();
   }
 
   void _handleError(SpeechRecognitionError err) {
-    _isListening = false;
     final mapped = _classifyError(err);
+    // Continuous: a benign silence/no-speech error is NOT a real end — keep the
+    // session alive via an auto-restart (the user hasn't stopped).
+    if (_continuous &&
+        !_manualStop &&
+        _isListening &&
+        mapped == VoiceErrorKind.silence &&
+        !err.permanent) {
+      if (kDebugMode) {
+        debugPrint('[VoiceService] benign silence in continuous → restart');
+      }
+      _scheduleRestart();
+      return;
+    }
     _onError?.call(mapped);
-    _onStop?.call();
+    if (_continuous) {
+      // Commit what we have so far so a mid-session error never loses words.
+      if (_isListening) _finalize();
+    } else {
+      _isListening = false;
+      _onStop?.call();
+    }
     if (kDebugMode) {
       debugPrint(
           '[VoiceService] error mapped=$mapped permanent=${err.permanent} '

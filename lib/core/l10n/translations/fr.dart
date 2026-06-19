@@ -75,6 +75,7 @@ const Map<String, String> frTranslations = {
   'chatTitle': "Session de design",
   'chatPlaceholder': "Comment cet espace doit-il évoluer ?",
   'chatGeneratingHint': "Génération de votre vision...",
+  'voiceListening': "À l'écoute… Touchez pour arrêter",
   'generateButton': "Générer",
   'generatingInChat': "Génération de votre transformation...",
 
@@ -91,6 +92,7 @@ const Map<String, String> frTranslations = {
   // Before/After
   'beforeLabel': "Original",
   'afterLabel': "Vision",
+  'exploreOtherAtmospheres': "Explorer d'autres ambiances",
   'saveResult': "Enregistrer",
   'shareResult': "Partager",
   'newVariation': "En essayer un autre",
@@ -235,7 +237,7 @@ const Map<String, String> frTranslations = {
       "Essayez avec une de nos photos d'exemple pour voir la magie.",
   'uplExampleLoadError': "Impossible de charger la photo d'exemple.",
   'uplMoreSpaces': "Plus d'espaces",
-  'uplAiDecide': "L'IA décide",
+  'uplAiDecide': 'Ayden décide',
   'uplAiDecideSub': "Laissez l'IA détecter l'espace pour moi",
   'uplSurpriseMe': "Surprenez-moi",
   'uplSurpriseSub': "Laissez l'IA choisir une ambiance adaptée",

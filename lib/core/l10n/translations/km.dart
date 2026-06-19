@@ -71,6 +71,7 @@ const Map<String, String> kmTranslations = {
   'chatTitle': 'វគ្គរចនា',
   'chatPlaceholder': 'ពណ៌នា​អ្វី​ដែល​អ្នក​ចង់​ផ្លាស់ប្ដូរ...',
   'chatGeneratingHint': 'កំពុង​បង្កើត...',
+  'voiceListening': 'កំពុង​ស្តាប់… ប៉ះ​ដើម្បី​បញ្ឈប់',
   'generateButton': 'បង្កើត',
   'generatingInChat': 'កំពុង​បង្កើត​ការ​បំប្លែង​របស់​អ្នក...',
 
@@ -87,6 +88,7 @@ const Map<String, String> kmTranslations = {
   // Before/After
   'beforeLabel': 'ដើម',
   'afterLabel': 'ទស្សនៈ',
+  'exploreOtherAtmospheres': 'ស្វែងរកបរិយាកាសផ្សេងទៀត',
   'saveResult': 'រក្សា​ទុក',
   'shareResult': 'ចែក​រំលែក',
   'newVariation': 'សាក​ម្ដង​ទៀត',
@@ -226,7 +228,7 @@ const Map<String, String> kmTranslations = {
   'uplExampleHint': 'សាក​ល្បង​ជាមួយ​រូបថត​គំរូ​មួយ​ដើម្បី​ឃើញ​លទ្ធផល​អស្ចារ្យ។',
   'uplExampleLoadError': 'មិន​អាច​ផ្ទុក​រូបថត​គំរូ​បាន​ទេ។',
   'uplMoreSpaces': 'ទីកន្លែង​បន្ថែម',
-  'uplAiDecide': 'AI សម្រេច',
+  'uplAiDecide': 'Ayden សម្រេច',
   'uplAiDecideSub': 'ឲ្យ AI រក​ឃើញ​ទីកន្លែង​ជំនួស',
   'uplSurpriseMe': 'ធ្វើ​ឲ្យ​ភ្ញាក់​ផ្អើល',
   'uplSurpriseSub': 'ឲ្យ AI ជ្រើស​បរិយាកាស​សមរម្យ',

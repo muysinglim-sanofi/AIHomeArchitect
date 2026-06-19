@@ -128,6 +128,7 @@ class AppLocalizations {
   String get chatTitle => _get('chatTitle');
   String get chatPlaceholder => _get('chatPlaceholder');
   String get chatGeneratingHint => _get('chatGeneratingHint');
+  String get voiceListening => _get('voiceListening');
   String get generateButton => _get('generateButton');
   String get generatingInChat => _get('generatingInChat');
 
@@ -144,6 +145,7 @@ class AppLocalizations {
   // ── Before/After ──────────────────────────────────────────────────────────
   String get beforeLabel => _get('beforeLabel');
   String get afterLabel => _get('afterLabel');
+  String get exploreOtherAtmospheres => _get('exploreOtherAtmospheres');
   String get saveResult => _get('saveResult');
   String get shareResult => _get('shareResult');
   String get newVariation => _get('newVariation');

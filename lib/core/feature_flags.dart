@@ -83,4 +83,15 @@ class FeatureFlags {
   /// original Camera/Gallery `ListTile` sheet. Frontend/UI only — selecting an
   /// example just sets the source image exactly like a normal pick.
   static const bool uploadPickerV2 = true;
+
+  /// Voice dictation — "continuous" capture (Option A, best-effort on the
+  /// native OS recognizers). When true : the mic keeps listening through
+  /// pauses (large pauseFor + auto-restart when the engine self-stops),
+  /// partials feed a temporary PREVIEW only, final segments accumulate in an
+  /// internal buffer, and the committed transcript is written into the text
+  /// field ONLY when the user taps stop (never auto-sent). When false : the
+  /// legacy single-shot behaviour (partials written live, stop on first
+  /// silence). Frontend/voice only — no /generate, backend or pipeline impact.
+  /// Instant rollback : flip to false.
+  static const bool voiceContinuous = true;
 }

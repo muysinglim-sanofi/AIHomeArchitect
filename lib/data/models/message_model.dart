@@ -22,12 +22,23 @@ class GeneratedResult {
   // fall back to the current room.
   final String? roomType;
 
+  // Wave 4.9.3 — display label for the COMPARISON SOURCE (the left side of the
+  // Full Reveal before/after), e.g. "Original", an atmosphere name ("Warm
+  // Modern"), or — in future — "Vision #2" / "Branch A". Deliberately a
+  // type-agnostic DISPLAY string (not a style/vision id) so it stays
+  // future-proof for version branching / source selection. Computed at
+  // navigation time from the in-memory timeline (chat_screen._openReveal), NOT
+  // persisted — the timeline is rebuilt from the DB on reload, so it survives.
+  // Null everywhere except the Full Reveal nav extra → the screen falls back.
+  final String? sourceDisplayLabel;
+
   const GeneratedResult({
     required this.beforeImageUrl,
     required this.afterImageUrl,
     required this.styleLabel,
     required this.projectId,
     this.roomType,
+    this.sourceDisplayLabel,
   });
 }
 

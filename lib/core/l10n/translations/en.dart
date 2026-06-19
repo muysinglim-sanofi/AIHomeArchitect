@@ -70,6 +70,7 @@ const Map<String, String> enTranslations = {
   'chatTitle': 'Design Session',
   'chatPlaceholder': 'How should this space evolve next?',
   'chatGeneratingHint': 'Generating your vision...',
+  'voiceListening': 'Listening… Tap to stop',
   'generateButton': 'Generate',
   'generatingInChat': 'Generating your transformation...',
 
@@ -86,6 +87,7 @@ const Map<String, String> enTranslations = {
   // Before/After result
   'beforeLabel': 'Original',
   'afterLabel': 'Vision',
+  'exploreOtherAtmospheres': 'Explore other atmospheres',
   'saveResult': 'Save',
   'shareResult': 'Share',
   'newVariation': 'Try Another',
@@ -229,7 +231,7 @@ const Map<String, String> enTranslations = {
   'uplExampleHint': 'Try with one of our example photos to see the magic.',
   'uplExampleLoadError': 'Could not load the example photo.',
   'uplMoreSpaces': 'More Spaces',
-  'uplAiDecide': 'AI Decide',
+  'uplAiDecide': 'Ayden Decide',
   'uplAiDecideSub': 'Let AI detect the space for me',
   'uplSurpriseMe': 'Surprise Me',
   'uplSurpriseSub': 'Let the AI choose a fitting atmosphere',

@@ -10,6 +10,7 @@ import '../../core/constants/app_spacing.dart';
 import '../../core/constants/free_tier.dart';
 import '../../core/constants/room_type_images.dart';
 import '../../core/l10n/app_localizations.dart';
+import '../../core/models/atmosphere_style.dart';
 import '../../core/providers/premium_provider.dart';
 import '../../core/providers/access_provider.dart';
 import '../../core/providers/me_status_provider.dart';
@@ -48,14 +49,14 @@ import '../cards/widgets/room_card.dart';
 // ("preserve") since the FTUE no longer sends the param. AI Decide and
 // Surprise Me remain real cards inside their respective selectors.
 
-class UploadScreen extends StatefulWidget {
+class UploadScreen extends ConsumerStatefulWidget {
   const UploadScreen({super.key});
 
   @override
-  State<UploadScreen> createState() => _UploadScreenState();
+  ConsumerState<UploadScreen> createState() => _UploadScreenState();
 }
 
-class _UploadScreenState extends State<UploadScreen>
+class _UploadScreenState extends ConsumerState<UploadScreen>
     with SingleTickerProviderStateMixin {
   File? _image;
   String? _selectedRoom;
@@ -146,7 +147,12 @@ class _UploadScreenState extends State<UploadScreen>
   // ── Picker (preserved verbatim — non-regression) ──────────────────────────
   Future<void> _pickImage(ImageSource source) async {
     final picked = await _picker.pickImage(source: source, imageQuality: 85);
-    if (picked != null) setState(() => _image = File(picked.path));
+    if (picked != null) {
+      setState(() {
+        _image = File(picked.path);
+        _applyDefaultsAfterUpload();
+      });
+    }
   }
 
   void _showImagePicker() {
@@ -184,7 +190,10 @@ class _UploadScreenState extends State<UploadScreen>
         data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
       );
       if (!mounted) return;
-      setState(() => _image = file);
+      setState(() {
+        _image = file;
+        _applyDefaultsAfterUpload();
+      });
     } catch (e) {
       debugPrint('[Upload] example photo load failed: $e');
       if (!mounted) return;
@@ -259,6 +268,38 @@ class _UploadScreenState extends State<UploadScreen>
   bool get _roomChosen => _selectedRoom != null || _aiDecideRoom;
   bool get _styleChosen => _selectedStyle != null || _surpriseStyle;
   bool get _canProceed => _image != null && _roomChosen && _styleChosen;
+
+  // Wave — entitlement (premium / admin / active promo). Mirrors the scrollers'
+  // `entitled` predicate; used only to decide which room default to seed.
+  bool get _entitled {
+    final isPremium = ref.read(premiumProvider);
+    final isAdmin = ref.read(accessProvider);
+    final hasPromo = ref.read(meStatusProvider)?.hasActivePromo ?? false;
+    return isPremium || isAdmin || hasPromo;
+  }
+
+  // Wave — seed sensible defaults the moment a photo is uploaded so the user
+  // can hit Generate immediately. Only seeds when nothing is chosen yet, so it
+  // never overrides a deliberate pick (incl. a Replace-photo with prior choices).
+  //   • Room  → "AI Decide" (the first choice) when entitled; AI Decide is a
+  //             premium feature, so free users fall back to the one free room
+  //             (Living Room) instead of being seeded into a locked option.
+  //   • Style → Warm Modern (first atmosphere, free tier, universal starter).
+  // Called inside an existing setState by the callers.
+  void _applyDefaultsAfterUpload() {
+    if (_selectedRoom == null && !_aiDecideRoom) {
+      if (_entitled) {
+        _aiDecideRoom = true;
+      } else {
+        _selectedRoom = RoomTypeImages.enLabelForId('livingRoom');
+      }
+    }
+    if (_selectedStyle == null && !_surpriseStyle) {
+      final wm = AppLocalizations.atmospheres
+          .firstWhere((a) => a.id == kDefaultAtmosphereId);
+      _selectedStyle = wm.name;
+    }
+  }
 
   String get _missingHint {
     if (_image == null) return context.l10n.uplHintAddPhoto;
@@ -815,6 +856,8 @@ class _DescriptionFieldState extends ConsumerState<_DescriptionField>
   bool _voiceAvailable = false;
   bool _isListening = false;
   String _dictationPrefix = '';
+  // Continuous mode: live preview (not written to the controller until stop).
+  String _preview = '';
 
   late final AnimationController _pulseCtrl;
   late final Animation<double> _pulseScale;
@@ -857,11 +900,18 @@ class _DescriptionFieldState extends ConsumerState<_DescriptionField>
         : ' ';
     _dictationPrefix = existing + separator;
 
-    setState(() => _isListening = true);
+    final continuous = FeatureFlags.voiceContinuous;
+    // Don't force/keep the keyboard open while dictating.
+    if (continuous) FocusScope.of(context).unfocus();
+    setState(() {
+      _isListening = true;
+      _preview = '';
+    });
     _pulseCtrl.repeat();
     await _voice.start(
-      onPartial: _applyTranscript,
-      onFinal: _applyTranscript,
+      continuous: continuous,
+      onPartial: continuous ? _onPreview : _applyTranscript,
+      onFinal: continuous ? _onCommit : _applyTranscript,
       onStop: _handleStop,
       onError: (_) => _handleStop(),
       // Phase 4 — dictate in the user's UI language (resolved/fallback inside).
@@ -870,9 +920,26 @@ class _DescriptionFieldState extends ConsumerState<_DescriptionField>
     );
   }
 
+  // Legacy live transcription (flag off).
   void _applyTranscript(String words) {
     if (!mounted) return;
     final combined = _dictationPrefix + words;
+    widget.controller.text = combined;
+    widget.controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: combined.length),
+    );
+  }
+
+  // Continuous: preview only — never touches the controller.
+  void _onPreview(String content) {
+    if (!mounted) return;
+    setState(() => _preview = content);
+  }
+
+  // Continuous: commit the accumulated transcript once, at stop.
+  void _onCommit(String full) {
+    if (!mounted) return;
+    final combined = _dictationPrefix + full;
     widget.controller.text = combined;
     widget.controller.selection = TextSelection.fromPosition(
       TextPosition(offset: combined.length),
@@ -883,7 +950,10 @@ class _DescriptionFieldState extends ConsumerState<_DescriptionField>
     if (!mounted) return;
     _pulseCtrl.stop();
     _pulseCtrl.reset();
-    setState(() => _isListening = false);
+    setState(() {
+      _isListening = false;
+      _preview = '';
+    });
   }
 
   @override
@@ -891,6 +961,54 @@ class _DescriptionFieldState extends ConsumerState<_DescriptionField>
     _pulseCtrl.dispose();
     _voice.dispose();
     super.dispose();
+  }
+
+  // Read-only listening state (continuous mode) shown in place of the field:
+  // "Listening… Tap to stop" + live preview. Committed only at stop.
+  Widget _buildListeningPreview() {
+    final text = (_dictationPrefix + _preview).trim();
+    return Container(
+      constraints: const BoxConstraints(minHeight: 96),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
+        border: Border.all(color: AppColors.accent, width: 1.5),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.mic, size: 14, color: AppColors.accent),
+              const SizedBox(width: 6),
+              Text(
+                context.l10n.voiceListening,
+                style: const TextStyle(
+                  color: AppColors.accent,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          if (text.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              text,
+              maxLines: 5,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(height: 1.5, fontSize: 15),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -931,12 +1049,16 @@ class _DescriptionFieldState extends ConsumerState<_DescriptionField>
       ),
     );
 
-    if (!_voiceAvailable) return field;
+    final content = (_isListening && FeatureFlags.voiceContinuous)
+        ? _buildListeningPreview()
+        : field;
+
+    if (!_voiceAvailable) return content;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Expanded(child: field),
+        Expanded(child: content),
         const SizedBox(width: 8),
         Padding(
           padding: const EdgeInsets.only(bottom: 4),
@@ -1162,7 +1284,22 @@ class _RoomScroller extends ConsumerWidget {
               childAspectRatio: 6 / 5,
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              children: [for (final r in kHeroRooms) card(r)],
+              children: [
+                // Ayden Decide leads the choices (first cell) — the default
+                // pick. Full-bleed pre-composed card art (logo + tagline baked
+                // into the image).
+                if (onAi != null)
+                  AiActionCard(
+                    title: context.l10n.uplAiDecide,
+                    subtitle: context.l10n.uplAiDecideSub,
+                    selected: aiDecideSelected,
+                    locked: aiLockedNow,
+                    onTap: onAi,
+                    backgroundImageAsset:
+                        'assets/branding/ayden_decide_card.png',
+                  ),
+                for (final r in kHeroRooms) card(r),
+              ],
             ),
             const SizedBox(height: 12),
             Row(
@@ -1186,21 +1323,9 @@ class _RoomScroller extends ConsumerWidget {
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
                 clipBehavior: Clip.none,
-                itemCount: kMoreRooms.length + (onAi != null ? 1 : 0),
+                itemCount: kMoreRooms.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 10),
                 itemBuilder: (context, i) {
-                  if (onAi != null && i == kMoreRooms.length) {
-                    return SizedBox(
-                      width: secW,
-                      child: AiActionCard(
-                        title: context.l10n.uplAiDecide,
-                        subtitle: context.l10n.uplAiDecideSub,
-                        selected: aiDecideSelected,
-                        locked: aiLockedNow,
-                        onTap: onAi,
-                      ),
-                    );
-                  }
                   return SizedBox(width: secW, child: card(kMoreRooms[i]));
                 },
               ),
