@@ -382,19 +382,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
   void _clearSessionActive() {
     if (!FeatureFlags.genLifecycleV2) return;
-    // Only clear if WE are the one currently marked (a newer chat may already
-    // own the signal).
-    if (_activeSessionCtrl?.state == _project.id) {
-      _activeSessionCtrl?.state = null;
-    }
+    final ctrl = _activeSessionCtrl;
+    final id = _project.id;
+    if (ctrl == null) return;
+    // DEFER the write: Riverpod forbids modifying a provider during a widget
+    // life-cycle (build/dispose) — doing it synchronously in dispose() threw and
+    // aborted the rest of dispose (timers never cancelled → reconciliation poll
+    // kept running on a disposed widget; activeSession never cleared → all
+    // notifications stayed suppressed). The controller is app-scoped so the
+    // deferred write is safe. Only clear if WE still own the signal (a newer
+    // chat may already have claimed it).
+    Future(() {
+      if (ctrl.state == id) ctrl.state = null;
+    });
   }
 
   @override
   void dispose() {
-    _clearSessionActive();
+    // Cancel timers FIRST so a throw later in dispose can never leave the
+    // reconciliation poll running on a disposed widget.
     WidgetsBinding.instance.removeObserver(this);
     _longGenerationTimer?.cancel();
     _reconcileTimer?.cancel();
+    _clearSessionActive();
     _inputController.dispose();
     _scrollController.dispose();
     _entryController.dispose();
@@ -1062,6 +1072,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         }
       }
 
+      // Guard: the fetch above is async — if the widget was disposed during the
+      // await (user navigated away while a reconciliation tick was in flight),
+      // bail BEFORE touching ref (ref-after-dispose throws). The timer is also
+      // cancelled in dispose, so this is belt-and-suspenders.
+      if (!mounted) return;
       // #21b — a generation started on a now-disposed screen (user left the
       // chat mid-generation and came back) shows nothing here, because the DB
       // has no "loading" row. Detect the still-in-flight state from the
