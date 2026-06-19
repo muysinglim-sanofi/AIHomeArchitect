@@ -94,4 +94,15 @@ class FeatureFlags {
   /// silence). Frontend/voice only — no /generate, backend or pipeline impact.
   /// Instant rollback : flip to false.
   static const bool voiceContinuous = true;
+
+  /// B1 (2026-06-19) — stay in ONE session across a re-upload, but keep every
+  /// lineage's versions in the ledger (do NOT purge on re-upload) so that acting
+  /// on an OLDER vision (continue-from-vision, or an atmosphere switch from its
+  /// full reveal) pins THAT vision's exact version AND restores its lineage's
+  /// structural identity. Fixes the cross-lineage "wrong apartment" leak (the
+  /// switch used the re-uploaded lineage's version+identity instead of the
+  /// viewed vision's). Scoped to NON-latest visions so the normal switch keeps
+  /// the cascade-free V1 anchor (Wave 5.21). When false: the legacy ledger purge
+  /// runs (instant rollback). V1 first-vision path unchanged → V1 impact: NONE.
+  static const bool reuploadKeepLineage = true;
 }

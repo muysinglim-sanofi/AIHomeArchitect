@@ -696,10 +696,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   void _exploreDirectionFromVision(GeneratedResult vision, String style) {
     final target =
         resolveAtmosphereSwitchTarget(vision, fallbackRoom: _currentRoomType);
+    // B1 — is the switched vision the LATEST imageResult? If so, keep today's
+    // behavior (source_mode empty → Wave 5.21 cascade-free V1 anchor of the
+    // CURRENT lineage). If it's an OLDER / cross-lineage vision (e.g. apartment
+    // A after a re-upload of B), pin its EXACT version + restore its lineage
+    // structural identity so the switch evolves from THAT vision's source +
+    // identity instead of the re-uploaded lineage's (the cross-lineage leak).
+    MessageModel? latest;
+    for (final m in _messages.reversed) {
+      if (m.type == MessageType.imageResult && m.result != null) {
+        latest = m;
+        break;
+      }
+    }
+    final isLatest = latest?.result?.afterImageUrl == vision.afterImageUrl;
     setState(() {
       if (target.sourceUrl != null) _generationSourceUrl = target.sourceUrl;
       if (target.room != null) _currentRoomType = target.room!;
       _currentStyle = style;
+      if (FeatureFlags.reuploadKeepLineage && !isLatest) {
+        _branchSourceVersionId = _versionIdForUrl(vision.afterImageUrl);
+        final token = _structuralTokenForUrl(vision.afterImageUrl);
+        if (token != null && token.isNotEmpty) _structuralIdentity = token;
+      }
     });
     _persistSession(); // Wave 4.10g — survive atmosphere swap
     _generate(overridePrompt: 'Redesign this space in the $style style.');
@@ -819,6 +838,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     return null;
   }
 
+  // B1 — the structural-identity token a given render was generated WITH, looked
+  // up in the round-tripped ledger (same path-match as _versionIdForUrl). Lets
+  // continue-from-vision restore the CLICKED vision's lineage identity so the
+  // pinned image and the structural identity stay in the same lineage (no
+  // cross-lineage desync after a re-upload). Null if not found / no token.
+  String? _structuralTokenForUrl(String afterUrl) {
+    if (_versions.isEmpty || afterUrl.isEmpty) return null;
+    final wantPath = _urlPath(afterUrl);
+    try {
+      final list = jsonDecode(_versions);
+      if (list is! List) return null;
+      for (final v in list) {
+        if (v is Map &&
+            v['generated_image_url'] is String &&
+            _urlPath(v['generated_image_url'] as String) == wantPath) {
+          final t = v['structural_identity_token'];
+          return (t is String && t.isNotEmpty) ? t : null;
+        }
+      }
+    } catch (_) {/* malformed ledger → no restore */}
+    return null;
+  }
+
   Future<void> _continueFromVision(GeneratedResult result) async {
     final afterUrl = result.afterImageUrl;
     if (afterUrl.isEmpty) return;
@@ -874,6 +916,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // url isn't in the ledger yet (pre-persistence sessions) → backend keeps
       // its LATEST default, i.e. the prior behaviour.
       _branchSourceVersionId = _versionIdForUrl(afterUrl);
+      // B1 — restore the clicked vision's lineage structural identity so the
+      // pinned image (its version) and the structural identity stay in the SAME
+      // lineage. Prevents the cross-lineage desync after a re-upload (image=A
+      // but identity=B → "different apartment"). No-op for a same-lineage
+      // selection (token == current). Only meaningful with the ledger retained.
+      if (FeatureFlags.reuploadKeepLineage) {
+        final token = _structuralTokenForUrl(afterUrl);
+        if (token != null && token.isNotEmpty) _structuralIdentity = token;
+      }
       if (branchMessage != null) _messages.add(branchMessage);
     });
     _persistSession();
@@ -1880,6 +1931,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           Navigator.of(context).pop();
           setState(() {
             _generationSourceUrl = v.afterUrl;
+            // B1 — same fix as _continueFromVision (the full-reveal pencil): pin
+            // the chosen vision's exact version + restore its lineage structural
+            // identity so the next edit (e.g. "add a TV") evolves from THIS
+            // vision's source+identity, not the re-uploaded lineage's.
+            if (FeatureFlags.reuploadKeepLineage) {
+              _branchSourceVersionId = _versionIdForUrl(v.afterUrl);
+              final token = _structuralTokenForUrl(v.afterUrl);
+              if (token != null && token.isNotEmpty) _structuralIdentity = token;
+            }
             _messages.add(MessageModel(
               id: 'sys_${DateTime.now().millisecondsSinceEpoch}',
               content:
@@ -2026,7 +2086,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         // on continue-from-vision. The ledger repopulates from this lineage's
         // first generation; a click on an old vision now resolves to the current
         // lineage (LATEST) instead of a stale cross-lineage pin.
-        _versions = '';
+        // B1 (2026-06-19) — when reuploadKeepLineage is ON we KEEP the ledger so
+        // the prior lineage's versions stay resolvable; continue-from-vision now
+        // pins the clicked version AND restores its lineage identity (no desync),
+        // the proper fix this purge was a workaround for.
+        if (!FeatureFlags.reuploadKeepLineage) {
+          _versions = '';
+        }
         _branchSourceVersionId = null;
         _sourceReplaced = false;
         _messages.add(MessageModel(
@@ -2176,7 +2242,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                             // cinematic wait (V2+ = latest vision, V1 = source
                             // photo). Read-only context; the 4.9.1b "<n>|<style>"
                             // content encoding is unchanged.
-                            sourceFile: _sourceImageFile,
+                            // B1 — the waiting backdrop must show the ACTUAL
+                            // source being edited. The local file (_sourceImageFile)
+                            // is the last upload (e.g. re-uploaded apartment B) and
+                            // takes precedence in _backdrop(), so it wrongly showed
+                            // B while continuing/switching from an older vision A.
+                            // Only use the local file for V1 (no explicit source);
+                            // for V2+/continue/switch fall back to backdropUrl
+                            // (= _generationSourceUrl = the viewed vision).
+                            sourceFile: (FeatureFlags.reuploadKeepLineage &&
+                                    _generationSourceUrl != null)
+                                ? null
+                                : _sourceImageFile,
                             backdropUrl: _generationSourceUrl ??
                                 _project.beforeImageUrl,
                           ),
