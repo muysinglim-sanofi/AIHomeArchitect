@@ -134,6 +134,50 @@ def _struct_id_cache_put(key: str, token: str) -> None:
     _STRUCT_ID_CACHE[key] = token
 
 
+# ── #4 — /generate idempotency (defence-in-depth against duplicate generations)
+# In-memory, per-process, keyed by user:client_request_id (only when the client
+# supplied an idempotency key). Two jobs:
+#   • a same-key REPLAY that arrives AFTER the first finished → return the cached
+#     success payload (no 2nd OpenAI call);
+#   • a same-key CONCURRENT duplicate → wait a BOUNDED time for the first to
+#     populate the cache, then return it; if it doesn't appear in time, proceed
+#     (worst case = today's behaviour — never a hang).
+# Safety: request_ids are unique per request, so a stale in-flight entry can
+# never false-match a DIFFERENT request → no error-path cleanup needed on the
+# many raise sites. Failures are NEVER cached (only the success return writes).
+# Flag AYDEN_IDEMPOTENCY (default on); =0 disables entirely.
+_IDEM_TTL_S = 120.0
+_IDEM_MAX = 256
+_idem_results: "dict[str, tuple[float, dict]]" = {}
+_idem_inflight: "set[str]" = set()
+
+
+def _idem_enabled() -> bool:
+    return os.environ.get("AYDEN_IDEMPOTENCY", "1") != "0"
+
+
+def _idem_get(key: str):
+    hit = _idem_results.get(key)
+    if hit is None:
+        return None
+    if time.monotonic() - hit[0] > _IDEM_TTL_S:
+        _idem_results.pop(key, None)
+        return None
+    return hit[1]
+
+
+def _idem_put(key: str, payload: dict) -> None:
+    # opportunistic purge of expired entries + bound the dict size
+    now = time.monotonic()
+    if len(_idem_results) >= _IDEM_MAX:
+        for k in [k for k, v in _idem_results.items() if now - v[0] > _IDEM_TTL_S]:
+            _idem_results.pop(k, None)
+        if len(_idem_results) >= _IDEM_MAX:
+            _idem_results.pop(next(iter(_idem_results)), None)
+    _idem_results[key] = (now, payload)
+    _idem_inflight.discard(key)
+
+
 async def _localize_chip_list(chips, ui_locale):
     """Phase 5b — localize AI suggestion chips to the UI locale (FR/KM).
 
@@ -1716,6 +1760,36 @@ async def generate(
         request_id, bool(client_request_id.strip()), iteration, session_id or "(none)",
     )
 
+    # ── #4 — idempotency guard (defence-in-depth) ─────────────────────────────
+    # Only when the client supplied a real idempotency key (a uuid fallback is
+    # unique → nothing to dedup). Returns the cached success for a replay; for a
+    # concurrent duplicate, waits a BOUNDED ~5s for the first to finish, else
+    # proceeds. Never hangs; failures never cached.
+    _idem_key = (
+        f"{current_user.user_id}:{request_id}"
+        if (_idem_enabled() and client_request_id.strip())
+        else None
+    )
+    if _idem_key is not None:
+        _cached = _idem_get(_idem_key)
+        if _cached is not None:
+            log.info("[IDEMPOTENCY] replay hit — returning cached result "
+                     "(request_id=%s)", request_id)
+            return _cached
+        if _idem_key in _idem_inflight:
+            log.info("[IDEMPOTENCY] concurrent duplicate — waiting for the "
+                     "in-flight generation (request_id=%s)", request_id)
+            for _ in range(50):  # bounded ~5s; never an unbounded wait
+                await asyncio.sleep(0.1)
+                _cached = _idem_get(_idem_key)
+                if _cached is not None:
+                    log.info("[IDEMPOTENCY] joined in-flight — returning its "
+                             "result (request_id=%s)", request_id)
+                    return _cached
+            log.info("[IDEMPOTENCY] in-flight wait timed out — proceeding "
+                     "(request_id=%s)", request_id)
+        _idem_inflight.add(_idem_key)
+
     # ── Wave 5.17b — Reserve quota slot BEFORE the OpenAI call ──────────────
     # INSERTs a 'in_progress' usage_log row. Counts immediately against the
     # user's quota — closes the parallel-request race. Confirmed on OpenAI
@@ -3281,4 +3355,9 @@ async def generate(
         request_id,
     )
     log.info("=== /generate SUCCESS ===  request_id=%s", request_id)
+    # #4 — cache the SUCCESS payload so a same-key replay / concurrent duplicate
+    # returns it instead of launching a 2nd generation (failures are never
+    # cached — only this success path writes). Clears the in-flight marker.
+    if _idem_key is not None:
+        _idem_put(_idem_key, payload)
     return payload
