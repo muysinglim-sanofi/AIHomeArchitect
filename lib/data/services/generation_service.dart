@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
+import '../../core/feature_flags.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -56,7 +57,12 @@ class GenerationService {
     _dio = Dio(BaseOptions(
       baseUrl: dotenv.env['API_BASE_URL'] ?? 'http://localhost:8000',
       connectTimeout: const Duration(seconds: 180),
-      receiveTimeout: const Duration(seconds: 180),
+      // #4 — raise the RESPONSE wait above the backend worst case. The backend
+      // can legitimately run up to max_attempts × 180s (prod=3 → ~540s); a 180s
+      // client timeout fired WHILE the backend was still working, surfacing an
+      // error/retry that produced a DUPLICATE generation. 600s lets the slow-but-
+      // valid generation land instead of racing it. (genLifecycleV2 rollback.)
+      receiveTimeout: Duration(seconds: FeatureFlags.genLifecycleV2 ? 600 : 180),
       sendTimeout: const Duration(seconds: 180),
     ));
 
