@@ -51,6 +51,7 @@ class VoiceService {
   bool _continuous = false;
   bool _manualStop = false;
   bool _restarting = false;
+  bool _finalized = false;
   bool _sawSpeechThisSession = false;
   final List<String> _segments = <String>[];
   String _livePartial = '';
@@ -103,17 +104,23 @@ class VoiceService {
     final ids = _availableLocaleIds!;
     String norm(String s) => s.replaceAll('-', '_').toLowerCase();
     final want = norm(requested);
+    // #6 Khmer diagnosis — prove device STT support. Logs the requested locale,
+    // whether any matching-language model exists on this device, and (for km) the
+    // list of km_* ids. If km is absent here, Khmer "not working" is a device/OS
+    // STT-model gap (graceful fallback to device default), not a code bug.
+    final lang = want.split('_').first;
+    final sameLang = ids.where((id) => norm(id).split('_').first == lang).toList();
+    debugPrint('[VoiceService] locale resolve: requested="$requested" '
+        'deviceLocales=${ids.length} ${lang}_matches=$sameLang');
     for (final id in ids) {
       if (norm(id) == want) return id;
     }
-    final lang = want.split('_').first;
     for (final id in ids) {
       if (norm(id).split('_').first == lang) return id;
     }
-    if (kDebugMode) {
-      debugPrint(
-          '[VoiceService] locale "$requested" unsupported → device default');
-    }
+    debugPrint(
+        '[VoiceService] locale "$requested" UNSUPPORTED on this device → '
+        'falling back to device default (this is why $lang dictation fails)');
     return null;
   }
 
@@ -190,6 +197,7 @@ class VoiceService {
     _continuous = continuous;
     _manualStop = false;
     _restarting = false;
+    _finalized = false;
     _sawSpeechThisSession = false;
     _segments.clear();
     _livePartial = '';
@@ -286,9 +294,12 @@ class VoiceService {
   }
 
   // Real end of a continuous session: fold any leftover partial, commit the
-  // accumulated transcript via [onFinal], then [onStop]. Idempotent-ish: guarded
-  // by callers checking _isListening.
+  // accumulated transcript via [onFinal], then [onStop]. IDEMPOTENT — a late
+  // status 'done' / error arriving after an authoritative stop() is a no-op
+  // (prevents a double onFinal/onStop).
   void _finalize() {
+    if (_finalized) return;
+    _finalized = true;
     _isListening = false;
     if (_continuous) {
       final tail = _livePartial.trim();
@@ -308,12 +319,23 @@ class VoiceService {
     // Mark the stop as user-initiated FIRST so the auto-restart loop and the
     // status handler know not to re-open the session.
     _manualStop = true;
+    if (_continuous) {
+      // AUTHORITATIVE manual stop (bug fix). In continuous mode the engine
+      // self-stops/restarts every silence cycle, so trusting a status round-trip
+      // to finalize made the 2nd mic tap a no-op (the session re-armed and never
+      // exited). Tear the engine down and finalize NOW. _finalize is idempotent,
+      // so a late status 'done' from the plugin is harmless. The current partial
+      // is folded into the transcript inside _finalize, so no words are lost.
+      try {
+        await _stt.stop();
+      } catch (_) {/* swallow */}
+      _finalize();
+      return;
+    }
+    // Legacy mode: let the platform resolve state via _handleStatus (unchanged).
     try {
       await _stt.stop();
     } catch (_) {/* swallow — _handleStatus will still resolve state */}
-    // `_handleStatus` flips _isListening false + fires onStop/onFinal when the
-    // platform confirms; we do NOT mutate _isListening here to keep one
-    // source of truth (avoids racing the platform).
   }
 
   /// Discard the current session without finalising the transcript.
