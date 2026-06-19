@@ -29,8 +29,19 @@ class PendingGenerationsNotifier
     extends StateNotifier<Map<String, GenerationLifecycle>> {
   PendingGenerationsNotifier() : super(const {});
 
+  // Group 1 — when each in-flight generation STARTED, kept parallel to [state]
+  // (app-scoped → survives the chat widget being disposed/recreated). Lets the
+  // loading bubble resume its progress bar at the real elapsed fraction instead
+  // of restarting from 0 on every rebuild. Not part of [state] so existing
+  // `== GenerationLifecycle.x` readers stay untouched.
+  final Map<String, DateTime> _startedAt = {};
+
+  /// When the in-flight generation for [sessionId] started, or null.
+  DateTime? startedAt(String sessionId) => _startedAt[sessionId];
+
   void markInFlight(String sessionId) {
     if (sessionId.isEmpty || sessionId == 'new') return;
+    _startedAt[sessionId] = DateTime.now();
     state = {...state, sessionId: GenerationLifecycle.inFlight};
   }
 
@@ -45,6 +56,7 @@ class PendingGenerationsNotifier
   }
 
   void clear(String sessionId) {
+    _startedAt.remove(sessionId);
     if (!state.containsKey(sessionId)) return;
     final next = {...state};
     next.remove(sessionId);

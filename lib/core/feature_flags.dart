@@ -95,6 +95,18 @@ class FeatureFlags {
   /// Instant rollback : flip to false.
   static const bool voiceContinuous = true;
 
+  /// Group 1 (2026-06-19) — generation lifecycle hardening:
+  ///   • "ready" snackbar / OS notification is SUPPRESSED when the just-completed
+  ///     session is the one the user is currently viewing (active-session aware,
+  ///     instead of the old `!mounted`-only guard which misfired for a
+  ///     re-opened instance of the same session);
+  ///   • the loading progress bar RESUMES from the real generation elapsed time
+  ///     (persisted startedAt) instead of restarting from 0 on every rebuild;
+  ///   • the long-generation reassurance fires after 60s (was 45s).
+  /// Frontend/UI only — no /generate, backend or pipeline change. Instant
+  /// rollback: flip to false. V1 impact: NONE.
+  static const bool genLifecycleV2 = true;
+
   /// B1 (2026-06-19) — stay in ONE session across a re-upload, but keep every
   /// lineage's versions in the ledger (do NOT purge on re-upload) so that acting
   /// on an OLDER vision (continue-from-vision, or an atmosphere switch from its
