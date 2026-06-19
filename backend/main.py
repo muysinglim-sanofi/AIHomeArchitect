@@ -222,6 +222,42 @@ from performance_observer import estimate_payload_bytes, estimate_cost_usd, Pipe
 # never takes effect from .env alone (Wave 5.3 post-mortem fix).
 load_dotenv(override=True)
 
+# ── Benched-config defaults (2026-06-19) ─────────────────────────────────────
+# The validated "benched" flag set is ON BY DEFAULT in code, so NO environment
+# (Render prod, local, CI) has to declare them — eliminating the silent
+# "non-benched config" risk (a prod backend that forgot BIMODAL_ENABLED served a
+# degraded prompt). This does NOT remove the flag system: an EXPLICIT "0" (or
+# false/no/off) in the env still wins → the kill-switch / instant rollback is
+# preserved. We run this AFTER load_dotenv(override=True) and treat a
+# present-but-EMPTY value as "use the default" too (an empty .env line would
+# otherwise silently disable a flag — see .env.example warning).
+#
+# Scope = ONLY the run.sh-validated set + MULTILINGUAL_NORMALIZE. Deliberately
+# NOT defaulted on: experimental / rolled-back flags (ENABLE_STRUCTURAL_MASK is
+# already handled separately; SWITCH_REDESIGN_PILOT, PRESERVE_FURNISH_SCOPE,
+# COMPOSER_VERSION, the WAVE_61 / 5.14B dormant constants stay OFF).
+_BENCHED_DEFAULT_ON = (
+    "BIMODAL_ENABLED",
+    "VISION_DETERMINISTIC",
+    "PROMPT_FURNITURE_FIX",
+    "PROMPT_CONTRACT_LIGHT",
+    "TRUST_PIXELS_V1",          # already defaults ON at its read site; pinned here too
+    "EDIT_FIDELITY_LOW",
+    "LOCAL_EDIT_QUALITY_MEDIUM",
+    "STYLE_REFINE_QUALITY_MEDIUM",
+    "STRUCT_FIDELITY_LOW",
+    "STRUCT_ID_CACHE",
+    "DNA_CLEANUP_V1",           # already defaults ON at its read site; pinned here too
+    "MULTILINGUAL_NORMALIZE",
+)
+_OFF_VALUES = {"0", "false", "no", "off"}
+for _flag in _BENCHED_DEFAULT_ON:
+    _cur = os.environ.get(_flag, "").strip()
+    if _cur == "":
+        os.environ[_flag] = "1"          # absent or empty → benched default ON
+    # else: an explicit value (incl. "0"/"false") is respected verbatim.
+# (observability log emitted below, once the file handler is attached)
+
 # ── Wave 5.2 — composer feature-flag dispatch ────────────────────────────────
 # COMPOSER_VERSION env var selects which composer the /generate handler uses.
 #   unset / "v1" (default) → frozen composer.py (rollback baseline; unchanged)
@@ -267,6 +303,10 @@ _file_handler.setFormatter(
 logging.getLogger().addHandler(_file_handler)
 log = logging.getLogger("aih")
 log.info("[PerfDiag] file logging active -> %s", _log_path)
+log.info(
+    "[Flags] benched defaults applied (explicit env still wins): %s",
+    {f: os.environ.get(f) for f in _BENCHED_DEFAULT_ON},
+)
 
 # Emit active profile at import time so the running mode is visible immediately.
 _startup_profile = get_active_profile()
