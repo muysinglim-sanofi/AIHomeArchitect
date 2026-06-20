@@ -269,30 +269,19 @@ class _UploadScreenState extends ConsumerState<UploadScreen>
   bool get _styleChosen => _selectedStyle != null || _surpriseStyle;
   bool get _canProceed => _image != null && _roomChosen && _styleChosen;
 
-  // Wave — entitlement (premium / admin / active promo). Mirrors the scrollers'
-  // `entitled` predicate; used only to decide which room default to seed.
-  bool get _entitled {
-    final isPremium = ref.read(premiumProvider);
-    final isAdmin = ref.read(accessProvider);
-    final hasPromo = ref.read(meStatusProvider)?.hasActivePromo ?? false;
-    return isPremium || isAdmin || hasPromo;
-  }
-
   // Wave — seed sensible defaults the moment a photo is uploaded so the user
   // can hit Generate immediately. Only seeds when nothing is chosen yet, so it
   // never overrides a deliberate pick (incl. a Replace-photo with prior choices).
-  //   • Room  → "AI Decide" (the first choice) when entitled; AI Decide is a
-  //             premium feature, so free users fall back to the one free room
-  //             (Living Room) instead of being seeded into a locked option.
+  //   • Room  → Ayden Decide (free for everyone; renders great as-is).
   //   • Style → Warm Modern (first atmosphere, free tier, universal starter).
   // Called inside an existing setState by the callers.
   void _applyDefaultsAfterUpload() {
     if (_selectedRoom == null && !_aiDecideRoom) {
-      if (_entitled) {
-        _aiDecideRoom = true;
-      } else {
-        _selectedRoom = RoomTypeImages.enLabelForId('livingRoom');
-      }
+      // Default everyone to Ayden Decide: it's free (FeatureFlags.aydenDecideFree
+      // + backend AYDEN_DECIDE_FREE) and renders great as-is — gpt-image-1 reads
+      // the room from the source photo and the lean prompt keeps the atmosphere
+      // native. The user can still pick an explicit room.
+      _aiDecideRoom = true;
     }
     if (_selectedStyle == null && !_surpriseStyle) {
       final wm = AppLocalizations.atmospheres
