@@ -24,5 +24,10 @@
 	<array>
 		<string>Default</string>
 	</array>
+	<!-- Phase B — APNs push. "production" matches the App Store / TestFlight
+	     distribution build Codemagic produces (IOS_APP_STORE profile). If a
+	     development-signed build is ever made, switch this to "development". -->
+	<key>aps-environment</key>
+	<string>production</string>
 </dict>
 </plist>

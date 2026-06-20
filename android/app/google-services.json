@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "945911228686",
+    "project_id": "ayden-studio",
+    "storage_bucket": "ayden-studio.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:945911228686:android:54a289a9319e4fce2d0f5f",
+        "android_client_info": {
+          "package_name": "com.aihomearchitect.ai_home_architect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDl6BKClgRZGw4t6KNYgCWL7n8YbuEwSrs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

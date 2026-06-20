@@ -1,3 +1,5 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -8,8 +10,10 @@ import 'core/providers/locale_provider.dart';
 import 'core/providers/me_status_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/services/local_notification_service.dart';
+import 'core/services/push_service.dart';
 import 'core/theme/app_theme.dart';
 import 'data/services/revenuecat_service.dart';
+import 'firebase_options.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +27,19 @@ Future<void> main() async {
 
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
   debugPrint('[DB] Supabase.initialize() complete');
+
+  // Phase B — Firebase (FCM push). initializeApp from the flutterfire-generated
+  // options; register the top-level background handler BEFORE runApp. Guarded so
+  // a Firebase hiccup never blocks app start (push is non-critical).
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    FirebaseMessaging.onBackgroundMessage(fcmBackgroundHandler);
+    debugPrint('[Push] Firebase.initializeApp() complete');
+  } catch (e) {
+    debugPrint('[Push] Firebase init failed (non-fatal): $e');
+  }
 
   final auth = Supabase.instance.client.auth;
   final existingSession = auth.currentSession;
@@ -64,6 +81,14 @@ Future<void> main() async {
     await LocalNotificationService.instance.init();
   } catch (e) {
     debugPrint('[Notif] init() failed (non-fatal): $e');
+  }
+
+  // Phase B — register this device's FCM token with the backend (after auth so
+  // the JWT exists) + wire push-tap deep-linking. Non-fatal.
+  try {
+    await PushService.instance.init();
+  } catch (e) {
+    debugPrint('[Push] init() failed (non-fatal): $e');
   }
 
   runApp(const ProviderScope(child: App()));

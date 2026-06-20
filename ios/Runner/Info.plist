@@ -4,6 +4,12 @@
 	<dict>
 		<key>CADisableMinimumFrameDurationOnPhone</key>
 		<true/>
+		<!-- Phase B — allow the app to be woken to process the FCM
+		     "vision ready" push while backgrounded. -->
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>remote-notification</string>
+		</array>
 		<!-- App uses only standard HTTPS encryption (exempt) → skips the
 		     "Missing Compliance" prompt in TestFlight on every upload. -->
 		<key>ITSAppUsesNonExemptEncryption</key>
