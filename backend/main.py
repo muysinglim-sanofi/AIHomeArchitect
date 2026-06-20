@@ -178,6 +178,48 @@ def _idem_put(key: str, payload: dict) -> None:
     _idem_inflight.discard(key)
 
 
+# ── #8 — Ayden Decide exterior support ────────────────────────────────────────
+# Interiors render great lean (no room block → atmosphere DNA + gpt-image-1 reads
+# the room from the photo). Exteriors broke: the interior-centric atmosphere DNA
+# was applied to a garden → incoherent. One tiny gpt-4o-mini call detects
+# interior vs exterior (+ which exterior); if exterior, the caller sets room_type
+# so the proper exterior room DNA is injected. Returns a canonical exterior room
+# id, or "" for interior/unknown (→ keep the lean interior path unchanged).
+_EXTERIOR_ROOMS = {"garden", "terrace", "facade", "balcony", "pool_area", "driveway"}
+
+
+async def _classify_exterior_room(image_bytes: bytes) -> str:
+    try:
+        b64 = base64.b64encode(image_bytes).decode()
+        resp = await openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url",
+                     "image_url": {
+                         "url": f"data:image/jpeg;base64,{b64}",
+                         "detail": "low",  # coarse classification — cheap + fast
+                     }},
+                    {"type": "text", "text": (
+                        "Is this photo an INTERIOR room or an EXTERIOR / outdoor "
+                        "space? If exterior, pick the closest type. Reply with "
+                        "EXACTLY one lowercase word, no punctuation, from: "
+                        "interior, garden, terrace, pool_area, facade, driveway, "
+                        "balcony."
+                    )},
+                ],
+            }],
+            max_tokens=4,
+        )
+        ans = (resp.choices[0].message.content or "").strip().lower().replace(" ", "_")
+        return ans if ans in _EXTERIOR_ROOMS else ""
+    except Exception as exc:
+        log.warning("  [AydenDecideExterior] classify failed (non-fatal): %s: %s",
+                    type(exc).__name__, exc)
+        return ""
+
+
 async def _localize_chip_list(chips, ui_locale):
     """Phase 5b — localize AI suggestion chips to the UI locale (FR/KM).
 
@@ -2306,6 +2348,25 @@ async def generate(
             if s not in secondary_visible_spaces:
                 secondary_visible_spaces.append(s)
 
+    # #8 — Ayden Decide exterior routing (flag AYDEN_DECIDE_EXTERIOR, default off).
+    # Runs only on the delegated path with no room resolved yet (on mobile the
+    # full vision is skipped, so room_type stays empty here). One tiny mini call:
+    # if the photo is an EXTERIOR, set room_type so its proper exterior DNA is
+    # injected (fixes incoherent gardens); interiors keep room_type empty →
+    # byte-identical lean behaviour. V2+/explicit-room/surprise flows untouched.
+    if (
+        let_ai_decide
+        and not room_type
+        and os.environ.get("AYDEN_DECIDE_EXTERIOR", "0") == "1"
+    ):
+        log.info("--- Ayden Decide: interior/exterior detection ---")
+        _t_ext = time.monotonic()
+        _ext_room = await _classify_exterior_room(image_bytes)
+        log.info("  [AydenDecideExterior] result=%r in %.2fs",
+                 _ext_room or "interior", time.monotonic() - _t_ext)
+        if _ext_room:
+            room_type = _ext_room  # → exterior room DNA injected downstream
+
     if surprise_me_flag:
         log.info("--- Surprise Me: selecting atmosphere for room=%s ---", room_type)
         selected_atmosphere = surprise_me(
@@ -3322,6 +3383,10 @@ async def generate(
         "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
         "suggestions": suggestions,
         "request_id": request_id,
+        # #8 — the room actually used (e.g. an exterior detected by Ayden Decide),
+        # so the client can fill its header when the room was AI-delegated. Empty
+        # for the lean interior Ayden Decide path (unchanged).
+        "room_type": room_type,
         # Wave 4.7.2: client persists this in session state and echoes it back
         # on every subsequent /generate so the apartment's structural identity is
         # captured ONCE (at V1) and reused deterministically forever.
