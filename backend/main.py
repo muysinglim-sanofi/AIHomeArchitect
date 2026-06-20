@@ -294,6 +294,7 @@ from version_state import (
 
 from generation_profiles import get_active_profile, list_profiles
 from retry_classifier import classify_for_retry, RetryVerdict
+from push_service import send_push  # Phase B — FCM push on completion
 from performance_observer import estimate_payload_bytes, estimate_cost_usd, PipelineTimer
 
 # override=True: .env is the single source of truth for runtime config.
@@ -1661,6 +1662,34 @@ async def chat(
         "sub_intent": intent_class.sub_intent.value,
         "session_language": meta.language,
     }
+
+
+@app.post("/devices")
+async def register_device(
+    token: str = Form(...),
+    platform: str = Form(""),            # "ios" | "android"
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Phase B — register/refresh this device's FCM token for the user, so the
+    backend can push "vision ready" when the app is backgrounded. Upsert on the
+    token (one row per device; re-registration just refreshes user/updated_at)."""
+    tok = (token or "").strip()
+    if not tok:
+        raise HTTPException(status_code=400, detail="missing token")
+    try:
+        supa.table("device_tokens").upsert(
+            {
+                "user_id": current_user.user_id,
+                "token": tok,
+                "platform": (platform or "").strip().lower() or "unknown",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            on_conflict="token",
+        ).execute()
+    except Exception as exc:
+        log.warning("[Push] device register failed: %s: %s", type(exc).__name__, exc)
+        raise HTTPException(status_code=500, detail="register failed")
+    return {"ok": True}
 
 
 @app.post("/generate")
@@ -3425,4 +3454,18 @@ async def generate(
     # cached — only this success path writes). Clears the in-flight marker.
     if _idem_key is not None:
         _idem_put(_idem_key, payload)
+    # Phase B — fire-and-forget "vision ready" push (no-op unless PUSH_ENABLED +
+    # FCM configured). Never blocks the response, never raises. Reaches the device
+    # even when the app is backgrounded/suspended (where local notifs can't fire).
+    _push_title, _push_body = {
+        "fr": ("Votre vision est prête", "Touchez pour voir votre nouveau design."),
+        "km": ("ចក្ខុវិស័យ​របស់​អ្នក​រួចរាល់​ហើយ", "ប៉ះ​ដើម្បី​មើល​ការ​រចនា​ថ្មី​របស់​អ្នក។"),
+    }.get(ui_locale, ("Your vision is ready", "Tap to view your new design."))
+    asyncio.create_task(send_push(
+        supa=supa,
+        user_id=current_user.user_id,
+        title=_push_title,
+        body=_push_body,
+        session_id=session_id or "",
+    ))
     return payload
