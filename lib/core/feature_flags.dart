@@ -124,4 +124,14 @@ class FeatureFlags {
   /// Surprise Me stays premium. When false: the old premium lock + paywall on
   /// tap. Keep both sides in lockstep. UI gating only — backend enforces.
   static const bool aydenDecideFree = true;
+
+  /// Option C (2026-06-20) — "develop" reveal on the in-chat result image.
+  /// When the generated render finishes downloading, it resolves in
+  /// (blur→sharp + a brief fade/scale), like a photo developing, instead of
+  /// popping in abruptly after the shimmer placeholder. This is the perceived-
+  /// progress complement to the already-cinematic loading wait (blurred source
+  /// backdrop + asymptotic progress). Pure frontend/UI: the SAME final image,
+  /// only its on-screen arrival is animated — no /generate, backend, OpenAI
+  /// cost or pipeline impact. Instant rollback: flip to false. V1 impact: NONE.
+  static const bool revealDevelop = true;
 }
