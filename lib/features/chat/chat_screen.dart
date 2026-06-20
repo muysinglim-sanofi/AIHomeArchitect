@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -3195,17 +3194,6 @@ class _GeneratedImageCardState extends State<_GeneratedImageCard> {
                     width: double.infinity,
                     height: double.infinity,
                     placeholder: (_, _) => const _ShimmerPlaceholder(),
-                    // Option C — when the render is ready, it "develops"
-                    // (blur→sharp + brief fade/scale) instead of popping in.
-                    // imageBuilder owns the arrival, so we drop the default
-                    // cross-fade to avoid a double animation.
-                    fadeInDuration: FeatureFlags.revealDevelop
-                        ? Duration.zero
-                        : const Duration(milliseconds: 500),
-                    imageBuilder: FeatureFlags.revealDevelop
-                        ? (_, imageProvider) =>
-                            _DevelopReveal(image: imageProvider)
-                        : null,
                     errorWidget: (_, _, _) =>
                         const ColoredBox(color: AppColors.shimmerBase),
                   ),
@@ -4255,79 +4243,6 @@ class _SystemMessageBubble extends StatelessWidget {
               ),
         ),
       ),
-    );
-  }
-}
-
-// ── Option C — "develop" reveal of the result image ─────────────────────────
-// Plays once when the generated render is ready (CachedNetworkImage.imageBuilder
-// only fires after the bytes are decoded). The image resolves from a soft blur
-// to sharp with a brief fade + micro-zoom, like a photo developing — the
-// perceived-progress complement to the cinematic loading wait. No network/cost
-// impact: it animates the SAME final image already in hand. Flag: revealDevelop.
-class _DevelopReveal extends StatefulWidget {
-  final ImageProvider image;
-  const _DevelopReveal({required this.image});
-
-  @override
-  State<_DevelopReveal> createState() => _DevelopRevealState();
-}
-
-class _DevelopRevealState extends State<_DevelopReveal>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..forward();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final img = Image(
-      image: widget.image,
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      gaplessPlayback: true,
-    );
-    return AnimatedBuilder(
-      animation: _ctrl,
-      // The decoded Image is the (cheap, const-after-build) child so it isn't
-      // rebuilt every frame — only the blur/opacity/scale wrappers are.
-      child: img,
-      builder: (context, child) {
-        final t = Curves.easeOutCubic.transform(_ctrl.value);
-        final sigma = (1 - t) * 12.0;
-        // Reach full opacity by ~45% so the sharpening (not the fade) carries
-        // the back half of the reveal. The micro-zoom (1.03→1.0) also slightly
-        // over-fills the clip, hiding any blur edge-bleed.
-        final opacity = (t * 2.2).clamp(0.0, 1.0);
-        final scale = 1.0 + (1 - t) * 0.03;
-        return Opacity(
-          opacity: opacity,
-          child: Transform.scale(
-            scale: scale,
-            child: sigma < 0.3
-                ? child
-                : ImageFiltered(
-                    imageFilter:
-                        ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-                    child: child,
-                  ),
-          ),
-        );
-      },
     );
   }
 }
