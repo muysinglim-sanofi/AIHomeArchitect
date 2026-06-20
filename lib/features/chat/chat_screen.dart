@@ -1671,6 +1671,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // if backend omits / sends empty (older sessions, partial responses).
       final returnedIdentity = result['structural_identity'] as String?;
       final returnedVersions = result['versions'] as String?;
+      // #8 — Ayden Decide exterior: the backend may have detected an exterior
+      // room (e.g. "garden") and used its DNA. Fill our (empty) room so the
+      // header shows it + the lineage continues with the right room. Only when
+      // we had no room (delegated) → never overrides an explicit pick.
+      final returnedRoom = (result['room_type'] as String?)?.trim() ?? '';
 
       setState(() {
         _isGenerating = false;
@@ -1678,6 +1683,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         _iterationCount = newCount;
         _generationSourceUrl = afterUrl;  // next refinement edits this output
         _branchSourceVersionId = null;    // BUG A fix — one-shot pin consumed
+        if (returnedRoom.isNotEmpty && _currentRoomType.trim().isEmpty) {
+          _currentRoomType = RoomTypeImages.enLabelForId(returnedRoom) ?? returnedRoom;
+        }
         if (returnedIdentity != null && returnedIdentity.isNotEmpty) {
           _structuralIdentity = returnedIdentity;
         }
@@ -2216,12 +2224,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   Widget build(BuildContext context) {
     final l10n = context.l10n;
 
-    // #8 Option B — when the room was delegated to Ayden Decide (no explicit
-    // room picked), surface "Ayden Decide" in the header so the user knows the
-    // room is AI-chosen (cosmetic; no real detection on this profile). Normal
-    // sessions are unchanged.
-    final aiDecidePrefix = (_letAiDecide && _currentRoomType.trim().isEmpty)
-        ? '${l10n.uplAiDecide} · '
+    // #8 — Ayden Decide header label. When the room was AI-delegated: show the
+    // DETECTED room if we have one (e.g. an exterior "Garden" routed by
+    // AYDEN_DECIDE_EXTERIOR), otherwise "Ayden Decide". Normal sessions
+    // (explicit room) are unchanged → no prefix.
+    final aiDecidePrefix = _letAiDecide
+        ? (_currentRoomType.trim().isNotEmpty
+            ? '${_currentRoomType.trim()} · '
+            : '${l10n.uplAiDecide} · ')
         : '';
     final headerSubtitle = _iterationCount > 0
         ? '$aiDecidePrefix$_currentStyle · ${l10n.visionCount(_iterationCount)}'
