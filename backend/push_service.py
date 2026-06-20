@@ -96,11 +96,27 @@ async def send_push(
 ) -> None:
     """Fire-and-forget push to all of the user's devices. Never raises."""
     try:
-        if not push_enabled() or not user_id:
+        if not user_id:
+            log.info("[Push] skip: no user_id")
+            return
+        # Diagnostic: when disabled, say WHICH env var is missing (values are
+        # never logged — only presence) so a misconfigured deploy is obvious.
+        if not push_enabled():
+            log.warning(
+                "[Push] DISABLED — PUSH_ENABLED=%r FCM_PROJECT_ID_set=%s "
+                "FCM_SERVICE_ACCOUNT_JSON_set=%s",
+                os.environ.get("PUSH_ENABLED"),
+                bool(os.environ.get("FCM_PROJECT_ID")),
+                bool(os.environ.get("FCM_SERVICE_ACCOUNT_JSON")),
+            )
             return
         tokens = await _user_tokens(supa, user_id)
         if not tokens:
+            log.warning("[Push] no device tokens for user=%s (nothing to send)",
+                        user_id)
             return
+        log.info("[Push] sending to %d device(s) user=%s session=%s",
+                 len(tokens), user_id, session_id)
         project_id = os.environ["FCM_PROJECT_ID"]
         url = f"https://fcm.googleapis.com/v1/projects/{project_id}/messages:send"
         headers = {

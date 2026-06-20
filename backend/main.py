@@ -295,6 +295,11 @@ from version_state import (
 from generation_profiles import get_active_profile, list_profiles
 from retry_classifier import classify_for_retry, RetryVerdict
 from push_service import send_push  # Phase B — FCM push on completion
+
+# Phase B — keep a strong ref to fire-and-forget push tasks. asyncio.create_task
+# only holds a WEAK reference, so without this the task can be garbage-collected
+# before it runs (the push would silently never fire). Discarded on completion.
+_push_bg_tasks: set = set()
 from performance_observer import estimate_payload_bytes, estimate_cost_usd, PipelineTimer
 
 # override=True: .env is the single source of truth for runtime config.
@@ -3461,11 +3466,13 @@ async def generate(
         "fr": ("Votre vision est prête", "Touchez pour voir votre nouveau design."),
         "km": ("ចក្ខុវិស័យ​របស់​អ្នក​រួចរាល់​ហើយ", "ប៉ះ​ដើម្បី​មើល​ការ​រចនា​ថ្មី​របស់​អ្នក។"),
     }.get(ui_locale, ("Your vision is ready", "Tap to view your new design."))
-    asyncio.create_task(send_push(
+    _push_task = asyncio.create_task(send_push(
         supa=supa,
         user_id=current_user.user_id,
         title=_push_title,
         body=_push_body,
         session_id=session_id or "",
     ))
+    _push_bg_tasks.add(_push_task)
+    _push_task.add_done_callback(_push_bg_tasks.discard)
     return payload
