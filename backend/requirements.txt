@@ -10,4 +10,7 @@ Pillow>=10.0.0
 PyJWT>=2.9.0
 # Phase B — FCM push (HTTP v1 OAuth2 service-account token). Imported lazily in
 # push_service.py so the backend still boots if this isn't installed yet.
+# `requests` is required by google.auth.transport.requests.Request (the OAuth
+# token refresh transport) — google-auth does NOT pull it in on its own.
 google-auth>=2.30.0
+requests>=2.32.0
