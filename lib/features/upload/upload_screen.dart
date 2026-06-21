@@ -1347,10 +1347,7 @@ Future<void> _openLockedPaywall(
   await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
-    backgroundColor: AppColors.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
+    backgroundColor: Colors.transparent,
     builder: (_) => PaywallSheet(
       trigger: PaywallTrigger.locked,
       restrictedField: restrictedField,

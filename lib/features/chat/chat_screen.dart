@@ -1815,10 +1815,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         await showModalBottomSheet<bool>(
           context: context,
           isScrollControlled: true,
-          backgroundColor: AppColors.surface,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
+          backgroundColor: Colors.transparent,
           builder: (_) => PaywallSheet(
             trigger: e.freeTierRestricted
                 ? PaywallTrigger.freeTier
@@ -3637,10 +3634,7 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
     await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (_) => PaywallSheet(
         trigger: PaywallTrigger.locked,
         restrictedField: restrictedField,

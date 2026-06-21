@@ -971,10 +971,7 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
     await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (_) => PaywallSheet(trigger: trigger),
     );
     // Returning from the paywall may have flipped premium — refresh the card.
