@@ -1895,7 +1895,15 @@ async def generate(
     # Non-entitled users may only generate Living Room + (Nordic Warmth |
     # Soft Luxury). admin/premium AND promo (limited or unlimited) bypass —
     # _decision.bypass_scope is True for every tier except 'free'.
-    if not _decision.bypass_scope:
+    # AYDEN_REFINE_FREE (default off): a refinement (iteration > 1) INHERITS the
+    # V1 room/atmosphere — which was already allowed, or freely delegated via
+    # Ayden Decide / Signature. Re-running the scope check on it wrongly paywalls
+    # a legit in-session edit ("move the table") or an atmosphere switch, even
+    # with quota left. So scope-gate only the FIRST vision; quota still caps the
+    # total. AYDEN_REFINE_FREE=0 restores the old per-generation scope check.
+    _refine_free = os.environ.get("AYDEN_REFINE_FREE", "0") == "1"
+    _skip_scope_for_refine = _refine_free and iteration > 1
+    if not _decision.bypass_scope and not _skip_scope_for_refine:
         await check_restrictions(
             user_id=current_user.user_id,
             room_type_id=room_type_id,
@@ -1903,6 +1911,9 @@ async def generate(
             let_ai_decide=let_ai_decide,
             surprise_me=surprise_me_flag,
         )
+    elif _skip_scope_for_refine:
+        log.info("[free-tier] scope check skipped for refinement (iteration=%d)",
+                 iteration)
 
     # ── Step 1: log request ───────────────────────────────────────────────────
     request_id = client_request_id.strip() or uuid.uuid4().hex
