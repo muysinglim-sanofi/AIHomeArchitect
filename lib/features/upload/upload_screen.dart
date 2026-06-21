@@ -284,9 +284,16 @@ class _UploadScreenState extends ConsumerState<UploadScreen>
       _aiDecideRoom = true;
     }
     if (_selectedStyle == null && !_surpriseStyle) {
-      final wm = AppLocalizations.atmospheres
-          .firstWhere((a) => a.id == kDefaultAtmosphereId);
-      _selectedStyle = wm.name;
+      if (FeatureFlags.aydenSignatureFree) {
+        // Default = Ayden Signature: the AI picks the best-fit atmosphere from the
+        // photo. Free + first card. (Pairs with the Ayden Decide room default →
+        // full AI delegation out of the box.)
+        _surpriseStyle = true;
+      } else {
+        final wm = AppLocalizations.atmospheres
+            .firstWhere((a) => a.id == kDefaultAtmosphereId);
+        _selectedStyle = wm.name;
+      }
     }
   }
 
@@ -1490,7 +1497,28 @@ class _AtmosphereScroller extends ConsumerWidget {
         final cardW = c.maxWidth * 0.80;
         final h = cardW / 1.2;
 
+        // AYDEN SIGNATURE — the AI-picks-the-atmosphere card. FIRST position,
+        // image hero, and FREE (no lock) when aydenSignatureFree; otherwise the
+        // legacy premium-locked behaviour.
+        final signatureLocked =
+            !FeatureFlags.aydenSignatureFree && notEntitled;
         final items = <Widget>[
+          if (hasSurprise)
+            AtmosphereHeroCard(
+              // Name blank: the "AYDEN SIGNATURE" wordmark is baked into the image
+              // centre; only the subtitle shows at the bottom. Image is 1402x1122
+              // (card ratio) → default contain fills it cleanly, no crop.
+              name: '',
+              subtitle:
+                  'AI analyzes your space and selects the atmosphere that fits it best.',
+              asset: 'assets/atmospheres/ayden_signature.jpg',
+              selected: surpriseSelected,
+              locked: signatureLocked,
+              onTap: signatureLocked
+                  ? () => _openLockedPaywall(context,
+                      restrictedField: 'delegated_choice')
+                  : onSurprise!,
+            ),
           for (final a in atmospheres)
             AtmosphereHeroCard(
               name: a.name,
@@ -1503,17 +1531,6 @@ class _AtmosphereScroller extends ConsumerWidget {
                   ? () =>
                       _openLockedPaywall(context, restrictedField: 'atmosphere')
                   : () => onSelected(a.name),
-            ),
-          if (hasSurprise)
-            AiActionCard(
-              title: context.l10n.uplSurpriseMe,
-              subtitle: context.l10n.uplSurpriseSub,
-              radius: 18,
-              locked: notEntitled,
-              onTap: notEntitled
-                  ? () => _openLockedPaywall(context,
-                      restrictedField: 'delegated_choice')
-                  : onSurprise!,
             ),
           AiActionCard(
             title: _customLabel,

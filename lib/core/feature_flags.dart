@@ -124,4 +124,13 @@ class FeatureFlags {
   /// Surprise Me stays premium. When false: the old premium lock + paywall on
   /// tap. Keep both sides in lockstep. UI gating only — backend enforces.
   static const bool aydenDecideFree = true;
+
+  /// AYDEN SIGNATURE (2026-06-21) — the rebranded "Surprise Me": the AI analyzes
+  /// the photo and picks the best-fit atmosphere (backend SURPRISE_VISION). When
+  /// true: shown FIRST in the atmosphere selector, pre-selected by DEFAULT, and
+  /// FREE (no premium lock) — it's a conversion funnel (taste a premium style via
+  /// the AI, then pay to pick it explicitly). The explicit-atmosphere lock stays.
+  /// Mirrors the backend AYDEN_SIGNATURE_FREE env flag — keep both in lockstep.
+  /// When false: the old premium-locked "Surprise Me", default = Warm Modern.
+  static const bool aydenSignatureFree = true;
 }

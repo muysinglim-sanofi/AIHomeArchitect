@@ -132,19 +132,24 @@ class _AtmosphereHeroCardState extends State<AtmosphereHeroCard> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        widget.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTheme.atmosphereTitle(
-                          fontSize:
-                              widget.nameFontSize ?? (widget.compact ? 15 : 22),
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
-                          height: 1.1,
+                      // Name is optional — Ayden Signature passes '' because its
+                      // brand wordmark is baked into the image; only the subtitle
+                      // shows. Skip the title (and its spacer) when blank.
+                      if (widget.name.isNotEmpty) ...[
+                        Text(
+                          widget.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTheme.atmosphereTitle(
+                            fontSize: widget.nameFontSize ??
+                                (widget.compact ? 15 : 22),
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                            height: 1.1,
+                          ),
                         ),
-                      ),
-                      SizedBox(height: widget.compact ? 1 : 2),
+                        SizedBox(height: widget.compact ? 1 : 2),
+                      ],
                       Text(
                         widget.subtitle,
                         maxLines: widget.compact ? 1 : 2,
