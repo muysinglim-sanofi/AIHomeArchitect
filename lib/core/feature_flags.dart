@@ -133,4 +133,13 @@ class FeatureFlags {
   /// Mirrors the backend AYDEN_SIGNATURE_FREE env flag — keep both in lockstep.
   /// When false: the old premium-locked "Surprise Me", default = Warm Modern.
   static const bool aydenSignatureFree = true;
+
+  /// In-session refinement / atmosphere switch is FREE within quota — mirrors the
+  /// backend AYDEN_REFINE_FREE. When true: switching atmosphere from the Full
+  /// Reveal carousel (an in-session iteration, not a new V1) is NOT premium-
+  /// locked; the tap proceeds and the backend allows the refinement (quota still
+  /// caps the total). Keep in lockstep with the backend flag, else a free user
+  /// could tap a premium switch and then hit a 402. When false: the old per-
+  /// switch premium lock.
+  static const bool aydenRefineFree = true;
 }
