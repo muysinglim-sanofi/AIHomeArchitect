@@ -220,6 +220,55 @@ async def _classify_exterior_room(image_bytes: bytes) -> str:
         return ""
 
 
+# ── Ayden Decide STAGE MODE — interior room classification (Option B) ──────────
+# Flag AYDEN_DECIDE_FURNISH (default off). Decision (2026-06-21): on Ayden Decide,
+# ALWAYS re-imagine the interior as a fully furnished room — no empty-vs-furnished
+# gate (that detection was the fragile link). We only need the room TYPE so the
+# right staging items are used; "" for exterior/unclear → no staging.
+_INTERIOR_ROOMS = {
+    "living_room", "bedroom", "kitchen", "dining_room", "office", "bathroom",
+    "entrance", "hallway",
+}
+
+
+async def _classify_interior_room(image_bytes: bytes) -> str:
+    """Return the canonical interior room type so Ayden Decide can furnish/redesign
+    it (Option B: always furnish). Returns "" for exterior/unclear (→ no staging).
+    NOT an empty-vs-furnished judgement — Ayden Decide re-imagines either way."""
+    try:
+        b64 = base64.b64encode(image_bytes).decode()
+        resp = await openai.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url",
+                     "image_url": {
+                         "url": f"data:image/jpeg;base64,{b64}",
+                         "detail": "low",  # room TYPE only — coarse is enough
+                     }},
+                    {"type": "text", "text": (
+                        "What kind of interior room is this? Reply with EXACTLY one "
+                        "lowercase token, nothing else, from: living_room, bedroom, "
+                        "kitchen, dining_room, office, bathroom, entrance, hallway, "
+                        "other. Use 'entrance' for an entry/foyer with a front door, "
+                        "'hallway' for a corridor, 'other' for an exterior/outdoor "
+                        "or unclear space."
+                    )},
+                ],
+            }],
+            max_tokens=8,
+        )
+        _raw = (resp.choices[0].message.content or "").strip().lower().replace(" ", "_")
+        room = _raw if _raw in _INTERIOR_ROOMS else ""
+        log.info("  [AydenDecideFurnish] raw=%r → room=%r", _raw, room)
+        return room
+    except Exception as exc:
+        log.warning("  [AydenDecideFurnish] classify failed (non-fatal): %s: %s",
+                    type(exc).__name__, exc)
+        return ""
+
+
 async def _localize_chip_list(chips, ui_locale):
     """Phase 5b — localize AI suggestion chips to the UI locale (FR/KM).
 
@@ -251,7 +300,7 @@ from prompt_engine.intent_classifier import (
     IntentClassification,
 )
 from prompt_engine.edit_intent import EditMode
-from prompt_engine.preservation import HIGH_FIDELITY_ATMOSPHERES  # PHASE 1.2 — shared with composer's contract-light decision (single source of truth)
+from prompt_engine.preservation import HIGH_FIDELITY_ATMOSPHERES, apply_stage_mode  # PHASE 1.2 — shared with composer's contract-light decision (single source of truth); apply_stage_mode — Ayden Decide empty-room staging
 from prompt_engine.mask_generator import build_structural_mask
 from prompt_engine.structural_identity import (
     ApartmentStructuralIdentity,
@@ -2401,6 +2450,25 @@ async def generate(
         if _ext_room:
             room_type = _ext_room  # → exterior room DNA injected downstream
 
+    # Ayden Decide STAGE MODE (Option B) — ALWAYS re-imagine the interior as a
+    # fully furnished room (flag AYDEN_DECIDE_FURNISH, default off). Runs on the V1
+    # delegated path with no room resolved (an exterior above would have set
+    # room_type and skipped this). We classify only the room TYPE; the swap to the
+    # furnish contract happens AFTER composition. "" (exterior/unclear) ⇒ preserve.
+    # Flag off ⇒ no call ⇒ byte-identical.
+    _stage_room = ""
+    if (
+        let_ai_decide
+        and not room_type
+        and iteration == 1
+        and os.environ.get("AYDEN_DECIDE_FURNISH", "0") == "1"
+    ):
+        log.info("--- Ayden Decide: room classification for staging (B: always furnish) ---")
+        _t_stage = time.monotonic()
+        _stage_room = await _classify_interior_room(image_bytes)
+        log.info("  [AydenDecideFurnish] room=%r in %.2fs",
+                 _stage_room or "(none/exterior → preserve)", time.monotonic() - _t_stage)
+
     if surprise_me_flag:
         log.info("--- Surprise Me: selecting atmosphere for room=%s ---", room_type)
         selected_atmosphere = surprise_me(
@@ -2552,6 +2620,19 @@ async def generate(
         generation_mode=generation_mode,  # Wave 5.5.14c — no-op unless BIMODAL_ENABLED=1
         edit_mode=edit_mode,  # Wave 5.13d Phase 1 — single source of truth (main.py classified + elevated)
     )
+    # Ayden Decide STAGE MODE — swap the preserve contract for the furnish
+    # contract so an empty room is reliably staged (flag-gated; detected above).
+    # The architecture lock is preserved VERBATIM inside the stage contract, so
+    # the walls=0 guard is unaffected. Self-guarding: no-op if no preserve
+    # contract is present in the composed prompt.
+    if _stage_room:
+        design_prompt, _staged = apply_stage_mode(
+            design_prompt, room_label=_stage_room, atmosphere_label=style_label,
+            atmosphere_id=atmosphere_id,
+        )
+        log.info("[AydenDecideFurnish] STAGE MODE %s (room=%s)",
+                 "applied" if _staged else "NO-OP (preserve contract not found)",
+                 _stage_room)
     _prompt_s = time.monotonic() - _t_prompt
     log.info(
         "--- prompt composed (%d chars, compact_prompts=%s) ---",

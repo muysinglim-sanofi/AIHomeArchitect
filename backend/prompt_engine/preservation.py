@@ -398,6 +398,143 @@ _PRESERVE_MODE_CONTRACT_LIGHT = (
     "before any styling. " + _FURNITURE_CLAUSE
 )
 
+# ── Ayden Decide STAGE MODE (flag AYDEN_DECIDE_FURNISH_EMPTY, default off) ────
+# An empty / unfurnished interior delegated to Ayden Decide is ambiguous under
+# the preserve contract ("Add nothing, fill nothing in … on the existing
+# furniture") → gpt-image-1 sometimes leaves the room bare, sometimes furnishes
+# it (run-to-run coin flip). STAGE MODE keeps the architecture lock VERBATIM but
+# swaps the furniture-preservation clause for a furnishing instruction, so empty
+# rooms are reliably staged. Architecture preservation is unchanged → the walls=0
+# guard is intact. Applied post-composition by apply_stage_mode(); fully
+# reversible (flag off ⇒ never called ⇒ byte-identical).
+# Room-appropriate staging pieces. An entrance/hallway must NOT receive a sofa
+# or living-room set — it gets entry pieces (console, mirror, bench, hooks).
+_STAGE_ITEMS = {
+    "entrance": "a console table or slim cabinet, a mirror, a bench or stool, "
+    "coat hooks or a coat rack, a runner rug, a small tray or catch-all, and a "
+    "plant or framed art — NO sofa or living-room seating",
+    "hallway": "a console table or slim cabinet, a mirror, coat hooks, a runner "
+    "rug, framed wall art and a plant — NO sofa or living-room seating",
+    "living_room": "a sofa and armchairs, a coffee table, a low media console / "
+    "TV unit with a flat-screen TV on it placed against a wall facing the "
+    "seating, side tables, layered lighting, a rug, cushions and throws, art and "
+    "greenery; and if the room is large or open-plan, also stage a dining area "
+    "with a dining table and chairs (and a pendant above it)",
+    "bedroom": "a bed dressed with linens, two nightstands with lamps, a wardrobe "
+    "or dresser, a bench or reading chair, a rug and art",
+    "dining_room": "a dining table with chairs, a statement pendant over the "
+    "table, a sideboard or buffet, a rug and art",
+    "kitchen": "counter or bar stools, pendant lighting, styled open shelving, "
+    "plants and considered countertop styling (keep the fitted kitchen layout)",
+    "office": "a desk and chair, shelving or a bookcase, a task lamp, a rug and art",
+    "bathroom": "styled towels, a vanity stool or ladder, a mirror, plants and "
+    "considered decor (keep the fitted sanitary layout)",
+}
+_STAGE_ITEMS_DEFAULT = (
+    "the seating, tables, storage, lighting, rugs, textiles, greenery, art and "
+    "decor that a real, finished room of this kind would have"
+)
+
+# Window treatment per room — curtains read odd in wet/utility rooms, so kitchen
+# and bathroom get blinds/shades instead. All "open" so the glass stays visible
+# (keeps the architecture-lock happy).
+_WINDOW_TREATMENT = {
+    "kitchen": "a neat roller or Roman blind, raised and open at the top",
+    "bathroom": "a neat roller or Roman blind, raised and open at the top",
+}
+_WINDOW_TREATMENT_DEFAULT = (
+    "curtains or drapes hung at the sides and drawn fully open"
+)
+
+# Per-atmosphere FURNITURE LANGUAGE — the materials/forms every staged piece must
+# take, so an atmosphere reads unmistakably (a Japandi living ≠ a Soft Luxury
+# living, not the same sofa in a different tint). This is what restores identity.
+_ATMO_FURNITURE_STYLE = {
+    "warm_modern": "rich American walnut and warm-toned oak, a caramel / ochre / "
+    "terracotta and warm-white palette, natural-linen and tan-leather upholstery, "
+    "travertine and warm stone, brass accents — deep, cosy, contrasted "
+    "residential warmth; deliberately NOT pale, cool or Scandinavian",
+    "japandi_calm": "distinctly JAPANDI (Japanese × Scandinavian), NOT plain "
+    "Nordic: VERY LOW, floor-hugging forms (a low platform sofa, a low oak table "
+    "— keep everything low and grounded); light oak mixed with SPARING CHARCOAL / "
+    "black contrast accents (black-framed screens, black metal, dark wabi-sabi "
+    "ceramics) — this black contrast is what separates it from Nordic; natural "
+    "linen in warm greige, a jute rug, muted sage-green, ikebana-style sculptural "
+    "bare branches, handcrafted imperfect (wabi-sabi) pottery, paper-lantern / "
+    "rice-paper lighting, sheer linen; soft natural light; deeply MINIMAL, zen and "
+    "uncluttered with intentional, generous negative space",
+    "soft_luxury": "velvet and bouclé upholstery, honed-marble tops, polished "
+    "brass legs and accents, deep plush rugs, sculptural lighting — refined, "
+    "tactile, quietly opulent",
+    "nordic_warmth": "pale birch / ash wood, wool, sheepskin and chunky-knit "
+    "textiles, soft muted tones, simple clean forms — cosy, light, hygge",
+    "tropical_escape": "rattan, cane and teak, woven natural fibres, linen, "
+    "abundant lush greenery, breezy organic forms — resort-like",
+}
+
+
+def build_stage_contract(room_label: str = "", atmosphere_label: str = "",
+                         atmosphere_id: str = "") -> str:
+    room_key = (room_label or "").strip().lower()
+    room = room_key.replace("_", " ") or "room"
+    atmo = (atmosphere_label or "").split("·")[0].strip()
+    atmo_phrase = f" in the {atmo} style" if atmo else ""
+    items = _STAGE_ITEMS.get(room_key, _STAGE_ITEMS_DEFAULT)
+    treatment = _WINDOW_TREATMENT.get(room_key, _WINDOW_TREATMENT_DEFAULT)
+    atmo_style = _ATMO_FURNITURE_STYLE.get((atmosphere_id or "").strip().lower(), "")
+    atmo_furniture_clause = (
+        f"Every single piece is designed in the {atmo} furniture language — "
+        f"{atmo_style}. " if atmo_style else ""
+    )
+    return (
+        "STAGE MODE — FURNISH EMPTY SPACE CONTRACT:\n"
+        "CRITICAL — the structural shell is FIXED and must be reproduced "
+        "pixel-for-pixel: every wall, doorway, opening, passage, archway, window, "
+        "glass/sliding door, the ceiling shape and height, columns, niches, "
+        "proportions, circulation, camera angle and perspective stay EXACTLY as "
+        "photographed. Never close, fill in, wall up, narrow, shorten, cover or add "
+        "any opening, doorway, passage or wall; never turn an existing opening or "
+        "passage into a solid wall. "
+        "You MAY, however, add atmosphere-appropriate CEILING and LIGHTING design "
+        "— recessed and indirect cove lighting, statement pendants, sculptural and "
+        "modern fixtures, layered ambient glow — plus freestanding furniture and "
+        "decor placed on the existing floor. "
+        "Any existing FITTED elements are part of the room and MUST be kept in "
+        "place — an open / American kitchen (units, island, worktops, appliances), "
+        "fitted wardrobes, built-in shelving or storage: keep them exactly where "
+        "they are and restyle them to match the atmosphere; never remove, shrink, "
+        "relocate or wall them off. "
+        f"Furnish and stage this as a complete, fully resolved, "
+        f"lived-in {room}{atmo_phrase}: add {items}, arranged in the density that "
+        "suits the atmosphere — richly layered for warm or opulent styles, "
+        "restrained and airy with generous empty space for minimal styles — within "
+        "the existing floor area, keeping circulation clear. "
+        + atmo_furniture_clause +
+        f"At EVERY window and glass door, add {treatment} — leaving the glass "
+        "fully visible and the opening clear; never cover, block, tint or narrow "
+        "it (the view stays visible). "
+        f"CRITICAL identity — the furniture, materials, palette, textiles AND the "
+        f"ceiling/lighting design MUST express the {atmo or 'chosen'} atmosphere "
+        "(see STYLE below), so the room reads unmistakably as that atmosphere — "
+        "never a generic interior. "
+        "Furniture, lighting and decor are yours to compose; the structural shell "
+        "is not."
+    )
+
+
+def apply_stage_mode(prompt: str, room_label: str = "",
+                     atmosphere_label: str = "",
+                     atmosphere_id: str = "") -> tuple[str, bool]:
+    """Swap whichever preserve contract is present for the STAGE (furnish)
+    contract. Returns (new_prompt, applied). No-op (applied=False) if no preserve
+    contract is found (creative mode / unexpected prompt) — safe by construction."""
+    stage = build_stage_contract(room_label, atmosphere_label, atmosphere_id)
+    for _contract in (_PRESERVE_MODE_CONTRACT_LIGHT, _PRESERVE_MODE_CONTRACT):
+        if _contract in prompt:
+            return prompt.replace(_contract, stage), True
+    return prompt, False
+
+
 _CREATIVE_MODE_CONTRACT = (
     "CREATIVE MODE — ARCHITECTURAL REDESIGN CONTRACT:\n"
     "You may reinterpret the architecture, including walls, openings, "
