@@ -58,6 +58,7 @@ from prompt_engine import (
     classify_edit_mode,
     classify_room,
     surprise_me,
+    rank_atmospheres,
     classify_intent,
     generate_architect_response,
     generate_chat_response,
@@ -229,12 +230,18 @@ _INTERIOR_ROOMS = {
     "living_room", "bedroom", "kitchen", "dining_room", "office", "bathroom",
     "entrance", "hallway",
 }
+# The 5 MVP atmospheres image-driven Surprise Me may recommend.
+_MVP_ATMOSPHERES = {
+    "warm_modern", "soft_luxury", "japandi_calm", "nordic_warmth", "tropical_escape",
+}
 
 
-async def _classify_interior_room(image_bytes: bytes) -> str:
-    """Return the canonical interior room type so Ayden Decide can furnish/redesign
-    it (Option B: always furnish). Returns "" for exterior/unclear (→ no staging).
-    NOT an empty-vs-furnished judgement — Ayden Decide re-imagines either way."""
+async def _classify_ayden(image_bytes: bytes) -> dict:
+    """ONE gpt-4o pass for Ayden Decide: room type (drives STAGE) + the best-fit
+    atmosphere with confidence + a one-phrase reason (drives image-driven Surprise
+    Me). Reused by both consumers so there is a single vision call. All fields
+    default empty / 'low' on any failure (callers fall back)."""
+    out = {"room": "", "atmosphere": "", "confidence": "low", "reason": ""}
     try:
         b64 = base64.b64encode(image_bytes).decode()
         resp = await openai.chat.completions.create(
@@ -245,28 +252,49 @@ async def _classify_interior_room(image_bytes: bytes) -> str:
                     {"type": "image_url",
                      "image_url": {
                          "url": f"data:image/jpeg;base64,{b64}",
-                         "detail": "low",  # room TYPE only — coarse is enough
+                         "detail": "low",
                      }},
                     {"type": "text", "text": (
-                        "What kind of interior room is this? Reply with EXACTLY one "
-                        "lowercase token, nothing else, from: living_room, bedroom, "
-                        "kitchen, dining_room, office, bathroom, entrance, hallway, "
-                        "other. Use 'entrance' for an entry/foyer with a front door, "
-                        "'hallway' for a corridor, 'other' for an exterior/outdoor "
-                        "or unclear space."
+                        "Analyse this interior. Reply with EXACTLY four fields "
+                        "separated by ' | ', nothing else:\n"
+                        "room_type | recommended_atmosphere | confidence | reason\n"
+                        "- room_type: one of living_room, bedroom, kitchen, "
+                        "dining_room, office, bathroom, entrance, hallway, other.\n"
+                        "- recommended_atmosphere: the ONE best-fitting from: "
+                        "warm_modern (warm walnut/caramel, cosy residential), "
+                        "soft_luxury (marble/brass/velvet, elegant — fits high "
+                        "ceilings, large or refined spaces), japandi_calm (pale "
+                        "wood, minimal, zen — fits simple, bright, uncluttered "
+                        "spaces), nordic_warmth (pale wood, cosy hygge, light), "
+                        "tropical_escape (rattan/teak/greenery — fits garden views "
+                        "or lush, bright spaces). Choose by architecture, light, "
+                        "materials, view and mood — NOT a default.\n"
+                        "- confidence: high, medium or low.\n"
+                        "- reason: a short phrase (max ~8 words).\n"
+                        "Example: living_room | soft_luxury | high | high ceilings, "
+                        "large, elegant proportions"
                     )},
                 ],
             }],
-            max_tokens=8,
+            max_tokens=40,
         )
-        _raw = (resp.choices[0].message.content or "").strip().lower().replace(" ", "_")
-        room = _raw if _raw in _INTERIOR_ROOMS else ""
-        log.info("  [AydenDecideFurnish] raw=%r → room=%r", _raw, room)
-        return room
+        raw = (resp.choices[0].message.content or "").strip()
+        parts = [p.strip().lower() for p in raw.split("|")]
+        if len(parts) >= 1:
+            r = parts[0].replace(" ", "_")
+            out["room"] = r if r in _INTERIOR_ROOMS else ""
+        if len(parts) >= 2:
+            a = parts[1].replace(" ", "_")
+            out["atmosphere"] = a if a in _MVP_ATMOSPHERES else ""
+        if len(parts) >= 3:
+            out["confidence"] = parts[2] if parts[2] in ("high", "medium", "low") else "low"
+        if len(parts) >= 4:
+            out["reason"] = parts[3][:60]
+        log.info("  [AydenVision] raw=%r → %r", raw, out)
     except Exception as exc:
-        log.warning("  [AydenDecideFurnish] classify failed (non-fatal): %s: %s",
+        log.warning("  [AydenVision] classify failed (non-fatal): %s: %s",
                     type(exc).__name__, exc)
-        return ""
+    return out
 
 
 async def _localize_chip_list(chips, ui_locale):
@@ -1062,8 +1090,10 @@ async def get_me_access(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Return {is_admin: bool} for the authenticated user."""
+    _is_admin = await is_admin_role(current_user.user_id)
+    log.info("[Access] /me/access user=%s is_admin=%s", current_user.user_id, _is_admin)
     return {
-        "is_admin": await is_admin_role(current_user.user_id),
+        "is_admin": _is_admin,
     }
 
 
@@ -2450,32 +2480,61 @@ async def generate(
         if _ext_room:
             room_type = _ext_room  # → exterior room DNA injected downstream
 
-    # Ayden Decide STAGE MODE (Option B) — ALWAYS re-imagine the interior as a
-    # fully furnished room (flag AYDEN_DECIDE_FURNISH, default off). Runs on the V1
-    # delegated path with no room resolved (an exterior above would have set
-    # room_type and skipped this). We classify only the room TYPE; the swap to the
-    # furnish contract happens AFTER composition. "" (exterior/unclear) ⇒ preserve.
-    # Flag off ⇒ no call ⇒ byte-identical.
-    _stage_room = ""
-    if (
-        let_ai_decide
-        and not room_type
-        and iteration == 1
+    # Single Ayden vision pass — ONE gpt-4o call shared by two consumers (no
+    # double call): STAGE MODE (room type) + image-driven Surprise Me (atmosphere).
+    # Runs only if at least one is needed & enabled. Flag(s) off ⇒ no call ⇒
+    # byte-identical.
+    _ayden_vision = None
+    _want_stage = (
+        let_ai_decide and not room_type and iteration == 1
         and os.environ.get("AYDEN_DECIDE_FURNISH", "0") == "1"
-    ):
-        log.info("--- Ayden Decide: room classification for staging (B: always furnish) ---")
-        _t_stage = time.monotonic()
-        _stage_room = await _classify_interior_room(image_bytes)
-        log.info("  [AydenDecideFurnish] room=%r in %.2fs",
-                 _stage_room or "(none/exterior → preserve)", time.monotonic() - _t_stage)
+    )
+    _want_surprise_vision = (
+        surprise_me_flag and iteration == 1
+        and os.environ.get("SURPRISE_VISION", "0") == "1"
+    )
+    if _want_stage or _want_surprise_vision:
+        log.info("--- Ayden vision pass (stage=%s surprise=%s) ---",
+                 _want_stage, _want_surprise_vision)
+        _t_v = time.monotonic()
+        _ayden_vision = await _classify_ayden(image_bytes)
+        log.info("  [AydenVision] room=%r atmo=%r conf=%s reason=%r in %.2fs",
+                 _ayden_vision["room"], _ayden_vision["atmosphere"],
+                 _ayden_vision["confidence"], _ayden_vision["reason"],
+                 time.monotonic() - _t_v)
+
+    # STAGE consumes the room type (Option B: always re-imagine; swap happens after
+    # composition; "" exterior/unclear ⇒ preserve).
+    _stage_room = _ayden_vision["room"] if (_want_stage and _ayden_vision) else ""
 
     if surprise_me_flag:
-        log.info("--- Surprise Me: selecting atmosphere for room=%s ---", room_type)
-        selected_atmosphere = surprise_me(
-            room_type=room_type,
-            vision_description=room_description,
-            user_prompt=prompt_en,
-        )
+        # Room for the compat lookup: explicit room if set, else the vision's guess.
+        _room_for_atmo = room_type or ((_ayden_vision or {}).get("room") or "")
+        selected_atmosphere = ""
+        # Image-driven pick (SURPRISE_VISION): use the AI atmosphere only if it is
+        # valid, confident, and not a poor fit for the room (base_compat ≥ 0.45);
+        # otherwise fall back to the curated table. Keeps a safe warm_modern path.
+        if _want_surprise_vision and _ayden_vision and _ayden_vision["atmosphere"]:
+            _ai_atmo = _ayden_vision["atmosphere"]
+            _ai_conf = _ayden_vision["confidence"]
+            _score = dict(rank_atmospheres(_room_for_atmo)).get(_ai_atmo, 0.0)
+            if _ai_conf != "low" and _score >= 0.45:
+                selected_atmosphere = _ai_atmo
+                log.info("[Surprise] room=%s ai_reco=%s conf=%s reason=%r "
+                         "base_compat=%.2f → SELECTED %s",
+                         _room_for_atmo or "(none)", _ai_atmo, _ai_conf,
+                         _ayden_vision["reason"], _score, _ai_atmo)
+            else:
+                log.info("[Surprise] room=%s ai_reco=%s conf=%s base_compat=%.2f → "
+                         "FALLBACK (conf=low or below floor 0.45)",
+                         _room_for_atmo or "(none)", _ai_atmo, _ai_conf, _score)
+        if not selected_atmosphere:
+            selected_atmosphere = surprise_me(
+                room_type=_room_for_atmo,
+                vision_description=room_description,
+                user_prompt=prompt_en,
+            )
+            log.info("[Surprise] table fallback → %s", selected_atmosphere)
         log.info("  selected atmosphere: %s", selected_atmosphere)
         style_label = selected_atmosphere.replace("_", " ").title()
 

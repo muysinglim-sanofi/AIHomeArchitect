@@ -102,12 +102,18 @@ async def check_restrictions(
     # ATMOSPHERE → could pick a premium style). AYDEN_DECIDE_FREE=0 restores the
     # old lock (instant rollback).
     _ayden_decide_free = os.environ.get("AYDEN_DECIDE_FREE", "1") != "0"
-    # Free users cannot delegate the ATMOSPHERE (surprise_me); let_ai_decide is
-    # allowed when the flag is on. Without a gate, delegation could pass an empty
-    # room_type_id and slip past the membership test — so for a free let_ai_decide
-    # we deliberately SKIP the room check (the room is delegated) but keep the
-    # atmosphere check.
-    if surprise_me or (let_ai_decide and not _ayden_decide_free):
+    # AYDEN_SIGNATURE_FREE (default off): make Ayden Signature (surprise_me) FREE
+    # for everyone AND let its AI pick ANY atmosphere (incl. premium ones). The
+    # lock then lives ONLY on EXPLICIT atmosphere choice (the membership test
+    # below) — Signature becomes a free teaser/funnel: a free user tastes a premium
+    # style via the AI, then pays to pick that style directly. AYDEN_SIGNATURE_FREE=0
+    # restores the old lock (surprise_me premium).
+    _signature_free = os.environ.get("AYDEN_SIGNATURE_FREE", "0") == "1"
+    # A free user may not DELEGATE the atmosphere via surprise_me UNLESS Signature
+    # is free; let_ai_decide (room only) is allowed when its flag is on. Without a
+    # gate, delegation could pass an empty room_type_id and slip past the room test
+    # — so for a free let_ai_decide we SKIP the room check (room is delegated).
+    if (surprise_me and not _signature_free) or (let_ai_decide and not _ayden_decide_free):
         log.info(
             "[Wave 5.17d] free-tier blocked — user=%s reason=delegated_choice "
             "(let_ai_decide=%s surprise_me=%s)",
@@ -150,7 +156,10 @@ async def check_restrictions(
             },
         )
 
-    if atmosphere_id not in FREE_ATMOSPHERES:
+    # Skip the atmosphere lock when Ayden Signature is free + delegated: the AI
+    # picks the atmosphere, intentionally free (funnel). The lock stays for an
+    # EXPLICIT atmosphere choice (surprise_me=False).
+    if not (surprise_me and _signature_free) and atmosphere_id not in FREE_ATMOSPHERES:
         log.info(
             "[Wave 5.17d] free-tier blocked — user=%s reason=atmosphere "
             "received=%r allowed=%s",
