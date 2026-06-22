@@ -297,6 +297,25 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
     return out
 
 
+# SPECIFIC_ROOM_STAGE — interior rooms allowed to reuse the STAGE contract on a
+# Specific (explicit-room) V1. Whitelist = the interior keys of
+# preservation._STAGE_ITEMS; exteriors (terrace/balcony/facade/pool/driveway)
+# are simply absent → skip → never _STAGE_ITEMS_DEFAULT.
+_SPECIFIC_STAGE_ROOMS = frozenset({
+    "living_room", "bedroom", "dining_room", "office",
+    "entrance", "hallway", "kitchen", "bathroom",
+})
+# Form display labels that don't normalise directly to a _STAGE_ITEMS key.
+# CONFIRMED real labels only (frontend en.dart) — no speculative entries.
+#   "Master Bedroom" → master_bedroom ; "Home Office" → home_office ;
+#   "Entrance Hall" → entrance_hall
+_SPECIFIC_STAGE_MAP = {
+    "master_bedroom": "bedroom",
+    "home_office": "office",
+    "entrance_hall": "entrance",
+}
+
+
 async def _localize_chip_list(chips, ui_locale):
     """Phase 5b — localize AI suggestion chips to the UI locale (FR/KM).
 
@@ -2597,6 +2616,22 @@ async def generate(
                  "— reactivates per-atmosphere DNA (furniture/TV anchor/decor)",
                  _stage_room, room_type or "(none)")
         room_type = _stage_room
+
+    # SPECIFIC_ROOM_STAGE (2026-06-22, flag-gated, MINIMAL) — let a Specific
+    # (explicit-room) V1 reuse the existing STAGE contract. Additive + guarded so
+    # Ayden Decide stays byte-identical: `not let_ai_decide` excludes the Decide
+    # path by construction, `not _stage_room` means Decide didn't already set it,
+    # `iteration == 1` is V1-only (no switch/edit/continue). Sets `_stage_room`
+    # only (room_type untouched → zero V2+ effect). Whitelist → exteriors skip.
+    if (not _stage_room and not let_ai_decide and iteration == 1 and room_type
+            and os.environ.get("SPECIFIC_ROOM_STAGE", "0") == "1"):
+        _sk = "_".join(room_type.strip().lower().split())
+        _sk = _SPECIFIC_STAGE_MAP.get(_sk, _sk)  # form label → _STAGE_ITEMS key (confirmed labels only)
+        if _sk in _SPECIFIC_STAGE_ROOMS:
+            _stage_room = _sk
+            log.info("[SpecificStage] enabled=true room=%r stage_room=%s", room_type, _sk)
+        else:
+            log.info("[SpecificStage] skipped reason=unsupported_room room=%r", room_type)
 
     if surprise_me_flag:
         # Room for the compat lookup: explicit room if set, else the vision's guess.
