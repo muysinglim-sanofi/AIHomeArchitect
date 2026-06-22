@@ -512,8 +512,26 @@ _CUSTOMIZATION_TRANSFORMATIONS = frozenset({
 def is_customization_transformation(ttype: TransformationType) -> bool:
     """True if a refinement is a real spatial customization (vs atmosphere-
     only). Conservative: UNKNOWN → treated as customization so we never
-    risk losing user intent we can't classify."""
+    risk losing user intent we can't classify.
+
+    NOTE: used ONLY by the legacy history scan (detect_history_customizations).
+    The β lineage_customized flag uses is_spatial_edit() instead (UNKNOWN
+    excluded — see below)."""
     return ttype in _CUSTOMIZATION_TRANSFORMATIONS
+
+
+# β (2026-06-22) — "spatial edit" for the lineage_customized flag. SAME set as
+# _CUSTOMIZATION_TRANSFORMATIONS but **without UNKNOWN**: the flag must be set on
+# a POSITIVELY-identified spatial edit, never assumed from an unclassified
+# prompt. (UNKNOWN is tracked via telemetry instead — see main.py [LineageFlag].)
+_SPATIAL_TRANSFORMATIONS = _CUSTOMIZATION_TRANSFORMATIONS - {TransformationType.UNKNOWN}
+
+
+def is_spatial_edit(ttype: TransformationType) -> bool:
+    """True if this generation physically changes the space (object / layout /
+    functional / structural). Atmosphere switch, style refinement, first vision,
+    and UNKNOWN are NOT spatial. Drives VersionRecord.lineage_customized."""
+    return ttype in _SPATIAL_TRANSFORMATIONS
 
 
 def _iter_user_messages(history: Optional[list]) -> list[str]:
@@ -558,22 +576,31 @@ def resolve_switch_strategy(
     current_atmosphere_id: str,
     iteration: int,
     explicit_prev_id: str = "",
+    explicit_customized: Optional[bool] = None,
 ) -> tuple[_SwitchStrategy, str, bool]:
     """Single resolver. Returns (strategy, prev_atmosphere_id, has_customizations).
 
     INCREMENTAL          — not an atmosphere switch (same atmosphere or V1)
-    REBOOT_FRESH         — atmosphere switch AND no customizations in history
-    REBOOT_CUSTOMIZED    — atmosphere switch AND at least one customization in history
+    REBOOT_FRESH         — atmosphere switch AND no customizations
+    REBOOT_CUSTOMIZED    — atmosphere switch AND at least one customization
 
     `explicit_prev_id` (version-ledger atmosphere) is the authoritative previous
     atmosphere when supplied — see _detect_atmosphere_switch.
+
+    `explicit_customized` (β — the SOURCE version's lineage_customized flag) is
+    the authoritative customization verdict when not None. Only when it is None
+    (pre-β ledger / source record not found) do we fall back to the legacy
+    chat-history scan, which never silently loses user work.
     """
     is_switch, prev_id = _detect_atmosphere_switch(
         history, current_atmosphere_id, iteration, explicit_prev_id,
     )
     if not is_switch:
         return _SwitchStrategy.INCREMENTAL, "", False
-    has_custom = detect_history_customizations(history)
+    has_custom = (
+        explicit_customized if explicit_customized is not None
+        else detect_history_customizations(history)
+    )
     if has_custom:
         return _SwitchStrategy.REBOOT_CUSTOMIZED, prev_id, True
     return _SwitchStrategy.REBOOT_FRESH, prev_id, False
@@ -927,6 +954,7 @@ def compose_generation_prompt(
     generation_mode: str = "preserve",  # Wave 5.5.14c — bimodal intent. Forwarded into _build_style_block / _v1_compose. No-op unless BIMODAL_ENABLED env var truthy.
     edit_mode: "EditMode | None" = None,  # Wave 5.13d Phase 1 — single source of truth for edit_mode (from main.py classification + elevation).
     prev_atmosphere_id: str = "",  # (2026-06-22) authoritative previous atmosphere (from the version ledger); makes switch detection language/phrasing-proof. See resolve_switch_strategy.
+    lineage_customized: "Optional[bool]" = None,  # β (2026-06-22) authoritative customization verdict (SOURCE version's lineage_customized flag); None → legacy history scan. See resolve_switch_strategy.
 ) -> str:
     """
     Drop-in replacement for composer.py::compose_generation_prompt.
@@ -1086,10 +1114,12 @@ def compose_generation_prompt(
     # used below to filter refinement_memory (REBOOT_FRESH drops it all;
     # REBOOT_CUSTOMIZED keeps only customization items). main.py uses the
     # same resolver to decide whether to override source_mode to ORIGINAL.
-    # RHS evaluates the param (ledger-derived prev) first, then the name is
-    # rebound to the RESOLVED prev for all downstream logging / delegation.
+    # RHS evaluates the params (ledger-derived prev + β customization verdict)
+    # first, then the name is rebound to the RESOLVED prev for downstream use.
     switch_strategy, prev_atmosphere_id, _has_customizations = (
-        resolve_switch_strategy(history, atmosphere_id, iteration, prev_atmosphere_id)
+        resolve_switch_strategy(
+            history, atmosphere_id, iteration, prev_atmosphere_id, lineage_customized,
+        )
     )
     is_atmosphere_switch = switch_strategy != _SwitchStrategy.INCREMENTAL
     if is_atmosphere_switch:

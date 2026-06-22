@@ -146,11 +146,33 @@ _STYLE_REFINEMENT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# (2026-06-22) Concrete addable objects — used by the article-LESS add branch
+# below. Users naturally drop the article ("add tv", "add flowers", "add purple
+# flower", "add lamp", "add sofa"); the article-required branch missed these →
+# they fell to UNKNOWN. Anchoring on a curated furniture/decor noun list keeps
+# this OBJECT_EDIT-only: abstract qualities ("add warmth", "add light", "add
+# depth", "add contrast") are NOT in the list → still classify as before
+# (STYLE_REFINEMENT / UNKNOWN). Scope: classifier only — β / lineage rules / the
+# UNKNOWN policy are untouched.
+_ADDABLE_OBJECT = (
+    r"(?:tvs?|televisions?|screens?|sofas?|couch(?:es)?|armchairs?|chairs?|"
+    r"tables?|desks?|beds?|nightstands?|dressers?|wardrobes?|cabinets?|"
+    r"bookshel(?:f|ves)|bookcases?|shel(?:f|ves)|consoles?|sideboards?|"
+    r"ottomans?|poufs?|stools?|benches?|rugs?|carpets?|lamps?|chandeliers?|"
+    r"pendants?|sconces?|mirrors?|artworks?|paintings?|posters?|prints?|"
+    r"frames?|plants?|flowers?|vases?|cushions?|pillows?|throws?|curtains?|"
+    r"blinds?|clocks?|candles?|baskets?|fireplaces?)"
+)
+
 _OBJECT_EDIT_RE = re.compile(
     r"\b(add\s+(a|an|the|one|some)\s+\w+|remove\s+(the|a|an)\s+\w+|"
     r"change\s+the\s+\w+|replace\s+the\s+\w+|swap\s+(the|out\s+the)\s+\w+|"
     r"put\s+(a|an|the|one)\s+\w+|move\s+the\s+\w+\s+(to|from)|"
     r"take\s+(out|away)\s+the|get\s+rid\s+of\s+the|"
+    # Article-LESS natural add forms, anchored on a concrete object noun
+    # (≤3 modifier words between the verb and the noun: "add purple flower",
+    # "add a small wooden table", "put tv", "include some plants").
+    rf"(?:add|put|place|include)\s+(?:\w+\s+){{0,3}}{_ADDABLE_OBJECT}|"
     r"ajoute[rz]?\s+(un|une|le|la|les)|enl[eè]ve[rz]?\s+(le|la|les|un|une)|"
     r"retire[rz]?\s+(le|la|les)|remplace[rz]?\s+(le|la|les)|"
     r"mets?\s+(un|une|le|la)|déplace[rz]?\s+(le|la|les))\b",

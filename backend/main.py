@@ -362,8 +362,8 @@ from prompt_engine.architectural_memory import get_memory_reference
 from version_state import (
     VersionRecord,
     parse_versions,
-    latest_atmosphere,
-    atmosphere_for_version,
+    record_for_version,
+    latest_record,
     serialize_versions,
     version_to_dict,
     resolve_source,
@@ -442,6 +442,7 @@ if _COMPOSER_V2_ACTIVE:
     from prompt_engine.composer_v2 import (  # noqa: F811
         compose_generation_prompt,
         resolve_switch_strategy as _v2_resolve_switch_strategy,
+        is_spatial_edit as _is_spatial_edit,
     )
     logging.getLogger("aih").info(
         "[ComposerV2] feature flag ACTIVE — using composer_v2 for /generate"
@@ -2016,35 +2017,58 @@ async def generate(
     # source. Legacy clients (no source_mode/versions) get the V2+ LATEST default.
     _versions = parse_versions(versions)
 
-    # (2026-06-22) SINGLE SOURCE OF TRUTH for the PREVIOUS atmosphere on a switch
-    # (Option C): the atmosphere of the vision this generation is edited FROM —
-    # the RESOLVED SOURCE, not the most-recently-appended record. The ledger
-    # (client round-tripped) stores the resolved atmosphere per version, so this
-    # is language/phrasing-proof (the chat-text regex fails for AI-chosen
-    # atmospheres — Ayden Signature greeting = "AI's choice").
-    #   • client pinned a specific prior vision (branch / continue-from-vision)
-    #     → prev = that version's atmosphere (correct under branching, where the
-    #       tail ≠ the source);
-    #   • linear LATEST switch (no pin) → prev = the chain tail (latest_atmosphere);
-    #   • V1 / legacy clients with no ledger → "" → resolver falls back to the
-    #     history walk (kept ONLY as a legacy filet; telemetry below tells us if
-    #     any real session still needs it, so we can delete the regex later).
-    # Fed to BOTH switch evaluations (source-mode override below + composer build)
-    # so a switch after an AI-chosen V1 is seen as REBOOT_FRESH (→ V1-source pin +
-    # SWITCH_REDESIGN_PILOT), not INCREMENTAL.
+    # (2026-06-22) ONE source-record identification, shared by:
+    #   • axis C — previous atmosphere (the source vision's atmosphere), and
+    #   • axis β — lineage_customized (the source vision's cumulative flag).
+    # The "source record" is the vision this generation is edited FROM: a
+    # client-pinned prior vision (branch / continue-from-vision) by id, else the
+    # linear chain tail (LATEST). No lineage walk, no parallel source logic.
     _src_vid = (source_version_id or "").strip()
-    _prev_atmo_label = atmosphere_for_version(_versions, _src_vid) if _src_vid else ""
-    _prev_basis = "source-version" if _prev_atmo_label else ""
-    if not _prev_atmo_label:
-        _prev_atmo_label = latest_atmosphere(_versions)
-        _prev_basis = "linear-tail" if _prev_atmo_label else "none"
-    _ledger_prev_atmo_id = label_to_atmosphere_id(_prev_atmo_label) if _prev_atmo_label else ""
+    _src_record = (record_for_version(_versions, _src_vid) if _src_vid
+                   else latest_record(_versions))
+    _src_basis = ("source-version" if (_src_vid and _src_record)
+                  else "linear-tail" if _src_record else "none")
+
+    # axis C — previous atmosphere (language/phrasing-proof; chat-text regex
+    # fails for AI-chosen atmospheres). Fed to BOTH switch evaluations so a
+    # switch after an AI-chosen V1 is seen as REBOOT_FRESH, not INCREMENTAL.
+    _ledger_prev_atmo_id = (
+        label_to_atmosphere_id(_src_record.atmosphere)
+        if (_src_record and _src_record.atmosphere) else ""
+    )
+
+    # axis β — the SOURCE vision's lineage_customized verdict (read value).
+    # None when: no ledger, source not found, or a pre-β record (field unset) →
+    # resolver falls back to the legacy history scan (never silently FRESH).
+    # The READ is flag-gated (LINEAGE_CUSTOM_FLAG); the WRITE below always runs
+    # so ledgers populate the field for a smooth migration.
+    # Default ON (2026-06-22) — device-validated A/B/D (pristine→FRESH, real
+    # spatial edit→CUSTOMIZED, sibling branch isolated). Set LINEAGE_CUSTOM_FLAG=0
+    # as a kill-switch (→ legacy detect_history_customizations). WRITE always runs.
+    _lineage_flag_on = os.environ.get("LINEAGE_CUSTOM_FLAG", "1") == "1"
+    _src_lineage_customized = (
+        _src_record.lineage_customized
+        if (_src_record is not None and _src_record.lineage_customized is not None)
+        else None
+    )
+    _explicit_customized = _src_lineage_customized if _lineage_flag_on else None
     if iteration > 1:
+        _cd_basis = ("lineage-flag" if _explicit_customized is not None
+                     else "legacy-history")
+        _cd_reason = ("" if _explicit_customized is not None
+                      else (" reason=flag_off" if not _lineage_flag_on
+                            else " reason=no_ledger" if not _versions
+                            else " reason=source_not_found" if _src_record is None
+                            else " reason=missing_lineage_field"))
         log.info(
-            "[SwitchPrev] iteration=%d basis=%s src_vid=%s ledger_size=%d → prev_atmo=%s%s",
-            iteration, _prev_basis, _src_vid or "(none)", len(_versions),
+            "[SwitchPrev] iteration=%d basis=%s src_vid=%s ledger_size=%d → prev_atmo=%s",
+            iteration, _src_basis, _src_vid or "(none)", len(_versions),
             _ledger_prev_atmo_id or "(none)",
-            "  (NO LEDGER — will fall back to chat-text parse)" if not _ledger_prev_atmo_id else "",
+        )
+        log.info(
+            "[CustomDetect] basis=%s%s src=%s lineage_customized=%s",
+            _cd_basis, _cd_reason, (_src_record.version_id if _src_record else "(none)"),
+            ("(legacy)" if _explicit_customized is None else _explicit_customized),
         )
 
     # ── Wave 5.3 — atmosphere-switch source-mode override ────────────────────
@@ -2074,11 +2098,12 @@ async def generate(
         _switch_atmos_id = label_to_atmosphere_id(style_label)
         _strategy, _prev_id, _has_custom = _v2_resolve_switch_strategy(
             _history_list_for_switch, _switch_atmos_id, iteration,
-            _ledger_prev_atmo_id,
+            _ledger_prev_atmo_id, _explicit_customized,
         )
         log.info(
-            "[SwitchDetect] iteration=%d current=%s ledger_prev=%s → strategy=%s prev=%s",
+            "[SwitchDetect] iteration=%d current=%s ledger_prev=%s customized=%s → strategy=%s prev=%s",
             iteration, _switch_atmos_id, _ledger_prev_atmo_id or "(none)",
+            ("(legacy)" if _explicit_customized is None else _explicit_customized),
             _strategy.value, _prev_id or "(none)",
         )
         if _strategy.value == "REBOOT_FRESH":
@@ -2745,6 +2770,7 @@ async def generate(
         generation_mode=generation_mode,  # Wave 5.5.14c — no-op unless BIMODAL_ENABLED=1
         edit_mode=edit_mode,  # Wave 5.13d Phase 1 — single source of truth (main.py classified + elevated)
         prev_atmosphere_id=_ledger_prev_atmo_id,  # (2026-06-22) authoritative prev → switch detection inside the composer matches main.py's
+        lineage_customized=_explicit_customized,  # β — authoritative customization verdict (source's flag; None → legacy scan)
     )
     # Ayden Decide STAGE MODE — swap the preserve contract for the furnish
     # contract so an empty room is reliably staged (flag-gated; detected above).
@@ -3569,6 +3595,31 @@ async def generate(
     log.info("  ai_message: %s", ai_message[:100])
     log.info("  suggestions: %s", suggestions)
 
+    # ── β (2026-06-22): cumulative lineage_customized for this new version ───
+    # new.lineage_customized = (source's flag) OR (this generation is spatial).
+    # Computed at WRITE so the read-time decision is O(1) (no lineage walk). The
+    # WRITE always runs (independent of LINEAGE_CUSTOM_FLAG) so ledgers populate
+    # the field for a smooth migration; only the READ above is flag-gated.
+    # Under the frozen v1 composer (no switch awareness) we write None.
+    if _COMPOSER_V2_ACTIVE:
+        _this_spatial = _is_spatial_edit(transformation_type)
+        _base_customized = (
+            _src_record.lineage_customized
+            if (_src_record is not None and _src_record.lineage_customized is not None)
+            else False
+        )
+        _new_lineage_customized = bool(_base_customized or _this_spatial)
+        log.info(
+            "[LineageFlag] iteration=%d transformation=%s this_spatial=%s "
+            "src=%s src_lineage=%s → lineage_customized=%s",
+            iteration, getattr(transformation_type, "value", transformation_type),
+            _this_spatial, (_src_record.version_id if _src_record else "(none)"),
+            (_src_record.lineage_customized if _src_record else "(none)"),
+            _new_lineage_customized,
+        )
+    else:
+        _new_lineage_customized = None  # v1 path: β not applicable
+
     # ── Wave 4.7.3: append this vision to the version ledger (Task 2) ────────
     # Lightweight, client-persisted (same round-trip pattern as history /
     # structural_identity). The client echoes `versions` back so SPECIFIC_VERSION
@@ -3584,6 +3635,7 @@ async def generate(
         user_request=prompt[:240],
         structural_permission=structural_permission,
         structural_identity_token=structural_identity_token,
+        lineage_customized=_new_lineage_customized,
     )
     _updated_versions = _versions + [_new_version]
     log.info(

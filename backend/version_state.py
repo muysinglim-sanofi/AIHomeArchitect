@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, asdict, fields
+from typing import Optional
 
 # ── Source modes ──────────────────────────────────────────────────────────────
 
@@ -46,6 +47,14 @@ class VersionRecord:
     user_request: str
     structural_permission: bool
     structural_identity_token: str
+    # β (2026-06-22) — cumulative lineage state for REBOOT_FRESH vs REBOOT_CUSTOMIZED.
+    # True  = this version's lineage contains ≥1 spatial edit (object/layout/
+    #         functional/structural) → an atmosphere switch must preserve it.
+    # False = pristine lineage (only first-vision + switches + refinements).
+    # None  = pre-β record (field never written) → readers MUST fall back to the
+    #         legacy history scan; NEVER coerce None→False (would create unsafe
+    #         REBOOT_FRESH that re-sources V1 and drops the user's spatial work).
+    lineage_customized: Optional[bool] = None
 
 
 def new_version_id() -> str:
@@ -81,58 +90,57 @@ def parse_versions(raw: str) -> list[VersionRecord]:
                 user_request=str(c.get("user_request") or ""),
                 structural_permission=bool(c.get("structural_permission") or False),
                 structural_identity_token=str(c.get("structural_identity_token") or ""),
+                # β — strict tri-state: keep True/False as-is, anything else
+                # (absent / null / malformed) → None (= pre-β, legacy fallback).
+                # NEVER coerce to False.
+                lineage_customized=(c.get("lineage_customized")
+                                    if isinstance(c.get("lineage_customized"), bool)
+                                    else None),
             ))
         except (ValueError, TypeError):
             continue
     return out
 
 
-def latest_atmosphere(versions: list[VersionRecord]) -> str:
-    """The most-recently-recorded version's atmosphere label (reversed scan,
-    skipping empties), or '' if the ledger has none.
+# ── Source-record identification (SINGLE definition; shared by the previous-
+# atmosphere detection — axis C — and the lineage_customized flag — axis β) ────
+# The "source record" is the version a new generation is edited FROM:
+#   • a client-pinned prior vision (branch / continue-from-vision) → by id,
+#   • else the linear chain tail (LATEST).
+# Both axes call these; no parallel source logic, no lineage walk.
 
-    This is the LINEAR-chain case of `previous_atmosphere` (see below): on a
-    straight V1→V2→V3 chain the tail IS the source being edited. For branching
-    (continue-from-an-older-vision) the source is NOT the tail — use
-    `atmosphere_for_version` keyed on the requested source_version_id instead.
+def record_for_version(
+    versions: list[VersionRecord], version_id: str
+) -> Optional[VersionRecord]:
+    """The record whose version_id == `version_id`, or None if absent/unknown."""
+    vid = (version_id or "").strip()
+    if not vid:
+        return None
+    for v in versions:
+        if v.version_id == vid:
+            return v
+    return None
 
-    Why structural (not chat-text): the ledger always stores the RESOLVED
-    atmosphere (VersionRecord.atmosphere = style_label), so it is language-proof
-    and phrasing-proof — unlike the regex parse, which fails for AI-chosen
-    atmospheres (Ayden Signature: greeting = "AI's choice", result message
-    conversational)."""
+
+def latest_record(versions: list[VersionRecord]) -> Optional[VersionRecord]:
+    """The most-recently-recorded version that actually produced an image
+    (reversed scan), or None. This is the LATEST/linear source."""
     for v in reversed(versions):
-        if v.atmosphere and v.atmosphere.strip():
-            return v.atmosphere.strip()
-    return ""
+        if v.generated_image_url:
+            return v
+    return None
+
+
+def latest_atmosphere(versions: list[VersionRecord]) -> str:
+    """Convenience: atmosphere label of the linear chain tail (or '')."""
+    r = latest_record(versions)
+    return (r.atmosphere or "").strip() if r else ""
 
 
 def atmosphere_for_version(versions: list[VersionRecord], version_id: str) -> str:
-    """Atmosphere label of the record whose version_id == `version_id`, or ''
-    if absent / not found.
-
-    This is the SINGLE SOURCE OF TRUTH for "previous atmosphere" on a switch:
-    the previous atmosphere is the atmosphere of the vision the new generation
-    is edited FROM (the resolved source), NOT the most-recently-appended record.
-    The two coincide on a linear chain but diverge under branching:
-
-        V1(WM) → V2(Japandi) → V3(SoftLuxury)
-        user "continue from V1" then switch → source = V1
-            correct prev = Warm Modern (V1's atmosphere)
-            tail would wrongly say Soft Luxury (V3)
-
-    Caller passes the request's source_version_id (set only when the client
-    pins a specific prior vision); on a linear LATEST switch this is empty and
-    the caller falls back to latest_atmosphere(). VersionRecord already carries
-    source_version_id_used (parent link), so deeper lineage walks are possible
-    later without a schema change — not needed for direct-source prev."""
-    vid = (version_id or "").strip()
-    if not vid:
-        return ""
-    for v in versions:
-        if v.version_id == vid:
-            return (v.atmosphere or "").strip()
-    return ""
+    """Convenience: atmosphere label of a specific version (or '')."""
+    r = record_for_version(versions, version_id)
+    return (r.atmosphere or "").strip() if r else ""
 
 
 def serialize_versions(versions: list[VersionRecord]) -> str:
