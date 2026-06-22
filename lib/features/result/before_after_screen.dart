@@ -1277,11 +1277,12 @@ class _BeforeAfterScreenState extends ConsumerState<BeforeAfterScreen>
                   final isAdmin = ref.watch(accessProvider);
                   final hasPromo =
                       ref.watch(meStatusProvider)?.hasActivePromo ?? false;
-                  // aydenRefineFree: an atmosphere switch here is an in-session
-                  // iteration the backend now allows (quota-capped), so don't
-                  // premium-lock it (lockstep with backend AYDEN_REFINE_FREE).
-                  final locked = !FeatureFlags.aydenRefineFree
-                      && !isPremium && !isAdmin && !hasPromo
+                  // Switching atmosphere here is an EXPLICIT atmosphere choice →
+                  // premium atmospheres stay locked for free users (the funnel);
+                  // free atmospheres + admin/promo bypass. (A custom refine keeps
+                  // the same atmosphere and has no lock — only this explicit
+                  // switch is gated.)
+                  final locked = !isPremium && !isAdmin && !hasPromo
                       && !kFreeAtmosphereIds.contains(a.id);
                   final onTap = locked
                       ? () => _openCarouselPaywall(context, 'atmosphere')
