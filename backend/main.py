@@ -2518,6 +2518,22 @@ async def generate(
     # composition; "" exterior/unclear ⇒ preserve).
     _stage_room = _ayden_vision["room"] if (_want_stage and _ayden_vision) else ""
 
+    # PRIORITY FIX (flag AYDEN_DECIDE_PROPAGATE_ROOM) — propagate the DETECTED
+    # interior room so it becomes the official room_type. This reactivates the
+    # EXISTING per-atmosphere DNA (build_dna_room_context → furniture_language +
+    # TV anchor + room_specific constraints) for the V1 generation AND, via the
+    # payload round-trip, for every V2+ switch (which inherits the persisted
+    # room). Before: Ayden Decide kept room_type="" → DNA dropped → weak
+    # atmosphere + drifting TV. The composer's _normalise_room maps the id
+    # (e.g. "living_room") to the DNA key. Default ON (proven perf-neutral,
+    # 2026-06-22 bench: room=living_room, dna_room_context 374/418, switches
+    # inherit); set AYDEN_DECIDE_PROPAGATE_ROOM=0 as a kill-switch.
+    if _stage_room and os.environ.get("AYDEN_DECIDE_PROPAGATE_ROOM", "1") == "1":
+        log.info("[AydenDecide] propagate detected room → room_type=%r (was %r) "
+                 "— reactivates per-atmosphere DNA (furniture/TV anchor/decor)",
+                 _stage_room, room_type or "(none)")
+        room_type = _stage_room
+
     if surprise_me_flag:
         # Room for the compat lookup: explicit room if set, else the vision's guess.
         _room_for_atmo = room_type or ((_ayden_vision or {}).get("room") or "")
@@ -3604,6 +3620,7 @@ async def generate(
         len(design_prompt), profile.compact_prompts,
         request_id,
     )
+    log.info("[AydenDecide] payload room_type=%r (returned to client → switches inherit)", room_type)
     log.info("=== /generate SUCCESS ===  request_id=%s", request_id)
     # #4 — cache the SUCCESS payload so a same-key replay / concurrent duplicate
     # returns it instead of launching a 2nd generation (failures are never
