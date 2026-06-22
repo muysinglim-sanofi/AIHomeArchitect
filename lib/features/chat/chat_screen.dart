@@ -963,6 +963,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
     setState(() {
       _generationSourceUrl = afterUrl;
+      // P0 fix — continue the edit IN the clicked vision's atmosphere, not the
+      // session's last/latest style. Editing V1 (Warm Modern) must stay Warm
+      // Modern, never inherit the most recent switch (the reported "Vision 4 ·
+      // Soft Luxury (FROM Vision 1)" bug). styleLabel is "<Atmosphere> · Vision N".
+      final visionStyle = result.styleLabel.split('·').first.trim();
+      if (visionStyle.isNotEmpty) _currentStyle = visionStyle;
       // BUG A fix — pin the chosen vision's version_id so the next /generate
       // sends source_mode=SPECIFIC_VERSION and the backend truly rebranches
       // (before_image_url alone is ignored by resolve_source). Null if the
