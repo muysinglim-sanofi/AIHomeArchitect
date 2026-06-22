@@ -1606,6 +1606,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         if (afterUrl != null && afterUrl.isNotEmpty) {
           sessionNotifier.updateLatestPreview(sessionIdForLifecycle, afterUrl);
         }
+        // ledger_size=0 fix (2026-06-22) — a generation that completes while the
+        // chat is unmounted (e.g. an auto-gen V1 finishing after the user moved
+        // to the reveal) must STILL adopt + persist the protocol tokens. The
+        // server is stateless and the DB doesn't store the ledger/identity, so
+        // without this the version ledger AND structural_identity are lost → the
+        // next generation sends an empty ledger (ledger_size=0) and no
+        // architectural anchor. Safe off-screen: no setState/ref — direct field
+        // writes + _persistSession() (which uses _persistence, not ref). The
+        // snapshot is restored on the next open/reconcile, so the recovered
+        // tokens reach the following /generate.
+        final returnedVersions = result['versions'] as String?;
+        final returnedIdentity = result['structural_identity'] as String?;
+        final returnedRoom = (result['room_type'] as String?)?.trim() ?? '';
+        if (returnedVersions != null && returnedVersions.isNotEmpty) {
+          _versions = returnedVersions;
+        }
+        if (returnedIdentity != null && returnedIdentity.isNotEmpty) {
+          _structuralIdentity = returnedIdentity;
+        }
+        if (returnedRoom.isNotEmpty && _currentRoomType.trim().isEmpty) {
+          _currentRoomType = RoomTypeImages.enLabelForId(returnedRoom) ?? returnedRoom;
+        }
+        if (newCount > _iterationCount) {
+          _iterationCount = newCount;
+        }
+        _persistSession();
         // Group 1 — suppress the "ready" badge/notification when the user is
         // currently viewing a (re-opened) instance of THIS session: its
         // reconciliation poll renders the result inline, so a cross-screen
