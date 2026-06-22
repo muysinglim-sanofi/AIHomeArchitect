@@ -431,11 +431,17 @@ def _detect_atmosphere_switch(
     history: Optional[list],
     current_atmosphere_id: str,
     iteration: int,
+    explicit_prev_id: str = "",
 ) -> tuple[bool, str]:
-    """Return (is_switch, prev_atmosphere_id)."""
+    """Return (is_switch, prev_atmosphere_id).
+
+    `explicit_prev_id` (when provided by the caller — derived from the version
+    ledger's most-recent atmosphere) is AUTHORITATIVE: structured, language-proof
+    and phrasing-proof, so it beats the fragile chat-text parse. Falls back to
+    the history walk when empty (legacy clients / no ledger)."""
     if iteration <= 1:
         return False, ""
-    prev_id = _previous_atmosphere_id_from_history(history)
+    prev_id = (explicit_prev_id or "").strip() or _previous_atmosphere_id_from_history(history)
     if prev_id and prev_id != current_atmosphere_id:
         return True, prev_id
     return False, ""
@@ -551,15 +557,19 @@ def resolve_switch_strategy(
     history: Optional[list],
     current_atmosphere_id: str,
     iteration: int,
+    explicit_prev_id: str = "",
 ) -> tuple[_SwitchStrategy, str, bool]:
     """Single resolver. Returns (strategy, prev_atmosphere_id, has_customizations).
 
     INCREMENTAL          — not an atmosphere switch (same atmosphere or V1)
     REBOOT_FRESH         — atmosphere switch AND no customizations in history
     REBOOT_CUSTOMIZED    — atmosphere switch AND at least one customization in history
+
+    `explicit_prev_id` (version-ledger atmosphere) is the authoritative previous
+    atmosphere when supplied — see _detect_atmosphere_switch.
     """
     is_switch, prev_id = _detect_atmosphere_switch(
-        history, current_atmosphere_id, iteration,
+        history, current_atmosphere_id, iteration, explicit_prev_id,
     )
     if not is_switch:
         return _SwitchStrategy.INCREMENTAL, "", False
@@ -916,6 +926,7 @@ def compose_generation_prompt(
     authorized_user_changes: str = "",
     generation_mode: str = "preserve",  # Wave 5.5.14c — bimodal intent. Forwarded into _build_style_block / _v1_compose. No-op unless BIMODAL_ENABLED env var truthy.
     edit_mode: "EditMode | None" = None,  # Wave 5.13d Phase 1 — single source of truth for edit_mode (from main.py classification + elevation).
+    prev_atmosphere_id: str = "",  # (2026-06-22) authoritative previous atmosphere (from the version ledger); makes switch detection language/phrasing-proof. See resolve_switch_strategy.
 ) -> str:
     """
     Drop-in replacement for composer.py::compose_generation_prompt.
@@ -1075,8 +1086,10 @@ def compose_generation_prompt(
     # used below to filter refinement_memory (REBOOT_FRESH drops it all;
     # REBOOT_CUSTOMIZED keeps only customization items). main.py uses the
     # same resolver to decide whether to override source_mode to ORIGINAL.
+    # RHS evaluates the param (ledger-derived prev) first, then the name is
+    # rebound to the RESOLVED prev for all downstream logging / delegation.
     switch_strategy, prev_atmosphere_id, _has_customizations = (
-        resolve_switch_strategy(history, atmosphere_id, iteration)
+        resolve_switch_strategy(history, atmosphere_id, iteration, prev_atmosphere_id)
     )
     is_atmosphere_switch = switch_strategy != _SwitchStrategy.INCREMENTAL
     if is_atmosphere_switch:
@@ -1154,7 +1167,11 @@ def compose_generation_prompt(
         # delegation above which never sets this). Read the flag here and forward
         # it to composer.py Path D, so the switch redesigns furniture in place
         # while real V1 stays byte-identical.
-        _redesign = os.environ.get("SWITCH_REDESIGN_PILOT", "0") == "1"
+        # Default ON (2026-06-22) — validated on device: Japandi/Soft Luxury now
+        # read as distinct STYLES (hero-furnishing R1+R3), not recolors, with
+        # walls=0 and no furniture displacement. Set SWITCH_REDESIGN_PILOT=0 as
+        # a kill-switch. Switch-only → real V1 unaffected.
+        _redesign = os.environ.get("SWITCH_REDESIGN_PILOT", "1") == "1"
         log.info(
             "[SWITCH_REDESIGN_PILOT] %s — REBOOT_FRESH delegation switch_redesign=%s "
             "(prev=%s new=%s)",

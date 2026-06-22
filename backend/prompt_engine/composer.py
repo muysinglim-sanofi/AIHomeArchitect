@@ -684,6 +684,7 @@ def compose_generation_prompt(
     edit_mode: "EditMode | None" = None,  # Wave 5.13d Phase 1 — single source of truth for edit_mode (passed from main.py).
     editorial_realism_enabled: bool = True,  # Wave 5.14A — gate the editorial-realism layer (FIRST_VISION only ; REBOOT_FRESH delegation passes False). Default True preserves direct V1 callers (main.py iteration=1).
     switch_redesign: bool = False,  # SWITCH_REDESIGN_PILOT — set True ONLY by composer_v2's REBOOT_FRESH delegation (switch). Injects in-place furniture-replacement (R1) + hero signatures (R3) into FIRST_VISION. Default False → real V1 byte-identical.
+    prev_atmosphere_id: str = "",  # (2026-06-22) signature-compat with composer_v2 (env-dispatch). Accepted + IGNORED here — the frozen V1 path has no switch detection. No effect on V1 output.
 ) -> str:
     """
     Build the complete generation prompt from all intelligence layers.

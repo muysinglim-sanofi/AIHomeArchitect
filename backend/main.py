@@ -362,6 +362,8 @@ from prompt_engine.architectural_memory import get_memory_reference
 from version_state import (
     VersionRecord,
     parse_versions,
+    latest_atmosphere,
+    atmosphere_for_version,
     serialize_versions,
     version_to_dict,
     resolve_source,
@@ -2014,6 +2016,37 @@ async def generate(
     # source. Legacy clients (no source_mode/versions) get the V2+ LATEST default.
     _versions = parse_versions(versions)
 
+    # (2026-06-22) SINGLE SOURCE OF TRUTH for the PREVIOUS atmosphere on a switch
+    # (Option C): the atmosphere of the vision this generation is edited FROM —
+    # the RESOLVED SOURCE, not the most-recently-appended record. The ledger
+    # (client round-tripped) stores the resolved atmosphere per version, so this
+    # is language/phrasing-proof (the chat-text regex fails for AI-chosen
+    # atmospheres — Ayden Signature greeting = "AI's choice").
+    #   • client pinned a specific prior vision (branch / continue-from-vision)
+    #     → prev = that version's atmosphere (correct under branching, where the
+    #       tail ≠ the source);
+    #   • linear LATEST switch (no pin) → prev = the chain tail (latest_atmosphere);
+    #   • V1 / legacy clients with no ledger → "" → resolver falls back to the
+    #     history walk (kept ONLY as a legacy filet; telemetry below tells us if
+    #     any real session still needs it, so we can delete the regex later).
+    # Fed to BOTH switch evaluations (source-mode override below + composer build)
+    # so a switch after an AI-chosen V1 is seen as REBOOT_FRESH (→ V1-source pin +
+    # SWITCH_REDESIGN_PILOT), not INCREMENTAL.
+    _src_vid = (source_version_id or "").strip()
+    _prev_atmo_label = atmosphere_for_version(_versions, _src_vid) if _src_vid else ""
+    _prev_basis = "source-version" if _prev_atmo_label else ""
+    if not _prev_atmo_label:
+        _prev_atmo_label = latest_atmosphere(_versions)
+        _prev_basis = "linear-tail" if _prev_atmo_label else "none"
+    _ledger_prev_atmo_id = label_to_atmosphere_id(_prev_atmo_label) if _prev_atmo_label else ""
+    if iteration > 1:
+        log.info(
+            "[SwitchPrev] iteration=%d basis=%s src_vid=%s ledger_size=%d → prev_atmo=%s%s",
+            iteration, _prev_basis, _src_vid or "(none)", len(_versions),
+            _ledger_prev_atmo_id or "(none)",
+            "  (NO LEDGER — will fall back to chat-text parse)" if not _ledger_prev_atmo_id else "",
+        )
+
     # ── Wave 5.3 — atmosphere-switch source-mode override ────────────────────
     # On a PURE atmosphere switch (V2+, atmosphere differs from history's V1,
     # AND no user customizations detected in history), override source_mode
@@ -2041,6 +2074,12 @@ async def generate(
         _switch_atmos_id = label_to_atmosphere_id(style_label)
         _strategy, _prev_id, _has_custom = _v2_resolve_switch_strategy(
             _history_list_for_switch, _switch_atmos_id, iteration,
+            _ledger_prev_atmo_id,
+        )
+        log.info(
+            "[SwitchDetect] iteration=%d current=%s ledger_prev=%s → strategy=%s prev=%s",
+            iteration, _switch_atmos_id, _ledger_prev_atmo_id or "(none)",
+            _strategy.value, _prev_id or "(none)",
         )
         if _strategy.value == "REBOOT_FRESH":
             # Wave 5.21 EXPERIMENT (2026-06-01, TEMPORARY) — V1 anchor.
@@ -2705,6 +2744,7 @@ async def generate(
         authorized_user_changes=authorized_changes_clause,
         generation_mode=generation_mode,  # Wave 5.5.14c — no-op unless BIMODAL_ENABLED=1
         edit_mode=edit_mode,  # Wave 5.13d Phase 1 — single source of truth (main.py classified + elevated)
+        prev_atmosphere_id=_ledger_prev_atmo_id,  # (2026-06-22) authoritative prev → switch detection inside the composer matches main.py's
     )
     # Ayden Decide STAGE MODE — swap the preserve contract for the furnish
     # contract so an empty room is reliably staged (flag-gated; detected above).
