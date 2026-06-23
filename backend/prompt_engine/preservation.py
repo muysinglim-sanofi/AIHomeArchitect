@@ -506,7 +506,10 @@ def build_stage_contract(room_label: str = "", atmosphere_label: str = "",
             "alabaster, opaline glass or sculptural brass, a true 5-star-hotel-"
             "grade focal fixture (refined and elegant, never a sparkly crystal "
             "cliché). Lean the palette warm and layered — deeper champagne, taupe "
-            "and greige over pure ivory; avoid stark cool white. "
+            "and greige over pure ivory; avoid stark cool white. Render with a "
+            "warm, golden white balance and a soft warm lamplight glow layered "
+            "into the existing daylight — inviting and warm, never a cool or "
+            "blue-white daylight cast (keep the time-of-day unchanged). "
         )
     treatment = _WINDOW_TREATMENT.get(room_key, _WINDOW_TREATMENT_DEFAULT)
     atmo_style = _ATMO_FURNITURE_STYLE.get((atmosphere_id or "").strip().lower(), "")
