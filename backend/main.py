@@ -2623,8 +2623,11 @@ async def generate(
     # path by construction, `not _stage_room` means Decide didn't already set it,
     # `iteration == 1` is V1-only (no switch/edit/continue). Sets `_stage_room`
     # only (room_type untouched → zero V2+ effect). Whitelist → exteriors skip.
+    # Default ON (2026-06-23, routing device-validated: Living/Kitchen/Bathroom +
+    # Bedroom/Office/Entrance via _SPECIFIC_STAGE_MAP); SPECIFIC_ROOM_STAGE=0 is
+    # the kill-switch.
     if (not _stage_room and not let_ai_decide and iteration == 1 and room_type
-            and os.environ.get("SPECIFIC_ROOM_STAGE", "0") == "1"):
+            and os.environ.get("SPECIFIC_ROOM_STAGE", "1") == "1"):
         _sk = "_".join(room_type.strip().lower().split())
         _sk = _SPECIFIC_STAGE_MAP.get(_sk, _sk)  # form label → _STAGE_ITEMS key (confirmed labels only)
         if _sk in _SPECIFIC_STAGE_ROOMS:
