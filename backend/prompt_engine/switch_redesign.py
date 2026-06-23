@@ -54,6 +54,60 @@ _SWITCH_HERO_SIGNATURES: dict[str, str] = {
 }
 
 
-def build_switch_hero_block(atmosphere_id: str) -> str:
-    """Return the hero-furnishing signature for an atmosphere, or "" if unknown."""
-    return _SWITCH_HERO_SIGNATURES.get((atmosphere_id or "").strip().lower(), "")
+# SWITCH_BLOCK_COMPACT (2026-06-23) — compact hero signatures. Used ONLY when
+# composer.py reads SWITCH_BLOCK_COMPACT=1 (switch path / switch_redesign=True).
+# Same intent (REPLACE) + same signature FORMS + signature MATERIALS + the
+# prev-atmosphere contrast, with verbose parentheticals and duplicate mood
+# adjectives removed (~30-200 chars lighter per atmosphere). Goal: stop the
+# REBOOT_FRESH prompt from overflowing the FIRST_VISION budget (4300), which was
+# forcing the budget assembler to drop dna_room_context — the section that
+# carries the TV / room-specific anchors (proven on WM→Soft Luxury). Nordic keeps
+# an explicit Japandi contrast so the two stay visually distinct. The default
+# (full) signatures above are untouched → switch output is byte-identical when
+# the flag is OFF.
+_SWITCH_HERO_SIGNATURES_COMPACT: dict[str, str] = {
+    "warm_modern": (
+        "HERO FURNISHING — Warm Modern: low modular oatmeal-boucle sofa on slim "
+        "wood legs; chunky warm-oak or travertine coffee table; slim arched floor "
+        "lamp + warm dimmable spots; flat caramel wool-blend rug; brass and "
+        "warm-wood accents — understated, grounded, daytime-warm."
+    ),
+    "japandi_calm": (
+        "HERO FURNISHING — Japandi: low oak-frame sofa with natural-linen "
+        "cushions; minimalist solid-wood low table; rice-paper/washi pendant + "
+        "slim wooden floor lamp; flat-weave jute/tatami mat; ceramic, bamboo and "
+        "paper accents — restrained, handcrafted, calm."
+    ),
+    "soft_luxury": (
+        "HERO FURNISHING — Soft Luxury: deep curved channel-tufted taupe-velvet "
+        "sofa; rounded marble or smoked-glass coffee table; sculptural "
+        "alabaster/brass lamp + warm cove light; high-pile silk-blend rug; "
+        "polished metal and stone accents — plush and opulent, clearly richer and "
+        "curvier than Warm Modern."
+    ),
+    "nordic_warmth": (
+        "HERO FURNISHING — Nordic Warmth: light-oak and pale-wool sofa with clean "
+        "lines; round birch coffee table; paper-globe or matte-black arc lamp; "
+        "chunky off-white wool rug + sheepskin throw; light-wood accents — bright, "
+        "airy, cosy, lighter than Japandi's wood-and-paper restraint."
+    ),
+    "tropical_escape": (
+        "HERO FURNISHING — Tropical: rattan/cane-frame sofa with natural-linen "
+        "cushions; teak or live-edge coffee table; woven-seagrass pendant + rattan "
+        "floor lamp; natural jute rug; large leafy plants and teak accents — lush, "
+        "breezy, organic."
+    ),
+}
+
+
+def build_switch_hero_block(atmosphere_id: str, compact: bool = False) -> str:
+    """Return the hero-furnishing signature for an atmosphere, or "" if unknown.
+
+    compact=False (default) → the full signature, byte-identical to the shipped
+    switch block. compact=True → the lighter SWITCH_BLOCK_COMPACT variant,
+    forwarded ONLY by composer.py when SWITCH_BLOCK_COMPACT=1. Switch-path only;
+    a real V1 never reaches this (switch_redesign=False).
+    """
+    key = (atmosphere_id or "").strip().lower()
+    table = _SWITCH_HERO_SIGNATURES_COMPACT if compact else _SWITCH_HERO_SIGNATURES
+    return table.get(key, "")

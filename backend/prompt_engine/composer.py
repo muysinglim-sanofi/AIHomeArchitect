@@ -959,21 +959,64 @@ def compose_generation_prompt(
     # to the kept (P1) mode_contract so the budget assembler can't drop them, and
     # the switch reads as a distinct STYLE instead of a recolor of V1's furniture.
     if switch_redesign:
-        _hero = build_switch_hero_block(atmosphere_id)
+        # SWITCH_BLOCK_COMPACT (2026-06-23) — switch-only compaction. The full
+        # SWITCH REDESIGN clause re-asserts architecture preservation (already in
+        # the PRESERVE contract + STRUCTURAL IDENTITY) and footprint (already in
+        # PRESERVE), and the full HERO carries verbose parentheticals + duplicate
+        # mood adjectives. On feature-rich atmospheres (Soft Luxury) the ~834-char
+        # switch appendage pushed the FIRST_VISION prompt past 4300, so the budget
+        # assembler dropped dna_room_context — the section carrying the TV / room
+        # anchors (proven WM→Soft Luxury: brut 4534 → dropped → TV gone). The
+        # compact variant removes only the redundant/verbose parts (keeps REPLACE
+        # intent + per-atmosphere hero forms/materials + prev-atmosphere contrast),
+        # so the prompt fits and dna_room_context survives.
+        # Default OFF → byte-identical to the shipped switch block. NEVER reached
+        # on a real V1 (switch_redesign=False) → V1/STAGE byte-identical whatever
+        # the flag. Kill-switch: SWITCH_BLOCK_COMPACT=0.
+        _compact_switch = os.environ.get("SWITCH_BLOCK_COMPACT", "0") == "1"
+        # HERO leak fix (Option A, 2026-06-23) — HERO FURNISHING names living-room
+        # pieces (sofa / coffee table / rug). It must NEVER reach a non-living
+        # switch: proven that bedroom switches carried sofa+coffee table+rug in the
+        # prompt alongside the bed (4/4 atmospheres in backend.log). Gate HERO to
+        # the canonical living_room only; elsewhere _hero="". Uses the existing
+        # canonical resolver (get_room_dna → _normalise_room), so "Living"/"lounge"/
+        # "reception" qualify while "bedroom"/"Master"/Kitchen/Bathroom do not.
+        # ALWAYS ON (independent of SWITCH_BLOCK_COMPACT) — it's a live bugfix.
+        # The generic SWITCH REDESIGN clause below stays for ALL rooms (a non-living
+        # switch must still restyle its own pieces, just without the sofa hero).
+        _hero_room_dna = get_room_dna(atmosphere_id, room_type)
+        _is_living_room = (
+            _hero_room_dna is not None
+            and _hero_room_dna.room_type == "living_room"
+        )
+        _hero = (
+            build_switch_hero_block(atmosphere_id, compact=_compact_switch)
+            if _is_living_room else ""
+        )
+        if _compact_switch:
+            _switch_clause = (
+                " SWITCH REDESIGN — keep every piece in its existing position, but"
+                " REPLACE each piece's design with this atmosphere's signature"
+                " pieces; do not keep the previous atmosphere's furniture style."
+            )
+        else:
+            _switch_clause = (
+                " SWITCH REDESIGN — keep the existing furniture LAYOUT and positions"
+                " (each piece stays in place, same footprint and scale), but REPLACE"
+                " each piece's design/identity with this atmosphere's signature pieces;"
+                " do NOT keep the previous atmosphere's furniture style; keep"
+                " architecture (walls, windows, doors, openings, ceiling)"
+                " pixel-identical."
+            )
         mode_contract = (
             mode_contract
-            + " SWITCH REDESIGN — keep the existing furniture LAYOUT and positions"
-            " (each piece stays in place, same footprint and scale), but REPLACE"
-            " each piece's design/identity with this atmosphere's signature pieces;"
-            " do NOT keep the previous atmosphere's furniture style; keep"
-            " architecture (walls, windows, doors, openings, ceiling)"
-            " pixel-identical."
+            + _switch_clause
             + ((" " + _hero) if _hero else "")
         )
         log.info(
             "[SWITCH_REDESIGN_PILOT] composer Path D — switch_redesign=True "
-            "atmosphere=%s hero_injected=%s",
-            atmosphere_id, bool(_hero),
+            "atmosphere=%s hero_injected=%s compact=%s",
+            atmosphere_id, bool(_hero), _compact_switch,
         )
 
     # Wave 5.13f — compact STRUCTURAL_IDENTITY wrapper for FIRST_VISION only.
