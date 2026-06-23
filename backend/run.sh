@@ -25,6 +25,18 @@
 
 cd "$(dirname "$0")" || exit 1
 echo "=== RESTART $(date) — canonical perf-safe launch ===" >> logs/backend.log
+# Ayden runtime flags — PINNED ON so a restart never silently disables them.
+# (2026-06-23 incident: a run.sh restart WITHOUT AYDEN_DECIDE_FURNISH dropped
+#  Ayden Decide room detection → AtmosphereDNA fell back to fallback_style_block
+#  → empty/sparse V1 render. Proven via backend.log: the "Ayden vision pass"
+#  stopped running after the restart. Render already sets these; this keeps the
+#  local canonical launch in parity.)
+#   AYDEN_DECIDE_FURNISH — Ayden Decide STAGE: detect + propagate room → per-atmosphere DNA
+#   SURPRISE_VISION      — image-driven Surprise Me atmosphere
+#   SWITCH_BLOCK_COMPACT — compact switch block (switch-only; keeps TV/room anchor under budget)
+AYDEN_DECIDE_FURNISH=1 \
+SURPRISE_VISION=1 \
+SWITCH_BLOCK_COMPACT=1 \
 BIMODAL_ENABLED=1 \
 VISION_DETERMINISTIC=1 \
 PROMPT_FURNITURE_FIX=1 \
