@@ -68,6 +68,9 @@ class RevenuecatService {
   bool _configured = false;
   bool _premiumActive = false;
   Offerings? _offerings;
+  // FAST_BOOT — dedupes a configure() that runs fire-and-forget at boot so the
+  // paywall can await the SAME in-flight call instead of starting a second one.
+  Future<void>? _configuring;
 
   final StreamController<bool> _premiumController =
       StreamController<bool>.broadcast();
@@ -151,6 +154,18 @@ class RevenuecatService {
     debugPrint(
       '[RevenuecatService] configured — user=$userId platform=${Platform.operatingSystem}',
     );
+  }
+
+  /// FAST_BOOT — idempotent + awaitable configure. The boot path calls this
+  /// fire-and-forget (un-awaited); the paywall calls it AWAITED before loading
+  /// offerings, so it either no-ops (already configured), joins the in-flight
+  /// boot call, or starts one. Never throws to the caller (errors are logged in
+  /// configure under graceful degradation; a non-graceful StateError would
+  /// surface, but boot/paywall both wrap this).
+  Future<void> ensureConfigured({required String userId}) {
+    if (_configured) return Future<void>.value();
+    return _configuring ??=
+        configure(userId: userId).whenComplete(() => _configuring = null);
   }
 
   /// Fetch the current offerings (products configured for this app in

@@ -42,6 +42,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/feature_flags.dart';
 import '../../core/l10n/app_localizations.dart';
@@ -114,6 +115,15 @@ class _PaywallSheetState extends State<PaywallSheet> {
   }
 
   Future<void> _loadOfferings() async {
+    // FAST_BOOT — RevenueCat configure() runs fire-and-forget at boot. Ensure it
+    // has finished (or finish it now) before reading offerings, so a paywall
+    // opened in the first seconds isn't empty. No-op once configured; safe in
+    // legacy boot (already configured before runApp).
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId != null) {
+      await RevenuecatService.instance.ensureConfigured(userId: userId);
+      if (!mounted) return;
+    }
     final offerings = await RevenuecatService.instance.loadOfferings();
     if (!mounted) return;
     setState(() {

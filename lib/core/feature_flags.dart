@@ -142,4 +142,20 @@ class FeatureFlags {
   /// could tap a premium switch and then hit a 402. When false: the old per-
   /// switch premium lock.
   static const bool aydenRefineFree = true;
+
+  /// FAST_BOOT (2026-06-23) — get the Flutter splash on screen ASAP by moving
+  /// the heavy, non-critical startup off the pre-runApp() path.
+  ///
+  /// When TRUE: main() only does ensureInitialized + dotenv + Supabase.initialize
+  /// before runApp() (local, ~<300ms → native iOS Launch Screen <1s). The splash
+  /// then (a) AWAITS the anonymous auth session (critical for a working Home) and
+  /// captures the cold-start notification deep-link, and (b) FIRE-AND-FORGETS the
+  /// non-critical inits (Firebase, RevenueCat configure, notification
+  /// permissions/channel, FCM/push registration) so they never block the first
+  /// frame. RevenueCat no longer rethrows at boot; the paywall awaits RC-ready.
+  ///
+  /// When FALSE (rollback): the legacy sequential pre-runApp chain (today's
+  /// behaviour) + the fixed 2.4s splash timer. Instant revert if a startup
+  /// regression appears on TestFlight.
+  static const bool fastBoot = true;
 }

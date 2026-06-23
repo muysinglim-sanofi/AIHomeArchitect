@@ -5,6 +5,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'core/boot/app_boot.dart';
+import 'core/feature_flags.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
 import 'core/providers/me_status_provider.dart';
@@ -16,81 +18,74 @@ import 'data/services/revenuecat_service.dart';
 import 'firebase_options.dart';
 
 Future<void> main() async {
+  final bootSw = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
+  bootLog(bootSw, 'ensureInitialized');
   await dotenv.load(fileName: '.env');
+  bootLog(bootSw, 'dotenv');
 
   final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
   final supabaseKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+  debugPrint('[DB] SUPABASE_URL loaded: ${supabaseUrl.isNotEmpty}');
 
-  debugPrint('[DB] SUPABASE_URL loaded: ${supabaseUrl.isNotEmpty} (${supabaseUrl.substring(0, supabaseUrl.length.clamp(0, 30))}...)');
-  debugPrint('[DB] SUPABASE_ANON_KEY loaded: ${supabaseKey.isNotEmpty} (${supabaseKey.substring(0, supabaseKey.length.clamp(0, 20))}...)');
-
+  // KEPT before runApp in BOTH modes: Supabase.instance must exist when App /
+  // providers (meStatusProvider, etc.) build, and it's local/fast (~<200ms).
   await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
-  debugPrint('[DB] Supabase.initialize() complete');
+  bootLog(bootSw, 'Supabase.initialize');
 
-  // Phase B — Firebase (FCM push). initializeApp from the flutterfire-generated
-  // options; register the top-level background handler BEFORE runApp. Guarded so
-  // a Firebase hiccup never blocks app start (push is non-critical).
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    FirebaseMessaging.onBackgroundMessage(fcmBackgroundHandler);
-    debugPrint('[Push] Firebase.initializeApp() complete');
-  } catch (e) {
-    debugPrint('[Push] Firebase init failed (non-fatal): $e');
-  }
-
-  final auth = Supabase.instance.client.auth;
-  final existingSession = auth.currentSession;
-
-  if (existingSession == null) {
-    debugPrint('[DB] No existing session — calling signInAnonymously()');
+  if (!FeatureFlags.fastBoot) {
+    // ── LEGACY pre-runApp chain (rollback path; today's behaviour, minus the
+    //    RevenueCat rethrow). All heavy/network inits are awaited here → the
+    //    native Launch Screen lingers for their sum. ────────────────────────
     try {
-      final res = await auth.signInAnonymously();
-      debugPrint('[DB] signInAnonymously() success — user_id: ${res.user?.id}');
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      FirebaseMessaging.onBackgroundMessage(fcmBackgroundHandler);
+      debugPrint('[Push] Firebase.initializeApp() complete');
     } catch (e) {
-      debugPrint('[DB] signInAnonymously() FAILED: $e');
+      debugPrint('[Push] Firebase init failed (non-fatal): $e');
     }
-  } else {
-    debugPrint('[DB] Existing session RESTORED — user_id: ${existingSession.user.id} | expires: ${existingSession.expiresAt}');
-  }
 
-  final userId = auth.currentUser?.id;
-  debugPrint('[DB] Active user_id at app start: $userId');
+    final auth = Supabase.instance.client.auth;
+    if (auth.currentSession == null) {
+      try {
+        final res = await auth.signInAnonymously();
+        debugPrint('[DB] signInAnonymously() success — user_id: ${res.user?.id}');
+      } catch (e) {
+        debugPrint('[DB] signInAnonymously() FAILED: $e');
+      }
+    } else {
+      debugPrint('[DB] Existing session RESTORED — user_id: ${auth.currentUser?.id}');
+    }
 
-  // Wave 5.17d — Configure RevenueCat with the Supabase UUID as the App
-  // User ID (Decision D6). configure() is fail-fast in dev — see
-  // FeatureFlags.revenuecatGracefulDegradation for the production
-  // fallback. We only configure when we have a userId ; an absent UUID
-  // means anon sign-in failed above and the app is already in a
-  // degraded state where the paywall won't be reachable anyway.
-  if (userId != null) {
+    final userId = auth.currentUser?.id;
+    if (userId != null) {
+      // No rethrow — a RevenueCat hiccup must never block app start.
+      try {
+        await RevenuecatService.instance.configure(userId: userId);
+      } catch (e) {
+        debugPrint('[RevenuecatService] configure() failed at boot (non-fatal): $e');
+      }
+    }
+
     try {
-      await RevenuecatService.instance.configure(userId: userId);
+      await LocalNotificationService.instance.init();
     } catch (e) {
-      debugPrint('[RevenuecatService] configure() failed at boot: $e');
-      rethrow;
+      debugPrint('[Notif] init() failed (non-fatal): $e');
+    }
+
+    try {
+      await PushService.instance.init();
+    } catch (e) {
+      debugPrint('[Push] init() failed (non-fatal): $e');
     }
   }
+  // FAST_BOOT: the heavy chain above is SKIPPED here — the SplashScreen runs it
+  // (auth awaited + the rest fire-and-forget) behind the Ayden splash.
 
-  // Phase A — init local notifications (channel + permission) and capture any
-  // cold-start launch payload, AFTER auth is ready and BEFORE runApp so the
-  // splash can consume the deep-link target on first frame.
-  try {
-    await LocalNotificationService.instance.init();
-  } catch (e) {
-    debugPrint('[Notif] init() failed (non-fatal): $e');
-  }
-
-  // Phase B — register this device's FCM token with the backend (after auth so
-  // the JWT exists) + wire push-tap deep-linking. Non-fatal.
-  try {
-    await PushService.instance.init();
-  } catch (e) {
-    debugPrint('[Push] init() failed (non-fatal): $e');
-  }
-
+  AppBoot.bootStopwatch = bootSw;
+  bootLog(bootSw, 'runApp');
   runApp(const ProviderScope(child: App()));
 }
 

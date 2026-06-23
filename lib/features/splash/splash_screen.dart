@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/boot/app_boot.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/feature_flags.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/services/local_notification_service.dart';
 import '../../shared/branding/ayden_brand.dart';
@@ -38,20 +40,51 @@ class _SplashScreenState extends State<SplashScreen>
         vsync: this, duration: const Duration(milliseconds: 1200));
     _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
     _controller.forward();
-    Future.delayed(const Duration(milliseconds: 2400), () {
-      if (!mounted) return;
-      // Phase A — if the app was COLD-STARTED by tapping a "vision ready"
-      // notification, deep-link straight to that session (home-first so back
-      // returns to home) instead of running the onboarding flow.
-      final deepLinkSessionId =
-          LocalNotificationService.instance.consumePendingDeepLink();
-      if (deepLinkSessionId != null && deepLinkSessionId.isNotEmpty) {
-        context.go('/home');
-        context.push('/chat/$deepLinkSessionId?from=notif');
-        return;
-      }
-      context.go('/onboarding');
-    });
+    if (FeatureFlags.fastBoot) {
+      _runFastBoot();
+    } else {
+      // Legacy (FAST_BOOT=0): all init already ran before runApp → fixed delay.
+      Future.delayed(const Duration(milliseconds: 2400), () {
+        if (!mounted) return;
+        _navigateAfterSplash();
+      });
+    }
+  }
+
+  /// FAST_BOOT — run the startup chain BEHIND the splash: AWAIT the auth session
+  /// (Home needs it) + capture the cold-start deep-link, then FIRE-AND-FORGET
+  /// the heavy inits (Firebase / RevenueCat / notif perms / push), hold the
+  /// brand a short minimum, and route.
+  Future<void> _runFastBoot() async {
+    final splashSw = Stopwatch()..start();
+    await AppBoot.ensureSession();
+    await AppBoot.captureColdStartDeepLink();
+    AppBoot.startBackgroundInit();
+
+    // Brand-min: keep the Ayden splash visible ~900ms (replaces the fixed 2.4s).
+    const brandMinMs = 900;
+    final elapsed = splashSw.elapsedMilliseconds;
+    if (elapsed < brandMinMs) {
+      await Future.delayed(Duration(milliseconds: brandMinMs - elapsed));
+    }
+    final total = AppBoot.bootStopwatch?.elapsedMilliseconds;
+    if (total != null) debugPrint('[Boot] +${total}ms  → navigate (time-to-Home)');
+    if (!mounted) return;
+    _navigateAfterSplash();
+  }
+
+  /// Shared routing — Phase A: if the app was COLD-STARTED by tapping a "vision
+  /// ready" notification, deep-link straight to that session (home-first so back
+  /// returns to home) instead of running onboarding.
+  void _navigateAfterSplash() {
+    final deepLinkSessionId =
+        LocalNotificationService.instance.consumePendingDeepLink();
+    if (deepLinkSessionId != null && deepLinkSessionId.isNotEmpty) {
+      context.go('/home');
+      context.push('/chat/$deepLinkSessionId?from=notif');
+      return;
+    }
+    context.go('/onboarding');
   }
 
   @override

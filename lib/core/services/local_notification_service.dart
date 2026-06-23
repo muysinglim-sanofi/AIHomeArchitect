@@ -41,13 +41,35 @@ class LocalNotificationService {
 
   bool _initialized = false;
 
-  /// Initialise the plugin, create the Android channel, request permission,
-  /// and capture any cold-start launch payload. Call once from main(), after
-  /// auth is ready and before runApp().
+  /// Legacy (FAST_BOOT=0) — full init before runApp: initialise the plugin,
+  /// create the channel, request permission, and capture the cold-start payload.
+  /// Same operations/order as before; just factored into the helpers below.
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
+    await _initializePlugin();
+    await _setupChannelAndPermissions();
+    await _captureLaunchPayload();
+  }
 
+  /// FAST_BOOT — the FAST half: initialise the plugin + capture the cold-start
+  /// deep-link, WITHOUT requesting permission (no blocking iOS permission
+  /// dialog). Awaited by the splash bootstrap BEFORE it navigates, so the
+  /// cold-start deep-link is preserved. The slow half runs fire-and-forget via
+  /// [setupPermissionsAndChannel].
+  Future<void> initFast() async {
+    if (_initialized) return;
+    _initialized = true;
+    await _initializePlugin();
+    await _captureLaunchPayload();
+  }
+
+  /// FAST_BOOT — the SLOW half: Android channel + runtime permission (iOS
+  /// dialog). Run fire-and-forget after the first frame so it never blocks the
+  /// splash. Safe to call after [initFast].
+  Future<void> setupPermissionsAndChannel() => _setupChannelAndPermissions();
+
+  Future<void> _initializePlugin() async {
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
     const darwinInit = DarwinInitializationSettings(
       // Permission is requested explicitly below so we control the timing.
@@ -59,12 +81,13 @@ class LocalNotificationService {
       android: androidInit,
       iOS: darwinInit,
     );
-
     await _plugin.initialize(
       settings: initSettings,
       onDidReceiveNotificationResponse: _onTap,
     );
+  }
 
+  Future<void> _setupChannelAndPermissions() async {
     // Android 8+ notification channel (high importance → heads-up + sound).
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
@@ -83,7 +106,9 @@ class LocalNotificationService {
         .resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin>()
         ?.requestPermissions(alert: true, badge: true, sound: true);
+  }
 
+  Future<void> _captureLaunchPayload() async {
     // Cold-start: was the app launched by tapping a notification?
     final launch = await _plugin.getNotificationAppLaunchDetails();
     if (launch?.didNotificationLaunchApp ?? false) {
