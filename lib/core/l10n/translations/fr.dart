@@ -300,10 +300,13 @@ const Map<String, String> frTranslations = {
 
   // Profile sheets (settings)
   'spDisplayName': "NOM AFFICHÉ",
+  'spFirstName': "PRÉNOM",
+  'spLastName': "NOM",
   'spEmail': "E-MAIL",
   'spYourName': "Votre nom",
   'spSaveChanges': "Enregistrer",
   'spSaved': "Enregistré",
+  'spSaveFailed': "Échec de l'enregistrement. Réessayez.",
   'spNotifSubtitle': "Choisissez ce qui vous inspire.",
   'spNotif1Title': "Mises à jour de redesign",
   'spNotif1Sub': "Progrès de vos designs en cours",

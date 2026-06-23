@@ -288,10 +288,13 @@ const Map<String, String> kmTranslations = {
 
   // Profile sheets (settings) — KHMER V1, needs native review
   'spDisplayName': 'ឈ្មោះ​បង្ហាញ',
+  'spFirstName': 'នាម​ខ្លួន',
+  'spLastName': 'នាម​ត្រកូល',
   'spEmail': 'អ៊ីមែល',
   'spYourName': 'ឈ្មោះ​របស់​អ្នក',
   'spSaveChanges': 'រក្សា​ទុក',
   'spSaved': 'បាន​រក្សា​ទុក',
+  'spSaveFailed': 'រក្សាទុក​មិន​បាន។ សូម​ព្យាយាម​ម្ដង​ទៀត។',
   'spNotifSubtitle': 'ជ្រើស​អ្វី​ដែល​ផ្ដល់​ការ​បំផុស​គំនិត​ដល់​អ្នក។',
   'spNotif1Title': 'បច្ចុប្បន្នភាព​ការ​រចនា',
   'spNotif1Sub': 'វឌ្ឍនភាព​នៃ​ការ​រចនា​សកម្ម​របស់​អ្នក',

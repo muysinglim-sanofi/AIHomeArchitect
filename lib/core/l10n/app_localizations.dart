@@ -336,10 +336,13 @@ class AppLocalizations {
 
   // ── Profile sheets (settings) ─────────────────────────────────────────────
   String get spDisplayName => _get('spDisplayName');
+  String get spFirstName => _get('spFirstName');
+  String get spLastName => _get('spLastName');
   String get spEmail => _get('spEmail');
   String get spYourName => _get('spYourName');
   String get spSaveChanges => _get('spSaveChanges');
   String get spSaved => _get('spSaved');
+  String get spSaveFailed => _get('spSaveFailed');
   String get spNotifSubtitle => _get('spNotifSubtitle');
   String get spNotif1Title => _get('spNotif1Title');
   String get spNotif1Sub => _get('spNotif1Sub');

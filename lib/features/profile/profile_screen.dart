@@ -9,6 +9,7 @@ import '../../core/providers/locale_provider.dart';
 import '../../core/providers/me_status_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../data/services/status_service.dart';
+import '../../data/services/profile_service.dart';
 import '../paywall/paywall_sheet.dart';
 import '../../data/services/auth_service.dart';
 import '../auth/sign_in_screen.dart';
@@ -314,20 +315,65 @@ class _EditProfileSheet extends StatefulWidget {
 }
 
 class _EditProfileSheetState extends State<_EditProfileSheet> {
-  late final TextEditingController _nameCtrl;
-  bool _saved = false;
+  final ProfileService _profile = ProfileService();
+  late final TextEditingController _firstCtrl;
+  late final TextEditingController _lastCtrl;
+  late final TextEditingController _emailCtrl;
+  bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _nameCtrl = TextEditingController(text: 'Alex Martin');
+    final p = _profile.load();
+    _firstCtrl = TextEditingController(text: p.firstName)
+      ..addListener(_onFirstChanged);
+    _lastCtrl = TextEditingController(text: p.lastName);
+    _emailCtrl = TextEditingController(text: p.email);
+  }
+
+  void _onFirstChanged() => setState(() {}); // avatar initial follows first name
+
+  String get _initial {
+    final f = _firstCtrl.text.trim();
+    return f.isNotEmpty ? f.substring(0, 1).toUpperCase() : '?';
   }
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
+    _firstCtrl.dispose();
+    _lastCtrl.dispose();
+    _emailCtrl.dispose();
     super.dispose();
   }
+
+  Future<void> _onSave() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    final ok = await _profile.save(
+      firstName: _firstCtrl.text,
+      lastName: _lastCtrl.text,
+      email: _emailCtrl.text,
+    );
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (ok) {
+      Navigator.of(context).pop();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.spSaveFailed)),
+      );
+    }
+  }
+
+  Widget _fieldLabel(String text) => Text(
+        text,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: AppColors.textTertiary,
+              fontWeight: FontWeight.w600,
+              fontSize: 10,
+              letterSpacing: 0.8,
+            ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -357,8 +403,8 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                   width: 72,
                   height: 72,
                   decoration: const BoxDecoration(color: AppColors.accentLight, shape: BoxShape.circle),
-                  child: const Center(
-                    child: Text('A', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w600, color: AppColors.accentDark)),
+                  child: Center(
+                    child: Text(_initial, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w600, color: AppColors.accentDark)),
                   ),
                 ),
                 Positioned(
@@ -379,56 +425,47 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
-          Text(
-            context.l10n.spDisplayName,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textTertiary,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 10,
-                  letterSpacing: 0.8,
-                ),
-          ),
+          _fieldLabel(context.l10n.spFirstName),
           const SizedBox(height: 8),
           TextField(
-            controller: _nameCtrl,
+            controller: _firstCtrl,
+            textCapitalization: TextCapitalization.words,
             decoration: InputDecoration(
               filled: true,
               fillColor: AppColors.surfaceVariant,
-              hintText: context.l10n.spYourName,
+              hintText: context.l10n.spFirstName,
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            context.l10n.spEmail,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.textTertiary,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 10,
-                  letterSpacing: 0.8,
-                ),
-          ),
+          _fieldLabel(context.l10n.spLastName),
           const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceVariant,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
+          TextField(
+            controller: _lastCtrl,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: AppColors.surfaceVariant,
+              hintText: context.l10n.spLastName,
             ),
-            child: Text(
-              'alex@example.com',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.textTertiary),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _fieldLabel(context.l10n.spEmail),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            autocorrect: false,
+            decoration: const InputDecoration(
+              filled: true,
+              fillColor: AppColors.surfaceVariant,
+              hintText: 'you@example.com',
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {
-                setState(() => _saved = true);
-                Navigator.of(context).pop();
-              },
+              onPressed: _saving ? null : _onSave,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.textPrimary,
                 foregroundColor: AppColors.surface,
@@ -436,8 +473,18 @@ class _EditProfileSheetState extends State<_EditProfileSheet> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 elevation: 0,
               ),
-              child: Text(_saved ? context.l10n.spSaved : context.l10n.spSaveChanges,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.surface)),
+              child: _saving
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: AppColors.surface),
+                    )
+                  : Text(context.l10n.spSaveChanges,
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelLarge
+                          ?.copyWith(color: AppColors.surface)),
             ),
           ),
         ],

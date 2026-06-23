@@ -291,10 +291,13 @@ const Map<String, String> enTranslations = {
 
   // Profile sheets (settings)
   'spDisplayName': 'DISPLAY NAME',
+  'spFirstName': 'FIRST NAME',
+  'spLastName': 'LAST NAME',
   'spEmail': 'EMAIL',
   'spYourName': 'Your name',
   'spSaveChanges': 'Save Changes',
   'spSaved': 'Saved',
+  'spSaveFailed': "Couldn't save. Please try again.",
   'spNotifSubtitle': 'Choose what keeps you inspired.',
   'spNotif1Title': 'Redesign updates',
   'spNotif1Sub': 'Progress on your active designs',
