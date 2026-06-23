@@ -74,6 +74,23 @@ class MeStatus {
         canGenerate:
             j['can_generate'] == null ? true : j['can_generate'] == true,
       );
+
+  /// Exact mirror of [fromJson] — lets meStatusProvider cache the last
+  /// confirmed entitled snapshot and re-seed it on cold start (fromJson(toJson)
+  /// round-trips). Keys match the backend /me/status payload.
+  Map<String, dynamic> toJson() => {
+        'is_premium': isPremium,
+        'is_admin': isAdmin,
+        'role': role,
+        'quota_used': quotaUsed,
+        'quota_limit': quotaLimit,
+        'remaining_free_generations': remainingFreeGenerations,
+        'promo_generations_remaining': promoGenerationsRemaining,
+        'promo_unlimited_active': promoUnlimitedActive,
+        'active_promo_campaign': activePromoCampaign,
+        'effective_access_state': effectiveAccessState,
+        'can_generate': canGenerate,
+      };
 }
 
 class StatusService {
