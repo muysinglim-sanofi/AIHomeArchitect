@@ -10,6 +10,12 @@ backend/.env
 !.env.example
 !**/.env.example
 
+# Firebase iOS client config — belongs to the iOS app bundle (frontend),
+# NOT the backend repo. Holds API_KEY / GOOGLE_APP_ID / GCM_SENDER_ID; keep it
+# out of git history. Manage it on the iOS side or via Codemagic env.
+GoogleService-Info.plist
+**/GoogleService-Info.plist
+
 # ── Python ────────────────────────────────────────────────────────────
 **/__pycache__/
 *.pyc
