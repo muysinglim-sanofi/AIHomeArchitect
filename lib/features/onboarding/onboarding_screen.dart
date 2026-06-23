@@ -430,12 +430,15 @@ class _RevealHandle extends StatelessWidget {
 // SCREEN 2 — Conversational architect demo (loop preserved; presentation calmed)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// FTUE wow-speed (2026-06-23): the After image landed at ~3.7s (testers clicked
+// Continue before registering the "wow"). Compressed the conversational beats so
+// the After lands ~1s, then held ~3.5s so it registers. Narrative preserved.
 const _d1UserIn = 0;
-const _d2AiIn = 900;
-const _d3Spinner = 1900;
-const _d4Image = 3100;
-const _d6Clear = 6400;
-const _d7Reset = 7200;
+const _d2AiIn = 300;
+const _d3Spinner = 550;
+const _d4Image = 950;
+const _d6Clear = 4500;
+const _d7Reset = 5200;
 
 class _ChatDemoSlide extends StatefulWidget {
   final String title;
@@ -457,7 +460,7 @@ class _ChatDemoSlideState extends State<_ChatDemoSlide> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(milliseconds: 600), _runLoop);
+    Future.delayed(const Duration(milliseconds: 300), _runLoop);
   }
 
   @override
@@ -492,7 +495,7 @@ class _ChatDemoSlideState extends State<_ChatDemoSlide> {
         fit: StackFit.expand,
         children: [
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 750),
+            duration: const Duration(milliseconds: 500),
             child: _SpaceImage(
               key: ValueKey(_showAfter),
               url: _showAfter
