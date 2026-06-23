@@ -480,6 +480,34 @@ def build_stage_contract(room_label: str = "", atmosphere_label: str = "",
     atmo = (atmosphere_label or "").split("·")[0].strip()
     atmo_phrase = f" in the {atmo} style" if atmo else ""
     items = _STAGE_ITEMS.get(room_key, _STAGE_ITEMS_DEFAULT)
+    # Soft Luxury living-room ONLY — STAGE-scoped polish (preserve/switch/V2+ are
+    # byte-identical: build_stage_contract runs ONLY on the STAGE V1 path via
+    # apply_stage_mode, and the guard below restricts to SL + living_room).
+    #   (1) Silhouette: the generic "a sofa and armchairs" + SL's material-only DNA
+    #       (no sofa form) read too close to Warm Modern (both living DNAs use
+    #       bouclé, WM's is even "curved"). Inject the SL silhouette — SHAPE ONLY,
+    #       materials already in the DNA → no duplication.
+    #   (2) Pendant + warmth nudge (validated 2026-06-23): the SL DNA LIGHT calls
+    #       for no ceiling fixture and a pale ivory/cream palette → the V1 STAGE
+    #       render reads flat/cold. Add a luxury pendant (DNA forbids crystal →
+    #       alabaster/brass) + a warm-tone nudge. STAGE-only by design: kept out of
+    #       the DNA so the validated switch SL (V4) and its budget stay untouched.
+    _sl_stage_extra = ""
+    if (atmosphere_id or "").strip().lower() == "soft_luxury" and room_key == "living_room":
+        items = items.replace(
+            "a sofa and armchairs",
+            "a deep, curved, channel-tufted sofa with rounded plush volumes "
+            "and curved armchairs",
+            1,
+        )
+        _sl_stage_extra = (
+            "Include a LARGE sculptural statement chandelier as the ceiling "
+            "centrepiece over the main seating — oversized and multi-tier in "
+            "alabaster, opaline glass or sculptural brass, a true 5-star-hotel-"
+            "grade focal fixture (refined and elegant, never a sparkly crystal "
+            "cliché). Lean the palette warm and layered — deeper champagne, taupe "
+            "and greige over pure ivory; avoid stark cool white. "
+        )
     treatment = _WINDOW_TREATMENT.get(room_key, _WINDOW_TREATMENT_DEFAULT)
     atmo_style = _ATMO_FURNITURE_STYLE.get((atmosphere_id or "").strip().lower(), "")
     atmo_furniture_clause = (
@@ -509,7 +537,7 @@ def build_stage_contract(room_label: str = "", atmosphere_label: str = "",
         "suits the atmosphere — richly layered for warm or opulent styles, "
         "restrained and airy with generous empty space for minimal styles — within "
         "the existing floor area, keeping circulation clear. "
-        + atmo_furniture_clause +
+        + atmo_furniture_clause + _sl_stage_extra +
         f"At EVERY window and glass door, add {treatment} — leaving the glass "
         "fully visible and the opening clear; never cover, block, tint or narrow "
         "it (the view stays visible). "
