@@ -510,6 +510,18 @@ def build_stage_contract(room_label: str = "", atmosphere_label: str = "",
             "warm, golden white balance and a soft warm lamplight glow layered "
             "into the existing daylight — inviting and warm, never a cool or "
             "blue-white daylight cast (keep the time-of-day unchanged). "
+            # Wave (2026-06-24) — authoritative seating tonal hierarchy (STAGE-only).
+            # The shared DNA taupe tokens proved too optional → V1 still rendered an
+            # all-cream seating package. This MANDATORY directive lives in the STAGE
+            # contract (NOT the DNA), so switch/preserve prompt sizes + the TV anchor
+            # (dna_room_context) stay byte-identical — STAGE runs only via apply_stage_mode.
+            "CRITICAL seating tonal hierarchy — the seating package MUST NOT be "
+            "entirely cream or ivory: the sofa MUST be the dominant warm-taupe "
+            "anchor, a clearly visible mid-tone noticeably deeper than the pale "
+            "walls, marble and rug; the armchairs are a secondary warm-champagne "
+            "anchor; cushions and throw stay lighter as layered accents that "
+            "contrast with — never erase — the sofa's deeper taupe. At least the "
+            "sofa MUST read as a warm taupe mid-tone, never pale ivory. "
         )
     treatment = _WINDOW_TREATMENT.get(room_key, _WINDOW_TREATMENT_DEFAULT)
     atmo_style = _ATMO_FURNITURE_STYLE.get((atmosphere_id or "").strip().lower(), "")
