@@ -226,6 +226,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   @override
   void initState() {
     super.initState();
+    // [ChatLife] — instance lifecycle trace. A spontaneous dispose+recreate of
+    // this State (no user navigation) orphans an in-flight /generate into the
+    // !mounted completion branch (DB written, in-memory card never built →
+    // "image disappears until reopen"). hashCode identifies the instance so a
+    // dispose can be paired with the initState that replaced it.
+    debugPrint('[ChatLife] initState #$hashCode session=${widget.projectId}');
     // #21 — observe app lifecycle so a generation that finished while the app
     // was backgrounded gets reconciled from the DB on resume (the in-flight
     // HTTP future can silently never complete after the OS drops the socket).
@@ -359,7 +365,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       _currentRoomType = _project.roomType;
       _currentStyle = _project.style;
       _sessionTitle = _project.title;
-      _loadMessages();
+      _loadMessages(trigger: 'init');
     }
     _titleFocusNode.addListener(() {
       if (!_titleFocusNode.hasFocus && _isEditingTitle) _applyTitleEdit();
@@ -400,6 +406,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
   @override
   void dispose() {
+    // [ChatLife] — pairs with the initState log. `isGenerating=true` here is the
+    // smoking gun: this instance is being torn down WHILE a generation it
+    // launched is still in flight → that await will resolve in the !mounted
+    // branch (orphaned). The hashCode matches the initState that created it.
+    debugPrint('[ChatLife] dispose #$hashCode session=${_project.id} '
+        'isGenerating=$_isGenerating');
     // Cancel timers FIRST so a throw later in dispose can never leave the
     // reconciliation poll running on a disposed widget.
     WidgetsBinding.instance.removeObserver(this);
@@ -1040,8 +1052,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   }
 
   /// Fetches full message history from Supabase for an existing session.
-  Future<void> _loadMessages() async {
-    debugPrint('[DB] _loadMessages() started — session_id: ${_project.id}');
+  Future<void> _loadMessages({String trigger = 'unknown'}) async {
+    debugPrint('[DB] _loadMessages() started — session_id: ${_project.id} '
+        'trigger=$trigger');
     try {
       final rows = await _svc.fetchMessages(_project.id);
       debugPrint('[DB] _loadMessages() — got ${rows.length} rows');
@@ -1115,8 +1128,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       });
       // Reconcile from the DB until the result lands (the original await lives
       // in the disposed screen and won't update this instance). Idempotent —
-      // the poll no-ops if one is already running.
+      // the poll no-ops if one is already running. This is requirement (3):
+      // opening a session that is still inFlight auto-starts reconciliation
+      // with the correct baseline, so the orphaned result appears WITHOUT a
+      // manual quit/reopen.
       if (inFlightResume) {
+        debugPrint('[ChatLife] open inFlight session=${_project.id} '
+            'trigger=$trigger → start reconcile');
         _startReconciliationPolling(sessionId: _project.id);
       }
       // #20 — keep session.latest_preview (the Projects card image) in sync
@@ -1950,6 +1968,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final startSeq = _genSeq;
     int attempt = 0;
 
+    // ── Disappearing-image fix — BASELINE ────────────────────────────────────
+    // The old success test was `hasResult = any imageResult`. On V2/V3/V4 a
+    // PRIOR vision is already an imageResult, so the very first poll tick
+    // declared the in-flight generation "done", stopped the poll, dropped the
+    // spinner and never rendered the real result (it landed in the orphaned
+    // !mounted branch → DB only → "image disappears until reopen").
+    //
+    // Capture how many imageResults exist BEFORE the tracked generation lands.
+    // In every reconcile entry point (transport-error fallback, inFlightResume
+    // recovery, foreground resume) the new result is NOT yet in `_messages`, so
+    // the current count IS the correct baseline. The poll then waits for a
+    // count STRICTLY GREATER than this — a genuinely NEW vision.
+    final baselineImageCount =
+        _messages.where((m) => m.type == MessageType.imageResult).length;
+    debugPrint('[Reconcile] start session=$sessionId '
+        'baselineImageCount=$baselineImageCount startSeq=$startSeq');
+
     void stop(Timer t) {
       t.cancel();
       _reconcileTimer = null;
@@ -1964,17 +1999,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         return;
       }
 
-      await _loadMessages();
+      await _loadMessages(trigger: 'poll');
       if (!mounted || _genSeq != startSeq) {
         stop(timer);
         return;
       }
 
-      // Result landed in the DB → adopt it as truth, clear the spinner, and
-      // bump _genSeq so any still-in-flight original await bails instead of
-      // appending a duplicate vision.
-      final hasResult = _messages.any((m) => m.type == MessageType.imageResult);
-      if (hasResult) {
+      // A NEW vision landed in the DB (count grew beyond the baseline) → adopt
+      // it as truth, clear the spinner, and bump _genSeq so any still-in-flight
+      // original await bails instead of appending a duplicate vision.
+      // NEVER clear the spinner on a stale "any imageResult" — only on a real
+      // increase, so the in-flight generation can't be declared done early.
+      final currentImageCount =
+          _messages.where((m) => m.type == MessageType.imageResult).length;
+      final hasNewResult = currentImageCount > baselineImageCount;
+      if (hasNewResult) {
+        debugPrint('[Reconcile] NEW result session=$sessionId '
+            'count=$currentImageCount > baseline=$baselineImageCount '
+            'attempt=$attempt');
         stop(timer);
         _genSeq++;
         _longGenerationTimer?.cancel();
