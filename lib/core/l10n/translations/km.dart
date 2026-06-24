@@ -67,6 +67,15 @@ const Map<String, String> kmTranslations = {
   'balcony': 'បន្ទប់​ក្រោម​ដំបូល',
   'driveway': 'ផ្លូវ​រថ​យន្ត',
 
+  // Suggestion chips — static fallback (KM proposé, à relire)
+  'suggPushFurther': 'ពង្រឹង​ទិសដៅ​នេះ',
+  'suggMoreDaylight': 'បន្ថែម​ពន្លឺ​ថ្ងៃ',
+  'suggCalmerAtmo': 'បរិយាកាស​ស្ងប់​ជាង',
+  'suggOpenSpace': 'បើក​លំហ​ឲ្យ​ធំ​ទូលាយ',
+  'suggSofterLighting': 'ពន្លឺ​ប្រយោល​ទន់​ភ្លន់',
+  'suggOtherPalette': 'សាកល្បង​សម្ភារៈ​ផ្សេង',
+  'suggCalmerStrong': 'ធ្វើ​ឲ្យ​បរិយាកាស​ស្ងប់​ស្ងាត់',
+
   // Chat
   'chatTitle': 'វគ្គរចនា',
   'chatPlaceholder': 'ពណ៌នា​អ្វី​ដែល​អ្នក​ចង់​ផ្លាស់ប្ដូរ...',

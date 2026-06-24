@@ -114,6 +114,23 @@ class AppLocalizations {
         _get('driveway'),
       ];
 
+  // Suggestion chips — localized STATIC fallback (used by chat _suggestions when
+  // there is no dynamic backend suggestion). Same order/role as the former
+  // const lists in mock_projects.dart. Dynamic backend suggestions bypass these.
+  List<String> get preGenerationSuggestions => [
+        _get('suggPushFurther'),
+        _get('suggMoreDaylight'),
+        _get('suggCalmerAtmo'),
+        _get('suggOpenSpace'),
+      ];
+
+  List<String> get postGenerationSuggestions => [
+        _get('suggPushFurther'),
+        _get('suggSofterLighting'),
+        _get('suggOtherPalette'),
+        _get('suggCalmerStrong'),
+      ];
+
   // Emotional atmosphere styles — image-first, evocative naming.
   // Wave 5.17d.1 — display order honors the free pair (Warm Modern,
   // Nordic Warmth) first so non-premium users see what they can do

@@ -294,25 +294,9 @@ final mockProjects = [
 ];
 
 // ── Chat suggestions ──────────────────────────────────────────────────────────
-
-// Wave 5.11 — atmosphere-neutral architectural defaults. Reads as
-// editorial refinement language, not generic AI-tool prompts. Backend
-// override path (chat / generation response `suggestions` field) stays
-// untouched — these are the calmer fallback list. Per-atmosphere
-// contextual mapping deferred to a future wave.
-const preGenerationSuggestions = [
-  'Push this direction further',
-  'Bring in more daylight',
-  'Calmer atmosphere',
-  'Open the space visually',
-];
-
-const postGenerationSuggestions = [
-  'Push this direction further',
-  'Introduce softer indirect lighting',
-  'Try another material palette',
-  'Make the atmosphere calmer',
-];
+// Moved to AppLocalizations (preGenerationSuggestions / postGenerationSuggestions)
+// for EN/FR/KM localization — see app_localizations.dart + translations/*.dart.
+// The dynamic backend `suggestions` override path is unchanged.
 
 // ── Session packs (Wave 5.17d.1 — removed) ────────────────────────────────────
 //

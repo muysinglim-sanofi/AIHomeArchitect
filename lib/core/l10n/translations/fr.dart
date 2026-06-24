@@ -71,6 +71,15 @@ const Map<String, String> frTranslations = {
   'balcony': "Balcon",
   'driveway': "Allée",
 
+  // Suggestion chips — fallback statique (affiché quand pas de suggestion dynamique)
+  'suggPushFurther': "Accentuer cette direction",
+  'suggMoreDaylight': "Plus de lumière naturelle",
+  'suggCalmerAtmo': "Atmosphère plus calme",
+  'suggOpenSpace': "Ouvrir l'espace visuellement",
+  'suggSofterLighting': "Éclairage indirect plus doux",
+  'suggOtherPalette': "Essayer une autre palette",
+  'suggCalmerStrong': "Rendre l'atmosphère plus apaisante",
+
   // Chat
   'chatTitle': "Session de design",
   'chatPlaceholder': "Comment cet espace doit-il évoluer ?",

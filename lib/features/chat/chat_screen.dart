@@ -35,7 +35,6 @@ import '../../core/providers/access_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/services/local_notification_service.dart';
 import '../../core/services/session_persistence_service.dart';
-import '../../data/mock/mock_projects.dart';
 import '../../data/services/generation_service.dart';
 import '../../data/services/supabase_service.dart';
 import '../paywall/paywall_sheet.dart';
@@ -61,6 +60,16 @@ String _timeAgo(DateTime date) {
   if (diff.inDays == 1) return 'yesterday';
   return '${diff.inDays}d ago';
 }
+
+const String _kAydenSignatureLabel = 'Ayden Signature ✦';
+
+/// #4-B — show the Ayden Signature (surprise) atmosphere with its brand label
+/// instead of the internal "AI's choice" sentinel. Display ONLY — the stored /
+/// routed VALUE (_currentStyle, style_label, the session title) stays
+/// "AI's choice"; only what the user reads is rebranded. Works on a bare style
+/// ("AI's choice") and on a composed title ("Master Bedroom — AI's choice").
+String _brandSignature(String s) =>
+    s.replaceAll("AI's choice", _kAydenSignatureLabel);
 
 // ── Chat screen ───────────────────────────────────────────────────────────────
 
@@ -200,9 +209,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
   List<String> get _suggestions {
     if (_dynamicSuggestions.isNotEmpty) return _dynamicSuggestions;
+    // Localized static fallback (dynamic backend suggestions take priority above).
+    final l10n = context.l10n;
     return (_hasGenerated || _iterationCount > 0)
-        ? postGenerationSuggestions
-        : preGenerationSuggestions;
+        ? l10n.postGenerationSuggestions
+        : l10n.preGenerationSuggestions;
   }
 
   // Flat list interleaving DateTime day-separators with MessageModels
@@ -2314,8 +2325,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
             : '${l10n.uplAiDecide} · ')
         : '';
     final headerSubtitle = _iterationCount > 0
-        ? '$aiDecidePrefix$_currentStyle · ${l10n.visionCount(_iterationCount)}'
-        : '$aiDecidePrefix$_currentStyle · ${l10n.readyToCreate}';
+        ? '$aiDecidePrefix${_brandSignature(_currentStyle)} · ${l10n.visionCount(_iterationCount)}'
+        : '$aiDecidePrefix${_brandSignature(_currentStyle)} · ${l10n.readyToCreate}';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -2335,7 +2346,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
               )
             : GestureDetector(
                 onTap: () {
-                  _titleEditController.text = _sessionTitle;
+                  // Seed the editor with the branded label the user sees (so they
+                  // don't edit the raw "AI's choice" sentinel). Display-only.
+                  _titleEditController.text = _brandSignature(_sessionTitle);
                   setState(() => _isEditingTitle = true);
                   WidgetsBinding.instance.addPostFrameCallback(
                     (_) => _titleFocusNode.requestFocus(),
@@ -2349,7 +2362,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                       children: [
                         Flexible(
                           child: Text(
-                            _sessionTitle,
+                            _brandSignature(_sessionTitle),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -3581,7 +3594,7 @@ class _SourceContextStrip extends StatelessWidget {
                   Text(
                     // Routed value is canonical English; localize for display.
                     '${RoomTypeImages.displayLabel(l10n, currentRoomType)}'
-                    ' · $currentStyle',
+                    ' · ${_brandSignature(currentStyle)}',
                     style: Theme.of(context)
                         .textTheme
                         .bodySmall

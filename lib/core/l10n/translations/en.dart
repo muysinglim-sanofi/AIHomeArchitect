@@ -66,6 +66,15 @@ const Map<String, String> enTranslations = {
   'balcony': 'Balcony',
   'driveway': 'Driveway',
 
+  // Suggestion chips — static fallback (shown when no dynamic backend suggestion)
+  'suggPushFurther': 'Push this direction further',
+  'suggMoreDaylight': 'Bring in more daylight',
+  'suggCalmerAtmo': 'Calmer atmosphere',
+  'suggOpenSpace': 'Open the space visually',
+  'suggSofterLighting': 'Introduce softer indirect lighting',
+  'suggOtherPalette': 'Try another material palette',
+  'suggCalmerStrong': 'Make the atmosphere calmer',
+
   // Chat
   'chatTitle': 'Design Session',
   'chatPlaceholder': 'How should this space evolve next?',
