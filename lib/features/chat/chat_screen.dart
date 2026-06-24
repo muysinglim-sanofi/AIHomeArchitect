@@ -2124,7 +2124,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         initialRoomType: _currentRoomType,
         initialStyle: _currentStyle,
         onReplace: _replaceSourcePhoto,
-        onDirectionChanged: (roomType, style, aiDecide) {
+        onDirectionChanged: (roomType, style, aiDecide, surprise) {
           // CHANTIER A — Room lock. The room is settable ONLY before the first
           // vision exists; once the lineage has any generated vision the room is
           // IMMUTABLE (the Living Room → Home Office bug). Style stays freely
@@ -2146,8 +2146,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                 _letAiDecide = false;
                 _currentRoomType = roomType;
               }
+              // #2 — surprise = Ayden Signature (delegate the atmosphere). Only on
+              // a fresh V1 / re-upload; honored by _generate via
+              // `_surpriseMe && isFirstVision`.
+              _surpriseMe = surprise;
+              _currentStyle = surprise ? "AI's choice" : style;
+            } else {
+              // Mid-lineage: room + delegation locked; the atmosphere itself
+              // stays freely changeable (explicit pick only, no surprise).
+              _surpriseMe = false;
+              _currentStyle = style;
             }
-            _currentStyle = style;
           });
           // Wave 4.10g — room/atmosphere selection survives restart.
           _persistSession();
@@ -3609,7 +3618,8 @@ class _SourcePhotoSheet extends ConsumerStatefulWidget {
   final Future<File?> Function() onReplace;
   // #8b — aiDecide carries the "Ayden Decide" choice (delegate the room) out of
   // the sheet so the next generation can set let_ai_decide.
-  final void Function(String roomType, String style, bool aiDecide)
+  final void Function(
+          String roomType, String style, bool aiDecide, bool surprise)
       onDirectionChanged;
   // Wave 5.16b — bimodal toggle removed (preserve-only UI in V1).
   // `initialMode` + `onModeChanged` params dropped ; parent no longer
@@ -3636,6 +3646,9 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
   late String _selectedStyle;
   // #8b — "Ayden Decide" (delegate the room to the AI) chosen in this sheet.
   bool _aiDecide = false;
+  // #2 — "Ayden Signature" (delegate the ATMOSPHERE to the AI = surprise) chosen
+  // in this sheet. Mirrors the upload-screen signature card.
+  bool _signatureSelected = false;
   // Wave 5.16b — `_selectedMode` field removed with the MODE toggle.
 
   // Local source preview — lets "Replace photo" update the sheet in place
@@ -3647,6 +3660,9 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
     super.initState();
     _selectedRoomType = widget.initialRoomType;
     _selectedStyle = widget.initialStyle;
+    // Pre-select the signature card if the current direction already delegates
+    // the atmosphere (surprise label convention, mirrors ChatScreen initState).
+    _signatureSelected = widget.initialStyle == "AI's choice";
     _sourceFile = widget.sourceFile;
   }
 
@@ -3656,8 +3672,9 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
   }
 
   void _apply() {
-    // chat consumes (roomType, style, aiDecide) then the sheet pops.
-    widget.onDirectionChanged(_selectedRoomType, _selectedStyle, _aiDecide);
+    // chat consumes (roomType, style, aiDecide, surprise) then the sheet pops.
+    widget.onDirectionChanged(
+        _selectedRoomType, _selectedStyle, _aiDecide, _signatureSelected);
     Navigator.of(context).pop();
   }
 
@@ -3676,6 +3693,24 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
       return;
     }
     setState(() => _aiDecide = !_aiDecide);
+  }
+
+  // #2 — Ayden Signature free unlock (mirror of upload screen + aydenSignatureFree).
+  bool _signatureLockedSheet() {
+    if (FeatureFlags.aydenSignatureFree) return false;
+    final isPremium = ref.read(premiumProvider);
+    final isAdmin = ref.read(accessProvider);
+    final hasPromo = ref.read(meStatusProvider)?.hasActivePromo ?? false;
+    return !(isPremium || isAdmin || hasPromo);
+  }
+
+  void _onSignatureTap() {
+    if (_signatureLockedSheet()) {
+      _openSheetPaywall('delegated_choice');
+      return;
+    }
+    // Signature selected → AI delegates the atmosphere; clear any explicit pick.
+    setState(() => _signatureSelected = true);
   }
 
   // Wave 5.17d — lock policy for the re-upload / direction sheet. Mirrors
@@ -3995,10 +4030,30 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
                       scrollDirection: Axis.horizontal,
                       clipBehavior: Clip.none,
                       padding: EdgeInsets.zero,
-                      itemCount: AppLocalizations.atmospheres.length,
+                      itemCount: AppLocalizations.atmospheres.length + 1,
                       separatorBuilder: (_, _) => const SizedBox(width: 10),
                       itemBuilder: (context, i) {
-                        final a = AppLocalizations.atmospheres[i];
+                        // #2 — Ayden Signature card first (mirror upload screen):
+                        // delegates the atmosphere to the AI (surprise).
+                        if (i == 0) {
+                          final sigLocked = _signatureLockedSheet();
+                          return SizedBox(
+                            width: 150,
+                            child: AtmosphereHeroCard(
+                              compact: true,
+                              name: '',
+                              subtitle: 'AI analyzes your space and selects '
+                                  'the atmosphere that fits it best.',
+                              asset: 'assets/atmospheres/ayden_signature.jpg',
+                              selected: _signatureSelected,
+                              locked: sigLocked,
+                              onTap: sigLocked
+                                  ? () => _openSheetPaywall('delegated_choice')
+                                  : _onSignatureTap,
+                            ),
+                          );
+                        }
+                        final a = AppLocalizations.atmospheres[i - 1];
                         // Wave 5.17d — atmosphere lock + paywall-on-tap
                         // mirroring upload-screen and full-reveal carousel.
                         // Wave 5.18 — admin bypass added.
@@ -4010,7 +4065,10 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
                             && !kFreeAtmosphereIds.contains(a.id);
                         final onTap = locked
                             ? () => _openSheetPaywall('atmosphere')
-                            : () => setState(() => _selectedStyle = a.name);
+                            : () => setState(() {
+                                  _selectedStyle = a.name;
+                                  _signatureSelected = false;
+                                });
                         return SizedBox(
                           width: 150,
                           child: FeatureFlags.newDesignCards
