@@ -16,7 +16,7 @@ for _d in [
     RoomAdaptationDNA(
         atmosphere_id="soft_luxury",
         room_type="living_room",
-        furniture_language=["warm bouclé in ivory or blush — plush tactile richness", "honed marble or stone — champagne brass accents, premium surface warmth", "cashmere or velvet in cream — layered textile softness"],
+        furniture_language=["warm bouclé in soft taupe and warm champagne — plush tactile richness", "honed marble or stone — champagne brass accents, premium surface warmth", "cashmere or velvet in warm champagne, cream and soft taupe — layered textile softness"],
         # Wave 5.7e — anchored "fluted ivory plaster walls" → "fluted
         # ivory plaster finish on existing walls" (Wave 5.7 pattern, now
         # applied to living_room). Defense in depth against the fluted-
@@ -43,9 +43,9 @@ for _d in [
         decor_language=[
             "floor-length cashmere or silk-blend curtains in ivory or cream clearly framing each existing window, drawn open with the glass left fully clear — never covering, narrowing or blocking it, never on a glass partition",
             "floor-level ceramic vessel with dried pampas or lunaria",
-            "soft wool-blend rug in cream tones within the seating footprint",
-            "layered cashmere and velvet cushions in cream and blush on the existing sofa — plush asymmetric placement, visible tactile weight",
-            "a weighted velvet or cashmere throw casually draped over the existing sofa or chaise — softly folded, lived-in luxury",
+            "soft wool-blend rug in soft taupe and warm champagne tones within the seating footprint",
+            "layered cashmere and velvet cushions in cream, blush and soft taupe on the existing sofa — plush asymmetric placement, visible tactile weight",
+            "a weighted velvet or cashmere throw in soft taupe casually draped over the existing sofa or chaise — softly folded, lived-in luxury",
             "a sculptural potted olive or fig anchored in the existing corner near the glazing — single statement vessel in cream ceramic or matte stone, never floating in the room",
             "a warm-toned abstract or textural artwork on the existing wall above the sofa or console — only if that wall is solid and free, else omit",
         ],
