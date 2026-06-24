@@ -97,11 +97,51 @@ class RoomTypeImages {
     'driveway': (l) => l.driveway,
   };
 
+  /// #4 — backend / Ayden-Decide room ids are snake_case or short forms
+  /// ("living_room", "bedroom", "office") while [_labelOf] keys are camelCase.
+  /// This bridges them so a room returned by the backend resolves to a proper
+  /// (localized) label instead of leaking the raw id into the UI / titles.
+  static const Map<String, String> _backendIdAlias = {
+    'living_room': 'livingRoom',
+    'bedroom': 'masterBedroom',
+    'master_bedroom': 'masterBedroom',
+    'kitchen': 'kitchen',
+    'bathroom': 'bathroom',
+    'office': 'homeOffice',
+    'home_office': 'homeOffice',
+    'dining_room': 'diningRoom',
+    'entrance': 'entranceHall',
+    'entrance_hall': 'entranceHall',
+    'hallway': 'entranceHall',
+    'facade': 'houseFacade',
+    'house_facade': 'houseFacade',
+    'garden': 'garden',
+    'pool': 'poolArea',
+    'pool_area': 'poolArea',
+    'terrace': 'terrace',
+    'balcony': 'balcony',
+    'driveway': 'driveway',
+  };
+
+  /// Resolve ANY room id form → canonical camelCase id (a [_labelOf] key), or
+  /// null. A camelCase id passes through; a snake_case/short backend id maps via
+  /// [_backendIdAlias]. The label helpers call this so a raw snake id never
+  /// reaches the UI (routing/free-tier behaviour is unchanged — they still emit
+  /// the same canonical English value / camelCase id as before).
+  static String? _canonicalId(String raw) {
+    final r = raw.trim();
+    if (r.isEmpty) return null;
+    if (_labelOf.containsKey(r)) return r;
+    return _backendIdAlias[r.toLowerCase()];
+  }
+
   /// Canonical id → LOCALIZED room label (the routing/free-tier value the
   /// screens pass around). Lets the new card system key by stable camelCase
   /// id while still routing the localized label the backend expects.
-  static String? labelForId(AppLocalizations l10n, String id) =>
-      _labelOf[id]?.call(l10n);
+  static String? labelForId(AppLocalizations l10n, String id) {
+    final cid = _canonicalId(id);
+    return cid == null ? null : _labelOf[cid]!(l10n);
+  }
 
   /// Locale-stable ENGLISH label for an id. THIS is the canonical value routed
   /// through session/generation as `room_type` — the backend prompt engine's
@@ -110,7 +150,10 @@ class RoomTypeImages {
   /// the whole room DNA block (room context, TV anchor, furniture directives).
   /// UI display may still localize via [labelForId]; the VALUE must stay English.
   static final AppLocalizations _enL10n = AppLocalizations(const Locale('en'));
-  static String? enLabelForId(String id) => _labelOf[id]?.call(_enL10n);
+  static String? enLabelForId(String id) {
+    final cid = _canonicalId(id);
+    return cid == null ? null : _labelOf[cid]!(_enL10n);
+  }
 
   /// Localized DISPLAY label for a routed (canonical English) room value.
   /// Round-trips English value → id → localized label so the UI can show
@@ -150,6 +193,8 @@ class RoomTypeImages {
         return entry.key;
       }
     }
-    return null;
+    // #4 — last resort: a snake_case/short backend id ("living_room"). Resolve
+    // it so displayLabel() works on a raw backend room instead of echoing it.
+    return _canonicalId(label);
   }
 }
