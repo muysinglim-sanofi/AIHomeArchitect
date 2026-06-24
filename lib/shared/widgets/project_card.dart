@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/room_type_images.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../data/models/project_model.dart';
 
@@ -30,8 +31,11 @@ class ProjectCard extends StatelessWidget {
     final l10n = context.l10n;
     final previewUrl = project.afterImageUrl ?? project.beforeImageUrl;
     // Room leads the title (AFTER mock); fall back to the session title.
-    final title =
-        project.roomType.isNotEmpty ? project.roomType : project.title;
+    // Display-only: localize the room VALUE via displayLabel (the stored
+    // project.roomType stays canonical English — no data/routing change).
+    final title = project.roomType.isNotEmpty
+        ? RoomTypeImages.displayLabel(l10n, project.roomType)
+        : project.title;
 
     return GestureDetector(
       onTap: onTap,

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/room_type_images.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/pending_generations_provider.dart';
 import '../../core/providers/premium_provider.dart';
@@ -500,8 +501,10 @@ class _ContinueCard extends ConsumerWidget {
     // + overlaid meta, mirroring the Redesigns ProjectCard so the home strip
     // and the Projects grid read as one consistent premium system (was: fixed
     // image band on top + flat text block below).
-    final title =
-        project.roomType.isNotEmpty ? project.roomType : project.title;
+    // Display-only: localize the room via displayLabel (stored value stays EN).
+    final title = project.roomType.isNotEmpty
+        ? RoomTypeImages.displayLabel(context.l10n, project.roomType)
+        : project.title;
 
     return _TapScaleWidget(
       onTap: () => context.push('/chat/${project.id}'),

@@ -1251,14 +1251,16 @@ class _RoomScroller extends ConsumerWidget {
     bool aiLockedNow,
   ) {
     // VALUE routed to session/backend = canonical ENGLISH label (locale-stable;
-    // backend DNA room lookup keys off English names). Display stays English
-    // (r.label) per Option A. Localized labels must NEVER be the routed value —
+    // backend DNA room lookup keys off English names). Display localizes via
+    // displayLabel (below). Localized labels must NEVER be the routed value —
     // they make the backend drop room DNA (room context / TV anchor).
     String value(String id) => RoomTypeImages.enLabelForId(id) ?? id;
     RoomCard card(RoomCardData r) {
       final v = value(r.id);
       return RoomCard(
-        label: r.label,
+        // Display-only localization: show the room in the active locale; the
+        // routed VALUE `v` stays canonical English → backend DNA unaffected.
+        label: RoomTypeImages.displayLabel(l10n, v),
         asset: r.asset,
         selected: selected == v,
         locked: roomLocked(v),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/room_type_images.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/session_provider.dart';
 import '../../data/models/project_model.dart';
@@ -15,8 +16,10 @@ class ProjectsHistoryScreen extends ConsumerWidget {
   // CHANTIER D — "…" menu → confirmed delete (destructive, so a confirm gate).
   Future<void> _confirmDelete(
       BuildContext context, WidgetRef ref, ProjectModel project) async {
-    final name =
-        project.roomType.isNotEmpty ? project.roomType : project.title;
+    // Display-only: localize the room via displayLabel (stored value stays EN).
+    final name = project.roomType.isNotEmpty
+        ? RoomTypeImages.displayLabel(context.l10n, project.roomType)
+        : project.title;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
