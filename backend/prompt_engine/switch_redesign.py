@@ -80,9 +80,9 @@ _SWITCH_HERO_SIGNATURES_COMPACT: dict[str, str] = {
     ),
     "soft_luxury": (
         "HERO FURNISHING — Soft Luxury: deep curved channel-tufted taupe-velvet "
-        "sofa; rounded marble or smoked-glass coffee table; sculptural "
-        "alabaster/brass lamp + warm cove light; high-pile silk-blend rug; "
-        "polished metal and stone accents — plush and opulent, clearly richer and "
+        "sofa; rounded marble or smoked-glass coffee table; large sculptural "
+        "alabaster chandelier + warm cove light; high-pile silk-blend rug; "
+        "polished metal and stone accents — plush and opulent, richer and "
         "curvier than Warm Modern."
     ),
     "nordic_warmth": (
