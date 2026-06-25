@@ -242,6 +242,63 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
     Me). Reused by both consumers so there is a single vision call. All fields
     default empty / 'low' on any failure (callers fall back)."""
     out = {"room": "", "atmosphere": "", "confidence": "low", "reason": ""}
+    # AYDEN_UNIFIED_VISION (default OFF): when ON, this SAME single vision pass also
+    # classifies EXTERIOR spaces (no 2nd call, no pre-classifier). When OFF,
+    # _prompt_text + _room_filter are byte-identical to the original interior-only
+    # classifier (the else branch below is the verbatim original prompt).
+    _unified = os.environ.get("AYDEN_UNIFIED_VISION", "0") == "1"
+    _room_filter = (_INTERIOR_ROOMS | _EXTERIOR_ROOMS) if _unified else _INTERIOR_ROOMS
+    if _unified:
+        _prompt_text = (
+            "Analyse this space (interior OR exterior). Reply with EXACTLY four "
+            "fields separated by ' | ', nothing else:\n"
+            "room_type | recommended_atmosphere | confidence | reason\n"
+            "- room_type: classify into EXACTLY ONE canonical type. Interior: "
+            "living_room, bedroom, kitchen, dining_room, office, bathroom, "
+            "entrance, hallway, other. Exterior: terrace, balcony, garden, "
+            "pool_area, facade, driveway. Never return a generic label such as "
+            "'outdoor', 'exterior' or 'outside'. Prefer the MOST SPECIFIC type: "
+            "pool_area over garden if a pool dominates; balcony over terrace if "
+            "elevated and railing-bound; terrace over garden if it is a paved "
+            "usable outdoor living surface; facade if the building front elevation "
+            "dominates; driveway if vehicle access or paved parking dominates; for "
+            "an entry / door approach choose facade, driveway or terrace by the "
+            "dominant content.\n"
+            "- recommended_atmosphere: the ONE best-fitting from: "
+            "warm_modern (warm walnut/caramel, cosy residential), "
+            "soft_luxury (marble/brass/velvet, elegant — fits high "
+            "ceilings, large or refined spaces), japandi_calm (pale "
+            "wood, minimal, zen — fits simple, bright, uncluttered "
+            "spaces), nordic_warmth (pale wood, cosy hygge, light), "
+            "tropical_escape (rattan/teak/greenery — fits garden views "
+            "or lush, bright spaces). Choose by architecture, light, "
+            "materials, view and mood — NOT a default.\n"
+            "- confidence: high, medium or low.\n"
+            "- reason: a short phrase (max ~8 words).\n"
+            "Example: terrace | tropical_escape | high | paved outdoor "
+            "living area with greenery"
+        )
+    else:
+        _prompt_text = (
+            "Analyse this interior. Reply with EXACTLY four fields "
+            "separated by ' | ', nothing else:\n"
+            "room_type | recommended_atmosphere | confidence | reason\n"
+            "- room_type: one of living_room, bedroom, kitchen, "
+            "dining_room, office, bathroom, entrance, hallway, other.\n"
+            "- recommended_atmosphere: the ONE best-fitting from: "
+            "warm_modern (warm walnut/caramel, cosy residential), "
+            "soft_luxury (marble/brass/velvet, elegant — fits high "
+            "ceilings, large or refined spaces), japandi_calm (pale "
+            "wood, minimal, zen — fits simple, bright, uncluttered "
+            "spaces), nordic_warmth (pale wood, cosy hygge, light), "
+            "tropical_escape (rattan/teak/greenery — fits garden views "
+            "or lush, bright spaces). Choose by architecture, light, "
+            "materials, view and mood — NOT a default.\n"
+            "- confidence: high, medium or low.\n"
+            "- reason: a short phrase (max ~8 words).\n"
+            "Example: living_room | soft_luxury | high | high ceilings, "
+            "large, elegant proportions"
+        )
     try:
         b64 = base64.b64encode(image_bytes).decode()
         resp = await openai.chat.completions.create(
@@ -254,26 +311,7 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
                          "url": f"data:image/jpeg;base64,{b64}",
                          "detail": "low",
                      }},
-                    {"type": "text", "text": (
-                        "Analyse this interior. Reply with EXACTLY four fields "
-                        "separated by ' | ', nothing else:\n"
-                        "room_type | recommended_atmosphere | confidence | reason\n"
-                        "- room_type: one of living_room, bedroom, kitchen, "
-                        "dining_room, office, bathroom, entrance, hallway, other.\n"
-                        "- recommended_atmosphere: the ONE best-fitting from: "
-                        "warm_modern (warm walnut/caramel, cosy residential), "
-                        "soft_luxury (marble/brass/velvet, elegant — fits high "
-                        "ceilings, large or refined spaces), japandi_calm (pale "
-                        "wood, minimal, zen — fits simple, bright, uncluttered "
-                        "spaces), nordic_warmth (pale wood, cosy hygge, light), "
-                        "tropical_escape (rattan/teak/greenery — fits garden views "
-                        "or lush, bright spaces). Choose by architecture, light, "
-                        "materials, view and mood — NOT a default.\n"
-                        "- confidence: high, medium or low.\n"
-                        "- reason: a short phrase (max ~8 words).\n"
-                        "Example: living_room | soft_luxury | high | high ceilings, "
-                        "large, elegant proportions"
-                    )},
+                    {"type": "text", "text": _prompt_text},
                 ],
             }],
             max_tokens=40,
@@ -282,7 +320,7 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
         parts = [p.strip().lower() for p in raw.split("|")]
         if len(parts) >= 1:
             r = parts[0].replace(" ", "_")
-            out["room"] = r if r in _INTERIOR_ROOMS else ""
+            out["room"] = r if r in _room_filter else ""
         if len(parts) >= 2:
             a = parts[1].replace(" ", "_")
             out["atmosphere"] = a if a in _MVP_ATMOSPHERES else ""
@@ -2626,7 +2664,17 @@ async def generate(
 
     # STAGE consumes the room type (Option B: always re-imagine; swap happens after
     # composition; "" exterior/unclear ⇒ preserve).
-    _stage_room = _ayden_vision["room"] if (_want_stage and _ayden_vision) else ""
+    _detected_room = _ayden_vision["room"] if (_want_stage and _ayden_vision) else ""
+    # AYDEN_UNIFIED_VISION — STAGE is an INTERIOR furnish contract; an exterior
+    # space must NOT be staged. Route exteriors to PRESERVE: keep _stage_room ""
+    # (so apply_stage_mode is skipped) but still propagate the detected room below
+    # so its existing DNA applies. When the flag is OFF, _classify_ayden never
+    # returns an exterior → _is_exterior is always False → byte-identical to today.
+    _is_exterior = _detected_room in _EXTERIOR_ROOMS
+    _stage_room = "" if _is_exterior else _detected_room
+    if _is_exterior:
+        log.info("[AydenUnified] exterior detected room=%s → PRESERVE (STAGE skipped)",
+                 _detected_room)
 
     # PRIORITY FIX (flag AYDEN_DECIDE_PROPAGATE_ROOM) — propagate the DETECTED
     # interior room so it becomes the official room_type. This reactivates the
@@ -2638,11 +2686,11 @@ async def generate(
     # (e.g. "living_room") to the DNA key. Default ON (proven perf-neutral,
     # 2026-06-22 bench: room=living_room, dna_room_context 374/418, switches
     # inherit); set AYDEN_DECIDE_PROPAGATE_ROOM=0 as a kill-switch.
-    if _stage_room and os.environ.get("AYDEN_DECIDE_PROPAGATE_ROOM", "1") == "1":
+    if _detected_room and os.environ.get("AYDEN_DECIDE_PROPAGATE_ROOM", "1") == "1":
         log.info("[AydenDecide] propagate detected room → room_type=%r (was %r) "
                  "— reactivates per-atmosphere DNA (furniture/TV anchor/decor)",
-                 _stage_room, room_type or "(none)")
-        room_type = _stage_room
+                 _detected_room, room_type or "(none)")
+        room_type = _detected_room
 
     # SPECIFIC_ROOM_STAGE (2026-06-22, flag-gated, MINIMAL) — let a Specific
     # (explicit-room) V1 reuse the existing STAGE contract. Additive + guarded so
