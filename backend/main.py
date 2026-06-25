@@ -147,7 +147,7 @@ def _struct_id_cache_put(key: str, token: str) -> None:
 # never false-match a DIFFERENT request → no error-path cleanup needed on the
 # many raise sites. Failures are NEVER cached (only the success return writes).
 # Flag AYDEN_IDEMPOTENCY (default on); =0 disables entirely.
-_IDEM_TTL_S = 120.0
+_IDEM_TTL_S = 300.0  # replay window, measured from SUCCESS (_idem_put at completion). 300s comfortably exceeds the worst-case gen (~180s Dio timeout) + a realistic accidental-refire delay, while memory stays bounded by _IDEM_MAX. Does not affect an intentional regenerate (new attempt → new key).
 _IDEM_MAX = 256
 _idem_results: "dict[str, tuple[float, dict]]" = {}
 _idem_inflight: "set[str]" = set()
@@ -1818,6 +1818,8 @@ async def generate(
     secondary_spaces: str = Form(""),     # JSON-encoded list of secondary room type keys
     original_image_url: str = Form(""),  # V1 source image — structural anchor for V2+
     client_request_id: str = Form(""),  # idempotency key from Flutter
+    generation_attempt: str = Form("0"),  # #4 defense — bumped by the client ONLY on an intentional regenerate; lets the secondary (content) idempotency key allow a deliberate re-gen while still deduping accidental retries
+    generation_trigger: str = Form("unknown"),  # Part 5 observability — auto | button | switch | chat | resume | unknown (logged only; never changes behaviour)
     structural_identity: str = Form(""),  # Wave 4.7.2 — persisted apartment identity token (client round-trip)
     source_mode: str = Form(""),          # Wave 4.7.3 — ORIGINAL | LATEST | SPECIFIC_VERSION (missing => default)
     source_version_id: str = Form(""),    # Wave 4.7.3 — target version id when source_mode=SPECIFIC_VERSION
@@ -1944,8 +1946,9 @@ async def generate(
     # of the SAME action; two different ids around one user action ⇒ a timeout
     # re-trigger created a duplicate generation. Lets us tell them apart in prod.
     log.info(
-        "[RETRY-PROOF] request_id=%s  client_supplied=%s  iteration=%d  session=%s",
-        request_id, bool(client_request_id.strip()), iteration, session_id or "(none)",
+        "[RETRY-PROOF] request_id=%s  trigger=%s  client_supplied=%s  iteration=%d  session=%s",
+        request_id, (generation_trigger or "unknown"),
+        bool(client_request_id.strip()), iteration, session_id or "(none)",
     )
 
     # ── #4 — idempotency guard (defence-in-depth) ─────────────────────────────
@@ -1958,25 +1961,48 @@ async def generate(
         if (_idem_enabled() and client_request_id.strip())
         else None
     )
-    if _idem_key is not None:
-        _cached = _idem_get(_idem_key)
+    # #4 defense-in-depth (2026-06-25) — SECONDARY content key. The primary key
+    # dedups identical client_request_ids; this catches an accidental frontend
+    # re-fire that arrives with a DIFFERENT id but is the SAME logical generation
+    # (same user + session + iteration + source + attempt). Success-replay only
+    # (the 120s cache) — the in-flight semantics stay on the primary key, so a
+    # legitimate retry-after-failure is never blocked. An intentional regenerate
+    # bumps `generation_attempt` → different key → allowed (not treated as a dup).
+    _src_for_idem = (before_image_url or original_image_url or "").strip()
+    _idem_key2 = (
+        f"{current_user.user_id}:{session_id}:{iteration}:"
+        f"{hashlib.sha1(_src_for_idem.encode('utf-8')).hexdigest()[:12]}:"
+        f"{(generation_attempt or '0').strip()}"
+        if (_idem_enabled() and _src_for_idem)
+        else None
+    )
+    if _idem_key is not None or _idem_key2 is not None:
+        _cached = (
+            (_idem_get(_idem_key) if _idem_key is not None else None)
+            or (_idem_get(_idem_key2) if _idem_key2 is not None else None)
+        )
         if _cached is not None:
             log.info("[IDEMPOTENCY] replay hit — returning cached result "
-                     "(request_id=%s)", request_id)
+                     "(request_id=%s  via=%s)", request_id,
+                     "primary" if (_idem_key and _idem_get(_idem_key)) else "content_key")
             return _cached
-        if _idem_key in _idem_inflight:
+        if _idem_key is not None and _idem_key in _idem_inflight:
             log.info("[IDEMPOTENCY] concurrent duplicate — waiting for the "
                      "in-flight generation (request_id=%s)", request_id)
             for _ in range(50):  # bounded ~5s; never an unbounded wait
                 await asyncio.sleep(0.1)
-                _cached = _idem_get(_idem_key)
+                _cached = (
+                    _idem_get(_idem_key)
+                    or (_idem_get(_idem_key2) if _idem_key2 is not None else None)
+                )
                 if _cached is not None:
                     log.info("[IDEMPOTENCY] joined in-flight — returning its "
                              "result (request_id=%s)", request_id)
                     return _cached
             log.info("[IDEMPOTENCY] in-flight wait timed out — proceeding "
                      "(request_id=%s)", request_id)
-        _idem_inflight.add(_idem_key)
+        if _idem_key is not None:
+            _idem_inflight.add(_idem_key)
 
     # ── Wave 5.17b — Reserve quota slot BEFORE the OpenAI call ──────────────
     # INSERTs a 'in_progress' usage_log row. Counts immediately against the
@@ -3757,6 +3783,11 @@ async def generate(
     # cached — only this success path writes). Clears the in-flight marker.
     if _idem_key is not None:
         _idem_put(_idem_key, payload)
+    # #4 defense — also cache under the content key so an accidental re-fire with
+    # a different client_request_id (within the 120s TTL) replays this success
+    # instead of launching a 2nd OpenAI generation.
+    if _idem_key2 is not None:
+        _idem_put(_idem_key2, payload)
     # Phase B — fire-and-forget "vision ready" push (no-op unless PUSH_ENABLED +
     # FCM configured). Never blocks the response, never raises. Reaches the device
     # even when the app is backgrounded/suspended (where local notifs can't fire).
