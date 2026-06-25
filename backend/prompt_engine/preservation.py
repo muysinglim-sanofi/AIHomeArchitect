@@ -529,6 +529,42 @@ def build_stage_contract(room_label: str = "", atmosphere_label: str = "",
         f"Every single piece is designed in the {atmo} furniture language — "
         f"{atmo_style}. " if atmo_style else ""
     )
+    # Ceiling-architecture protection (SL living STAGE only — A/B isolation 2026-06-25).
+    # SL is the sole atmosphere with a mandatory oversized chandelier; this clarifies
+    # that "lighting design" = the FIXTURE, not the ceiling structure. Conditional so
+    # Warm Modern / Japandi / Nordic / Tropical keep the original shared closing
+    # byte-identical. Deliberately does NOT touch the shared "You MAY add CEILING and
+    # LIGHTING design" line above — single-variable A/B by design.
+    _sl_living_close = (
+        (atmosphere_id or "").strip().lower() == "soft_luxury"
+        and room_key == "living_room"
+    )
+    # Lever #1 (SL living STAGE only — 2026-06-25): the shared permission invited
+    # "recessed cove lighting + CEILING design", contradicting the SL ceiling-fixed
+    # closing → mixed signal (2/4 still reconstructed). For SL only, keep the
+    # chandelier + lamps + warm light but forbid ceiling-structure changes. Other
+    # atmospheres keep the original permission byte-identical (else branch).
+    ceiling_perm = (
+        "You MAY, however, add atmosphere-appropriate LIGHTING — a hanging "
+        "statement chandelier and freestanding floor/table lamps — plus freestanding "
+        "furniture and decor placed on the existing floor; do not add or alter any "
+        "ceiling structure, recesses, coves, trays, coffers or dropped ceilings. "
+        if _sl_living_close else
+        "You MAY, however, add atmosphere-appropriate CEILING and LIGHTING design "
+        "— recessed and indirect cove lighting, statement pendants, sculptural and "
+        "modern fixtures, layered ambient glow — plus freestanding furniture and "
+        "decor placed on the existing floor. "
+    )
+    closing = (
+        "Furniture and decor are yours to compose. Existing ceiling architecture "
+        "must remain unchanged. Only replace the light fixture. The chandelier must "
+        "be integrated into the existing ceiling without creating or modifying "
+        "ceiling recesses, coffers, domes, moldings or any architectural ceiling "
+        "elements."
+        if _sl_living_close else
+        "Furniture, lighting and decor are yours to compose; the structural shell "
+        "is not."
+    )
     return (
         "STAGE MODE — FURNISH EMPTY SPACE CONTRACT:\n"
         "CRITICAL — the structural shell is FIXED and must be reproduced "
@@ -538,10 +574,7 @@ def build_stage_contract(room_label: str = "", atmosphere_label: str = "",
         "photographed. Never close, fill in, wall up, narrow, shorten, cover or add "
         "any opening, doorway, passage or wall; never turn an existing opening or "
         "passage into a solid wall. "
-        "You MAY, however, add atmosphere-appropriate CEILING and LIGHTING design "
-        "— recessed and indirect cove lighting, statement pendants, sculptural and "
-        "modern fixtures, layered ambient glow — plus freestanding furniture and "
-        "decor placed on the existing floor. "
+        + ceiling_perm +
         "Any existing FITTED elements are part of the room and MUST be kept in "
         "place — an open / American kitchen (units, island, worktops, appliances), "
         "fitted wardrobes, built-in shelving or storage: keep them exactly where "
@@ -560,8 +593,7 @@ def build_stage_contract(room_label: str = "", atmosphere_label: str = "",
         f"ceiling/lighting design MUST express the {atmo or 'chosen'} atmosphere "
         "(see STYLE below), so the room reads unmistakably as that atmosphere — "
         "never a generic interior. "
-        "Furniture, lighting and decor are yours to compose; the structural shell "
-        "is not."
+        + closing
     )
 
 
