@@ -160,6 +160,8 @@ class GenerationService {
     String sourceMode = '',        // BUG A fix — '' | ORIGINAL | LATEST | SPECIFIC_VERSION
     String sourceVersionId = '',   // BUG A fix — target version_id when sourceMode=SPECIFIC_VERSION
     String uiLocale = 'en',        // Phase 1 — authoritative reply language (NOT the generation prompt)
+    String generationTrigger = 'unknown', // P0 dup-fix — trigger source for [RETRY-PROOF] (auto|button|switch|chat|resume)
+    int generationAttempt = 0,     // P0 dup-fix — bumped only on intentional regenerate → backend content-key carve-out
   }) async {
     // Wave 5.13c perf diag — measure client-side click→response latency.
     // Pairs with the backend `[PERF SUMMARY] request_id=...` line via
@@ -198,6 +200,8 @@ class GenerationService {
           'source_mode': sourceMode,
           'source_version_id': sourceVersionId,
           'ui_locale': uiLocale,
+          'generation_trigger': generationTrigger,
+          'generation_attempt': generationAttempt.toString(),
         }),
       );
       sw.stop();
