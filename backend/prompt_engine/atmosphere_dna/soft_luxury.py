@@ -16,7 +16,7 @@ for _d in [
     RoomAdaptationDNA(
         atmosphere_id="soft_luxury",
         room_type="living_room",
-        furniture_language=["warm bouclé in soft taupe and warm champagne — plush tactile richness", "honed marble or stone — champagne brass accents, premium surface warmth", "cashmere or velvet in warm champagne, cream and soft taupe — layered textile softness"],
+        furniture_language=["warm bouclé in soft taupe — plush tactile richness", "honed marble or stone — champagne brass accents, premium surface warmth", "cashmere or velvet in warm champagne and soft taupe — layered textile softness"],
         # Wave 5.7e — anchored "fluted ivory plaster walls" → "fluted
         # ivory plaster finish on existing walls" (Wave 5.7 pattern, now
         # applied to living_room). Defense in depth against the fluted-
