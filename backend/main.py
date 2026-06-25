@@ -329,6 +329,9 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
         if len(parts) >= 4:
             out["reason"] = parts[3][:60]
         log.info("  [AydenVision] raw=%r → %r", raw, out)
+        log.info("  [AydenVision] classifier=%s  room=%s  atmosphere=%s  confidence=%s",
+                 "unified" if _unified else "legacy",
+                 out["room"] or "(none)", out["atmosphere"] or "(none)", out["confidence"])
     except Exception as exc:
         log.warning("  [AydenVision] classify failed (non-fatal): %s: %s",
                     type(exc).__name__, exc)
@@ -478,6 +481,16 @@ _BENCHED_DEFAULT_ON = (
     "STRUCT_ID_CACHE",
     "DNA_CLEANUP_V1",           # already defaults ON at its read site; pinned here too
     "MULTILINGUAL_NORMALIZE",
+    # 2026-06-25 — baked from the run.sh canonical launch so BOTH prod (Render)
+    # and any local run default these ON WITHOUT needing env vars or manual flags.
+    # Explicit env still wins (so any can be flipped off if ever needed).
+    "AYDEN_DECIDE_FURNISH",      # Ayden Decide STAGE room detection
+    "SURPRISE_VISION",           # image-driven Surprise Me / Ayden Signature atmosphere
+    "SWITCH_BLOCK_COMPACT",      # compact switch block (keeps TV/room anchor under budget)
+    # 2026-06-25 — promoted to default ON (user decision after the local bench:
+    # routing + interior/exterior detection validated). Single vision call;
+    # AYDEN_DECIDE_EXTERIOR stays OFF (never combined). Explicit env still wins.
+    "AYDEN_UNIFIED_VISION",      # unified interior + exterior room detection (1 call)
 )
 _OFF_VALUES = {"0", "false", "no", "off"}
 for _flag in _BENCHED_DEFAULT_ON:
@@ -537,6 +550,34 @@ log.info(
     "[Flags] benched defaults applied (explicit env still wins): %s",
     {f: os.environ.get(f) for f in _BENCHED_DEFAULT_ON},
 )
+
+# ── AYDEN_UNIFIED_VISION startup banner (logging only — makes the ACTIVE vision
+# classifier obvious for the A/B benchmark; no functional change) ─────────────
+_uv_on = os.environ.get("AYDEN_UNIFIED_VISION", "0") == "1"
+_de_on = os.environ.get("AYDEN_DECIDE_EXTERIOR", "0") == "1"
+if _uv_on:
+    _uv_cands = "\n".join(
+        f"- {r}" for r in (sorted(_INTERIOR_ROOMS) + sorted(_EXTERIOR_ROOMS))
+    )
+    log.info(
+        "\n==================================================\n"
+        "AYDEN_UNIFIED_VISION : ENABLED\n\n"
+        "Vision classifier:\n"
+        "- Single GPT call\n"
+        "- Interior + Exterior unified classification\n\n"
+        "Candidates:\n%s\n\n"
+        "AYDEN_DECIDE_EXTERIOR : %s\n"
+        "==================================================",
+        _uv_cands,
+        "ENABLED  !! WARNING: legacy 2-call path — must be 0" if _de_on else "DISABLED",
+    )
+else:
+    log.info(
+        "\n==================================================\n"
+        "AYDEN_UNIFIED_VISION : DISABLED\n"
+        "Using legacy interior-only classifier.\n"
+        "==================================================",
+    )
 
 # Emit active profile at import time so the running mode is visible immediately.
 _startup_profile = get_active_profile()
