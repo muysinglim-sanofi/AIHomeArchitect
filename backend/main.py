@@ -348,6 +348,7 @@ from prompt_engine.intent_classifier import (
 )
 from prompt_engine.edit_intent import EditMode
 from prompt_engine.preservation import HIGH_FIDELITY_ATMOSPHERES, apply_stage_mode  # PHASE 1.2 — shared with composer's contract-light decision (single source of truth); apply_stage_mode — Ayden Decide empty-room staging
+from prompt_engine.atmosphere_recommender import SIGNATURE_ATMOSPHERES  # Ayden Signature inspiration whitelist (auto-pick draws ONLY from validated atmospheres)
 from prompt_engine.mask_generator import build_structural_mask
 from prompt_engine.structural_identity import (
     ApartmentStructuralIdentity,
@@ -2673,23 +2674,31 @@ async def generate(
             _ai_atmo = _ayden_vision["atmosphere"]
             _ai_conf = _ayden_vision["confidence"]
             _score = dict(rank_atmospheres(_room_for_atmo)).get(_ai_atmo, 0.0)
-            if _ai_conf != "low" and _score >= 0.45:
+            # Ayden Signature draws ONLY from validated atmospheres — an AI pick
+            # of Japandi / Nordic is rejected here and falls back to the curated
+            # table (which is itself restricted to SIGNATURE_ATMOSPHERES below).
+            _in_signature = _ai_atmo in SIGNATURE_ATMOSPHERES
+            if _in_signature and _ai_conf != "low" and _score >= 0.45:
                 selected_atmosphere = _ai_atmo
                 log.info("[Surprise] room=%s ai_reco=%s conf=%s reason=%r "
-                         "base_compat=%.2f → SELECTED %s",
+                         "base_compat=%.2f in_signature=%s → SELECTED %s",
                          _room_for_atmo or "(none)", _ai_atmo, _ai_conf,
-                         _ayden_vision["reason"], _score, _ai_atmo)
+                         _ayden_vision["reason"], _score, _in_signature, _ai_atmo)
             else:
-                log.info("[Surprise] room=%s ai_reco=%s conf=%s base_compat=%.2f → "
-                         "FALLBACK (conf=low or below floor 0.45)",
-                         _room_for_atmo or "(none)", _ai_atmo, _ai_conf, _score)
+                log.info("[Surprise] room=%s ai_reco=%s conf=%s base_compat=%.2f "
+                         "in_signature=%s → FALLBACK (%s)",
+                         _room_for_atmo or "(none)", _ai_atmo, _ai_conf, _score,
+                         _in_signature,
+                         "not a validated Ayden Signature atmosphere"
+                         if not _in_signature else "conf=low or below floor 0.45")
         if not selected_atmosphere:
             selected_atmosphere = surprise_me(
                 room_type=_room_for_atmo,
                 vision_description=room_description,
                 user_prompt=prompt_en,
+                only=list(SIGNATURE_ATMOSPHERES),  # Ayden Signature: validated atmospheres only
             )
-            log.info("[Surprise] table fallback → %s", selected_atmosphere)
+            log.info("[Surprise] table fallback (signature-only) → %s", selected_atmosphere)
         log.info("  selected atmosphere: %s", selected_atmosphere)
         style_label = selected_atmosphere.replace("_", " ").title()
 

@@ -158,11 +158,31 @@ _SIGNAL_BONUSES: list[tuple[str, str, float]] = [
 ]
 
 
+# ── Ayden Signature inspiration whitelist ─────────────────────────────────────
+# Ayden Signature (surprise_me / let-AI-decide) is NOT an average of every
+# atmosphere — it expresses Ayden's BEST, production-validated taste. ONLY the
+# atmospheres listed here may be AUTO-selected by Ayden Signature.
+#
+#   ✅ warm_modern        ❌ japandi_calm   (not yet validated)
+#   ✅ soft_luxury        ❌ nordic_warmth  (not yet validated)
+#   ✅ tropical_escape
+#
+# Japandi & Nordic stay FULLY available as EXPLICIT user selections — this list
+# only governs the automatic inspiration engine. To validate one later, add its
+# id here; no other code change is required.
+SIGNATURE_ATMOSPHERES: tuple[str, ...] = (
+    "warm_modern",
+    "soft_luxury",
+    "tropical_escape",
+)
+
+
 def rank_atmospheres(
     room_type: str,
     vision_description: str = "",
     user_prompt: str = "",
     exclude: list[str] | None = None,
+    only: list[str] | None = None,
 ) -> list[tuple[str, float]]:
     """
     Return atmospheres ranked by suitability for the given room context.
@@ -172,6 +192,8 @@ def rank_atmospheres(
         vision_description: GPT-4o-mini room description
         user_prompt: user's instruction
         exclude: atmosphere IDs to exclude (e.g., current selection)
+        only: if provided, restrict the candidate set to these atmosphere IDs
+              (used by Ayden Signature to draw only from SIGNATURE_ATMOSPHERES).
 
     Returns:
         List of (atmosphere_id, score) sorted descending by score.
@@ -188,6 +210,10 @@ def rank_atmospheres(
         for atm in exclude:
             compat.pop(atm, None)
 
+    if only is not None:
+        _only = set(only)
+        compat = {k: v for k, v in compat.items() if k in _only}
+
     return sorted(compat.items(), key=lambda x: x[1], reverse=True)
 
 
@@ -196,6 +222,7 @@ def surprise_me(
     vision_description: str = "",
     user_prompt: str = "",
     exclude: list[str] | None = None,
+    only: list[str] | None = None,
 ) -> str:
     """
     Select the single atmosphere that will create the most emotional impact.
@@ -203,9 +230,18 @@ def surprise_me(
     Picks the top-ranked atmosphere from rank_atmospheres. This is not random —
     it is the highest-confidence recommendation for visual and emotional coherence.
 
+    Args:
+        only: if provided, restrict the candidate set (Ayden Signature passes
+              SIGNATURE_ATMOSPHERES so Japandi/Nordic are never auto-selected).
+
     Returns: atmosphere_id string
     """
-    ranked = rank_atmospheres(room_type, vision_description, user_prompt, exclude)
+    ranked = rank_atmospheres(
+        room_type, vision_description, user_prompt, exclude, only=only
+    )
     if ranked:
         return ranked[0][0]
-    return "warm_modern"  # safe fallback
+    # Safe fallback — keep it inside the validated set when one is enforced.
+    if only:
+        return only[0]
+    return "warm_modern"
