@@ -22,6 +22,7 @@ import 'package:intl/intl.dart';
 import 'widgets/chat_input_bar.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/atmosphere_display.dart';
 import '../../core/constants/free_tier.dart';
 import '../../core/constants/room_type_images.dart';
 import '../../core/l10n/app_localizations.dart';
@@ -61,15 +62,14 @@ String _timeAgo(DateTime date) {
   return '${diff.inDays}d ago';
 }
 
-const String _kAydenSignatureLabel = 'Ayden Signature ✦';
-
 /// #4-B — show the Ayden Signature (surprise) atmosphere with its brand label
 /// instead of the internal "AI's choice" sentinel. Display ONLY — the stored /
 /// routed VALUE (_currentStyle, style_label, the session title) stays
 /// "AI's choice"; only what the user reads is rebranded. Works on a bare style
 /// ("AI's choice") and on a composed title ("Master Bedroom — AI's choice").
-String _brandSignature(String s) =>
-    s.replaceAll("AI's choice", _kAydenSignatureLabel);
+/// Delegates to the shared single source of truth (atmosphere_display.dart) so
+/// the chat screen and the project gallery can never desync.
+String _brandSignature(String s) => brandSignature(s);
 
 // ── Chat screen ───────────────────────────────────────────────────────────────
 
@@ -1608,6 +1608,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       _scrollToBottom();
       if (_project.id != 'new') {
         _svc.insertMessage(sessionId: _project.id, role: 'ai', content: reassurance.content);
+        // Money-safety (2026-06-26) — a slow generation can have its long-lived
+        // HTTP response silently dropped on mobile (no TCP error → Dio waits the
+        // full receiveTimeout, ~10 min, showing an endless spinner) while the
+        // backend has ALREADY finished and was billed. Start DB reconciliation
+        // in PARALLEL now: the persisted result is adopted ~5s after it lands,
+        // independent of the fragile HTTP response — so "stay on screen, never
+        // see a result, give up and re-generate (double cost)" stops happening.
+        // Reuses the hardened poll: idempotent (won't stack on an existing
+        // poll), and _genSeq-deduped against the in-flight await, so whichever
+        // delivers first wins with no duplicate vision. Slow (>60s) gens only.
+        _startReconciliationPolling(sessionId: _project.id);
       }
     });
 
