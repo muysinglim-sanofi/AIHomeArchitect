@@ -270,7 +270,7 @@ for _d in [
     RoomAdaptationDNA(
         atmosphere_id="warm_modern",
         room_type="garden",
-        furniture_language=["simple oak table and chairs", "stone or terracotta planters", "single specimen tree as focal point"],
+        furniture_language=["oak or teak outdoor lounge sofa with warm cushions around a low table, plus an oak dining table and chairs where the garden is large enough", "stone or terracotta planters and urns", "specimen olive or tree as focal point"],
         material_palette=["natural limestone or sandstone paving", "warm-toned terracotta pots", "gravel infill between pavers"],
         lighting_behavior="Open natural daylight on planting + warm path lighting as soft accent; bright inviting warm garden atmosphere.",
         # Wave 6.26 (2026-06-06) — garden enrichment (anchoring guard at [0]; see WM balcony).

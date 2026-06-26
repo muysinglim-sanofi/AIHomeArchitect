@@ -478,8 +478,7 @@ _ATMO_FURNITURE_STYLE = {
 # instead of PRESERVE-only. Eligibility = MEMBERSHIP in the per-room tables below
 # (no env flag — Git is the rollback mechanism). Policy:
 #   interiors            -> STAGE (unchanged; NOT listed here)
-#   pool_area, terrace   -> STAGE (validated; listed below)
-#   garden / balcony     -> PRESERVE for now (future PRs; NOT listed here)
+#   pool_area, terrace, garden, balcony -> STAGE (validated; listed below)
 #   facade / driveway    -> PRESERVE always (architecture-dominant; never staged)
 # Frozen Exterior STAGE framework (4 zones). Per-room tokens fill the universal
 # template: PRIMARY SHELL (reproduce exactly), FOCAL (the COMPOSITION hero),
@@ -500,10 +499,25 @@ _EXTERIOR_SHELL_LOCK = {
         "(pergola, canopy or sail) that is already present, fixed and built-in "
         "structures, and the boundary walls and fences"
     ),
+    "garden": (
+        "the garden's exact footprint and levels, its paths, paving and hardscape, "
+        "the lawn and ground-plane extent, every existing wall, fence and boundary, "
+        "all mature and established trees and structural planting, the house facade "
+        "and all openings, retaining and steps, any water feature, and any existing "
+        "built structure (pergola, arbor or shed) that is already present"
+    ),
+    "balcony": (
+        "the balcony's exact footprint and floor, its railing, balustrade, parapet "
+        "and garde-corps, every existing wall, the house facade and all openings "
+        "(door, window, glazing), any existing overhead or soffit, fixed structures, "
+        "and the boundary"
+    ),
 }
 _EXTERIOR_FOCAL = {
     "pool_area": "the pool and its calm, reflective water",
     "terrace": "the open outdoor lounge and the view it frames",
+    "garden": "the garden's focal specimen planting and its layered green depth",
+    "balcony": "the open view beyond the railing and the compact seating moment",
 }
 _EXTERIOR_PLACEMENT = {
     "pool_area": (
@@ -515,6 +529,16 @@ _EXTERIOR_PLACEMENT = {
         "Place all furniture on the existing terrace floor only — never on a "
         "parapet, railing or planter edge and never overhanging the boundary; "
         "group it into a clear lounge zone while keeping circulation open."
+    ),
+    "garden": (
+        "Place all furniture, pots and lighting on existing paths, paving or stable "
+        "ground only — never blocking a path or crushing established beds; keep the "
+        "circulation through the garden clear."
+    ),
+    "balcony": (
+        "Place all furniture and pots on the existing balcony floor only — never on, "
+        "over or hanging off the railing or parapet, and never overhanging the edge; "
+        "one compact, well-composed grouping (a balcony is small)."
     ),
 }
 _EXTERIOR_STAGE_ITEMS = {
@@ -533,14 +557,27 @@ _EXTERIOR_STAGE_ITEMS = {
         "lightly fixed to the existing structure for shade, never enclosing or "
         "walling the space"
     ),
+    "garden": (
+        "an inviting outdoor lounge group (a sofa or sectional with cushions, or a "
+        "bench with armchairs) around a low table and, where the garden is large "
+        "enough, a separate dining area (a table with chairs); lush layered "
+        "ornamental planting and grouped planters and urns that fill the bare beds "
+        "and open ground; a clearly defined path through; and warm path and feature "
+        "lighting — uplights grazing the trees and planting, soft path lights"
+    ),
+    "balcony": (
+        "compact balcony seating (a bistro set or a lounge chair with a small side "
+        "table), floor-standing potted plants, a small outdoor rug, and soft lighting "
+        "— sized to the small balcony, one well-composed grouping, never crowded"
+    ),
 }
 
 
 def is_exterior_stage_room(room_key: str) -> bool:
     """True iff this exterior room uses the EXTERIOR STAGE engine. Eligibility =
-    membership in the per-room tables (validated: pool_area, terrace). No env flag —
-    Git is the rollback mechanism. Interiors / garden / balcony / facade / driveway
-    are NOT listed → False → PRESERVE."""
+    membership in the per-room tables (validated: pool_area, terrace, garden, balcony).
+    No env flag — Git is the rollback mechanism. Interiors / facade / driveway are NOT
+    listed → False → PRESERVE."""
     return (room_key or "").strip().lower() in _EXTERIOR_STAGE_ITEMS
 
 

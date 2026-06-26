@@ -236,7 +236,7 @@ for _d in [
     RoomAdaptationDNA(
         atmosphere_id="japandi_calm",
         room_type="garden",
-        furniture_language=["single low ash bench", "large specimen Japanese maple or birch tree", "raked gravel or moss ground zone"],
+        furniture_language=["a low ash bench plus a low ash or teak dining table with simple benches or low-back chairs where the garden is large enough — uncluttered, intentional, never rattan", "large specimen Japanese maple or birch tree", "raked gravel or moss ground zone"],
         material_palette=["dark slate stepping stone path", "moss or raked gravel ground plane", "raw concrete or stone planter"],
         lighting_behavior="Low warm uplights on specimen tree + single stone lantern on plinth; no path strip lighting.",
         # Wave 6.26 (2026-06-06) — garden enrichment, zen-restrained (guard at [0]; see WM balcony).

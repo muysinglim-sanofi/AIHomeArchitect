@@ -258,7 +258,7 @@ for _d in [
     RoomAdaptationDNA(
         atmosphere_id="tropical_escape",
         room_type="garden",
-        furniture_language=["simple timber garden bench", "tropical planting — palms, heliconias, banana plants", "concrete or stone path through planting"],
+        furniture_language=["a rattan or teak outdoor lounge sofa with white cushions around a low table, plus a teak or rattan dining table with cane chairs where the garden is large enough", "lush tropical planting — palms, heliconias, banana plants", "concrete or stone path through the planting"],
         material_palette=["pale stone or concrete path", "tropical planting palette — greens and whites", "simple timber or concrete garden furniture"],
         lighting_behavior="Warm uplights on tropical planting + warm path strips; lush tropical evening garden.",
         # Wave 6.26 (2026-06-06) — garden enrichment (anchoring guard at [0]; see WM balcony).

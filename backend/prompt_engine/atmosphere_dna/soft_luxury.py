@@ -276,7 +276,7 @@ for _d in [
     RoomAdaptationDNA(
         atmosphere_id="soft_luxury",
         room_type="garden",
-        furniture_language=["single curved garden bench in stone or painted iron", "formal clipped hedging structure", "large planted urns flanking axis"],
+        furniture_language=["a curved ivory outdoor sofa with a stone low table, plus a stone or pale-timber dining table with upholstered chairs where the garden is large enough — never rattan", "formal clipped hedging structure", "large planted urns flanking the axis"],
         material_palette=["honed limestone or gravel path", "clipped box or yew hedging", "painted iron or stone furniture"],
         lighting_behavior="Concealed ground uplights on hedging structure + warm path lighting; formal and restrained.",
         # Wave 6.26 (2026-06-06) — garden enrichment (anchoring guard at [0]; see WM balcony).

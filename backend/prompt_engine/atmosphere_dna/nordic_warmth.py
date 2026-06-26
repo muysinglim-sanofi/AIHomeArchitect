@@ -260,7 +260,7 @@ for _d in [
     RoomAdaptationDNA(
         atmosphere_id="nordic_warmth",
         room_type="garden",
-        furniture_language=["painted pine garden bench", "simple stone or gravel path", "naturalistic planting with wildflowers and ornamental grasses"],
+        furniture_language=["painted pine or teak outdoor lounge seating with wool cushions around a low table, plus a pine dining table and chairs where the garden is large enough", "simple stone or gravel path", "naturalistic planting with wildflowers and ornamental grasses"],
         material_palette=["pale stone or gravel path", "painted pine garden bench", "naturalistic planting in greens and whites"],
         lighting_behavior="Low warm path lights + amber lantern on table; garden in warm evening glow.",
         # Wave 6.26 (2026-06-06) — garden enrichment (anchoring guard at [0]; see WM balcony).
