@@ -3063,7 +3063,13 @@ async def generate(
         output_size, "yes" if mask_bytes else "no", profile.max_attempts,
     )
 
-    _MAX_ATTEMPTS = profile.max_attempts
+    # 2026-06-26 — guarantee at least ONE retry on a TRANSIENT failure (the
+    # recurring `APIConnectionError: Connection error` that blanks a generation
+    # with "service issue"). SAFE on cost: a connection error means OpenAI never
+    # produced an image → not billed → retrying can't double-charge. Retries fire
+    # ONLY on transient verdicts (the except block below); content/BadRequest stay
+    # non-retryable and surface immediately. No effect on the success path.
+    _MAX_ATTEMPTS = max(profile.max_attempts, 2)
     _last_exc: Exception | None = None
     generated_bytes: bytes | None = None
 
@@ -3556,6 +3562,9 @@ async def generate(
                     _attempt, _MAX_ATTEMPTS, _elapsed, _exc_type, exc,
                     decision.verdict.value, decision.reason, _remaining,
                 )
+                # 2026-06-26 — brief backoff so a momentary network blip clears
+                # before the retry (only on a failed attempt; no happy-path cost).
+                await asyncio.sleep(2.0)
             else:
                 log.error(
                     "[OpenAI Attempt %d/%d] final failure in %.1fs  "
