@@ -193,7 +193,7 @@ for _d in [
         furniture_language=["rattan or teak sofa set with thick warm cushions", "stone or teak coffee table", "structured plant in ceramic pot"],
         material_palette=["travertine or large-format stone paving", "warm linen outdoor cushions", "natural canvas overhead shade"],
         lighting_behavior="Bright afternoon daylight under pergola shade + warm outdoor pendant as soft accent; inviting warm residential outdoor atmosphere.",
-        decor_language=["warm linen cushion covers in oat or camel", "trailing or potted olive tree as accent"],
+        decor_language=["anchored to the existing terrace floor, parapet, garde-corps and any existing shade structure — existing architecture and openings kept exactly; no new walls, no enclosure, no building roof, no floor or deck extension", "layered Mediterranean planting filling the perimeter and any bare ground — an olive tree in a large terracotta urn, flowering terracotta planters and ornamental grasses grouped for landscaped depth", "a low reclaimed-wood coffee table styled with hurricane candle lanterns, a stoneware bowl and a tray", "layered oat and camel linen cushions and a soft throw on the sofa", "a patterned natural-fibre outdoor rug grounding the lounge zone", "where the terrace is large enough, a teak dining table with woven or timber chairs, set with candle lanterns", "a soft linen drape on the pergola or shade structure and a cluster of lanterns along the floor edge"],
         realism_constraints=["outdoor furniture at correct residential scale", "paving stones with correct grout lines"],
         room_specific_constraints=["shade structure — pergola or canvas — defines terrace zone", "transition to garden or interior clearly readable"],
         visible_transition_logic="travertine paving continues to pool deck or garden; interior oak floor visible through sliding doors",
@@ -261,11 +261,11 @@ for _d in [
         lighting_behavior="Bright natural afternoon daylight on deck + warm underwater pool tone as soft accent; inviting warm outdoor residential brightness.",
         # Wave 6.25 (2026-06-06) — pool enrichment. Guard at [0] = user constraint:
         # everything anchored to existing surfaces/layout, no new architecture.
-        decor_language=["anchored to the existing deck, coping and furniture — existing pool and spatial layout kept exactly; no added walls, new structures, roofs, pergolas or architectural extensions", "flush travertine coping at pool edge", "single restrained olive tree or hedging at deck perimeter", "rolled towels and a stone tray with a carafe and two glasses on the existing side table", "layered linen cushions and a folded throw on the existing loungers", "a few lanterns set along the existing deck edge"],
+        decor_language=["anchored to the existing deck, coping and furniture — existing pool and spatial layout kept exactly; no added walls, new structures, roofs, pergolas or architectural extensions", "flush travertine coping at pool edge", "layered Mediterranean planting filling the deck perimeter and any open or bare ground — olive trees, ornamental grasses and lavender massed in clustered terracotta and stone planters for landscaped depth", "rolled towels and a stone tray with a carafe and two glasses on the existing side table", "layered linen cushions and a folded throw on the existing loungers", "a few lanterns set along the existing deck edge"],
         realism_constraints=["pool coping at correct height above deck", "loungers spaced at correct 60–80 cm clearance"],
-        room_specific_constraints=["pool coping in single material — no mixing stone types", "deck furniture in one zone — not scattered"],
+        room_specific_constraints=["pool coping in single material — no mixing stone types", "deck furniture grouped in one zone — not scattered, while the surrounding ground is fully landscaped with planting"],
         visible_transition_logic="travertine deck material continues to terrace or garden; warm facade render visible as backdrop",
-        negative_rules=["no plastic sun loungers", "no bright parasols", "no busy pool surrounds", "no cold blue water overemphasis"],
+        negative_rules=["no plastic sun loungers", "no bright parasols", "no cold blue water overemphasis", "no bare or unplanted ground around the deck"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="warm_modern",

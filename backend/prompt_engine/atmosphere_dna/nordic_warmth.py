@@ -183,10 +183,12 @@ for _d in [
         # Wave 6.2a (2026-06-03) — pilot enrichment +2 items. Sheepskin
         # throw on EXISTING seating ; lantern cluster on EXISTING table.
         # Strengthens the hygge outdoor signature.
-        decor_language=["amber glass candle holders on table",
-                        "wool throw draped over chair for cooler evenings",
-                        "natural sheepskin throw on existing seating",
-                        "lantern cluster of 2 to 3 amber glass pieces on the existing table"],
+        decor_language=["anchored to the existing terrace floor, parapet, garde-corps and any existing shade structure — existing architecture and openings kept exactly; no new walls, no enclosure, no building roof, no floor or deck extension",
+                        "painted pine or teak lounge seating layered with thick wool and cotton cushions in oat and undyed white and a natural sheepskin throw",
+                        "a low timber table styled with amber glass candle holders and a lantern cluster of two or three amber glass pieces",
+                        "potted greenery and a specimen tree in painted timber or stone planters along the perimeter",
+                        "a soft wool or cotton outdoor rug in oat grounding the seating zone",
+                        "where the terrace is large enough, a painted pine or teak dining table with timber chairs and amber glass lanterns"],
         realism_constraints=["outdoor furniture at correct residential scale", "string lights on timber beam — not plastic"],
         room_specific_constraints=["dining set permitted on terrace — Nordic outdoor dining culture", "fire pit or brazier as optional focal element"],
         visible_transition_logic="stone or timber deck continues to garden; warm interior light and white walls visible through glass",

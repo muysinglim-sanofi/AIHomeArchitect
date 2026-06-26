@@ -388,7 +388,7 @@ from prompt_engine.intent_classifier import (
     IntentClassification,
 )
 from prompt_engine.edit_intent import EditMode
-from prompt_engine.preservation import HIGH_FIDELITY_ATMOSPHERES, apply_stage_mode  # PHASE 1.2 — shared with composer's contract-light decision (single source of truth); apply_stage_mode — Ayden Decide empty-room staging
+from prompt_engine.preservation import HIGH_FIDELITY_ATMOSPHERES, apply_stage_mode, is_exterior_stage_room  # PHASE 1.2 — shared with composer's contract-light decision (single source of truth); apply_stage_mode — Ayden Decide empty-room staging; is_exterior_stage_room — exterior STAGE eligibility (membership = pool_area, terrace; no env flag)
 from prompt_engine.atmosphere_recommender import SIGNATURE_ATMOSPHERES  # Ayden Signature inspiration whitelist (auto-pick draws ONLY from validated atmospheres)
 from prompt_engine.mask_generator import build_structural_mask
 from prompt_engine.structural_identity import (
@@ -2712,10 +2712,16 @@ async def generate(
     # so its existing DNA applies. When the flag is OFF, _classify_ayden never
     # returns an exterior → _is_exterior is always False → byte-identical to today.
     _is_exterior = _detected_room in _EXTERIOR_ROOMS
-    _stage_room = "" if _is_exterior else _detected_room
+    # An exterior room is STAGE-eligible iff it is a validated exterior STAGE room
+    # (membership: pool_area, terrace — no env flag, Git is the rollback). Eligible
+    # exterior → STAGE (exterior shell-lock); every other exterior → PRESERVE (blank
+    # _stage_room). Interiors are unaffected (_is_exterior is False for them).
+    _exterior_staged = _is_exterior and is_exterior_stage_room(_detected_room)
+    _stage_room = _detected_room if (not _is_exterior or _exterior_staged) else ""
     if _is_exterior:
-        log.info("[AydenUnified] exterior detected room=%s → PRESERVE (STAGE skipped)",
-                 _detected_room)
+        log.info("[AydenUnified] exterior detected room=%s → %s", _detected_room,
+                 "STAGE (exterior shell-lock)" if _exterior_staged
+                 else "PRESERVE (STAGE skipped)")
 
     # PRIORITY FIX (flag AYDEN_DECIDE_PROPAGATE_ROOM) — propagate the DETECTED
     # interior room so it becomes the official room_type. This reactivates the

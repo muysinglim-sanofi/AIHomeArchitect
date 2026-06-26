@@ -473,9 +473,146 @@ _ATMO_FURNITURE_STYLE = {
 }
 
 
+# ── Exterior STAGE eligibility — ADDITIVE, explicit table ──────────────────────
+# Outdoor rooms allowed to use the SAME STAGE engine, with an EXTERIOR shell-lock,
+# instead of PRESERVE-only. Eligibility = MEMBERSHIP in the per-room tables below
+# (no env flag — Git is the rollback mechanism). Policy:
+#   interiors            -> STAGE (unchanged; NOT listed here)
+#   pool_area, terrace   -> STAGE (validated; listed below)
+#   garden / balcony     -> PRESERVE for now (future PRs; NOT listed here)
+#   facade / driveway    -> PRESERVE always (architecture-dominant; never staged)
+# Frozen Exterior STAGE framework (4 zones). Per-room tokens fill the universal
+# template: PRIMARY SHELL (reproduce exactly), FOCAL (the COMPOSITION hero),
+# PLACEMENT (where freestanding pieces may rest), SCENE (the freestanding kit).
+_EXTERIOR_SHELL_LOCK = {
+    "pool_area": (
+        "the pool's exact shape, size, position and depth, its coping and full "
+        "surround, the deck / paving / hardscape, the steps and levels, every "
+        "existing wall, the house facade, all openings (doors, windows, glazing), "
+        "garde-corps, fixed and built-in structures, and the boundary walls and "
+        "fences"
+    ),
+    "terrace": (
+        "the terrace's exact footprint, size, position and levels, its floor / "
+        "decking / paving, the parapet, balustrade and garde-corps, every existing "
+        "wall, column and post, the house facade, all openings (doors, windows, "
+        "glazing, sliding doors), any EXISTING roof, overhang or shade structure "
+        "(pergola, canopy or sail) that is already present, fixed and built-in "
+        "structures, and the boundary walls and fences"
+    ),
+}
+_EXTERIOR_FOCAL = {
+    "pool_area": "the pool and its calm, reflective water",
+    "terrace": "the open outdoor lounge and the view it frames",
+}
+_EXTERIOR_PLACEMENT = {
+    "pool_area": (
+        "Place all loungers and furniture on the deck or paved surfaces only — "
+        "never on the pool coping lip and never overhanging or inside the water; "
+        "group them without crowding a single corner."
+    ),
+    "terrace": (
+        "Place all furniture on the existing terrace floor only — never on a "
+        "parapet, railing or planter edge and never overhanging the boundary; "
+        "group it into a clear lounge zone while keeping circulation open."
+    ),
+}
+_EXTERIOR_STAGE_ITEMS = {
+    "pool_area": (
+        "sun loungers, outdoor cushions, rolled towels, side tables, a tray with a "
+        "carafe and glasses, a freestanding parasol or a freestanding shade sail (on "
+        "its own posts, never attached to the building) where the deck clearly "
+        "allows, large planters and perimeter potted planting, and soft lanterns"
+    ),
+    "terrace": (
+        "an outdoor lounge sofa or sectional with cushions, a low coffee table, a "
+        "pair of armchairs or a chaise, an outdoor rug, side tables, a tray with a "
+        "carafe and glasses, large planters and layered perimeter planting, soft "
+        "lanterns, and an inviting shade structure — a pergola, canopy, shade sail or "
+        "parasol — sized to the terrace and styled to the atmosphere, freestanding or "
+        "lightly fixed to the existing structure for shade, never enclosing or "
+        "walling the space"
+    ),
+}
+
+
+def is_exterior_stage_room(room_key: str) -> bool:
+    """True iff this exterior room uses the EXTERIOR STAGE engine. Eligibility =
+    membership in the per-room tables (validated: pool_area, terrace). No env flag —
+    Git is the rollback mechanism. Interiors / garden / balcony / facade / driveway
+    are NOT listed → False → PRESERVE."""
+    return (room_key or "").strip().lower() in _EXTERIOR_STAGE_ITEMS
+
+
+def _build_exterior_stage_contract(room_key: str) -> str:
+    """Exterior STAGE contract — the frozen 4-zone framework (PRIMARY SHELL →
+    CONTEXT → COMPOSITION → SCENE + one architectural rule): compose a complete,
+    living outdoor scene while the architecture stays locked. Per-room tokens
+    (shell / focal / placement / scene) drive it; per-atmosphere materials/forms
+    stay in the room DNA (ROOM block)."""
+    shell = _EXTERIOR_SHELL_LOCK[room_key]
+    focal = _EXTERIOR_FOCAL[room_key]
+    placement = _EXTERIOR_PLACEMENT[room_key]
+    scene = _EXTERIOR_STAGE_ITEMS[room_key]
+    return (
+        "OUTDOOR STAGE — compose a complete, living scene while the architecture "
+        "stays locked.\n"
+        # ① PRIMARY SHELL — hard lock
+        f"PRIMARY SHELL — reproduce EXACTLY (pixel-for-pixel): {shell} stay exactly "
+        "as photographed. Never change, move, resize, rebuild or replace them, and "
+        "never add or extend PERMANENT architecture (no new wall, no enclosure of the "
+        "space, no building roof or extension, no new fence, no floor or deck "
+        "extension, no platform). An open shade structure — a pergola, canopy, shade "
+        "sail or parasol — is scene furniture and IS allowed (see SCENE). "
+        # ② CONTEXT — never invented
+        "CONTEXT — never invented: do not rebuild, beautify or replace the "
+        "neighbouring buildings, surroundings or sky, and never turn a construction "
+        "site or service area into new villas. A degraded or unsightly background "
+        "MAY be naturally softened or partially screened by the scene's planting and "
+        "depth; a desirable view (sea, open landscape, greenery) is preserved and "
+        "framed, never screened or replaced. "
+        # ③ COMPOSITION — the intent (no objects named here)
+        f"COMPOSITION — the intent: {focal} is the hero; orient the freestanding "
+        "pieces toward it and to the existing geometry; keep circulation and the "
+        "key edges clear; build depth in layers from foreground to background. Be "
+        "AMBITIOUS with planting and landscaping WITHIN the existing space: any open, "
+        "bare or unplanted ground MUST be resolved into layered greenery and grouped "
+        "planters placed on the ground that already exists — never left as bare earth "
+        "or a sparse, empty surround, and never by enlarging the space or shrinking "
+        "any built element. Use only as many functional zones as the existing space "
+        "naturally fits — a generous space may hold more than one (for example a "
+        "lounge and a dining area), a small one keeps a single well-composed zone; "
+        "never overcrowd. Make it read as a rich, lived-in, resort-grade moment — "
+        "never a showroom and never a bare construction plot. "
+        # ④ SCENE — freestanding elements that realise the composition
+        "SCENE — freestanding and lightweight scene elements on the existing "
+        f"surfaces: {scene}; arranged to realise the composition above. {placement} Their "
+        "materials and forms follow the atmosphere (see STYLE below). NO indoor "
+        "furniture: no indoor sofa, no TV, no chandelier, nothing that belongs "
+        "inside the house. "
+        # principle (tie-breaker) + time + closing
+        "RULE — the permanent architecture is the fixed frame: compose the scene "
+        "strictly within the space it leaves. When the desired scene would need more "
+        "room than exists, the SCENE gets smaller — the architecture NEVER shrinks, "
+        "moves, resizes or reshapes to make room for it. If a piece composes the "
+        "scene WITHOUT altering the existing architecture and WITHOUT enclosing, "
+        "walling, roofing-over or extending the building, place it — open shade "
+        "structures (pergola, canopy, sail, parasol) count as scene furniture; if it "
+        "changes the existing architecture, encloses or walls the space, or extends "
+        "the building footprint, it is forbidden. Keep the photographed time-of-day with "
+        "a warm, inviting light. The freestanding scene, styling and lighting are "
+        "yours to compose; the architecture is not."
+    )
+
+
 def build_stage_contract(room_label: str = "", atmosphere_label: str = "",
                          atmosphere_id: str = "") -> str:
     room_key = (room_label or "").strip().lower()
+    # ── PR-1 (ADDITIVE): exterior STAGE rooms use a dedicated exterior contract.
+    # Interior rooms are NOT in _EXTERIOR_STAGE_ITEMS → they fall straight through to
+    # the UNCHANGED interior code path below (byte-identical).
+    if room_key in _EXTERIOR_STAGE_ITEMS:
+        return _build_exterior_stage_contract(room_key)
     room = room_key.replace("_", " ") or "room"
     atmo = (atmosphere_label or "").split("·")[0].strip()
     atmo_phrase = f" in the {atmo} style" if atmo else ""

@@ -178,8 +178,13 @@ for _d in [
         # "open-air luxury") combined with +2 outdoor-coded items
         # (additional plant + lantern cluster) tipped the prompt into
         # "resort villa terrace from scratch" mode. See [[wave-6-2a-regression]].
-        decor_language=["large tropical planting — heliconia or bird of paradise in concrete pot",
-                        "woven rattan tray or object on table"],
+        decor_language=["anchored to the existing terrace floor, parapet, garde-corps and any existing shade structure — existing architecture and openings kept exactly; no new walls, no enclosure, no building roof, no floor or deck extension",
+                        "lush layered tropical planting filling the perimeter and any bare ground — heliconia, bird of paradise, banana leaf and palms in concrete or rattan planters",
+                        "a pale stone or timber low table styled with rattan lanterns, a woven tray with a carafe and glasses and a bowl",
+                        "thick white linen cushions and a woven throw layered on the sofa",
+                        "a natural-fibre outdoor rug grounding the lounge zone",
+                        "where the terrace is large enough, a teak or rattan dining table with cane chairs, set with rattan lanterns",
+                        "a soft linen drape on the pergola or shade structure and rattan lanterns along the floor edge"],
         realism_constraints=["outdoor sofa at correct scale for terrace", "paving at correct level with correct joints"],
         room_specific_constraints=["outdoor seating facing garden or pool — open orientation", "tropical planting as terrace edge feature"],
         visible_transition_logic="pale stone paving continues to pool deck; interior white walls and rattan furniture visible through open plan",
@@ -244,11 +249,11 @@ for _d in [
         material_palette=["large-format pale stone or concrete pool deck", "white canvas cushion fabric", "pale stone or concrete pool coping"],
         lighting_behavior="Warm underwater lighting (warm white tint) + concealed warm cove at shade structure edge.",
         # Wave 6.25 (2026-06-06) — pool enrichment (anchoring guard at [0]; see WM).
-        decor_language=["anchored to the existing deck, coping and furniture — existing pool and spatial layout kept exactly; no added walls, new structures, roofs, pergolas or architectural extensions", "tropical planting at pool edges — heliconia, banana leaf", "white canvas cushions on loungers — consistent colour", "rolled white towels and a rattan tray with a carafe and glasses on the existing side table", "a woven throw and extra cushions layered on the existing loungers", "rattan lanterns set along the existing deck edge"],
+        decor_language=["anchored to the existing deck, coping and furniture — existing pool and spatial layout kept exactly; no added walls, new structures, roofs, pergolas or architectural extensions", "lush layered tropical planting filling the deck perimeter and any open or bare ground — heliconia, banana leaf, palms and grouped planters for verdant landscaped depth", "white canvas cushions on loungers — consistent colour", "rolled white towels and a rattan tray with a carafe and glasses on the existing side table", "a woven throw and extra cushions layered on the existing loungers", "rattan lanterns set along the existing deck edge"],
         realism_constraints=["loungers at correct residential scale", "pool coping at correct level above deck"],
-        room_specific_constraints=["light pool liner — light blue or white", "white or natural cushion colour only on loungers"],
+        room_specific_constraints=["light pool liner — light blue or white", "white or natural cushion colour only on loungers", "no bare or unplanted ground around the deck — landscape it with tropical planting"],
         visible_transition_logic="pale stone deck continues to terrace; white villa facade visible as backdrop",
-        negative_rules=["no dark pool liner", "no bright parasols", "no plastic loungers", "no over-planted dense surround"],
+        negative_rules=["no dark pool liner", "no bright parasols", "no plastic loungers"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="tropical_escape",
