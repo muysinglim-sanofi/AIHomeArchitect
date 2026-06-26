@@ -152,6 +152,14 @@ _IDEM_MAX = 256
 _idem_results: "dict[str, tuple[float, dict]]" = {}
 _idem_inflight: "set[str]" = set()
 
+# ── TEMP INSTRUMENTATION (2026-06-26) — REMOVE after diagnosis. ────────────────
+# Goal: PROVE whether one logical generation can execute openai.images.edit()
+# more than once (the 14¢ double-charge question). Pure logging + counters; NO
+# behaviour change. Keyed by the logical generation (session:iteration:attempt);
+# stores the call count + every distinct request_id that reached the image call
+# for that logical gen. Unbounded over process lifetime (acceptable — temporary).
+_OPENAI_CALL_LOG: "dict[str, dict]" = {}
+
 
 def _idem_enabled() -> bool:
     return os.environ.get("AYDEN_IDEMPOTENCY", "1") != "0"
@@ -3388,7 +3396,44 @@ async def generate(
             if mask_file is not None:
                 edit_kwargs["mask"] = mask_file
 
+            # ── TEMP INSTRUMENTATION (2026-06-26) — REMOVE after diagnosis. ──
+            # logical_key = session:iteration:attempt. An intentional regenerate
+            # bumps `generation_attempt` → new key, so logical_call_count > 1 here
+            # is a TRUE accidental duplicate (same logical gen hitting the image
+            # call twice — whether from the same request_id or a different one).
+            _img_uuid = uuid.uuid4().hex
+            _logical_key = (
+                f"{session_id or '-'}:{iteration}:"
+                f"{(generation_attempt or '0').strip()}"
+            )
+            _rec = _OPENAI_CALL_LOG.setdefault(
+                _logical_key, {"count": 0, "request_ids": set()})
+            _rec["count"] += 1
+            _rec["request_ids"].add(request_id)
+            log.info(
+                "[OPENAI IMAGE START] img_uuid=%s ts=%.3f request_id=%s session=%s "
+                "iteration=%d attempt_field=%s loop_attempt=%d/%d logical_key=%s "
+                "logical_call_count=%d distinct_request_ids=%d",
+                _img_uuid, time.time(), request_id, session_id or "(none)", iteration,
+                (generation_attempt or "0").strip(), _attempt, _MAX_ATTEMPTS,
+                _logical_key, _rec["count"], len(_rec["request_ids"]),
+            )
+            if _rec["count"] > 1:
+                log.warning(
+                    "[OPENAI IMAGE DUPLICATE] logical_key=%s executed "
+                    "openai.images.edit %d times — request_ids=%s (this img_uuid=%s)",
+                    _logical_key, _rec["count"], sorted(_rec["request_ids"]), _img_uuid,
+                )
+            # ── END TEMP INSTRUMENTATION (START half) ──
             response = await openai.images.edit(**edit_kwargs)
+            # ── TEMP INSTRUMENTATION (2026-06-26) — REMOVE after diagnosis. ──
+            log.info(
+                "[OPENAI IMAGE END] img_uuid=%s ts=%.3f request_id=%s session=%s "
+                "iteration=%d loop_attempt=%d",
+                _img_uuid, time.time(), request_id, session_id or "(none)",
+                iteration, _attempt,
+            )
+            # ── END TEMP INSTRUMENTATION ──
             _elapsed = time.monotonic() - _t0
             _timer.record("openai_api", _elapsed, attempt=_attempt, status="success")
             log.info("[OpenAI Attempt %d/%d] succeeded in %.1fs", _attempt, _MAX_ATTEMPTS, _elapsed)
