@@ -348,20 +348,23 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
 
 # SPECIFIC_ROOM_STAGE — interior rooms allowed to reuse the STAGE contract on a
 # Specific (explicit-room) V1. Whitelist = the interior keys of
-# preservation._STAGE_ITEMS; exteriors (terrace/balcony/facade/pool/driveway)
-# are simply absent → skip → never _STAGE_ITEMS_DEFAULT.
+# preservation._STAGE_ITEMS. Exterior rooms are NOT in this frozenset; they are
+# routed to STAGE via preservation.is_exterior_stage_room (membership in the
+# exterior tables — pool_area/terrace/garden/balcony/facade/driveway), so a manual
+# exterior selection stages the same way Ayden Decide does (parity, no preserve cell).
 _SPECIFIC_STAGE_ROOMS = frozenset({
     "living_room", "bedroom", "dining_room", "office",
     "entrance", "hallway", "kitchen", "bathroom",
 })
-# Form display labels that don't normalise directly to a _STAGE_ITEMS key.
+# Form display labels that don't normalise directly to a _STAGE_ITEMS / exterior key.
 # CONFIRMED real labels only (frontend en.dart) — no speculative entries.
 #   "Master Bedroom" → master_bedroom ; "Home Office" → home_office ;
-#   "Entrance Hall" → entrance_hall
+#   "Entrance Hall" → entrance_hall ; "House Facade" → house_facade → facade
 _SPECIFIC_STAGE_MAP = {
     "master_bedroom": "bedroom",
     "home_office": "office",
     "entrance_hall": "entrance",
+    "house_facade": "facade",   # frontend EN label "House Facade" → exterior STAGE key
 }
 
 
@@ -2752,15 +2755,17 @@ async def generate(
     # Ayden Decide stays byte-identical: `not let_ai_decide` excludes the Decide
     # path by construction, `not _stage_room` means Decide didn't already set it,
     # `iteration == 1` is V1-only (no switch/edit/continue). Sets `_stage_room`
-    # only (room_type untouched → zero V2+ effect). Whitelist → exteriors skip.
+    # only (room_type untouched → zero V2+ effect). Interiors via the whitelist;
+    # exteriors via is_exterior_stage_room (manual exterior selection now STAGEs at
+    # parity with Ayden Decide — see _SPECIFIC_STAGE_ROOMS note).
     # Default ON (2026-06-23, routing device-validated: Living/Kitchen/Bathroom +
     # Bedroom/Office/Entrance via _SPECIFIC_STAGE_MAP); SPECIFIC_ROOM_STAGE=0 is
     # the kill-switch.
     if (not _stage_room and not let_ai_decide and iteration == 1 and room_type
             and os.environ.get("SPECIFIC_ROOM_STAGE", "1") == "1"):
         _sk = "_".join(room_type.strip().lower().split())
-        _sk = _SPECIFIC_STAGE_MAP.get(_sk, _sk)  # form label → _STAGE_ITEMS key (confirmed labels only)
-        if _sk in _SPECIFIC_STAGE_ROOMS:
+        _sk = _SPECIFIC_STAGE_MAP.get(_sk, _sk)  # form label → _STAGE_ITEMS / exterior key (confirmed labels only)
+        if _sk in _SPECIFIC_STAGE_ROOMS or is_exterior_stage_room(_sk):
             _stage_room = _sk
             log.info("[SpecificStage] enabled=true room=%r stage_room=%s", room_type, _sk)
         else:
