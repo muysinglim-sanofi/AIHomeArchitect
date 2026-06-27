@@ -478,8 +478,12 @@ _ATMO_FURNITURE_STYLE = {
 # instead of PRESERVE-only. Eligibility = MEMBERSHIP in the per-room tables below
 # (no env flag — Git is the rollback mechanism). Policy:
 #   interiors            -> STAGE (unchanged; NOT listed here)
-#   pool_area, terrace, garden, balcony -> STAGE (validated; listed below)
-#   facade / driveway    -> PRESERVE always (architecture-dominant; never staged)
+#   pool_area, terrace, garden, balcony, facade, driveway -> STAGE (listed below)
+# NOTE: facade/driveway are architecture-dominant — their SCENE is rich ground-level
+# landscaping + lighting (facade also allows a conditional entrance vignette ONLY on
+# an existing porch/covered threshold; driveway stays furniture- and car-free). The
+# building/drive shell is hard-locked and their per-atmosphere DNA already carries a
+# [0] architecture-safe guard (Wave 6.26). Curb-appeal staging, never a building change.
 # Frozen Exterior STAGE framework (4 zones). Per-room tokens fill the universal
 # template: PRIMARY SHELL (reproduce exactly), FOCAL (the COMPOSITION hero),
 # PLACEMENT (where freestanding pieces may rest), SCENE (the freestanding kit).
@@ -512,12 +516,29 @@ _EXTERIOR_SHELL_LOCK = {
         "(door, window, glazing), any existing overhead or soffit, fixed structures, "
         "and the boundary"
     ),
+    "facade": (
+        "the building facade in full — every wall, the roofline and the roof, all "
+        "openings (windows, doors, garage door, glazing) with their exact positions, "
+        "sizes and proportions, balconies, railings and garde-corps, columns, the "
+        "porch and entrance, all facade materials and cladding, and the storeys and "
+        "levels — together with the driveway, paths and paved approach, every existing "
+        "boundary wall, gate and fence, and all mature and established trees and "
+        "structural planting"
+    ),
+    "driveway": (
+        "the driveway's exact shape, extent, levels and paving / surface, the building "
+        "facade and all its openings (doors, windows, garage door, glazing), the garage "
+        "and any carport, every existing wall, pillar, gate, kerb and boundary, the "
+        "paths and steps, and all mature and established trees and structural planting"
+    ),
 }
 _EXTERIOR_FOCAL = {
     "pool_area": "the pool and its calm, reflective water",
     "terrace": "the open outdoor lounge and the view it frames",
     "garden": "the garden's focal specimen planting and its layered green depth",
     "balcony": "the open view beyond the railing and the compact seating moment",
+    "facade": "the entrance and the building's architectural presence",
+    "driveway": "the clean arrival approach to the entrance and garage",
 }
 _EXTERIOR_PLACEMENT = {
     "pool_area": (
@@ -539,6 +560,19 @@ _EXTERIOR_PLACEMENT = {
         "Place all furniture and pots on the existing balcony floor only — never on, "
         "over or hanging off the railing or parapet, and never overhanging the edge; "
         "one compact, well-composed grouping (a balcony is small)."
+    ),
+    "facade": (
+        "Place all planting, pots, lighting and any entrance vignette on existing "
+        "beds, paths, the paved approach, an existing porch or covered threshold, or "
+        "stable ground only — never against the facade in a way that hides or climbs "
+        "over any opening, and never blocking the entrance, a door or the driveway; "
+        "keep the approach to the front door clear and walkable."
+    ),
+    "driveway": (
+        "Place all planting, pots and lighting on existing borders, beds or stable "
+        "ground beside the drive only — never on the vehicle path, never blocking the "
+        "garage, gate or any door, and never narrowing the drivable width; keep the "
+        "full driveway and turning space clear."
     ),
 }
 _EXTERIOR_STAGE_ITEMS = {
@@ -570,13 +604,40 @@ _EXTERIOR_STAGE_ITEMS = {
         "table), floor-standing potted plants, a small outdoor rug, and soft lighting "
         "— sized to the small balcony, one well-composed grouping, never crowded"
     ),
+    "facade": (
+        "a designer, layered arrival: rich multi-height foundation and border planting "
+        "— structural evergreens, ornamental grasses and flowering shrubs — that "
+        "resolves every patch of bare ground along the approach, grouped statement "
+        "planters, urns and clipped topiary flanking the existing entrance, a focal "
+        "specimen tree or sculptural plant where the ground allows, a generous, "
+        "well-defined and welcoming path to the front door with crisp planted edges, "
+        "and — ONLY where an existing porch, veranda, stoop or covered threshold is "
+        "already present — a small styled entrance vignette (a bench or a pair of "
+        "outdoor chairs with a side table, a cushion and a lantern) set on that "
+        "existing hard surface, never on the drive and never blocking the door; "
+        "finished with a quality doormat at the existing threshold and a full warm "
+        "lighting design — uplights grazing the facade and planting, path and step "
+        "lights, and lanterns or sconces flanking the entrance"
+    ),
+    "driveway": (
+        "a designed arrival landscape: crisp clipped hedging and structural evergreens "
+        "framing the drive, rich layered border planting with ornamental grasses and "
+        "flowering accents that resolves any bare ground beside it, a focal specimen "
+        "tree or a planted entrance island as the arrival feature where the ground "
+        "already allows (never narrowing the drivable width), grouped statement "
+        "planters, urns and shaped topiary at the existing gate, pillars and boundary, "
+        "a crisp designed paving-to-planting edge, and a full warm lighting design — "
+        "bollard and path lights along the drive, uplighting on the trees and entrance "
+        "planting, and soft gate and pillar lights; NO seating, outdoor furniture or "
+        "parked vehicles (keep the drivable surface clear)"
+    ),
 }
 
 
 def is_exterior_stage_room(room_key: str) -> bool:
     """True iff this exterior room uses the EXTERIOR STAGE engine. Eligibility =
-    membership in the per-room tables (validated: pool_area, terrace, garden, balcony).
-    No env flag — Git is the rollback mechanism. Interiors / facade / driveway are NOT
+    membership in the per-room tables (pool_area, terrace, garden, balcony, facade,
+    driveway). No env flag — Git is the rollback mechanism. Interior rooms are NOT
     listed → False → PRESERVE."""
     return (room_key or "").strip().lower() in _EXTERIOR_STAGE_ITEMS
 
