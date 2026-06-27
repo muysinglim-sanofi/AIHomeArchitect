@@ -164,23 +164,24 @@ for _d in [
         # stone/marble styling + soft tonal textile + calm luxury. AVOID : gold
         # overload, glamour-Instagram, excessive symmetry — restraint encoded in
         # decor text (negative_rules[:3] only ships, so safety lives in the items).
-        furniture_language=["fluted ivory lacquer cabinetry with recessed brass pulls", "honed Calacatta marble countertop and waterfall island", "integrated appliances behind panel fronts"],
-        material_palette=["fluted ivory lacquer cabinetry", "Calacatta marble countertop", "brushed champagne brass hardware"],
-        lighting_behavior="Warm concealed under-cabinet indirect lighting grazing the Calacatta marble + single refined brass pendant cluster over the existing island; calm luxury brightness, quietly sophisticated, never glamour-staged.",
+        furniture_language=["fluted matte-lacquer perimeter cabinetry in warm oat, sand or greige with brushed champagne brass pulls — a clearly warm beige tone, never ivory, white or cream", "a statement island as the kitchen's focal hero mass — a waterfall top in warm honey-beige travertine with visible warm-brown veining and movement, distinctly warmer and deeper than the cabinetry — a clear warmth-and-value step, never white, cream or grey", "flush panel-front appliances in matching warm oat or sand, with a brushed-oak open shelf or niche as the timber accent"],
+        material_palette=["fluted matte-lacquer cabinetry in warm oat, sand or greige — never ivory or white", "warm honey-beige travertine island with visible warm-brown veining; perimeter worktop in a warmer beige stone with soft veining, never stark white", "brushed warm champagne brass with brushed-oak accents and warm stone textures"],
+        lighting_behavior="Warm concealed under-cabinet lighting grazing the stone + a refined brass pendant cluster over the existing island + a soft ceiling cove for layered ambient glow, with a warm golden daylight balance; calm warm brightness, no harsh spots, never over-bright and never a cool or white cast.",
         decor_language=[
-            "cashmere or silk-blend curtains in ivory or cream framing the existing window, drawn open with the glass clear — never covering or blocking it, never on a glass partition; only where a window exists",
-            "single marble mortar and honed stone cutting board styled on the existing counter — premium and restrained",
-            "open shelf with 3 sculptural ceramic pieces in cream and champagne tones — asymmetric, no clutter",
-            "a soft tonal ivory linen runner or tea towel draped on the existing counter — quiet textile layer",
-            "single white orchid or sculptural stem in a cream ceramic vessel on the existing counter",
-            "a stack of two neutral ceramic bowls beside the existing cooktop — curated, not styled-for-camera",
+            "a linen Roman shade in warm oat or sand, raised and open at the top — glass fully clear, never covering or blocking it; only where a window exists",
+            "a stone mortar with a travertine or oak cutting board styled on the existing counter — tactile and premium",
+            "a brushed-oak open shelf with 3-4 artisanal ceramics in warm stone and clay tones — asymmetric, tactile, never cluttered",
+            "a linen runner or tea towel in oatmeal, mushroom or flax on the existing counter — a warm textile layer, never pale-on-pale",
+            "a sculptural olive branch or lush greenery in a handmade stone or ceramic vessel — living and architectural, never a fussy floral",
+            "a stack of 2-3 artisanal ceramic bowls in warm stone or clay tones beside the existing cooktop — curated and tactile",
+            "a wooden tray with a few small amber glass bottles on the existing counter — natural texture",
         ],
         realism_constraints=["island at correct working height — 90 cm", "cabinet panels flush with appliances — no exposed appliance handles"],
         # Wave 6.13c (2026-06-05) — kitchen structure-preservation guard at [0] (see WM).
         # SL is the other documented wall-symmetry-leaning atmosphere. Ships [:2].
-        room_specific_constraints=["arrange cabinetry and island without covering, narrowing or relocating any existing window, doorway or wall opening — keep photographed openings fully clear", "countertop in single marble slab — no tile", "island in contrasting marble to perimeter counter"],
-        visible_transition_logic="ivory cabinet tone echoes dining room furniture; marble countertop palette flows to dining table surface",
-        negative_rules=["no stainless steel appliances exposed", "no dark cabinetry", "no industrial fixtures", "no open shelf clutter"],
+        room_specific_constraints=["arrange cabinetry and island without covering, narrowing or relocating any existing window, doorway or wall opening — keep photographed openings fully clear", "the island is the hero focal mass — a contrasting warm honey-beige stone, warmer and deeper than the cabinetry; all counters single slabs, no tile"],
+        visible_transition_logic="warm stone and oak tones flow to the dining room furniture and table; materials and palette connect softly with the surrounding spaces",
+        negative_rules=["no stark white or cool grey — warm neutrals only", "no glossy lacquer or over-polished high-glam look", "no dark cabinetry or black accents", "no industrial fixtures", "no cluttered open shelves", "no stainless steel appliances exposed"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="soft_luxury",
