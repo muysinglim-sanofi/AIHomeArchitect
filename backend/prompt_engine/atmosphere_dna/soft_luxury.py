@@ -127,8 +127,8 @@ for _d in [
         # and refined residential intimacy. Drops "above padded headboard
         # wall" architectural directive from lighting_behavior (wall risk).
         # Room-scoped, no living_room contamination.
-        furniture_language=["cashmere or bouclé in ivory or champagne with naturally relaxed fall and slight asymmetrical drape — plush tactile softness", "brushed brass — warm champagne metal refinement", "velvet or bouclé in champagne — layered softness and warmth"],
-        material_palette=["honed marble or travertine floor", "fluted ivory plaster finish on existing walls", "raw silk or velvet soft furnishings"],
+        furniture_language=["a sculptural, generously upholstered headboard in warm cashmere or bouclé — greige or mushroom, the bed's dominant mass, clearly deeper than the pale walls", "matched nightstands in fluted ivory lacquer or honed marble with brushed champagne brass — refined and modern, never rustic or dark wood", "a fluted ivory lacquer chest of drawers or dresser with brushed champagne brass hardware — a calm secondary mass against an existing wall", "velvet or bouclé seating in champagne plus an upholstered foot-of-bed bench with slim brushed-brass legs"],
+        material_palette=["honed marble or travertine floor", "fluted ivory plaster finish on existing walls", "honed marble or travertine tops, fluted ivory lacquer, brushed champagne brass, raw silk and velvet"],
         lighting_behavior="Soft warm daylight from windows + concealed warm cove + brushed brass bedside table lamps with silk shade producing soft ambient glow; refined residential intimacy.",
         # Wave 5.5.27 — REPLACED artwork with bedside rug. User-locked wording
         # drops "cashmere or champagne" hotel-staging semantics.
@@ -144,17 +144,17 @@ for _d in [
         # not above bed) to break the hotel-suite render.
         decor_language=[
             "floor-length cashmere or silk-blend curtains in ivory or cream clearly framing each existing window, drawn open with the glass left fully clear — never covering, narrowing or blocking it, never on a glass partition",
-            "VISIBLY relaxed cream-to-ivory bedding with clearly natural asymmetric folds — natural moment, not hotel turndown",
-            "soft wool rug at the bedside in cream tones",
+            "the bed is the focal mass — a coverlet or duvet in a clear mid-tone warm neutral (greige, mushroom or warm taupe), distinctly darker than the ivory sheets and the pale walls, a visible value step never near-white, with relaxed natural folds and layered mixed-texture pillows",
+            "a large textured wool rug anchoring the bed in a warm neutral deeper than the floor — never pale-on-pale",
             "PROMINENTLY displayed sculptural ceramic vase in cream or champagne on the existing nightstand or dresser",
-            "weighted velvet throw casually draped over the foot corner of the existing bed",
+            "a substantial textured throw in deeper mushroom or taupe at the foot of the existing bed — warmth and contrast",
             "open book or magazine on the existing nightstand",
             "small framed photograph on the existing dresser",
         ],
         realism_constraints=["headboard at correct height — 120–140 cm above mattress", "velvet or cashmere bedding with visible slight imperfections in fabric drape — not hotel-stiff"],
-        room_specific_constraints=["single bedding palette — cream, ivory, champagne only", "dressing area separated if space allows"],
+        room_specific_constraints=["layer the bedding across warm neutrals — ivory through oat, greige and mushroom — for tonal hierarchy; the bed reads as the dominant mass, never blending into the walls", "dressing area separated if space allows"],
         visible_transition_logic="marble floor and ivory plaster continue into ensuite; silk soft furnishing palette echoes dressing room",
-        negative_rules=["no coloured bedding", "no mirrored furniture", "no pattern on bedding", "no LED strip headboard"],
+        negative_rules=["no strong or saturated colours — warm neutrals only, never black, blue, green or burgundy", "no mirrored furniture", "no printed pattern on bedding — woven texture welcome", "no LED strip headboard"],
     ),
     RoomAdaptationDNA(
         atmosphere_id="soft_luxury",
