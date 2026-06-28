@@ -565,7 +565,12 @@ log.info(
 # ── AYDEN_UNIFIED_VISION startup banner (logging only — makes the ACTIVE vision
 # classifier obvious for the A/B benchmark; no functional change) ─────────────
 _uv_on = os.environ.get("AYDEN_UNIFIED_VISION", "0") == "1"
-_de_on = os.environ.get("AYDEN_DECIDE_EXTERIOR", "0") == "1"
+# Legacy 2-call exterior detection is mutually exclusive with the unified vision
+# (the unified 1-call path already classifies interior + exterior). Force it OFF
+# whenever unified vision is on, regardless of the env — this neutralises a stale
+# AYDEN_DECIDE_EXTERIOR=1 left in the Render dashboard (kills the redundant 2nd
+# GPT call). _de_on is the single source of truth for banner + routing below.
+_de_on = os.environ.get("AYDEN_DECIDE_EXTERIOR", "0") == "1" and not _uv_on
 if _uv_on:
     _uv_cands = "\n".join(
         f"- {r}" for r in (sorted(_INTERIOR_ROOMS) + sorted(_EXTERIOR_ROOMS))
@@ -2681,7 +2686,7 @@ async def generate(
     if (
         let_ai_decide
         and not room_type
-        and os.environ.get("AYDEN_DECIDE_EXTERIOR", "0") == "1"
+        and _de_on  # forced off when unified vision is on (see startup banner)
     ):
         log.info("--- Ayden Decide: interior/exterior detection ---")
         _t_ext = time.monotonic()
