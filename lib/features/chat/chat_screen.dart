@@ -3792,8 +3792,10 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
       _openSheetPaywall('delegated_choice');
       return;
     }
-    // Signature selected → AI delegates the atmosphere; clear any explicit pick.
-    setState(() => _signatureSelected = true);
+    // Signature toggles like Ayden Decide. While it's on, any explicit style is
+    // visually masked (see the atmosphere card `selected` predicate), so the two
+    // are mutually exclusive — tapping it again turns delegation back off.
+    setState(() => _signatureSelected = !_signatureSelected);
   }
 
   // Wave 5.17d — lock policy for the re-upload / direction sheet. Mirrors
@@ -3846,7 +3848,9 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
       return RoomCard(
         label: r.label,
         asset: r.asset,
-        selected: _selectedRoomType == v,
+        // Ayden Decide and an explicit room are mutually exclusive: while AI
+        // Decide is on, no room card reads as selected (mirrors the upload screen).
+        selected: _selectedRoomType == v && !_aiDecide,
         locked: _roomLocked(v),
         onTap: () => _onRoomTap(v),
       );
@@ -4161,13 +4165,13 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
                                   subtitle: context.l10n.atmosphereSubtitle(a.id),
                                   asset: kAtmosphereCardById[a.id]?.asset ??
                                       'assets/cards/atmospheres/${a.id}.png',
-                                  selected: a.name == _selectedStyle,
+                                  selected: a.name == _selectedStyle && !_signatureSelected,
                                   locked: locked,
                                   onTap: onTap,
                                 )
                               : AtmosphereCard(
                                   atmosphere: a,
-                                  selected: a.name == _selectedStyle,
+                                  selected: a.name == _selectedStyle && !_signatureSelected,
                                   locked: locked,
                                   onTap: onTap,
                                 ),
