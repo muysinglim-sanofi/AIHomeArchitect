@@ -127,10 +127,22 @@ class LocalNotificationService {
     return id;
   }
 
+  /// Set true by [PushService] once the device's FCM token is registered: the
+  /// SERVER then owns the "vision ready" signal for backgrounded/suspended apps,
+  /// so the local notification must NOT also fire — otherwise the user gets TWO
+  /// "ready" notifications (one local + one push) for a single generation. When
+  /// push is NOT registered (permission denied / token failed) the backend has no
+  /// token to push to, so this stays false and the local notification remains the
+  /// only fallback. Failures are unaffected ([notifyFailed]): the push only covers
+  /// success, so the local failure notification still fires in the background.
+  bool pushHandlesReady = false;
+
   /// Fire the "vision ready" notification. No-op in the foreground (the in-app
-  /// snackbar already covers that — see home_screen.dart).
-  Future<void> notifyReady({required String sessionId}) =>
-      _show(sessionId: sessionId, isError: false);
+  /// snackbar covers that) AND no-op once push owns "ready" (avoids the double).
+  Future<void> notifyReady({required String sessionId}) {
+    if (pushHandlesReady) return Future.value();
+    return _show(sessionId: sessionId, isError: false);
+  }
 
   /// Fire the "generation failed" notification (background only).
   Future<void> notifyFailed({required String sessionId}) =>

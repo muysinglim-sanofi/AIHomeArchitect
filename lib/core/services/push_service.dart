@@ -80,6 +80,11 @@ class PushService {
         data: FormData.fromMap({'token': token, 'platform': platform}),
         options: Options(headers: {'Authorization': 'Bearer $jwt'}),
       );
+      // Push now owns the "vision ready" signal for backgrounded/suspended apps,
+      // so the LOCAL "ready" notification must stop firing (it was double-notifying
+      // — one local + one push for a single generation). Failure notifications are
+      // unaffected (push covers success only).
+      LocalNotificationService.instance.pushHandlesReady = true;
       debugPrint('[Push] device token registered ($platform)');
     } catch (e) {
       debugPrint('[Push] device register failed (non-fatal): $e');
