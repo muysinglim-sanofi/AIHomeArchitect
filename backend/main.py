@@ -2046,6 +2046,42 @@ async def generate(
         request_id, (generation_trigger or "unknown"),
         bool(client_request_id.strip()), iteration, session_id or "(none)",
     )
+    # [INTENT-ID] (PR1a, 2026-06-28 — LOGGING ONLY) — observe the normalized INTENT
+    # IDENTITY (the user's expressed wish), computed PRE-RESOLUTION (before Ayden
+    # Decide / Surprise resolve atmosphere/room downstream at AYDEN_UNIFIED_VISION).
+    # NOTE — this is the identity of the INTENT, NOT of the Generation. The system will
+    # later use this `iid` to INSTANTIATE-OR-ATTACH a Generation (which gets its OWN id).
+    # Pure diagnostic: NO behaviour change, NO enforcement, NO persistence, NO
+    # retry/pipeline/frontend impact. Gate of proof (read in prod logs):
+    #   • same intent re-fired                       → SAME iid
+    #   • switch atmosphere / regenerate(revision++) / re-upload → DIFFERENT iid
+    #   • Ayden Decide / Surprise re-fired            → SAME iid (intent is pre-resolution)
+    # `revision` = business revision of the wish (read from generation_attempt): a
+    # RETRY keeps it (same wish), a REGENERATE bumps it (a new wish). Source: prefer the
+    # STABLE anchor (pinned version > V1 upload > immediate URL), hashed — never log the
+    # URL. Atmosphere/room use the REQUEST intent, not the resolved style. No sensitive
+    # data (no full prompt/URL/key/bytes).
+    _iid_src_ref = (source_version_id or original_image_url or before_image_url or "").strip()
+    _iid_src = hashlib.sha1(_iid_src_ref.encode("utf-8")).hexdigest()[:12] if _iid_src_ref else "(nosrc)"
+    _iid_atmo = ("let-decide" if let_ai_decide
+                 else "surprise" if surprise_me_flag
+                 else (atmosphere_id or style_label or "(none)").strip())
+    _iid_room = ("let-decide" if let_ai_decide else (room_type_id or room_type or "(none)").strip())
+    _iid_dir = hashlib.sha1(prompt.encode("utf-8")).hexdigest()[:8] if (prompt or "").strip() else "noprompt"
+    _iid_action = f"{generation_mode or 'preserve'}|{source_mode or 'default'}|{_iid_dir}"
+    _iid_revision = (generation_attempt or "0").strip()   # business: intent revision (regenerate++ ; retry keeps)
+    _iid_raw = (
+        f"{current_user.user_id}:{session_id}:{_iid_src}:{iteration}:"
+        f"{_iid_room}:{_iid_action}:{_iid_atmo}:{_iid_revision}"
+    )
+    _iid = hashlib.sha256(_iid_raw.encode("utf-8")).hexdigest()[:12]
+    log.info(
+        "[INTENT-ID] iid=%s user=%s session=%s src=%s iter=%s room=%s action=%s "
+        "atmo=%s let_decide=%s surprise=%s revision=%s creq=%s req=%s trigger=%s",
+        _iid, current_user.user_id[:8], session_id or "(none)", _iid_src, iteration,
+        _iid_room, _iid_action, _iid_atmo, let_ai_decide, surprise_me_flag, _iid_revision,
+        client_request_id.strip() or "(none)", request_id, generation_trigger or "unknown",
+    )
 
     # ── #4 — idempotency guard (defence-in-depth) ─────────────────────────────
     # Only when the client supplied a real idempotency key (a uuid fallback is
