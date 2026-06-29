@@ -511,6 +511,18 @@ for _flag in _BENCHED_DEFAULT_ON:
     # else: an explicit value (incl. "0"/"false") is respected verbatim.
 # (observability log emitted below, once the file handler is attached)
 
+# ── Core image model (2026-06-29) ────────────────────────────────────────────
+# Migration gpt-image-1 → gpt-image-2. Benché (39 imgs, 5 atmo × 5 pièces, low +
+# sonde medium) : gpt-image-2 quality=low = −84 % de coût vs gpt-image-1 medium,
+# préservation et latence équivalentes ; medium (×2,7 coût) rejeté. Deux
+# propriétés du modèle, gérées dans le bloc edit_kwargs de generate_design() :
+#   • input_fidelity est VERROUILLÉ (l'API le rejette) → omis de chaque appel ;
+#   • quality figé à "low" (la seule config benchée) sur tous les chemins.
+# Constante = source unique, PAS de flag env → rollback = remettre "gpt-image-1"
+# (toute la machinerie per-atmosphère quality/fidelity gpt-image-1 reste intacte,
+# juste neutralisée tant que ce modèle est gpt-image-2).
+IMAGE_MODEL = "gpt-image-2"
+
 # ── Wave 5.2 — composer feature-flag dispatch ────────────────────────────────
 # COMPOSER_VERSION env var selects which composer the /generate handler uses.
 #   unset / "v1" (default) → frozen composer.py (rollback baseline; unchanged)
@@ -3103,9 +3115,9 @@ async def generate(
         len(mask_bytes) if mask_bytes else 0, len(design_prompt.encode("utf-8")),
     )
     log.info(
-        "--- calling OpenAI images.edit (gpt-image-1, quality=%s, "
+        "--- calling OpenAI images.edit (%s, quality=%s, "
         "input_fidelity=%s, size=%s, mask=%s, max_attempts=%d) ---",
-        profile.quality, profile.input_fidelity or "omitted",
+        IMAGE_MODEL, profile.quality, profile.input_fidelity or "omitted",
         output_size, "yes" if mask_bytes else "no", profile.max_attempts,
     )
 
@@ -3393,6 +3405,18 @@ async def generate(
             # REVERT = comment the two lines below.
             if _switch_override_applied:
                 _fidelity_override = "low"
+            # gpt-image-2 migration (2026-06-29) — le modèle VERROUILLE
+            # input_fidelity (l'API le rejette) et a été benché en quality=low.
+            # On force les deux ICI pour que le reste du bloc (conçu pour le
+            # tuning per-atmosphère gpt-image-1) émette un appel valide :
+            #   • _fidelity_override=None → routé vers la branche OMIT plus bas
+            #     (pop + log "OMITTED"), donc input_fidelity absent de l'appel ;
+            #   • _quality_override="low" → config benchée (−84 % coût), figée
+            #     sur TOUS les chemins (y c. itérations) — medium = ×2,7 rejeté.
+            # Rollback complet = IMAGE_MODEL="gpt-image-1" (réactive le tuning).
+            if IMAGE_MODEL.startswith("gpt-image-2"):
+                _fidelity_override = None
+                _quality_override = "low"
             # Wave 5.14A Last-Chance Step 4 / Option E REMOVED (2026-06-02
             # evening) — omit-both config triggered OpenAI default quality=
             # "auto" which heuristically selected "high" tier (~55s OpenAI
@@ -3400,7 +3424,7 @@ async def generate(
             # vs visual gain. User reverted to Step 5 (quality=low set by
             # Step 1 + fidelity=OMIT set by Step 5 below).
             edit_kwargs: dict = dict(
-                model="gpt-image-1",
+                model=IMAGE_MODEL,
                 image=img_file,
                 prompt=design_prompt,
                 n=1,
@@ -3486,6 +3510,38 @@ async def generate(
                 iteration, _attempt,
             )
             # ── END TEMP INSTRUMENTATION ──
+            # ── OBSERVABILITÉ FACTURATION (2026-06-29) — usage tokens réels.
+            # Pur log, AUCUN changement de comportement, AUCUN base64.
+            # Répond à : OpenAI facture-t-il différemment la MÊME requête ?
+            #   input_tokens_details.image_tokens  = coût input_fidelity=high
+            #   output_tokens_details.image_tokens = coût quality × size
+            # Si pour une image identique ces tokens (ou le $/token) ont bougé
+            # dans le temps → c'est la plateforme OpenAI, pas notre code.
+            try:
+                _usage = getattr(response, "usage", None)
+                _oai_rid = getattr(response, "_request_id", None)
+                _itd = getattr(_usage, "input_tokens_details", None)
+                _otd = getattr(_usage, "output_tokens_details", None)
+                log.info(
+                    "\n========== OPENAI IMAGE RESPONSE ==========\n"
+                    "openai_request_id=%s\n"
+                    "input_tokens=%s (image=%s text=%s)\n"
+                    "output_tokens=%s (image=%s)\n"
+                    "total_tokens=%s\n"
+                    "payload: size=%s quality=%s input_fidelity=%s n=%s model=%s\n"
+                    "===========================================",
+                    _oai_rid,
+                    getattr(_usage, "input_tokens", None),
+                    getattr(_itd, "image_tokens", None),
+                    getattr(_itd, "text_tokens", None),
+                    getattr(_usage, "output_tokens", None),
+                    getattr(_otd, "image_tokens", None),
+                    getattr(_usage, "total_tokens", None),
+                    output_size, _quality_override, _fidelity_override,
+                    edit_kwargs.get("n"), IMAGE_MODEL,
+                )
+            except Exception as _uexc:  # noqa: BLE001 — observabilité non-fatale
+                log.warning("[OpenAI Usage] log usage échoué (non-fatal): %s", _uexc)
             _elapsed = time.monotonic() - _t0
             _timer.record("openai_api", _elapsed, attempt=_attempt, status="success")
             log.info("[OpenAI Attempt %d/%d] succeeded in %.1fs", _attempt, _MAX_ATTEMPTS, _elapsed)
