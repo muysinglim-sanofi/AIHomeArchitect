@@ -127,6 +127,37 @@ _FEATURE_TOPICS: dict[str, dict] = {
         ),
     },
 
+    "re_upload": {
+        "category": "feature",
+        "patterns_en": [
+            r"\bre.?upload\b",
+            r"\bwhat\s+is\s+(the\s+)?re.?upload\b",
+            r"\breplace\s+(the\s+)?(source|original)\s+(photo|image|picture)\b",
+            r"\bupload\s+(a\s+)?(new|different)\s+(photo|image|picture)\b",
+            r"\bchange\s+(the\s+)?(source|original)\s+(photo|image)\b",
+            r"\bstart\s+(over\s+)?(with\s+)?(a\s+)?(new|different)\s+(photo|image)\b",
+        ],
+        "patterns_km": [
+            r"re.?upload",
+            r"ផ្ទុក\s*រូបភាព\s*ឡើង\s*វិញ",
+            r"ប្ដូរ\s*រូបភាព\s*ដើម",
+        ],
+        "answer_en": (
+            "Re-upload lets you replace the original source photo of a project "
+            "with a new one while staying in the same project. Because the new "
+            "photo is a different starting point, the version history is reset to "
+            "it — the earlier visions don't carry over (they belonged to the old "
+            "photo). Use it when you want to redesign a different room or a new "
+            "picture of the same space from a clean slate."
+        ),
+        "answer_km": (
+            "Re-upload អនុញ្ញាតឱ្យអ្នកជំនួសរូបភាពដើមរបស់គម្រោងដោយរូបភាពថ្មី "
+            "ខណៈនៅក្នុងគម្រោងដដែល។ ដោយសាររូបភាពថ្មីជាចំណុចចាប់ផ្តើមផ្សេង "
+            "ប្រវត្តិកំណែត្រូវកំណត់ឡើងវិញ — ទស្សនៈចាស់មិនបន្តទេ។ "
+            "ប្រើវានៅពេលអ្នកចង់រចនាបន្ទប់ផ្សេង ឬរូបភាពថ្មីពីដំបូង។"
+        ),
+    },
+
     "branching": {
         "category": "feature",
         "patterns_en": [

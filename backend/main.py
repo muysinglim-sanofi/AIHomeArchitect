@@ -100,6 +100,7 @@ from prompt_engine.conversation_router import (
     TurnIntent,
     resolve_turn_intent,
     detect_result_explanation,   # PR2 Support — RESULT_EXPLANATION gate
+    detect_design_opinion_question,  # PR3-router — opinion question → DESIGN_ADVICE
     detect_out_of_scope,
     get_out_of_scope_reply,
 )
@@ -1870,16 +1871,50 @@ async def chat(
         log.info("  [normalize] %s->en  %r -> %r", ui_locale, message[:60], message_en[:60])
     intent_class = classify_intent(message_en, iteration)
 
+    # ── PR3-router-fix (Ayden Companion) — two recall corrections + observability.
+    # Resolve the product topic ONCE (used both to route AND to answer).
+    _topic_id = detect_product_help(message, language=_lang_for_4_11a)
+    _opinion_q = detect_design_opinion_question(message)
+    # Fix B — DESIGN_ADVICE recall : an elliptical opinion question phrased like a
+    # statement ("I put the TV in front of the window?") is mislabelled GENERATE,
+    # so the backend generated instead of giving an opinion. When it's an opinion
+    # question (and NOT a product topic, NOT a real confirmation), downgrade
+    # GENERATE → design discussion so the Designer voice answers. Plain commands
+    # ("make it warmer", "add a lamp") never match the opinion detector → untouched.
+    if (_topic_id is None
+            and intent_class.intent == ConversationIntent.GENERATE
+            and _opinion_q):
+        log.info("  [PR3-router] GENERATE→DESIGN_ADVICE (opinion question): %r", message[:80])
+        intent_class = IntentClassification(
+            intent=ConversationIntent.DESIGN_DISCUSSION,
+            sub_intent=SubIntent.GENERAL,
+            confidence=0.80,
+            reasoning="PR3-router — design opinion question, not a change command",
+        )
+    # Observability — log the detected intent for EVERY chat request (debug routing).
+    log.info(
+        "[TURN-INTENT] classify=%s/%s product_topic=%s opinion_q=%s → turn=%s",
+        intent_class.intent.value, intent_class.sub_intent.value, _topic_id, _opinion_q,
+        resolve_turn_intent(
+            message, intent_class=intent_class,
+            product=(_topic_id is not None or intent_class.intent in (
+                ConversationIntent.PRODUCT_HELP, ConversationIntent.SUPPORT)),
+        ).value,
+    )
+
     # ── Wave 4.11a: PRODUCT_HELP / SUPPORT direct routing — the pre-filter
     # inside classify_intent returns one of these when the user is asking
     # about the product rather than asking for a design change. Look up the
     # specific topic answer in product_knowledge and return it ; never
     # trigger a generation on these paths.
-    if intent_class.intent in (
-        ConversationIntent.PRODUCT_HELP,
-        ConversationIntent.SUPPORT,
-    ):
-        topic_id = detect_product_help(message, language=_lang_for_4_11a)
+    # Fix A — PRODUCT_HELP recall : a confident KB topic match is authoritative,
+    # so route to product help even when the base classifier missed it (e.g.
+    # "what is the re-upload?" was labelled CONVERSATION → design voice deflected).
+    if (intent_class.intent in (
+            ConversationIntent.PRODUCT_HELP,
+            ConversationIntent.SUPPORT,
+        ) or _topic_id is not None):
+        topic_id = _topic_id
         if topic_id is not None:
             ai_message = get_product_answer(topic_id, language=_lang_for_4_11a)
         else:
