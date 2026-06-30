@@ -59,6 +59,15 @@ _RESULT_EXPLANATION_PATTERNS = [
     r"\bpourquoi\s+avoir\s+(mis|chang|ajout|enlev|retir|fait|suppr|remplac)",
     r"\bwhy\s+(did|does|do|is|are|isn'?t|aren'?t|has|have)\s+(it|you|there|the\s+\w+)\b",
     r"\bwhy\s+(no|not|isn'?t\s+there|is\s+there\s+no)\b",
+    # Negative / preservation-complaint forms ("why didn't you preserve my room",
+    # "why isn't my architecture kept", "why did my room change") — these explain
+    # what the system DID (or failed to keep) → dynamic Designer voice, not a
+    # static FAQ. Excludes opinion-advice ("why should I…").
+    r"\bwhy\s+(did\s*n'?t|do\s*n'?t|does\s*n'?t|was\s*n'?t|were\s*n'?t)\s+(you|it|ayden)\b",
+    r"\bwhy\s+(is|are|isn'?t|aren'?t)\s+(my|the)\s+\w+\s+(not\s+)?(preserved|kept|the\s+same|changed|different|gone|missing)\b",
+    r"\bwhy\s+did\s+(my|the)\s+\w+\s+(change|move|disappear|go|shift)\b",
+    r"\bpourquoi\s+(tu\s+n'?as\s+pas|il\s+n'?a\s+pas|ce\s+n'?est\s+pas|ce\s+n'?a\s+pas)\b",
+    r"\bpourquoi\s+(ma|mon|mes)\s+\w+\s+(a\s+chang|n'?(est|a)\s+pas)\b",
 ]
 _RESULT_EXPLANATION_COMPILED = [re.compile(p, re.IGNORECASE) for p in _RESULT_EXPLANATION_PATTERNS]
 

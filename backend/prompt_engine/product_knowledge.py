@@ -64,6 +64,38 @@ class ProductTopic:
 # surface, voice, sessions, naming, saving, restoring.
 
 _FEATURE_TOPICS: dict[str, dict] = {
+    # mode_comparison FIRST: comparison questions ("X vs Y") must win over the
+    # individual feature topics, which detect_product_help would otherwise match
+    # first (registry order = first-match). Patterns require a mode keyword, so
+    # non-comparison questions fall through to the specific topics below.
+    "mode_comparison": {
+        "category": "feature",
+        "patterns_en": [
+            r"\b(difference|differ|vs\b|versus|compared?)\b.*\b(signature|atmosphere|continue|re.?upload|preserve|creative|decide)\b",
+            r"\b(signature|atmosphere|continue|re.?upload|preserve|creative)\b.*\b(vs\b|versus|\bor\b)\b.*\b(signature|atmosphere|continue|re.?upload|preserve|creative)\b",
+        ],
+        "patterns_km": [
+            r"ភាព\s*ខុស\s*គ្នា",
+            r"តើ.*ខុស.*យ៉ាង",
+        ],
+        "answer_en": (
+            "Quick guide. **Atmospheres**: you pick the style ; **Ayden "
+            "Signature**: Ayden picks the best-fit style for your room. "
+            "**Continue this vision**: evolves from a vision you already generated "
+            "(same photo) ; **Re-upload**: replaces the source photo with a new "
+            "one and resets the history. **Preserve**: keeps your real "
+            "architecture and restyles the furnishing ; **Creative**: reimagines "
+            "the space more freely. Preserve is the default."
+        ),
+        "answer_km": (
+            "មគ្គុទ្ទេសក៍រហ័ស។ **Atmospheres**: អ្នកជ្រើសរចនាបថ ; **Ayden Signature**: "
+            "Ayden ជ្រើសរចនាបថសមបំផុត។ **Continue this vision**: បន្តពីទស្សនៈដែលមាន "
+            "(រូបដដែល) ; **Re-upload**: ប្ដូររូបថតដើម ហើយកំណត់ប្រវត្តិឡើងវិញ។ "
+            "**Preserve**: រក្សាស្ថាបត្យកម្មពិត ; **Creative**: ស្រមៃឡើងវិញសេរីជាង។ "
+            "Preserve ជាលំនាំដើម។"
+        ),
+    },
+
     "continue_vision": {
         "category": "feature",
         "patterns_en": [
@@ -102,6 +134,9 @@ _FEATURE_TOPICS: dict[str, dict] = {
             r"\bpreserve\s+mode\s+(do|mean|work)\b",
             r"\bwhat\s+does\s+preserve\b",
             r"\bhow\s+does\s+preserve\b",
+            r"\b(keep|preserve|don'?t\s+change)\s+(my\s+)?(layout|architecture|room|walls|structure)\b",
+            r"\bcan\s+you\s+keep\s+(my\s+)?(layout|architecture|room|walls)\b",
+            r"\bhow\s+(do|can)\s+i\s+(keep|preserve)\s+(my\s+)?(layout|architecture|room|walls)\b",
         ],
         "patterns_km": [
             r"រក្សា\s*ទុក\s*(លំនៅដ្ឋាន|លក្ខណៈ)",
@@ -155,6 +190,152 @@ _FEATURE_TOPICS: dict[str, dict] = {
             "ខណៈនៅក្នុងគម្រោងដដែល។ ដោយសាររូបភាពថ្មីជាចំណុចចាប់ផ្តើមផ្សេង "
             "ប្រវត្តិកំណែត្រូវកំណត់ឡើងវិញ — ទស្សនៈចាស់មិនបន្តទេ។ "
             "ប្រើវានៅពេលអ្នកចង់រចនាបន្ទប់ផ្សេង ឬរូបភាពថ្មីពីដំបូង។"
+        ),
+    },
+
+    "ayden_decide": {
+        "category": "feature",
+        "patterns_en": [
+            r"\bayden\s+decide\b",
+            r"\bhow\s+does\s+ayden\s+(decide|choose|pick|know)\b",
+            r"\b(detect|guess|figure\s+out|know)\s+(the\s+)?room\s+type\b",
+            r"\bauto.?detect\b.*\broom\b",
+            r"\bwhat\s+is\s+(ayden\s+)?decide\b",
+            r"\bwhy\s+did\s+ayden\s+(choose|chose|pick|select)\b.*\broom\b",
+        ],
+        "patterns_km": [
+            r"ayden\s*decide",
+            r"ស្គាល់\s*ប្រភេទ\s*បន្ទប់",
+        ],
+        "answer_en": (
+            "Ayden Decide reads your photo and works out the room type on its "
+            "own — so the design fits a kitchen, a bedroom, a terrace and so on "
+            "without you setting it. For an empty or nearly-empty room it also "
+            "furnishes the space instead of leaving it bare. If it ever guesses "
+            "wrong, you can still set the room type yourself."
+        ),
+        "answer_km": (
+            "Ayden Decide អានរូបថតរបស់អ្នក ហើយកំណត់ប្រភេទបន្ទប់ដោយខ្លួនឯង — "
+            "ដូច្នេះការរចនាសមនឹងផ្ទះបាយ បន្ទប់គេង ឬកន្លែងផ្សេងៗ ដោយអ្នកមិនបាច់កំណត់។ "
+            "សម្រាប់បន្ទប់ទទេ វាក៏រៀបចំគ្រឿងសង្ហារិមផងដែរ។ បើខុស អ្នកអាចកំណត់ប្រភេទបន្ទប់ដោយខ្លួនឯង។"
+        ),
+    },
+
+    "ayden_signature": {
+        "category": "feature",
+        "patterns_en": [
+            r"\bayden\s+signature\b",
+            r"\bwhat\s+is\s+(the\s+)?signature\b",
+            r"\b(pick|choose|select)\s+(the\s+)?(best\s+)?atmosphere\s+for\s+me\b",
+            r"\bchoose\s+(a\s+)?style\s+for\s+me\b",
+            r"\bsurprise\s+me\b",
+            r"\bwhy\s+(this|that)\s+atmosphere\b",
+            r"\bwhy\s+did\s+ayden\s+(choose|chose|pick|select)\b",
+        ],
+        "patterns_km": [
+            r"ayden\s*signature",
+            r"ជ្រើស\s* atmosphere\s*ឱ្យ",
+        ],
+        "answer_en": (
+            "Ayden Signature lets Ayden choose the atmosphere for you: instead of "
+            "picking a style yourself, Ayden reads the space and selects the "
+            "best-fit design direction from its validated atmospheres. Use it when "
+            "you want a strong starting point and aren't sure which style to "
+            "choose — you can always switch atmosphere afterwards."
+        ),
+        "answer_km": (
+            "Ayden Signature អនុញ្ញាតឱ្យ Ayden ជ្រើស atmosphere ជំនួសអ្នក៖ "
+            "ជំនួសឱ្យអ្នកជ្រើសរចនាបថដោយខ្លួនឯង Ayden អានទំហំ ហើយជ្រើសទិសដៅសមបំផុត។ "
+            "ប្រើវានៅពេលអ្នកមិនប្រាកដថាជ្រើសរចនាបថណា — អ្នកអាចប្ដូរនៅពេលក្រោយ។"
+        ),
+    },
+
+    "photo_requirements": {
+        "category": "feature",
+        "patterns_en": [
+            r"\bwhat\s+(photo|picture|image)\s+(works|is)\s+best\b",
+            r"\b(best|good)\s+(photo|picture)\b",
+            r"\b(empty|furnished|occupied)\s+room\b",
+            r"\bportrait\s+or\s+landscape\b",
+            r"\b(dark|blurry|low.?light)\s+(room|photo|picture)\b",
+            r"\bwhy\s+can'?t\s+i\s+upload\b",
+            r"\bupload\s+(fail|won'?t|not\s+work|doesn'?t\s+work)\b",
+            r"\bwhat\s+kind\s+of\s+(photo|picture)\b",
+        ],
+        "patterns_km": [
+            r"រូបថត\s*ល្អ",
+            r"បន្ទប់\s*ទទេ",
+        ],
+        "answer_en": (
+            "A clear, well-lit photo of the whole room works best — step back so "
+            "the walls, windows and floor are visible. Empty or furnished both "
+            "work (Ayden can furnish an empty room). Portrait and landscape are "
+            "both fine; the result keeps your photo's orientation. Very dark or "
+            "blurry photos give weaker results, so add light if you can. If an "
+            "upload won't go through, make sure it's a normal photo (JPG or PNG) "
+            "and your connection is stable."
+        ),
+        "answer_km": (
+            "រូបថតច្បាស់ មានពន្លឺល្អ នៃបន្ទប់ទាំងមូលគឺល្អបំផុត — ថយក្រោយ ឱ្យឃើញជញ្ជាំង "
+            "បង្អួច និងឥដ្ឋ។ បន្ទប់ទទេ ឬមានគ្រឿងសង្ហារិម ដំណើរការទាំងពីរ។ បញ្ឈរ ឬផ្ដេក "
+            "ក៏បាន។ រូបងងឹត ឬព្រិល ផ្ដល់លទ្ធផលខ្សោយ។ បើផ្ទុកមិនបាន ពិនិត្យថាជារូប JPG/PNG "
+            "និងអ៊ីនធឺណិតស្ថិតស្ថេរ។"
+        ),
+    },
+
+    "generation_duration": {
+        "category": "feature",
+        "patterns_en": [
+            r"\bhow\s+long\s+(does|will|to|it)\b",
+            r"\bwhy\s+(is\s+it\s+)?(so\s+)?slow\b",
+            r"\bwhy.*still\s+generating\b",
+            r"\b(taking|takes)\s+(so\s+)?long\b",
+            r"\bgeneration\s+time\b",
+        ],
+        "patterns_km": [
+            r"យូរ\s*ប៉ុន្មាន",
+            r"ហេតុអ្វី\s*យឺត",
+        ],
+        "answer_en": (
+            "A vision usually takes under a minute. The very first one after the "
+            "app has been idle for a while can take longer, because the server "
+            "wakes up first. If it seems stuck well beyond that, pull down to "
+            "refresh or tap Generate again — your work is saved, so nothing is lost."
+        ),
+        "answer_km": (
+            "ការបង្កើតមួយជាធម្មតាក្រោម ១ នាទី។ លើកដំបូងបន្ទាប់ពីកម្មវិធីទំនេរយូរ "
+            "អាចយូរជាងបន្តិច ព្រោះ server ភ្ញាក់ឡើងជាមុន។ បើជាប់គាំងយូរ ទាញចុះដើម្បី "
+            "refresh ឬចុច Generate ម្ដងទៀត — ការងាររបស់អ្នកត្រូវបានរក្សាទុក។"
+        ),
+    },
+
+    "workflow_coaching": {
+        "category": "feature",
+        "patterns_en": [
+            r"\bwhere\s+(do|should)\s+i\s+start\b",
+            r"\b(best|recommended)\s+workflow\b",
+            r"\bhow\s+(do|should)\s+i\s+(use|get\s+started)\b",
+            r"\bhow\s+do\s+(pros|professionals|designers)\s+use\b",
+            r"\bgetting\s+started\b",
+            r"\bbest\s+way\s+to\s+(use|start)\b",
+        ],
+        "patterns_km": [
+            r"ចាប់ផ្ដើម\s*ពីណា",
+            r"របៀប\s*ប្រើ\s*ល្អ",
+        ],
+        "answer_en": (
+            "Start with one clear photo of the room that matters most. Pick an "
+            "atmosphere — or tap Ayden Signature if you're unsure — then generate. "
+            "Refine in the chat using plain words (\"warmer light\", \"add a rug\", "
+            "\"remove the painting\"). When you like a direction, Continue from that "
+            "vision to push it further, or branch to compare alternatives later in "
+            "the reveal screen."
+        ),
+        "answer_km": (
+            "ចាប់ផ្ដើមដោយរូបថតច្បាស់មួយនៃបន្ទប់សំខាន់បំផុត។ ជ្រើស atmosphere — ឬចុច "
+            "Ayden Signature បើមិនប្រាកដ — រួចបង្កើត។ កែតម្រូវក្នុង chat ដោយពាក្យធម្មតា "
+            "(\"ពន្លឺកក់ក្ដៅ\", \"បន្ថែមកម្រាល\")។ ពេលពេញចិត្ត ប្រើ Continue ដើម្បីបន្ត "
+            "ឬ branch ដើម្បីប្រៀបធៀប។"
         ),
     },
 
@@ -573,6 +754,11 @@ _FEATURE_TOPICS: dict[str, dict] = {
             r"\bwhat\s+(rooms?|spaces?)\s+(can|do)\s+you\s+(do|support|handle)\b",
             r"\bwhich\s+(rooms?|spaces?)\b",
             r"\bsupported\s+(rooms?|spaces?)\b",
+            r"\bdoes\s+it\s+work\s+(outside|outdoors)\b",
+            r"\bcan\s+(it|you|ayden)\s+(do|redesign|design)\s+(my\s+|a\s+)?(garden|terrace|balcony|facade|fa[çc]ade|bathroom|kitchen|pool|yard|patio|outdoor)\b",
+            r"\b(redesign|design)\s+(my\s+)?(garden|facade|fa[çc]ade|terrace|balcony|pool|backyard)\b",
+            r"\b(outdoor|exterior)\s+(space|design|area)\b",
+            r"\bdoes\s+it\s+do\s+(exteriors?|outdoors?|gardens?)\b",
         ],
         "patterns_km": [
             r"បន្ទប់\s*អ្វី\s*ខ្លះ",
@@ -690,6 +876,8 @@ _SUPPORT_TOPICS: dict[str, dict] = {
             r"\b(image|render|design)\s+(failed|didn'?t\s+(work|load|generate))\b",
             r"\bcan'?t\s+generate\b",
             r"\berror\s+(generating|when\s+(i\s+)?(tap|press))\b",
+            r"\b(timed?\s*out|timeout)\b",
+            r"\b(unsupported|invalid|bad)\s+(image|photo|file|format)\b",
         ],
         "patterns_km": [
             r"ការ\s*បង្កើត\s*បរាជ័យ",
@@ -703,8 +891,10 @@ _SUPPORT_TOPICS: dict[str, dict] = {
             "Try Generate once more — most failures resolve on a single retry "
             "(model timeout, network blip). If it fails a second time, the "
             "issue is usually one of : the source photo is very low "
-            "resolution or rotated, the brief is empty or extremely long, or "
-            "the device's network is unstable. If retry doesn't help, send a "
+            "resolution or rotated, the brief is empty or extremely long, the "
+            "image format is unsupported, or the device's network is unstable. "
+            "On the free tier, a vision also won't start once your free "
+            "generations are used up. If retry doesn't help, send a "
             "screenshot via feedback."
         ),
         "answer_km": (
@@ -916,6 +1106,10 @@ _MISC_TOPICS: dict[str, dict] = {
             r"\bis\s+(my|the)\s+(data|photo|image)\s+(private|secure|safe)\b",
             r"\bwhat\s+do\s+you\s+do\s+with\s+my\s+(data|photo)\b",
             r"\bare\s+my\s+photos?\s+(stored|shared|public)\b",
+            r"\b(used?|use)\s+to\s+train\b",
+            r"\btrain\b.*\b(ai|model|on\s+my)\b",
+            r"\bare\s+my\s+(photos?|images?|data)\s+public\b",
+            r"\bdo\s+you\s+(sell|share)\s+my\s+(data|photos?|images?)\b",
         ],
         "patterns_km": [
             r"ឯកជនភាព",
