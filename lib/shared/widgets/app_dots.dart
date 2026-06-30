@@ -19,6 +19,12 @@ class AppDots extends StatelessWidget {
   final double activeWidth;
   final double dotSize;
 
+  /// Optional — when provided, each dot becomes tappable and calls this with
+  /// the dot index. The visible dot is unchanged; a transparent hit-target is
+  /// added around it so the 6px dot is comfortably tappable (~40px zone).
+  /// Omit it (default) to keep the indicator display-only (e.g. onboarding).
+  final ValueChanged<int>? onDotTap;
+
   const AppDots({
     super.key,
     required this.count,
@@ -27,6 +33,7 @@ class AppDots extends StatelessWidget {
     this.inactiveColor = AppColors.border,
     this.activeWidth = 22,
     this.dotSize = 6,
+    this.onDotTap,
   });
 
   @override
@@ -36,7 +43,7 @@ class AppDots extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: List.generate(count, (i) {
         final active = i == index;
-        return AnimatedContainer(
+        final dot = AnimatedContainer(
           duration: const Duration(milliseconds: 280),
           curve: Curves.easeInOut,
           margin: const EdgeInsets.symmetric(horizontal: 3),
@@ -45,6 +52,21 @@ class AppDots extends StatelessWidget {
           decoration: BoxDecoration(
             color: active ? activeColor : inactiveColor,
             borderRadius: BorderRadius.circular(AppSpacing.radiusPill),
+          ),
+        );
+        if (onDotTap == null) return dot;
+        // Expand the tap target around the small dot without changing its look.
+        return Semantics(
+          button: true,
+          selected: active,
+          label: 'Slide ${i + 1} of $count',
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => onDotTap!(i),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+              child: dot,
+            ),
           ),
         );
       }),

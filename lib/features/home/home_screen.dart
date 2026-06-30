@@ -427,7 +427,18 @@ class _HeroCarouselState extends State<_HeroCarousel> {
           ),
         ),
         const SizedBox(height: 12),
-        AppDots(count: featuredShowcase.length, index: _currentPage),
+        AppDots(
+          count: featuredShowcase.length,
+          index: _currentPage,
+          // Tap a dot to jump to that showcase. animateToPage fires
+          // onPageChanged, which updates the active dot AND resets the
+          // auto-advance timer — same path as the timer itself.
+          onDotTap: (i) => _pageController.animateToPage(
+            i,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOutCubic,
+          ),
+        ),
       ],
     );
   }
