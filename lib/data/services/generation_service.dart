@@ -99,6 +99,13 @@ class GenerationService {
     String history = '',
     String secondarySpaces = '[]',
     String uiLocale = 'en', // Phase 1 — authoritative reply language
+    // PR0 (Ayden Companion) — situational context. All optional ; the backend
+    // falls back to safe defaults when omitted.
+    bool hasVision = false,
+    bool generationInProgress = false,
+    String currentImageUrl = '',      // displayed render — vision-input hook (PR2)
+    String displayedVersionId = '',
+    String originalImageUrl = '',
   }) async {
     final res = await _dio.post<Map<String, dynamic>>(
       '/chat',
@@ -111,6 +118,12 @@ class GenerationService {
         'history': history,
         'secondary_spaces': secondarySpaces,
         'ui_locale': uiLocale,
+        // PR0 — situational context (optional ; safe to omit)
+        'has_vision': hasVision ? '1' : '0',
+        'generation_in_progress': generationInProgress ? '1' : '0',
+        'current_image_url': currentImageUrl,
+        'displayed_version_id': displayedVersionId,
+        'original_image_url': originalImageUrl,
       }),
     );
     return res.data!;

@@ -1309,6 +1309,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         iteration: _iterationCount + 1,
         history: history,
         uiLocale: ref.read(localeProvider).languageCode,
+        // PR0 (Ayden Companion) — situational context from in-memory state.
+        hasVision: _hasGenerated,
+        generationInProgress: _busy,
+        currentImageUrl: _generationSourceUrl ?? '',
+        displayedVersionId: _branchSourceVersionId ?? '',
+        originalImageUrl: _project.beforeImageUrl ?? '',
       );
 
       if (!mounted) return;
