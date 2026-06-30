@@ -255,13 +255,17 @@ const Map<String, String> frTranslations = {
   'uplWillCreate': "L'IA va créer votre redesign",
   'uplPrivacy': "Vos photos sont privées et sécurisées.",
   'uplPickerSubtitle':
-      "Réimaginez votre maison avec votre architecte IA personnel.",
+      "Choisissez votre photo, ou découvrez Ayden instantanément.",
   'uplCamera': "Appareil photo",
   'uplGallery': "Galerie",
   'uplExamplePhotos': "Photos d'exemple",
   'uplExampleHint':
       "Essayez avec une de nos photos d'exemple pour voir la magie.",
   'uplExampleLoadError': "Impossible de charger la photo d'exemple.",
+  'uplOwnSpace': "Importez votre propre espace",
+  'uplTryInstantly': "Essayez Ayden instantanément",
+  'uplOr': "OU",
+  'uplRecommended': "Recommandé",
   'uplMoreSpaces': "Plus d'espaces",
   'uplAiDecide': 'Ayden décide',
   'uplAiDecideSub': "Laissez l'IA détecter l'espace pour moi",

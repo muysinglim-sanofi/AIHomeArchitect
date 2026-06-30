@@ -288,6 +288,10 @@ class AppLocalizations {
   String get uplExamplePhotos => _get('uplExamplePhotos');
   String get uplExampleHint => _get('uplExampleHint');
   String get uplExampleLoadError => _get('uplExampleLoadError');
+  String get uplOwnSpace => _get('uplOwnSpace');
+  String get uplTryInstantly => _get('uplTryInstantly');
+  String get uplOr => _get('uplOr');
+  String get uplRecommended => _get('uplRecommended');
   String get uplMoreSpaces => _get('uplMoreSpaces');
   String get uplAiDecide => _get('uplAiDecide');
   String get uplAiDecideSub => _get('uplAiDecideSub');

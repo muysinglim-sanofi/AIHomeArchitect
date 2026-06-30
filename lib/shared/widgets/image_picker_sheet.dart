@@ -3,11 +3,12 @@ import '../../core/constants/app_colors.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/theme/app_theme.dart';
 
-// CHANTIER C #1 — shared premium image-source picker (Camera / Gallery /
-// Examples). Used by BOTH the New Design upload screen and the in-chat Replace
-// Photo flow so the two surfaces offer the exact same premium UX. The widget +
-// its sub-widgets were extracted verbatim from upload_screen.dart — no
-// behavioural change, only made shareable.
+// CHANTIER UX — premium "Upload your space" bottom sheet. Two clear entry
+// paths: (1) your own photo (Camera / Gallery), (2) "Try Ayden instantly" with
+// an example room — promoted to a real second path (hero + small cards) instead
+// of a secondary strip. Shared by BOTH the New Design upload screen and the
+// in-chat Replace Photo flow, so the constructor (onCamera/onGallery/onExample)
+// is UNCHANGED — only the presentation. No backend / generation change.
 
 /// Fire-and-forget convenience: shows the picker and pops it on selection,
 /// then runs the matching callback. (New Design upload screen.)
@@ -42,10 +43,6 @@ const Color _pkCream = Color(0xFFF6F2EB);
 const Color _pkCreamBorder = Color(0xFFEBE4D9);
 const Color _pkMuted = Color(0xFF8C857B);
 const Color _pkChampagne = Color(0xFFC2A172);
-// Softer than _pkCream — used for the SECONDARY example section so it recedes
-// (less contrast vs. the white sheet) while the Camera/Gallery cards stay
-// visually dominant on _pkCream.
-const Color _pkCreamSoft = Color(0xFFFAF8F4);
 
 class _PickerExample {
   final String asset;
@@ -54,7 +51,7 @@ class _PickerExample {
   const _PickerExample(this.asset, this.label, this.icon);
 }
 
-class ImagePickerSheet extends StatefulWidget {
+class ImagePickerSheet extends StatelessWidget {
   final VoidCallback onCamera;
   final VoidCallback onGallery;
   final void Function(String asset) onExample;
@@ -66,57 +63,42 @@ class ImagePickerSheet extends StatefulWidget {
     required this.onExample,
   });
 
-  @override
-  State<ImagePickerSheet> createState() => ImagePickerSheetState();
-}
-
-class ImagePickerSheetState extends State<ImagePickerSheet> {
-  final ScrollController _scroll = ScrollController();
-
-  // Blank "before" rooms — replace these 3 files with the real shots you'll
-  // provide (same paths). Selecting one uploads it instantly.
-  static const _examples = <_PickerExample>[
-    _PickerExample(
-        'assets/examples/living_room.jpg', 'Living Room', Icons.weekend_outlined),
-    _PickerExample(
-        'assets/examples/kitchen.jpg', 'Kitchen', Icons.countertops_outlined),
-    _PickerExample(
-        'assets/examples/bedroom.jpg', 'Bedroom', Icons.bed_outlined),
-  ];
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  void _scrollRight() {
-    if (!_scroll.hasClients) return;
-    final target =
-        (_scroll.offset + 150).clamp(0.0, _scroll.position.maxScrollExtent);
-    _scroll.animateTo(target,
-        duration: const Duration(milliseconds: 320), curve: Curves.easeOutCubic);
-  }
+  // The Living Room is the recommended hero entry. The small row below is built
+  // from the remaining example assets. To add a 3rd small card (e.g. Bathroom),
+  // drop `assets/examples/bathroom.jpg` in and append it to `smalls` — the
+  // `bathroom` label + Icons.bathtub_outlined already exist; the Row adapts.
+  static const String _heroAsset = 'assets/examples/living_room.jpg';
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+    final smalls = <_PickerExample>[
+      _PickerExample(
+          'assets/examples/kitchen.jpg', l.kitchen, Icons.countertops_outlined),
+      _PickerExample(
+          'assets/examples/bedroom.jpg', l.masterBedroom, Icons.bed_outlined),
+    ];
+    // ~70% of the screen: the wizard (Step 1) stays visible & dimmed behind.
+    final sheetH =
+        (MediaQuery.sizeOf(context).height * 0.70).clamp(460.0, 760.0);
+
     return Container(
+      height: sheetH,
       decoration: const BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       child: SafeArea(
         top: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 14),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Center(
                 child: Container(
-                  width: 28,
-                  height: 3,
+                  width: 36,
+                  height: 4,
                   decoration: BoxDecoration(
                     color: AppColors.border.withValues(alpha: 0.55),
                     borderRadius: BorderRadius.circular(2),
@@ -125,111 +107,100 @@ class ImagePickerSheetState extends State<ImagePickerSheet> {
               ),
               const SizedBox(height: 14),
               Text(
-                context.l10n.uploadYourSpace,
+                l.uploadYourSpace,
                 textAlign: TextAlign.center,
                 style: AppTheme.displayEditorial(
-                    fontSize: 26, fontWeight: FontWeight.w600),
+                    fontSize: 25, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 5),
               Text(
-                context.l10n.uplPickerSubtitle,
+                l.uplPickerSubtitle,
                 textAlign: TextAlign.center,
                 style:
                     const TextStyle(color: _pkMuted, fontSize: 13, height: 1.3),
               ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: _PickerSourceCard(
-                      icon: Icons.camera_alt_outlined,
-                      label: context.l10n.uplCamera,
-                      onTap: widget.onCamera,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: _PickerSourceCard(
-                      icon: Icons.image_outlined,
-                      label: context.l10n.uplGallery,
-                      onTap: widget.onGallery,
-                    ),
-                  ),
-                ],
-              ),
               const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
-                decoration: BoxDecoration(
-                  color: _pkCreamSoft,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                      color: _pkCreamBorder.withValues(alpha: 0.6)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.star_rounded,
-                            color: _pkChampagne, size: 17),
-                        const SizedBox(width: 7),
-                        Text(
-                          context.l10n.uplExamplePhotos,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13.5,
-                          ),
+              // Scrollable middle — guarantees no overflow on small iPhones,
+              // stays compact and premium on large screens.
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        l.uplOwnSpace,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13.5,
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      context.l10n.uplExampleHint,
-                      style: const TextStyle(color: _pkMuted, fontSize: 11.5),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 96,
-                      child: Stack(
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
                         children: [
-                          ListView.separated(
-                            controller: _scroll,
-                            scrollDirection: Axis.horizontal,
-                            physics: const BouncingScrollPhysics(),
-                            clipBehavior: Clip.none,
-                            itemCount: _examples.length,
-                            separatorBuilder: (_, _) => const SizedBox(width: 10),
-                            itemBuilder: (_, i) {
-                              final ex = _examples[i];
-                              final labels = [
-                                context.l10n.livingRoom,
-                                context.l10n.kitchen,
-                                context.l10n.masterBedroom,
-                              ];
-                              return _ExamplePhotoCard(
-                                example:
-                                    _PickerExample(ex.asset, labels[i], ex.icon),
-                                onTap: () => widget.onExample(ex.asset),
-                              );
-                            },
+                          Expanded(
+                            child: _UploadActionCard(
+                              icon: Icons.camera_alt_outlined,
+                              label: l.uplCamera,
+                              onTap: onCamera,
+                            ),
                           ),
-                          Positioned(
-                            right: -2,
-                            top: 0,
-                            bottom: 0,
-                            child: Center(
-                              child: _CarouselArrow(onTap: _scrollRight),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _UploadActionCard(
+                              icon: Icons.image_outlined,
+                              label: l.uplGallery,
+                              onTap: onGallery,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 18),
+                      _OrDivider(label: l.uplOr),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          const Text('✨', style: TextStyle(fontSize: 15)),
+                          const SizedBox(width: 7),
+                          Text(
+                            l.uplTryInstantly,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 11),
+                      _ExampleHeroCard(
+                        asset: _heroAsset,
+                        label: l.livingRoom,
+                        icon: Icons.weekend_outlined,
+                        recommendedLabel: l.uplRecommended,
+                        onTap: () => onExample(_heroAsset),
+                      ),
+                      const SizedBox(height: 11),
+                      Row(
+                        children: [
+                          for (var i = 0; i < smalls.length; i++) ...[
+                            if (i > 0) const SizedBox(width: 11),
+                            Expanded(
+                              child: _ExampleSmallCard(
+                                example: smalls[i],
+                                onTap: () => onExample(smalls[i].asset),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 10),
               const _PickerPrivacyFooter(),
             ],
           ),
@@ -239,12 +210,12 @@ class ImagePickerSheetState extends State<ImagePickerSheet> {
   }
 }
 
-class _PickerSourceCard extends StatelessWidget {
+class _UploadActionCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
-  const _PickerSourceCard({
+  const _UploadActionCard({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -256,9 +227,9 @@ class _PickerSourceCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 18),
+          height: 124,
           decoration: BoxDecoration(
             color: _pkCream,
             borderRadius: BorderRadius.circular(18),
@@ -272,16 +243,16 @@ class _PickerSourceCard extends StatelessWidget {
             ],
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
                   color: _pkChampagne.withValues(alpha: 0.14),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: _pkChampagne, size: 21),
+                child: Icon(icon, color: _pkChampagne, size: 22),
               ),
               const SizedBox(height: 10),
               Text(
@@ -300,58 +271,146 @@ class _PickerSourceCard extends StatelessWidget {
   }
 }
 
-class _ExamplePhotoCard extends StatelessWidget {
-  final _PickerExample example;
+class _OrDivider extends StatelessWidget {
+  final String label;
+  const _OrDivider({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final line = Expanded(
+      child: Container(height: 1, color: _pkCreamBorder),
+    );
+    return Row(
+      children: [
+        line,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: _pkMuted,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.5,
+            ),
+          ),
+        ),
+        line,
+      ],
+    );
+  }
+}
+
+/// Bottom gradient + bottom-left icon/label, shared by hero & small cards.
+class _CardOverlay extends StatelessWidget {
+  final String asset;
+  final IconData icon;
+  final String label;
+  final double labelSize;
+  final double iconSize;
+  const _CardOverlay({
+    required this.asset,
+    required this.icon,
+    required this.label,
+    this.labelSize = 14,
+    this.iconSize = 15,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset(
+          asset,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => const ColoredBox(color: _pkCreamBorder),
+        ),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [Color(0x8C000000), Color(0x00000000)],
+              stops: [0.0, 0.62],
+            ),
+          ),
+        ),
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: 11,
+          child: Row(
+            children: [
+              Icon(icon, color: Colors.white, size: iconSize),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: labelSize,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ExampleHeroCard extends StatelessWidget {
+  final String asset;
+  final String label;
+  final IconData icon;
+  final String recommendedLabel;
   final VoidCallback onTap;
 
-  const _ExamplePhotoCard({required this.example, required this.onTap});
+  const _ExampleHeroCard({
+    required this.asset,
+    required this.label,
+    required this.icon,
+    required this.recommendedLabel,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: SizedBox(
-        width: 110,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: AspectRatio(
+          aspectRatio: 2.3,
+          child: Stack(
+            fit: StackFit.expand,
             children: [
-              Expanded(
-                // #24/#1 — show the FULL example room, never crop it. The
-                // photo is letterboxed on a neutral frame instead of being
-                // cover-cropped to fill the thumbnail.
-                child: ColoredBox(
-                  color: const Color(0xFF0B0B0C),
-                  child: Image.asset(
-                    example.asset,
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, _, _) =>
-                        const ColoredBox(color: _pkCreamBorder),
+              _CardOverlay(
+                  asset: asset, icon: icon, label: label, labelSize: 16),
+              Positioned(
+                left: 12,
+                top: 12,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _pkChampagne,
+                    borderRadius: BorderRadius.circular(20),
                   ),
-                ),
-              ),
-              Container(
-                color: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                child: Row(
-                  children: [
-                    Icon(example.icon, size: 13, color: _pkMuted),
-                    const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        example.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                  child: Text(
+                    recommendedLabel,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
                     ),
-                  ],
+                  ),
                 ),
               ),
             ],
@@ -362,31 +421,27 @@ class _ExamplePhotoCard extends StatelessWidget {
   }
 }
 
-class _CarouselArrow extends StatelessWidget {
+class _ExampleSmallCard extends StatelessWidget {
+  final _PickerExample example;
   final VoidCallback onTap;
-  const _CarouselArrow({required this.onTap});
+  const _ExampleSmallCard({required this.example, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    // Deliberately understated (brief #5): soft translucent disc, no heavy
-    // border, gentle chevron — a quiet "there's more" cue, not a web control.
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.82),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.10),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: AspectRatio(
+          aspectRatio: 1.35,
+          child: _CardOverlay(
+            asset: example.asset,
+            icon: example.icon,
+            label: example.label,
+            labelSize: 12.5,
+            iconSize: 13,
+          ),
         ),
-        child: const Icon(Icons.chevron_right, size: 18, color: _pkMuted),
       ),
     );
   }
@@ -397,7 +452,6 @@ class _PickerPrivacyFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Minimal single-line reassurance — present but unobtrusive.
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
