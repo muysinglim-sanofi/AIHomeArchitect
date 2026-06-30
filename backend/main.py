@@ -86,6 +86,22 @@ from prompt_engine import (
     TransformationType,
     get_contextual_chips,
 )
+# PR0 (Ayden Companion) — situational awareness layer (deterministic, no LLM).
+# Facts and interpretation are separate layers ; the wire envelope merges them.
+from prompt_engine.situational_context import (
+    build_situational_facts,
+    build_context,
+    context_log_line,
+    attach_context,
+)
+# PR-Router (Ayden Companion) — TurnIntent facade : consolidates the existing
+# classifiers + RESULT_EXPLANATION / PREFERENCE, and re-exports the OOS detector.
+from prompt_engine.conversation_router import (
+    TurnIntent,
+    resolve_turn_intent,
+    detect_out_of_scope,
+    get_out_of_scope_reply,
+)
 from prompt_engine.transformation_state_builder import (
     build_vision_caption,
     build_clean_instruction,
@@ -1465,6 +1481,13 @@ async def chat(
     history: str = Form(""),           # JSON-encoded list of {role, content} messages
     secondary_spaces: str = Form(""),  # JSON-encoded list of secondary room type keys
     ui_locale: str = Form("en"),       # Phase 1 — authoritative reply language (en|fr|km)
+    # ── PR0 (Ayden Companion) — situational context. All optional ; an older
+    # client that omits them yields safe backend defaults (fallback intact).
+    has_vision: str = Form(""),                 # "1"/"0" — frontend _hasGenerated
+    generation_in_progress: str = Form(""),     # "1"/"0" — frontend _isGenerating/_v1Priming
+    current_image_url: str = Form(""),          # displayed render — vision-input hook (PR2), carried not opened
+    displayed_version_id: str = Form(""),       # frontend _branchSourceVersionId / latest
+    original_image_url: str = Form(""),         # V1 source upload
     current_user: CurrentUser = Depends(get_current_user),  # Wave 5.17a
 ):
     """
@@ -1529,6 +1552,24 @@ async def chat(
         room_type_hint=room_type,
     )
 
+    # ── PR0 (Ayden Companion) — situational awareness ─────────────────────────
+    # Facts layer: a pure snapshot of "where are we now", assembled once. The
+    # interpretation layer (mode / is_about_image) is resolved per branch via
+    # build_context(facts, mode) once the routing branch is known, then logged
+    # ([SITCTX]) and attached to the response under `context`. No behaviour
+    # change : ai_message is left exactly as the routing below produces it.
+    facts = build_situational_facts(
+        room_type=room_type,
+        atmosphere_id=atmosphere_id,
+        iteration=iteration,
+        session_language=_early_session_memory.session_language,
+        has_vision_raw=has_vision,
+        generation_in_progress_raw=generation_in_progress,
+        current_image_url=current_image_url,
+        displayed_version_id=displayed_version_id,
+        original_image_url=original_image_url,
+    )
+
     if meta.intent != MetaIntent.NONE:
         # Wave 3.4.1: project-aware greeting whenever we have any context
         # (iteration > 1 means at least one vision was generated, or history exists)
@@ -1550,14 +1591,36 @@ async def chat(
         )
         log.info("  meta ai_message: %s", ai_message)
         log.info("=== /chat META SUCCESS === %s", meta.intent.value)
-        return {
+        ctx = build_context(facts, TurnIntent.META)
+        log.info("[SITCTX] %s", context_log_line(ctx))
+        return attach_context({
             "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": False,
             "intent": "conversation",
             "sub_intent": meta.intent.value,
             "session_language": meta.target_language,
-        }
+        }, ctx)
+
+    # ── PR1 (Ayden Companion) — Out of Scope gate ─────────────────────────────
+    # Deterministic, high-precision refusal of clearly off-domain requests.
+    # Runs AFTER meta (greetings/thanks already returned) and BEFORE design /
+    # support routing. Fires ONLY on a positive off-domain signal — never on
+    # "design did not match" — so a real design or app-support question is never
+    # blocked. No LLM, no generation.
+    if detect_out_of_scope(message, language=_early_session_memory.session_language):
+        ai_message = get_out_of_scope_reply(ui_locale)
+        log.info("=== /chat OUT_OF_SCOPE SUCCESS ===")
+        ctx = build_context(facts, TurnIntent.OUT_OF_SCOPE)
+        log.info("[SITCTX] %s", context_log_line(ctx))
+        return attach_context({
+            "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
+            "suggestions": [],
+            "should_generate": False,
+            "intent": "out_of_scope",
+            "sub_intent": "out_of_scope",
+            "session_language": _early_session_memory.session_language,
+        }, ctx)
 
     _lang_for_4_11a = (
         "km" if _early_session_memory.session_language == "km" else "en"
@@ -1622,14 +1685,16 @@ async def chat(
         )
         log.info("=== /chat WAVE 4.11d GENERATE DOMINANCE (%s) ===",
                  _wave411d_reason)
-        return {
+        ctx = build_context(facts, TurnIntent.ACTION_REFINE)
+        log.info("[SITCTX] %s", context_log_line(ctx))
+        return attach_context({
             "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": True,
             "intent": intent_class.intent.value,
             "sub_intent": intent_class.sub_intent.value,
             "session_language": session_memory.session_language,
-        }
+        }, ctx)
 
     # ── Wave 4.11a: ambiguity check — V2+ messages with truly ambiguous
     # standalone adjectives ("make it bigger") trigger a clarification
@@ -1648,14 +1713,16 @@ async def chat(
             _clarification.language,
         )
         log.info("=== /chat AMBIGUITY CLARIFY SUCCESS ===")
-        return {
+        ctx = build_context(facts, TurnIntent.AMBIGUOUS)
+        log.info("[SITCTX] %s", context_log_line(ctx))
+        return attach_context({
             "ai_message": await localize_reply(openai, _clarification.clarification_text, ui_locale, enabled=_norm_enabled()),
             "suggestions": [],
             "should_generate": False,
             "intent": "design_discussion",
             "sub_intent": "design_discussion",
             "session_language": _early_session_memory.session_language,
-        }
+        }, ctx)
 
     # ── Wave 2.5: design intent routing ───────────────────────────────────────
     # Phase 2: design intent routing runs on canonical English (FR/KM -> EN).
@@ -1696,14 +1763,16 @@ async def chat(
             _lang_for_4_11a,
         )
         log.info("=== /chat PRODUCT_HELP / SUPPORT SUCCESS ===")
-        return {
+        ctx = build_context(facts, TurnIntent.PRODUCT_HELP)
+        log.info("[SITCTX] %s", context_log_line(ctx))
+        return attach_context({
             "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": [],
             "should_generate": False,
             "intent": intent_class.intent.value,
             "sub_intent": intent_class.sub_intent.value,
             "session_language": _early_session_memory.session_language,
-        }
+        }, ctx)
 
     # ── Wave 4.11e: SUMMARIZE_DESIGN_BRIEF handler ────────────────────────────
     # User explicitly asked "summarize what I want / recap / what do you
@@ -1720,14 +1789,16 @@ async def chat(
         )
         log.info("  [Wave 4.11e] design brief summary emitted")
         log.info("=== /chat WAVE 4.11e SUMMARIZE_DESIGN_BRIEF SUCCESS ===")
-        return {
+        ctx = build_context(facts, TurnIntent.DESIGN_ADVICE)
+        log.info("[SITCTX] %s", context_log_line(ctx))
+        return attach_context({
             "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": [],
             "should_generate": False,
             "intent": intent_class.intent.value,
             "sub_intent": intent_class.sub_intent.value,
             "session_language": _early_session_memory.session_language,
-        }
+        }, ctx)
 
     # ── Wave 4.7.7: gated conversational generate confirmation ───────────────
     # Runs AFTER classify_meta_intent (so STOP_GENERATION / THANKS / reflection
@@ -1786,14 +1857,16 @@ async def chat(
         )
         log.info("  human_soft ai_message: %s", ai_message)
         log.info("=== /chat HUMAN_SOFT SUCCESS ===")
-        return {
+        ctx = build_context(facts, resolve_turn_intent(message, intent_class=intent_class))
+        log.info("[SITCTX] %s", context_log_line(ctx))
+        return attach_context({
             "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": False,
             "intent": "conversation",
             "sub_intent": intent_class.sub_intent.value,
             "session_language": session_memory.session_language,
-        }
+        }, ctx)
 
     if tone_mode == ToneMode.ARCHITECT_LIGHT and not confirmation_generate:
         resp_length = select_response_length(message, emotional_ctx)
@@ -1815,14 +1888,16 @@ async def chat(
         )
         log.info("  architect_light ai_message [%s/%s]: %s", emotional_ctx.value, resp_length.value, ai_message)
         log.info("=== /chat ARCHITECT_LIGHT SUCCESS ===")
-        return {
+        ctx = build_context(facts, resolve_turn_intent(message, intent_class=intent_class))
+        log.info("[SITCTX] %s", context_log_line(ctx))
+        return attach_context({
             "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": False,
             "intent": "conversation",
             "sub_intent": intent_class.sub_intent.value,
             "session_language": session_memory.session_language,
-        }
+        }, ctx)
 
     if intent_class.intent == ConversationIntent.MIXED:
         ai_message = generate_mixed_response(
@@ -1868,14 +1943,20 @@ async def chat(
     )
     log.info("=== /chat SUCCESS ===")
 
-    return {
+    ctx = build_context(
+        facts,
+        TurnIntent.ACTION_REFINE if should_generate
+        else resolve_turn_intent(message, intent_class=intent_class),
+    )
+    log.info("[SITCTX] %s", context_log_line(ctx))
+    return attach_context({
         "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
         "suggestions": suggestions,
         "should_generate": should_generate,
         "intent": intent_class.intent.value,
         "sub_intent": intent_class.sub_intent.value,
         "session_language": meta.language,
-    }
+    }, ctx)
 
 
 @app.post("/devices")
