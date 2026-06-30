@@ -1501,6 +1501,7 @@ async def resolve_design_ai_message(
     has_vision: bool,
     ui_locale: str,
     normalize_enabled: bool,
+    image_url: str = "",
 ) -> str:
     """PR3 Designer Voice gate for DESIGN_ADVICE turns.
 
@@ -1508,7 +1509,11 @@ async def resolve_design_ai_message(
     AND the resolved TurnIntent is DESIGN_ADVICE AND the turn is not an
     action/refine (should_generate). In every other case — flag OFF, non-design
     turn, or any LLM error/empty — it returns the existing pools reply localized
-    EXACTLY as before (byte-identical fallback). No image, no /generate."""
+    EXACTLY as before (byte-identical fallback). No /generate.
+
+    When `image_url` (the current render) is present, it is passed to the voice
+    so Ayden grounds his answer in THIS image ("in general" → "in THIS room").
+    Absent (older client / no render) → text-only, unchanged."""
     turn = resolve_turn_intent(message, intent_class=intent_class)
     _room = room_type or "(none)"
 
@@ -1526,22 +1531,24 @@ async def resolve_design_ai_message(
         )
         return await localize_reply(client, fallback_msg, ui_locale, enabled=normalize_enabled)
 
+    _vision = bool(image_url and image_url.strip().startswith("http"))
     _t0 = time.monotonic()
     voice = await generate_designer_voice(
         client, message=message, room_type=room_type,
         atmosphere_label=atmosphere_label, has_vision=has_vision, language=ui_locale,
+        image_url=image_url,
     )
     _ms = (time.monotonic() - _t0) * 1000.0
     if voice:
         log.info(
-            "[AYDEN-VOICE] enabled intent=design_advice room=%s has_vision=%s latency_ms=%.0f",
-            _room, has_vision, _ms,
+            "[AYDEN-VOICE] enabled intent=design_advice room=%s has_vision=%s vision_input=%s latency_ms=%.0f",
+            _room, has_vision, _vision, _ms,
         )
         return voice
     log.info(
-        "[AYDEN-VOICE] enabled intent=design_advice room=%s has_vision=%s latency_ms=%.0f "
+        "[AYDEN-VOICE] enabled intent=design_advice room=%s has_vision=%s vision_input=%s latency_ms=%.0f "
         "fallback_reason=llm_empty_or_error — pools fallback",
-        _room, has_vision, _ms,
+        _room, has_vision, _vision, _ms,
     )
     return await localize_reply(client, fallback_msg, ui_locale, enabled=normalize_enabled)
 
@@ -2033,6 +2040,7 @@ async def chat(
                 intent_class=intent_class, should_generate=False,
                 room_type=room_type, atmosphere_label=style_label,
                 has_vision=facts.has_vision, ui_locale=ui_locale,
+                image_url=facts.current_image_url or "",
                 normalize_enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": False,
@@ -2069,6 +2077,7 @@ async def chat(
                 intent_class=intent_class, should_generate=False,
                 room_type=room_type, atmosphere_label=style_label,
                 has_vision=facts.has_vision, ui_locale=ui_locale,
+                image_url=facts.current_image_url or "",
                 normalize_enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": False,
@@ -2133,6 +2142,7 @@ async def chat(
             intent_class=intent_class, should_generate=should_generate,
             room_type=room_type, atmosphere_label=style_label,
             has_vision=facts.has_vision, ui_locale=ui_locale,
+            image_url=facts.current_image_url or "",
             normalize_enabled=_norm_enabled()),
         "suggestions": suggestions,
         "should_generate": should_generate,

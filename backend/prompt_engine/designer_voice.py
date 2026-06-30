@@ -8,7 +8,13 @@ a short, anchored, opinionated reply. The internal reasoning is NEVER shown.
 Strictly gated by the caller: fires ONLY when AYDEN_VOICE=1 AND the turn is
 DESIGN_ADVICE (not Support / OOS / Meta / action-refine). On any error or empty
 output, generate_designer_voice returns None so the caller falls back to the
-existing pools (byte-identical fallback). No image, no /generate, no DNA/STAGE.
+existing pools (byte-identical fallback). No /generate, no DNA/STAGE change.
+
+Vision input (optional): when the current render URL is passed, the image is
+attached so Ayden answers about what is ACTUALLY in THIS render (real layout,
+placement, light) instead of generic advice — the "in general" → "in THIS room"
+jump. Sent at low detail (cheap) and only on design turns. Absent URL (older
+client / no render) → text-only, same as before.
 """
 from __future__ import annotations
 
@@ -31,17 +37,36 @@ def designer_voice_enabled() -> bool:
     return os.environ.get("AYDEN_VOICE", "0").strip().lower() in ("1", "true", "yes", "on")
 
 
-def _system_prompt(room_type: str, atmosphere_label: str, has_vision: bool, language: str) -> str:
+def _system_prompt(
+    room_type: str,
+    atmosphere_label: str,
+    has_vision: bool,
+    language: str,
+    has_image: bool = False,
+) -> str:
     lang_name = _LANG_NAME.get(language, "English")
     brief = render_brief_for_prompt(room_type)
     room = (room_type or "").replace("_", " ").strip() or "this space"
     atmo = (atmosphere_label or "").strip()
     atmo_line = f"Current design direction (atmosphere): {atmo}.\n" if atmo else ""
-    vision_line = (
-        "A rendered vision of this room currently exists; reason about THIS room, "
-        "not rooms in general.\n" if has_vision else
-        "No render exists yet; reason from the general principles for this room type.\n"
-    )
+    if has_image:
+        vision_line = (
+            "The current render of this room is attached. Look at it and answer "
+            "about what is ACTUALLY in THIS image — the real layout, furniture "
+            "placement, proportions, sightlines and light — and refer to specific "
+            "elements you can see. Do NOT give generic advice that would fit any "
+            "room.\n"
+        )
+    elif has_vision:
+        vision_line = (
+            "A rendered vision of this room currently exists; reason about THIS "
+            "room, not rooms in general.\n"
+        )
+    else:
+        vision_line = (
+            "No render exists yet; reason from the general principles for this "
+            "room type.\n"
+        )
     return (
         "You are Ayden, an interior-design architect for Ayden Studio. Interior "
         "design is your whole world: layout, furniture, the focal point, "
@@ -77,11 +102,26 @@ async def generate_designer_voice(
     atmosphere_label: str,
     has_vision: bool,
     language: str = "en",
+    image_url: Optional[str] = None,
 ) -> Optional[str]:
     """Return Ayden's short design reply (already in `language`), or None on any
-    failure/empty result so the caller can fall back to the existing pools."""
+    failure/empty result so the caller can fall back to the existing pools.
+
+    When `image_url` is a fetchable http(s) URL (the current render), it is
+    attached at low detail so Ayden grounds his answer in THIS image. Absent →
+    text-only (older client / no render)."""
     if not message or not message.strip():
         return None
+    has_image = bool(image_url and image_url.strip().startswith("http"))
+    if has_image:
+        user_content = [
+            {"type": "text", "text": message.strip()},
+            # low detail: enough to read layout/placement/light, cheap per turn.
+            {"type": "image_url",
+             "image_url": {"url": image_url.strip(), "detail": "low"}},
+        ]
+    else:
+        user_content = message.strip()
     try:
         resp = await client.chat.completions.create(
             model=_MODEL,
@@ -90,8 +130,9 @@ async def generate_designer_voice(
             timeout=_TIMEOUT_S,
             messages=[
                 {"role": "system", "content": _system_prompt(
-                    room_type, atmosphere_label, has_vision, language)},
-                {"role": "user", "content": message.strip()},
+                    room_type, atmosphere_label, has_vision, language,
+                    has_image=has_image)},
+                {"role": "user", "content": user_content},
             ],
         )
         text = (resp.choices[0].message.content or "").strip()
