@@ -110,6 +110,10 @@ from prompt_engine.support_answers import (
     build_quota_answer,
     detect_quota_question,
 )
+# PR3 Designer Voice (Ayden Companion) — LLM voice for DESIGN_ADVICE turns only,
+# behind the functional flag AYDEN_VOICE (default OFF). When OFF / non-design /
+# action-refine / LLM error, the existing pools stay the byte-identical fallback.
+from prompt_engine.designer_voice import designer_voice_enabled, generate_designer_voice
 from prompt_engine.transformation_state_builder import (
     build_vision_caption,
     build_clean_instruction,
@@ -1479,6 +1483,63 @@ async def admin_patch_promo_code(
     return updated
 
 
+async def resolve_design_ai_message(
+    client,
+    *,
+    fallback_msg: str,
+    message: str,
+    intent_class,
+    should_generate: bool,
+    room_type: str,
+    atmosphere_label: str,
+    has_vision: bool,
+    ui_locale: str,
+    normalize_enabled: bool,
+) -> str:
+    """PR3 Designer Voice gate for DESIGN_ADVICE turns.
+
+    Returns the final ai_message. The LLM voice fires ONLY when AYDEN_VOICE=1
+    AND the resolved TurnIntent is DESIGN_ADVICE AND the turn is not an
+    action/refine (should_generate). In every other case — flag OFF, non-design
+    turn, or any LLM error/empty — it returns the existing pools reply localized
+    EXACTLY as before (byte-identical fallback). No image, no /generate."""
+    turn = resolve_turn_intent(message, intent_class=intent_class)
+    _room = room_type or "(none)"
+
+    if should_generate or turn != TurnIntent.DESIGN_ADVICE:
+        log.info(
+            "[AYDEN-VOICE] disabled (turn=%s should_generate=%s) — pools fallback",
+            getattr(turn, "value", turn), should_generate,
+        )
+        return await localize_reply(client, fallback_msg, ui_locale, enabled=normalize_enabled)
+
+    if not designer_voice_enabled():
+        log.info(
+            "[AYDEN-VOICE] disabled (flag OFF) intent=design_advice room=%s has_vision=%s — pools fallback",
+            _room, has_vision,
+        )
+        return await localize_reply(client, fallback_msg, ui_locale, enabled=normalize_enabled)
+
+    _t0 = time.monotonic()
+    voice = await generate_designer_voice(
+        client, message=message, room_type=room_type,
+        atmosphere_label=atmosphere_label, has_vision=has_vision, language=ui_locale,
+    )
+    _ms = (time.monotonic() - _t0) * 1000.0
+    if voice:
+        log.info(
+            "[AYDEN-VOICE] enabled intent=design_advice room=%s has_vision=%s latency_ms=%.0f",
+            _room, has_vision, _ms,
+        )
+        return voice
+    log.info(
+        "[AYDEN-VOICE] enabled intent=design_advice room=%s has_vision=%s latency_ms=%.0f "
+        "fallback_reason=llm_empty_or_error — pools fallback",
+        _room, has_vision, _ms,
+    )
+    return await localize_reply(client, fallback_msg, ui_locale, enabled=normalize_enabled)
+
+
 @app.post("/chat")
 async def chat(
     session_id: str = Form(...),
@@ -1602,7 +1663,12 @@ async def chat(
         ctx = build_context(facts, TurnIntent.META)
         log.info("[SITCTX] %s", context_log_line(ctx))
         return attach_context({
-            "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
+            "ai_message": await resolve_design_ai_message(
+                openai, fallback_msg=ai_message, message=message,
+                intent_class=intent_class, should_generate=False,
+                room_type=room_type, atmosphere_label=style_label,
+                has_vision=facts.has_vision, ui_locale=ui_locale,
+                normalize_enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": False,
             "intent": "conversation",
@@ -1927,7 +1993,12 @@ async def chat(
         ctx = build_context(facts, resolve_turn_intent(message, intent_class=intent_class))
         log.info("[SITCTX] %s", context_log_line(ctx))
         return attach_context({
-            "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
+            "ai_message": await resolve_design_ai_message(
+                openai, fallback_msg=ai_message, message=message,
+                intent_class=intent_class, should_generate=False,
+                room_type=room_type, atmosphere_label=style_label,
+                has_vision=facts.has_vision, ui_locale=ui_locale,
+                normalize_enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": False,
             "intent": "conversation",
@@ -1958,7 +2029,12 @@ async def chat(
         ctx = build_context(facts, resolve_turn_intent(message, intent_class=intent_class))
         log.info("[SITCTX] %s", context_log_line(ctx))
         return attach_context({
-            "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
+            "ai_message": await resolve_design_ai_message(
+                openai, fallback_msg=ai_message, message=message,
+                intent_class=intent_class, should_generate=False,
+                room_type=room_type, atmosphere_label=style_label,
+                has_vision=facts.has_vision, ui_locale=ui_locale,
+                normalize_enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": False,
             "intent": "conversation",
@@ -2017,7 +2093,12 @@ async def chat(
     )
     log.info("[SITCTX] %s", context_log_line(ctx))
     return attach_context({
-        "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
+        "ai_message": await resolve_design_ai_message(
+            openai, fallback_msg=ai_message, message=message,
+            intent_class=intent_class, should_generate=should_generate,
+            room_type=room_type, atmosphere_label=style_label,
+            has_vision=facts.has_vision, ui_locale=ui_locale,
+            normalize_enabled=_norm_enabled()),
         "suggestions": suggestions,
         "should_generate": should_generate,
         "intent": intent_class.intent.value,
