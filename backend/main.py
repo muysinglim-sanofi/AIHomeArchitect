@@ -1663,12 +1663,7 @@ async def chat(
         ctx = build_context(facts, TurnIntent.META)
         log.info("[SITCTX] %s", context_log_line(ctx))
         return attach_context({
-            "ai_message": await resolve_design_ai_message(
-                openai, fallback_msg=ai_message, message=message,
-                intent_class=intent_class, should_generate=False,
-                room_type=room_type, atmosphere_label=style_label,
-                has_vision=facts.has_vision, ui_locale=ui_locale,
-                normalize_enabled=_norm_enabled()),
+            "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": suggestions,
             "should_generate": False,
             "intent": "conversation",
