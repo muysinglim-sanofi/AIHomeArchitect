@@ -99,8 +99,16 @@ from prompt_engine.situational_context import (
 from prompt_engine.conversation_router import (
     TurnIntent,
     resolve_turn_intent,
+    detect_result_explanation,   # PR2 Support — RESULT_EXPLANATION gate
     detect_out_of_scope,
     get_out_of_scope_reply,
+)
+# PR2 Support (Ayden Companion) — deterministic Support answers (no LLM, no image):
+# RESULT_EXPLANATION design-logic reply + honest live-quota reply.
+from prompt_engine.support_answers import (
+    build_result_explanation,
+    build_quota_answer,
+    detect_quota_question,
 )
 from prompt_engine.transformation_state_builder import (
     build_vision_caption,
@@ -1626,6 +1634,36 @@ async def chat(
         "km" if _early_session_memory.session_language == "km" else "en"
     )
 
+    # ── PR2 Support (Ayden Companion) — quota honesty gate ────────────────────
+    # "Combien de générations gratuites il me reste / how many do I have left /
+    # is it free" — a high-precision REMAINING-COUNT question. Answer with the
+    # user's REAL live quota (AccessDecision) + where to upgrade ; never an
+    # invented number. Placed HERE — after meta/OOS, BEFORE the generate
+    # dominance + design routing — because classify_intent otherwise mislabels
+    # these questions as GENERATE (proven: they never reach the PRODUCT_HELP
+    # branch). Pure pricing ("combien ça coûte") is deliberately NOT caught here
+    # (it wants the price, which lives on the paywall → static billing KB).
+    # Deterministic, no LLM, no image, should_generate=False.
+    if detect_quota_question(message):
+        _qdecision = await resolve_generation_access(current_user.user_id)
+        ai_message = build_quota_answer(
+            _qdecision, language=_early_session_memory.session_language)
+        log.info(
+            "  [PR2 quota] tier=%s free_remaining=%s",
+            getattr(_qdecision, "tier", "?"), getattr(_qdecision, "free_remaining", "?"),
+        )
+        log.info("=== /chat PR2 QUOTA SUCCESS ===")
+        ctx = build_context(facts, TurnIntent.PRODUCT_HELP)
+        log.info("[SITCTX] %s", context_log_line(ctx))
+        return attach_context({
+            "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
+            "suggestions": [],
+            "should_generate": False,
+            "intent": "product_help",
+            "sub_intent": "product_help",
+            "session_language": _early_session_memory.session_language,
+        }, ctx)
+
     # ── Wave 4.11d: Generation Intent Dominance ────────────────────────────
     # Two stateless detectors that sit BEFORE detect_ambiguity. When either
     # fires, the user gets the next vision instead of another clarification.
@@ -1717,6 +1755,35 @@ async def chat(
         log.info("[SITCTX] %s", context_log_line(ctx))
         return attach_context({
             "ai_message": await localize_reply(openai, _clarification.clarification_text, ui_locale, enabled=_norm_enabled()),
+            "suggestions": [],
+            "should_generate": False,
+            "intent": "design_discussion",
+            "sub_intent": "design_discussion",
+            "session_language": _early_session_memory.session_language,
+        }, ctx)
+
+    # ── PR2 Support (Ayden Companion) — RESULT_EXPLANATION handler ────────────
+    # "pourquoi tu as mis / changé / pas mis X" — the subject is the SYSTEM, not
+    # the user (that subject test, in detect_result_explanation, separates it
+    # from design advice "pourquoi JE devrais…"). Explain the design LOGIC of
+    # THIS render — anchored on the chosen atmosphere + the preservation contract
+    # — and invite a concrete change. Deterministic, no LLM, no image opened.
+    # Anti-bluff (persona): we never claim a specific object/measurement is
+    # present; the pixel-specific "why THAT exact object" is PR3 Voice+vision.
+    # Gated on has_vision: with no render yet there is nothing to explain, so we
+    # fall through to the normal routing. Priority matches resolve_turn_intent
+    # (after AMBIGUOUS, before PRODUCT_HELP / DESIGN_ADVICE).
+    if facts.has_vision and detect_result_explanation(message):
+        ai_message = build_result_explanation(
+            atmosphere_label=style_label,
+            room_type=room_type or "",
+            language=_early_session_memory.session_language,
+        )
+        log.info("=== /chat PR2 RESULT_EXPLANATION SUCCESS ===")
+        ctx = build_context(facts, TurnIntent.RESULT_EXPLANATION)
+        log.info("[SITCTX] %s", context_log_line(ctx))
+        return attach_context({
+            "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
             "suggestions": [],
             "should_generate": False,
             "intent": "design_discussion",
