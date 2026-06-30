@@ -25,7 +25,9 @@ _LANG_NAME = {"en": "English", "fr": "French", "km": "Khmer"}
 
 
 def designer_voice_enabled() -> bool:
-    """Functional flag, default OFF. AYDEN_VOICE=1 turns the LLM Voice on."""
+    """Functional flag. Default ON in the running app: main.py pins AYDEN_VOICE=1
+    via _BENCHED_DEFAULT_ON when unset (and logs it at startup). Kill-switch
+    preserved — an explicit AYDEN_VOICE=0 in the env falls back to the pools."""
     return os.environ.get("AYDEN_VOICE", "0").strip().lower() in ("1", "true", "yes", "on")
 
 

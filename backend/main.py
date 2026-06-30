@@ -530,6 +530,11 @@ _BENCHED_DEFAULT_ON = (
     # routing + interior/exterior detection validated). Single vision call;
     # AYDEN_DECIDE_EXTERIOR stays OFF (never combined). Explicit env still wins.
     "AYDEN_UNIFIED_VISION",      # unified interior + exterior room detection (1 call)
+    # 2026-06-30 — PR3 Designer Voice promoted from experimental to default-ON.
+    # MVP phase (frequent deploys, few users): develop on the real voice rather
+    # than keep a major feature dark. The flag STAYS as a kill-switch — set
+    # AYDEN_VOICE=0 in the env to fall back to the pools instantly, no Git revert.
+    "AYDEN_VOICE",               # LLM Designer voice on DESIGN_ADVICE turns
 )
 _OFF_VALUES = {"0", "false", "no", "off"}
 for _flag in _BENCHED_DEFAULT_ON:
