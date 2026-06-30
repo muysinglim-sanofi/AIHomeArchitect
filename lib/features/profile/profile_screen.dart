@@ -967,26 +967,60 @@ class _SectionHeader extends StatelessWidget {
 class _ProfileHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: const BoxDecoration(color: AppColors.accentLight, shape: BoxShape.circle),
-          child: const Center(
-            child: Text('A', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: AppColors.accentDark)),
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    // Real user data from Supabase user_metadata (same source as Edit Profile),
+    // not a hardcoded placeholder. Rebuilds on save via ProfileService.revision.
+    return ValueListenableBuilder<int>(
+      valueListenable: ProfileService.revision,
+      builder: (context, _, _) {
+        final p = ProfileService().load();
+        final fullName = [p.firstName, p.lastName]
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .join(' ');
+        final email = p.email.trim();
+        final hasName = fullName.isNotEmpty;
+        final initial = hasName
+            ? fullName[0].toUpperCase()
+            : (email.isNotEmpty ? email[0].toUpperCase() : '?');
+        final primary = hasName ? fullName : (email.isNotEmpty ? email : '—');
+        final showEmailLine = hasName && email.isNotEmpty;
+        return Row(
           children: [
-            Text('Alex Martin', style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 2),
-            Text('alex@example.com', style: Theme.of(context).textTheme.bodyMedium),
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                  color: AppColors.accentLight, shape: BoxShape.circle),
+              child: Center(
+                child: Text(initial,
+                    style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.accentDark)),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(primary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.headlineSmall),
+                  if (showEmailLine) ...[
+                    const SizedBox(height: 2),
+                    Text(email,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium),
+                  ],
+                ],
+              ),
+            ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 }

@@ -23,6 +23,10 @@ class ProfileService {
   static const String _kLast = 'last_name';
   static const String _kEmail = 'contact_email';
 
+  /// Bumped on every successful save so widgets that render the profile (e.g.
+  /// the Profile header) can refresh immediately, without a full screen rebuild.
+  static final ValueNotifier<int> revision = ValueNotifier<int>(0);
+
   /// Read the profile from the current user's metadata (empty fields if unset).
   UserProfile load() {
     final md = Supabase.instance.client.auth.currentUser?.userMetadata ??
@@ -50,6 +54,7 @@ class ProfileService {
           _kEmail: email.trim(),
         }),
       );
+      revision.value++; // notify header (and any listener) to reload
       return true;
     } catch (e) {
       debugPrint('[ProfileService] save failed: $e');
