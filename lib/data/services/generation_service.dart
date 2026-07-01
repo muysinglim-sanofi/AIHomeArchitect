@@ -88,24 +88,24 @@ class GenerationService {
     ));
   }
 
-  /// Generation Intent v1 — PR3 (READ-ONLY). Returns the status of the latest
-  /// Intent for [sessionId] — 'RUNNING' | 'SUCCEEDED' | 'FAILED' |
-  /// 'FAILED_TERMINAL' — or null (no intent / any error). Used to re-attach an
-  /// in-flight generation after an app kill, when the client never received the
-  /// intent_id. NEVER re-POSTs /generate → read-only, cannot create a duplicate.
-  Future<String?> getLatestIntentStatus(String sessionId) async {
+  /// Generation Intent v1 — PR3 (READ-ONLY). Returns the latest Intent snapshot
+  /// for [sessionId]: { intent_id, status, iteration, has_result } — or null
+  /// (no intent / any error). Used to re-attach an in-flight generation after an
+  /// app kill, when the client never received the intent_id. The `iteration`
+  /// lets the caller tell whether the expected image has already landed (so it
+  /// won't show a spinner over an already-complete vision). NEVER re-POSTs
+  /// /generate → read-only, cannot create a duplicate.
+  Future<Map<String, dynamic>?> getLatestIntent(String sessionId) async {
     try {
       final resp = await _dio.get(
         '/v1/intents/latest',
         queryParameters: {'session_id': sessionId},
       );
       final data = resp.data;
-      if (data is Map && data['status'] is String) {
-        return data['status'] as String;
-      }
+      if (data is Map) return Map<String, dynamic>.from(data);
       return null;
     } catch (e) {
-      debugPrint('[IntentStatus] getLatestIntentStatus failed (ignored): $e');
+      debugPrint('[IntentStatus] getLatestIntent failed (ignored): $e');
       return null;
     }
   }

@@ -1087,30 +1087,38 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       final rows = await _svc.fetchMessages(_project.id);
       debugPrint('[DB] _loadMessages() — got ${rows.length} rows');
       if (!mounted) return;
+      // Message view + how many visions already landed. Computed here (not lower
+      // down) because the in-flight guard below needs imageCount.
+      final msgs = rows.map(_rowToMessage).toList();
+      final imageCount = msgs.where((m) => m.type == MessageType.imageResult).length;
+
       // PR3 (Generation Intent v1) — DURABLE in-flight detection. The local
       // pendingGenerationsProvider is app-scoped RAM and is LOST on app kill, so
       // after a kill+reopen the in-flight generation was invisible (blank
-      // session). Ask the backend (READ-ONLY) whether the latest Intent for this
-      // session is still RUNNING. Never re-POSTs /generate → cannot create a
-      // duplicate (the atomic claim stays PR2). Skipped on reconciliation poll
-      // ticks (they call _loadMessages every 5s) and when the live provider
-      // already knows we're in flight.
+      // session). Ask the backend (READ-ONLY) whether the latest Intent is still
+      // RUNNING. Never re-POSTs /generate → cannot create a duplicate (the atomic
+      // claim stays PR2). Skipped on reconciliation poll ticks and when the live
+      // provider already knows we're in flight.
       final localInFlight =
           ref.read(pendingGenerationsProvider)[_project.id] ==
               GenerationLifecycle.inFlight;
       bool backendInFlight = false;
       if (!localInFlight && trigger != 'poll') {
-        final st = await GenerationService().getLatestIntentStatus(_project.id);
+        final probe = await GenerationService().getLatestIntent(_project.id);
         if (!mounted) return;
-        backendInFlight = st == 'RUNNING';
+        final running = probe?['status'] == 'RUNNING';
+        // Only in-flight if the latest Intent's image has NOT landed yet
+        // (imageCount < iteration). Guards against a spinner-over-a-finished-
+        // vision: if the user returns AFTER completion, the image is already in
+        // `rows` (imageCount >= iteration), so we show it instead of injecting a
+        // loading bubble whose reconciliation could never find a "new" result
+        // (baseline already includes it → the 3-min spin-then-timeout bug).
+        final iter = (probe?['iteration'] as num?)?.toInt() ?? 0;
+        backendInFlight = running && imageCount < iter;
         if (backendInFlight) {
-          // Re-HYDRATE the lifecycle RAM that the app-kill wiped. Without this,
-          // the reconciliation poll ticks (which intentionally DON'T re-probe
-          // the backend) would see localInFlight=false → inFlightResume=false →
-          // and drop the loading bubble after the first 5s tick (the bug: the
-          // spinner appeared on reopen then vanished until the image landed).
-          // markInFlight makes every subsequent tick keep re-injecting it; the
-          // reconciliation clears it (line ~2151) when the vision lands.
+          // Re-HYDRATE the lifecycle RAM the app-kill wiped, so reconciliation
+          // poll ticks (which don't re-probe) keep re-injecting the bubble until
+          // the vision lands. Reconciliation clears it (line ~2151) on arrival.
           ref.read(pendingGenerationsProvider.notifier).markInFlight(_project.id);
         }
       }
@@ -1151,8 +1159,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         }
         return;
       }
-      final msgs = rows.map(_rowToMessage).toList();
-      final imageCount = msgs.where((m) => m.type == MessageType.imageResult).length;
 
       // Wave 5.12b — walk the message stream backward and pick the FIRST
       // imageResult OR branchEvent as the refinement baseline. This
