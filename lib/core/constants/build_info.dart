@@ -5,4 +5,4 @@
 /// running this code — no ambiguity.
 ///
 /// BUMP this string whenever you cut a build you want to identify.
-const String kBuildTag = 'GI · iteration-guard · 2026-07-01a';
+const String kBuildTag = 'GI · stale-flag-fix · 2026-07-01b';

@@ -1102,27 +1102,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       final localInFlight =
           ref.read(pendingGenerationsProvider)[_project.id] ==
               GenerationLifecycle.inFlight;
-      bool backendInFlight = false;
-      if (!localInFlight && trigger != 'poll') {
+      bool inFlightResume;
+      if (trigger == 'poll') {
+        // Reconciliation ticks trust the flag set at open (they don't re-probe).
+        inFlightResume = localInFlight;
+      } else {
+        // Ask the backend for the DURABLE truth on EVERY session open. We must
+        // NOT blindly trust the RAM flag: it can be STALE-inFlight when a
+        // generation completed while this session was off-screen — leaving the
+        // chat cancels the reconcile on dispose, so pendingGenerations is never
+        // cleared. The guard `imageCount < iteration` then applies UNIFORMLY, so
+        // a spinner is shown ONLY when the expected image has not landed yet —
+        // never over an already-finished vision (the double-display / 3-min spin).
         final probe = await GenerationService().getLatestIntent(_project.id);
         if (!mounted) return;
         final running = probe?['status'] == 'RUNNING';
-        // Only in-flight if the latest Intent's image has NOT landed yet
-        // (imageCount < iteration). Guards against a spinner-over-a-finished-
-        // vision: if the user returns AFTER completion, the image is already in
-        // `rows` (imageCount >= iteration), so we show it instead of injecting a
-        // loading bubble whose reconciliation could never find a "new" result
-        // (baseline already includes it → the 3-min spin-then-timeout bug).
         final iter = (probe?['iteration'] as num?)?.toInt() ?? 0;
-        backendInFlight = running && imageCount < iter;
-        if (backendInFlight) {
-          // Re-HYDRATE the lifecycle RAM the app-kill wiped, so reconciliation
-          // poll ticks (which don't re-probe) keep re-injecting the bubble until
-          // the vision lands. Reconciliation clears it (line ~2151) on arrival.
-          ref.read(pendingGenerationsProvider.notifier).markInFlight(_project.id);
+        if (probe != null) {
+          inFlightResume = running && imageCount < iter;
+          if (inFlightResume) {
+            // Re-hydrate the lifecycle RAM so reconciliation poll ticks (which
+            // don't re-probe) keep re-injecting the bubble until the vision lands.
+            ref.read(pendingGenerationsProvider.notifier).markInFlight(_project.id);
+          } else if (localInFlight) {
+            // Stale RAM flag (vision already landed / no longer RUNNING) → clear
+            // it so neither this screen nor the homepage card keeps showing a
+            // phantom spinner over a finished vision.
+            ref.read(pendingGenerationsProvider.notifier).clear(_project.id);
+          }
+        } else {
+          // Probe unavailable (network): fall back to the RAM flag, but never
+          // spin over an already-landed image.
+          inFlightResume = localInFlight && imageCount == 0;
         }
       }
-      final inFlightResume = localInFlight || backendInFlight;
 
       // Phase A — a notification deep-link to a session that has no messages
       // means it was deleted between generation-complete and the tap. Bounce
