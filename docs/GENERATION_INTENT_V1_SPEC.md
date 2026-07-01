@@ -381,9 +381,11 @@ Le frontend l'interroge sur ré-attachement (RUNNING) au lieu de re-POSTer. Le p
 - **Frontend** : dans `_loadMessages` ([chat_screen.dart:1133-1167](../frontend/lib/features/chat/chat_screen.dart)), `inFlightResume = pendingGenerations.inFlight OR backend.status==RUNNING`. Si RUNNING → chemin existant (bulle chargement + `_startReconciliationPolling`). Best-effort (échec → comportement actuel).
 - *Gate* : kill-app mid-flight → réouverture → spinner + image auto (plus de session vide / reload manuel). Cœur image + `/generate` intouchés.
 
-### PR4 — Réconciliation (timeout + repair)
-- Worker : stuck intents `RUNNING > 12 min` → `FAILED` (§11.1 #1, mutualisé « stuck holds » Billing) ; post-upload repair (#2) ; drift alert (#3).
-- *Gate* : IT-8 (orphelin), IT-9 (repair post-upload).
+### PR4 — Réconciliation (timeout + repair) — **ÉCRIT + validé local** : [`backend/intent_reconciliation.py`](../backend/intent_reconciliation.py) + worker/endpoint dans [`backend/main.py`](../backend/main.py)
+- `reconcile_once()` : **repair** (image présente corrélée par **timestamp** `created_at >= intent.started_at`, robuste au re-upload → `SUCCEEDED`) + **timeout-fail** (`RUNNING > 12 min` sans image → `FAILED`) + résumé/warnings. Transitions gardées `.eq(status,'RUNNING')` (anti-clobber).
+- Worker `@app.on_event("startup")` toutes les **5 min** (best-effort, idempotent multi-instances). Endpoint manuel `POST /internal/reconcile` gardé par `X-Reconcile-Secret == RECONCILE_SECRET` (désactivé si env absent).
+- **Backend-only, aucun hook billing, aucune écriture ledger.** L'auto-worker tourne en prod sans config ; `RECONCILE_SECRET` optionnel (endpoint manuel/cron).
+- *Validé* : passe locale a réparé 1 orphelin réel (`scanned:1 repaired:1`), 2ᵉ passe idempotente (`scanned:0`), 403 sans secret.
 
 > **Billing branché APRÈS** : les hooks `reserve/commit/release` (§8) ne sont câblés qu'à l'étape **Billing Engine** (ordre global [BILLING_ENGINE_SPEC.md](BILLING_ENGINE_SPEC.md) §12). PR0–PR4 livrent l'identité + le lifecycle ; le ledger s'y branche ensuite sur les transitions déjà en place. `usage_log.intent_id` (PR0) prépare cette convergence.
 

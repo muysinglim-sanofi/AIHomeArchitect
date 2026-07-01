@@ -44,6 +44,8 @@ from intent_observer import (
     observe_intent_end,
     get_latest_intent_for_session,
 )
+# Generation Intent v1 — PR4 : reconciliation worker (lifecycle only, no billing).
+from intent_reconciliation import reconcile_once, RECONCILE_INTERVAL_SECONDS
 # Wave 5.17d — Free-tier scope (room + atmosphere allowlist for non-premium)
 from free_tier import check_restrictions
 # Wave 5.17d — RevenueCat webhook receiver (POST /webhooks/revenuecat)
@@ -1324,6 +1326,44 @@ async def get_latest_intent(
     if row is None:
         return {"intent_id": None, "status": None, "iteration": None, "has_result": False}
     return row
+
+
+# ── Generation Intent v1 — PR4 reconciliation (lifecycle only, no billing) ────
+_reconcile_bg_tasks: set = set()
+
+
+@app.on_event("startup")
+async def _start_reconciliation_worker():
+    """Periodic Intent lifecycle reconciliation: repair orphans (image in DB but
+    Intent still RUNNING) + timeout-fail stuck RUNNING. Best-effort, in-process;
+    idempotent across instances (transitions guarded by .eq(status,'RUNNING'))."""
+    async def _loop():
+        while True:
+            try:
+                await asyncio.sleep(RECONCILE_INTERVAL_SECONDS)
+                await reconcile_once()
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:  # never let the worker die silently
+                log.warning("[RECONCILE] worker cycle failed (continuing): %s", exc)
+
+    _t = asyncio.create_task(_loop())
+    _reconcile_bg_tasks.add(_t)
+    _t.add_done_callback(_reconcile_bg_tasks.discard)
+    log.info("[RECONCILE] worker started (interval=%ss)", RECONCILE_INTERVAL_SECONDS)
+
+
+@app.post("/internal/reconcile")
+async def trigger_reconcile(request: Request):
+    """PR4 — manual reconciliation pass (testing + prod cron). Gated by the
+    X-Reconcile-Secret header == env RECONCILE_SECRET; disabled (403) when the
+    env is unset. Only transitions stuck RUNNING intents; no billing, no OpenAI."""
+    secret = os.environ.get("RECONCILE_SECRET")
+    if not secret:
+        raise HTTPException(status_code=403, detail="reconcile disabled (RECONCILE_SECRET unset)")
+    if request.headers.get("X-Reconcile-Secret") != secret:
+        raise HTTPException(status_code=403, detail="forbidden")
+    return await reconcile_once()
 
 
 @app.post("/purchases/sync")
