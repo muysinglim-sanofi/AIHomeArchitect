@@ -78,13 +78,13 @@ Le `price_usd` stocké en DB est **indicatif/affichage** ; la vérité de prix m
 | Produit | Prix (réf.) | Durée | Crédits (générations) |
 |---|---:|---:|---:|
 | **Weekly Pass** | 7,99 $ | 7 jours | 60 |
-| **Annual Pass** | 44,00 $ | 365 jours | 300 |
+| **Annual Pass** | 79,00 $ | 365 jours | 300 |
 | Pack 10 | 1,99 $ | — | +10 |
 | Pack 25 | 3,99 $ | — | +25 |
 | Pack 50 | 6,99 $ | — | +50 |
 | Pack 100 | 11,99 $ | — | +100 |
 
-> **Note de prix** : l'Annual à **44 $ / 300 générations** est figé pour cette spec. Il n'est volontairement **pas** l'équivalent annualisé du Weekly (60/sem × 52 ≈ 3120) : le Weekly cible un usage **intensif court**, l'Annual un usage **longue durée mais moins intensif**. (Remplace la valeur 79,99 $ notée dans `wave_5_17d_1_repivot` — mémoire à mettre à jour.)
+> **Note de prix (figé 2026-07-01)** : l'Annual à **79 $ / 300 générations** est figé pour cette spec. Il n'est volontairement **pas** l'équivalent annualisé du Weekly (60/sem × 52 ≈ 3120) : le Weekly cible un usage **intensif court**, l'Annual un usage **longue durée mais moins intensif**. `price_usd` reste **indicatif** ; la vérité de prix mobile vient des paliers stores (probablement 79,99 $). (Confirme la valeur 79 $ ; annule la parenthèse 44 $ précédente.)
 
 ### 2.2 — Règles du modèle *(figées)*
 
