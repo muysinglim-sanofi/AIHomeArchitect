@@ -32,7 +32,7 @@ Ce document **supersède** le modèle d'« abonnement illimité » (`entitlement
 
 | Dépendance | Statut | Pourquoi bloquant |
 |---|---|---|
-| **Generation Intent v1** (`intent_id` déterministe + persisté, voir [`GENERATION_INTENT_V1_SPEC.md`](GENERATION_INTENT_V1_SPEC.md)) | **Conçu, pas codé** (voir `generation_job_v1_direction`) | la clé d'idempotence de la consommation de crédit EST l'`intent_id` (l'**Intent**, pas le **Job**/exécution technique). Sans lui, le double-débit est réintroduit dans le coffre-fort lui-même. |
+| **Generation Intent v1** (`intent_id` déterministe + persisté, voir [`GENERATION_INTENT_V1_SPEC.md`](GENERATION_INTENT_V1_SPEC.md)) | ✅ **LIVRÉ (PR0→PR4)** 2026-07-01 — hooks `observe_intent_start/end` + réconciliation `reconcile_once()` en prod | la clé d'idempotence de la consommation de crédit EST l'`intent_id` (l'**Intent**, pas le **Job**/exécution technique). Les points de branchement billing existent déjà (voir §4.0). |
 
 ---
 
@@ -213,6 +213,70 @@ Règle dure : une fois en état terminal, toute nouvelle écriture terminale pou
 ## 4 — Data model
 
 > Toutes les tables vivent dans Supabase/Postgres. RLS : un utilisateur ne lit que ses propres lignes (`auth.uid() = user_id`) ; les écritures de ledger/paiement passent par le **service role** uniquement (jamais le client).
+
+### 4.0 — Modèle d'événements *(à lire AVANT les tables)*
+
+**Principe** : le Billing est **orienté événements**, pas orienté tables. Et ce n'est pas une métaphore ici — c'est littéral :
+
+> **`ledger_entries` (§4.5) EST le journal d'événements du domaine crédit** (append-only : une ligne = un événement — `GRANT` / `HOLD` / `COMMIT` / `RELEASE` / `REFUND` / `EXPIRE` / `TRIAL`). Le **`Wallet` (§4.7) est une projection** de ce journal (rejouable). Les autres tables (`orders`, `payments`, `passes`) sont l'**état persisté** des événements d'acquisition. Si les événements sont bons, les tables en sont la **conséquence**.
+
+#### Catalogue d'événements
+
+**Groupe A — Acquisition** (le user obtient des droits) :
+
+| Événement | Déclencheur | Conséquence persistée |
+|---|---|---|
+| `PurchaseCompleted` | webhook RevenueCat / callback KHQR | `Payment` inséré (idempotent `provider_transaction_id`) · `Order` → `PAID` |
+| `PassGranted` | traitement d'un Payment produit=`PASS` | `Pass` créé (`starts_at`/`ends_at`) |
+| `CreditsGranted` | traitement Payment (`PASS` ou `CREDIT_PACK`) | ledger **`GRANT(+credits)`** (scoppé `pass_id`) |
+| `TrialGranted` | 1ʳᵉ éligibilité free-tier (OD-1) | ledger **`TRIAL(+3)`** |
+
+**Groupe B — Consommation** (ancrée sur le **lifecycle Intent déjà construit**) :
+
+| Événement | Hook **concret** (livré) | Conséquence ledger |
+|---|---|---|
+| `IntentStarted` | `observe_intent_start` (le claim, [intent_observer.py](../backend/intent_observer.py)) | `reserve` → **`HOLD(-1)`** (échoue si solde insuffisant → **402** avant OpenAI) |
+| `IntentSucceeded` | `observe_intent_end(SUCCEEDED)` **OU** repair PR4 ([intent_reconciliation.py](../backend/intent_reconciliation.py)) | `commit` → **`COMMIT`** |
+| `IntentFailed` | `observe_intent_end(FAILED/_TERMINAL)` **OU** timeout-fail PR4 | `release` → **`RELEASE(+1)`** |
+
+**Groupe C — Corrections** :
+
+| Événement | Déclencheur | Conséquence |
+|---|---|---|
+| `RefundReceived` | webhook refund provider | ledger **`REFUND(-x)`** + `Pass` → `CANCELLED` |
+| `PassExpired` | sweep expiry (worker) | ledger **`EXPIRE(-reste)`** + `Pass` → `EXPIRED` |
+
+#### Les deux flux
+
+```
+FLUX 1 — Acquisition (paiement → droits)
+  PurchaseCompleted → PassGranted → CreditsGranted → (Wallet reprojection)
+
+FLUX 2 — Consommation (génération, ancré Intent)
+  IntentStarted ── reserve → HOLD(-1) ──┐
+                                        │  (solde < 1 → 402, pas de génération)
+                                        ▼
+                                  [ openai.images.edit ]
+                                        │
+                        ┌───────────────┴───────────────┐
+                  IntentSucceeded                   IntentFailed
+                   commit → COMMIT                  release → RELEASE(+1)
+```
+
+#### 🔑 Point d'intégration critique (conséquence directe de PR4)
+
+Les effets billing sont pilotés par les **transitions Intent** — qui sont émises à **deux endroits** dans le code livré, pas un seul :
+
+1. **Chemin nominal** : `observe_intent_start` / `observe_intent_end` dans `/generate`.
+2. **Réconciliation (PR4)** : `reconcile_once()` transitionne aussi des Intents (**repair → SUCCEEDED**, **timeout → FAILED**).
+
+➡️ **Le Billing doit se brancher aux DEUX.** Un Intent réparé par PR4 (image livrée mais client tué avant `observe_intent_end`) **doit `commit`** le crédit — sinon une génération réussie ne serait jamais facturée. Un timeout-fail **doit `release`**. C'est exactement pourquoi PR4 devait exister **avant** le Billing : il ferme le trou où un débit serait perdu ou orphelin. La logique billing sera donc une fonction pure `apply_billing_for_intent_transition(intent_id, new_status)` appelée par **les deux** émetteurs, idempotente par `intent_id` (clé ledger `hold:/commit:/release:<intent_id>`).
+
+#### Conséquence pour la suite
+
+Les tables ci-dessous (§4.1–4.7) ne sont que la **matérialisation** de ce modèle : `products` (ce qui peut être acquis), `orders`/`payments` (Flux 1 entrant), `passes` (droit temporel), **`ledger_entries` (le journal d'événements lui-même)**, `wallets` (sa projection). On les lit désormais comme *« quel événement écrit/lit cette table ? »*.
+
+---
 
 ### 4.1 — `products` *(catalogue — configurable)*
 
@@ -528,7 +592,7 @@ Given un anon ayant consommé 2 crédits TRIAL puis se signant (anonymous-upgrad
 
 | # | Chantier | Pourquoi cet ordre | Statut |
 |---|---|---|---|
-| 1 | **Generation Intent v1** (`intent_id` déterministe + persisté, [`GENERATION_INTENT_V1_SPEC.md`](GENERATION_INTENT_V1_SPEC.md)) | Prérequis dur §3 — la clé d'idempotence de la consommation | Conçu, pas codé ([[generation_job_v1_direction]]) |
+| 1 | **Generation Intent v1** (`intent_id` déterministe + persisté, [`GENERATION_INTENT_V1_SPEC.md`](GENERATION_INTENT_V1_SPEC.md)) | Prérequis dur §3 — la clé d'idempotence de la consommation | ✅ **LIVRÉ (PR0→PR4)** 2026-07-01 |
 | 2 | **Billing Engine** (data model §4 + ledger + reserve/commit/release + webhooks normalisés) | Le coffre-fort lui-même, une fois l'`intent_id` disponible | Cette spec |
 | 3 | **RevenueCat mobile** (SDK + `/v1/webhooks/revenuecat` + catalogue IAP) | Premier canal de paiement réel (mobile-first) | À faire |
 | 4 | **UX wallet / paywall** (affichage solde, Pass, expiration ; paywall sur 402 `reason=pass\|pack`) | S'appuie sur le Wallet (§4.7) + les 402 du gate | À faire |
