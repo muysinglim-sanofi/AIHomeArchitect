@@ -1103,6 +1103,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         final st = await GenerationService().getLatestIntentStatus(_project.id);
         if (!mounted) return;
         backendInFlight = st == 'RUNNING';
+        if (backendInFlight) {
+          // Re-HYDRATE the lifecycle RAM that the app-kill wiped. Without this,
+          // the reconciliation poll ticks (which intentionally DON'T re-probe
+          // the backend) would see localInFlight=false → inFlightResume=false →
+          // and drop the loading bubble after the first 5s tick (the bug: the
+          // spinner appeared on reopen then vanished until the image landed).
+          // markInFlight makes every subsequent tick keep re-injecting it; the
+          // reconciliation clears it (line ~2151) when the vision lands.
+          ref.read(pendingGenerationsProvider.notifier).markInFlight(_project.id);
+        }
       }
       final inFlightResume = localInFlight || backendInFlight;
 
