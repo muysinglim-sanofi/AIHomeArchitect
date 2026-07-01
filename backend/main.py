@@ -33,6 +33,16 @@ from quota import (
     is_admin_role,
     has_admin_role,
 )
+# Generation Intent v1 — PR1 (OBSERVATION ONLY). Persists the durable INTENT
+# identity + technical JOB rows alongside the current flow. No claim, no
+# short-circuit; client_request_id stays the active idempotency key.
+from intent_observer import (
+    compute_intent_id,
+    observe_intent_start,
+    observe_job_start,
+    observe_job_end,
+    observe_intent_end,
+)
 # Wave 5.17d — Free-tier scope (room + atmosphere allowlist for non-premium)
 from free_tier import check_restrictions
 # Wave 5.17d — RevenueCat webhook receiver (POST /webhooks/revenuecat)
@@ -2347,26 +2357,35 @@ async def generate(
     # STABLE anchor (pinned version > V1 upload > immediate URL), hashed — never log the
     # URL. Atmosphere/room use the REQUEST intent, not the resolved style. No sensitive
     # data (no full prompt/URL/key/bytes).
-    _iid_src_ref = (source_version_id or original_image_url or before_image_url or "").strip()
-    _iid_src = hashlib.sha1(_iid_src_ref.encode("utf-8")).hexdigest()[:12] if _iid_src_ref else "(nosrc)"
-    _iid_atmo = ("let-decide" if let_ai_decide
-                 else "surprise" if surprise_me_flag
-                 else (atmosphere_id or style_label or "(none)").strip())
-    _iid_room = ("let-decide" if let_ai_decide else (room_type_id or room_type or "(none)").strip())
-    _iid_dir = hashlib.sha1(prompt.encode("utf-8")).hexdigest()[:8] if (prompt or "").strip() else "noprompt"
-    _iid_action = f"{generation_mode or 'preserve'}|{source_mode or 'default'}|{_iid_dir}"
-    _iid_revision = (generation_attempt or "0").strip()   # business: intent revision (regenerate++ ; retry keeps)
-    _iid_raw = (
-        f"{current_user.user_id}:{session_id}:{_iid_src}:{iteration}:"
-        f"{_iid_room}:{_iid_action}:{_iid_atmo}:{_iid_revision}"
+    # Generation Intent v1 — PR1 (OBSERVATION ONLY). compute_intent_id is the
+    # SINGLE authoritative implementation of the identity (spec §3, backend-
+    # authoritative) ; it replicates the old inline [INTENT-ID] recipe byte-for-
+    # byte so the gate-of-proof holds. observe_intent_start is placed BEFORE the
+    # idempotency guard on purpose : it records EVERY fire (NEW vs DUP) so prod
+    # logs measure the real duplicate rate (GATE 2) that the current guard would
+    # otherwise mask. NO behaviour change — no claim, no short-circuit ; a DUP is
+    # logged and we proceed exactly as today.
+    _intent = compute_intent_id(
+        user_id=current_user.user_id, session_id=session_id or "",
+        source_version_id=source_version_id, original_image_url=original_image_url,
+        before_image_url=before_image_url, iteration=iteration,
+        room_type_id=room_type_id, room_type=room_type,
+        atmosphere_id=atmosphere_id, style_label=style_label, prompt=prompt,
+        generation_mode=generation_mode, source_mode=source_mode,
+        generation_attempt=generation_attempt,
+        let_ai_decide=let_ai_decide, surprise_me_flag=surprise_me_flag,
     )
-    _iid = hashlib.sha256(_iid_raw.encode("utf-8")).hexdigest()[:12]
     log.info(
         "[INTENT-ID] iid=%s user=%s session=%s src=%s iter=%s room=%s action=%s "
         "atmo=%s let_decide=%s surprise=%s revision=%s creq=%s req=%s trigger=%s",
-        _iid, current_user.user_id[:8], session_id or "(none)", _iid_src, iteration,
-        _iid_room, _iid_action, _iid_atmo, let_ai_decide, surprise_me_flag, _iid_revision,
-        client_request_id.strip() or "(none)", request_id, generation_trigger or "unknown",
+        _intent.id, current_user.user_id[:8], session_id or "(none)", _intent.src_sha1, iteration,
+        _intent.room, _intent.action, _intent.atmosphere, let_ai_decide, surprise_me_flag,
+        _intent.revision, client_request_id.strip() or "(none)", request_id, generation_trigger or "unknown",
+    )
+    # OBSERVATION — persist the Intent (RUNNING). Best-effort ; never raises.
+    await observe_intent_start(
+        intent_id=_intent.id, user_id=current_user.user_id, session_id=session_id,
+        iteration=iteration, intent=_intent.intent_dict, client_request_id=request_id,
     )
 
     # ── #4 — idempotency guard (defence-in-depth) ─────────────────────────────
@@ -3404,6 +3423,7 @@ async def generate(
     _MAX_ATTEMPTS = max(profile.max_attempts, 2)
     _last_exc: Exception | None = None
     generated_bytes: bytes | None = None
+    _intent_job_id: str | None = None   # Generation Intent v1 (PR1) — current attempt's Job
 
     for _attempt in range(1, _MAX_ATTEMPTS + 1):
         _t0 = time.monotonic()
@@ -3411,6 +3431,8 @@ async def generate(
             "[OpenAI Attempt %d/%d] starting  (backend-controlled; SDK max_retries=%d)",
             _attempt, _MAX_ATTEMPTS, openai.max_retries,
         )
+        # OBSERVATION — one Job row per technical attempt (best-effort).
+        _intent_job_id = await observe_job_start(_intent.id, _attempt)
         try:
             img_file = io.BytesIO(image_bytes)
             img_file.name = "source.jpg"
@@ -3867,6 +3889,9 @@ async def generate(
                     "[Sprint 1B] promo generation consumed — user=%s result=%s",
                     current_user.user_id, _pc,
                 )
+            # OBSERVATION — this attempt's Job succeeded (Intent terminal marked
+            # after persistence, near the response). Best-effort.
+            await observe_job_end(_intent_job_id, "SUCCEEDED")
             break  # success — exit retry loop
 
         except BadRequestError as exc:
@@ -3882,6 +3907,12 @@ async def generate(
             if _reservation_id is not None:
                 await fail_generation(_reservation_id)
                 _reservation_id = None
+            # OBSERVATION — non-transient (content-policy) → terminal, no re-claim.
+            await observe_job_end(_intent_job_id, "FAILED", error_type="non_transient")
+            await observe_intent_end(
+                _intent.id, "FAILED_TERMINAL",
+                error={"type": "content_policy", "message": "OPENAI_REJECTED"},
+            )
             raise GenerationError(
                 error_code="OPENAI_REJECTED",
                 user_message="The design request was rejected. Try rephrasing or using a different photo.",
@@ -3913,6 +3944,12 @@ async def generate(
                 if _reservation_id is not None:
                     await fail_generation(_reservation_id)
                     _reservation_id = None
+                # OBSERVATION — non-transient → terminal, no re-claim.
+                await observe_job_end(_intent_job_id, "FAILED", error_type="non_transient")
+                await observe_intent_end(
+                    _intent.id, "FAILED_TERMINAL",
+                    error={"type": _exc_type, "message": str(exc)[:200]},
+                )
                 raise GenerationError(
                     error_code="OPENAI_FAILED",
                     user_message="Generation could not be completed. Please try again.",
@@ -3924,6 +3961,11 @@ async def generate(
 
             # Transient or unknown — retry if attempts remain
             _last_exc = exc
+            # OBSERVATION — close THIS attempt's Job as transient failure. The
+            # Intent stays RUNNING ; the next attempt opens a new Job (proves
+            # "1 Intent / N Jobs"). Intent terminal is set after the loop if
+            # every attempt is exhausted.
+            await observe_job_end(_intent_job_id, "FAILED", error_type="transient")
             if decision.verdict == RetryVerdict.UNKNOWN:
                 log.warning(
                     "[OpenAI Attempt %d/%d] UNCLASSIFIED failure in %.1fs  "
@@ -3957,6 +3999,12 @@ async def generate(
         if _reservation_id is not None:
             await fail_generation(_reservation_id)
             _reservation_id = None
+        # OBSERVATION — every transient attempt exhausted → Intent FAILED
+        # (re-claimable by the same intent_id on a user re-tir, in PR2).
+        await observe_intent_end(
+            _intent.id, "FAILED",
+            error={"type": "exhausted", "message": "all_attempts_failed"},
+        )
         raise GenerationError(
             error_code="OPENAI_FAILED",
             user_message="Generation failed due to a service issue. Please try again.",
@@ -4268,12 +4316,27 @@ async def generate(
                 type(msg_err).__name__, msg_err,
             )
 
+    # OBSERVATION — Intent SUCCEEDED (result_ref = the replay payload PR2 will
+    # serve on a same-intent re-fire). Best-effort ; never blocks the response.
+    await observe_intent_end(
+        _intent.id, "SUCCEEDED",
+        result_ref={
+            "after_image_url": public_url,
+            "version_id": _new_version.version_id,
+            "structural_identity": structural_identity_token,
+        },
+    )
+
     payload = {
         "after_image_url": public_url,
         "thumbnail_url": public_url,
         "ai_message": await localize_reply(openai, ai_message, ui_locale, enabled=_norm_enabled()),
         "suggestions": suggestions,
         "request_id": request_id,
+        # Generation Intent v1 (PR1) — durable identity, returned for
+        # propagation/debug. The frontend may memorise it (spec §3) ; it is NOT
+        # yet load-bearing (client_request_id remains the active idempotency key).
+        "intent_id": _intent.id,
         # #8 — the room actually used (e.g. an exterior detected by Ayden Decide),
         # so the client can fill its header when the room was AI-delegated. Empty
         # for the lean interior Ayden Decide path (unchanged).
