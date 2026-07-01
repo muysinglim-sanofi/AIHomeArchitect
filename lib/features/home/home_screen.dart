@@ -89,7 +89,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _slideAnim = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
         .animate(CurvedAnimation(
             parent: _entryController, curve: Curves.easeOutCubic));
-    WidgetsBinding.instance.addPostFrameCallback((_) => _reconcilePending());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // On (re)launch the RAM flags are gone → detect gens still RUNNING on the
+      // backend whose flag was lost on kill, then reconcile stale ones.
+      _deriveRecentFromBackend();
+      _reconcilePending();
+    });
     _pendingReconcileTimer = Timer.periodic(
         const Duration(seconds: 6), (_) => _reconcilePending());
   }
@@ -130,6 +135,41 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         }
       } catch (_) {
         // best-effort — a failed probe never clears a live spinner
+      }
+    }
+  }
+
+  /// On (re)launch, the RAM in-flight flags are gone — so a generation that was
+  /// running when the app was KILLED leaves the homepage with NO spinner even
+  /// though the gen is still going server-side. DERIVE the truth from the backend
+  /// for the most recent sessions and re-mark inFlight the ones whose latest
+  /// Intent is still RUNNING. Only SETS here (clearing stays in _reconcilePending);
+  /// a RUNNING status is authoritative, so there is no false-positive risk.
+  Future<void> _deriveRecentFromBackend() async {
+    if (!mounted) return;
+    final sessions = ref.read(sessionProvider);
+    if (sessions.isEmpty) return;
+    final recent = [...sessions]
+      ..sort((a, b) => b.lastUpdatedAt.compareTo(a.lastUpdatedAt));
+    // A gen in flight is on a very recently-active session (a gen takes ~70s).
+    // Only probe sessions touched in the last 10 min → ~0 probes on a normal
+    // launch, and never probes old/mock sessions. Sorted desc → break on the
+    // first stale one.
+    final cutoff = DateTime.now().subtract(const Duration(minutes: 10));
+    final svc = GenerationService();
+    for (final p in recent.take(6)) {
+      if (p.lastUpdatedAt.isBefore(cutoff)) break;
+      try {
+        final probe = await svc.getLatestIntent(p.id);
+        if (!mounted) return;
+        if (probe != null &&
+            probe['status'] == 'RUNNING' &&
+            ref.read(pendingGenerationsProvider)[p.id] !=
+                GenerationLifecycle.inFlight) {
+          ref.read(pendingGenerationsProvider.notifier).markInFlight(p.id);
+        }
+      } catch (_) {
+        // best-effort
       }
     }
   }

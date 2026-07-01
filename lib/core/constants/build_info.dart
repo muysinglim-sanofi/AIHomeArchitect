@@ -5,4 +5,4 @@
 /// running this code — no ambiguity.
 ///
 /// BUMP this string whenever you cut a build you want to identify.
-const String kBuildTag = 'GI · homepage-reconcile · 2026-07-01c';
+const String kBuildTag = 'GI · homepage-derive · 2026-07-01d';
