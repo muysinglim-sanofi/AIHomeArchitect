@@ -1087,12 +1087,52 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       final rows = await _svc.fetchMessages(_project.id);
       debugPrint('[DB] _loadMessages() — got ${rows.length} rows');
       if (!mounted) return;
+      // PR3 (Generation Intent v1) — DURABLE in-flight detection. The local
+      // pendingGenerationsProvider is app-scoped RAM and is LOST on app kill, so
+      // after a kill+reopen the in-flight generation was invisible (blank
+      // session). Ask the backend (READ-ONLY) whether the latest Intent for this
+      // session is still RUNNING. Never re-POSTs /generate → cannot create a
+      // duplicate (the atomic claim stays PR2). Skipped on reconciliation poll
+      // ticks (they call _loadMessages every 5s) and when the live provider
+      // already knows we're in flight.
+      final localInFlight =
+          ref.read(pendingGenerationsProvider)[_project.id] ==
+              GenerationLifecycle.inFlight;
+      bool backendInFlight = false;
+      if (!localInFlight && trigger != 'poll') {
+        final st = await GenerationService().getLatestIntentStatus(_project.id);
+        if (!mounted) return;
+        backendInFlight = st == 'RUNNING';
+      }
+      final inFlightResume = localInFlight || backendInFlight;
+
       // Phase A — a notification deep-link to a session that has no messages
       // means it was deleted between generation-complete and the tap. Bounce
       // cleanly to home rather than stranding the user on an empty chat.
       // (Scoped to fromNotification: a normally-opened empty session is left
       // alone — generated sessions always carry messages anyway.)
       if (rows.isEmpty) {
+        // PR3 — a still-RUNNING Intent with no persisted message yet (app killed
+        // mid-generation of the FIRST vision, reopened before completion) must
+        // show the spinner + reconcile, NOT a blank session that looks lost.
+        if (inFlightResume) {
+          debugPrint('[ChatLife] open inFlight EMPTY session=${_project.id} '
+              'trigger=$trigger → loading bubble + reconcile');
+          setState(() {
+            _isGenerating = true;
+            _messages = [
+              MessageModel(
+                id: 'loading_resumed',
+                content: '1|$_currentStyle',
+                isAi: true,
+                type: MessageType.loading,
+                createdAt: DateTime.now(),
+              ),
+            ];
+          });
+          _startReconciliationPolling(sessionId: _project.id);
+          return;
+        }
         if (widget.fromNotification) {
           context.go('/home');
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1127,12 +1167,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       if (!mounted) return;
       // #21b — a generation started on a now-disposed screen (user left the
       // chat mid-generation and came back) shows nothing here, because the DB
-      // has no "loading" row. Detect the still-in-flight state from the
-      // (app-alive) lifecycle provider and re-show the loading bubble so the
-      // user sees the source + progress phrases again instead of a blank chat.
-      final inFlightResume =
-          ref.read(pendingGenerationsProvider)[_project.id] ==
-              GenerationLifecycle.inFlight;
+      // has no "loading" row. `inFlightResume` (computed above) now also covers
+      // the app-KILLED case via the read-only backend probe, not just the
+      // app-alive lifecycle provider — so the loading bubble + reconcile fire
+      // after a kill+reopen too, instead of a blank chat.
 
       setState(() {
         _messages = msgs;

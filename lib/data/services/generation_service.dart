@@ -88,6 +88,28 @@ class GenerationService {
     ));
   }
 
+  /// Generation Intent v1 — PR3 (READ-ONLY). Returns the status of the latest
+  /// Intent for [sessionId] — 'RUNNING' | 'SUCCEEDED' | 'FAILED' |
+  /// 'FAILED_TERMINAL' — or null (no intent / any error). Used to re-attach an
+  /// in-flight generation after an app kill, when the client never received the
+  /// intent_id. NEVER re-POSTs /generate → read-only, cannot create a duplicate.
+  Future<String?> getLatestIntentStatus(String sessionId) async {
+    try {
+      final resp = await _dio.get(
+        '/v1/intents/latest',
+        queryParameters: {'session_id': sessionId},
+      );
+      final data = resp.data;
+      if (data is Map && data['status'] is String) {
+        return data['status'] as String;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[IntentStatus] getLatestIntentStatus failed (ignored): $e');
+      return null;
+    }
+  }
+
   /// Calls FastAPI /chat for intent classification and architect response.
   /// Returns { ai_message, suggestions, should_generate, intent, sub_intent }.
   Future<Map<String, dynamic>> chat({
