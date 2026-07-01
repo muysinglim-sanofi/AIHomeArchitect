@@ -15,6 +15,7 @@ import '../../core/theme/app_theme.dart';
 import '../../data/mock/mock_projects.dart';
 import '../../data/models/message_model.dart';
 import '../../data/models/project_model.dart';
+import '../../data/services/generation_service.dart';
 import '../../features/paywall/paywall_sheet.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_dots.dart';
@@ -64,6 +65,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   late final Animation<double> _fadeAnim;
   late final Animation<Offset> _slideAnim;
 
+  // Homepage in-flight reconcile — derive the card spinner from the BACKEND
+  // (source of truth), not just the app-scoped RAM flag. A generation that
+  // completes while the user is NOT in its chat leaves pendingGenerations=
+  // inFlight forever (the chat's own reconcile was disposed), so the card would
+  // spin indefinitely. This poller clears such STALE flags against the latest
+  // Intent. It never SETS inFlight (that stays the chat's job) — it only clears.
+  Timer? _pendingReconcileTimer;
+  // Grace set: an id seen in-flight for the FIRST time is skipped one cycle, so
+  // a just-started generation (whose Intent row the backend may not have written
+  // yet → getLatestIntent would still return the PREVIOUS terminal Intent) is
+  // never wrongly cleared. We only clear from the second observation on.
+  final Set<String> _reconcileSeen = {};
+
   @override
   void initState() {
     super.initState();
@@ -75,12 +89,49 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _slideAnim = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
         .animate(CurvedAnimation(
             parent: _entryController, curve: Curves.easeOutCubic));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reconcilePending());
+    _pendingReconcileTimer = Timer.periodic(
+        const Duration(seconds: 6), (_) => _reconcilePending());
   }
 
   @override
   void dispose() {
+    _pendingReconcileTimer?.cancel();
     _entryController.dispose();
     super.dispose();
+  }
+
+  /// Clear STALE in-flight flags by deriving the truth from the latest Intent.
+  /// Best-effort; only clears (never sets) inFlight. Runs while any session is
+  /// flagged in-flight; a one-cycle grace avoids clearing a just-started gen.
+  Future<void> _reconcilePending() async {
+    if (!mounted) return;
+    final pending = ref.read(pendingGenerationsProvider);
+    final inFlightIds = <String>[
+      for (final e in pending.entries)
+        if (e.value == GenerationLifecycle.inFlight) e.key,
+    ];
+    // Stop tracking ids that are no longer in flight.
+    _reconcileSeen.removeWhere((id) => !inFlightIds.contains(id));
+    if (inFlightIds.isEmpty) return;
+    final svc = GenerationService();
+    for (final id in inFlightIds) {
+      // First observation → grace (skip one cycle) so the backend has time to
+      // write a just-started generation's Intent row.
+      if (_reconcileSeen.add(id)) continue;
+      try {
+        final probe = await svc.getLatestIntent(id);
+        if (!mounted) return;
+        // Latest Intent no longer RUNNING → no gen in progress → clear the stale
+        // spinner. RUNNING (or probe unavailable) → leave it untouched.
+        if (probe != null && probe['status'] != 'RUNNING') {
+          ref.read(pendingGenerationsProvider.notifier).clear(id);
+          _reconcileSeen.remove(id);
+        }
+      } catch (_) {
+        // best-effort — a failed probe never clears a live spinner
+      }
+    }
   }
 
   /// Wave 5.6c — toast/snackbar shown when a generation completes (or fails)
