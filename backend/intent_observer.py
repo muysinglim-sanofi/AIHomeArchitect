@@ -287,6 +287,50 @@ async def observe_job_end(
         )
 
 
+async def get_latest_intent_for_session(
+    *,
+    user_id: str,
+    session_id: str,
+    supa=None,
+) -> Optional[dict]:
+    """PR3 — LECTURE SEULE. Renvoie l'état du dernier Intent (par `created_at`)
+    pour `(user, session)` : `{intent_id, status, iteration, has_result}`, ou
+    None. Permet au frontend de se ré-attacher à une génération en cours après
+    un kill d'app (il n'a peut-être jamais reçu l'`intent_id`). Aucune écriture,
+    aucun claim, aucun OpenAI. Best-effort → None si erreur.
+    """
+    supa = supa or _get_supa()
+    sid = _session_uuid_or_none(session_id)
+    if sid is None:
+        return None
+    try:
+        result = await asyncio.to_thread(
+            lambda: supa.table("generation_intents")
+            .select("intent_id, status, iteration, result_ref")
+            .eq("user_id", user_id)
+            .eq("session_id", sid)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(result, "data", None) or []
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "intent_id": row.get("intent_id"),
+            "status": row.get("status"),
+            "iteration": row.get("iteration"),
+            "has_result": row.get("result_ref") is not None,
+        }
+    except Exception as exc:
+        log.warning(
+            "[INTENT-OBS] get_latest failed (swallowed) session=%s err=%s: %s",
+            session_id, type(exc).__name__, exc,
+        )
+        return None
+
+
 async def observe_intent_end(
     intent_id: str,
     status: str,

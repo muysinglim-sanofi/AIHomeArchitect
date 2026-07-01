@@ -365,16 +365,21 @@ Le frontend l'interroge sur ré-attachement (RUNNING) au lieu de re-POSTer. Le p
 - **`%DUP` en SQL** : colonne `fire_count` + RPC atomique `increment_intent_fire` (incrément sur chaque DUP). `fires = sum(fire_count)`, `DUP = fires − count(*)`.
 - **Dashboard** : vues `v_generation_intent_daily` (volume, %NEW/%DUP, succès/échec transient/terminal, running) + `v_generation_jobs_daily` (jobs/intent, transient vs non_transient). Décision PR2 sur données, pas sur tests manuels.
 
-### PR2 — Claim atomique (ferme GATE 2)
+> **RÉORDONNANCEMENT 2026-07-01 (données d'observation)** : PR1 déployé, dashboard opérationnel. Sur 8+ générations manuelles (dont 3 scénarios kill-app), **`dup_pct = 0`** — le doublon GATE 2 **n'est pas reproductible à la main** (phénomène de timing prod). En revanche, le kill-app mid-flight révèle un **bug UX avéré** : session **vide** à la réouverture (détection inFlight en RAM app-scoped `pendingGenerationsProvider`, perdue au kill — [chat_screen.dart:1133-1167](../frontend/lib/features/chat/chat_screen.dart)), résultat visible seulement après sortir/rentrer manuel. **Décision : PR3 AVANT PR2.** PR3 corrige un problème utilisateur tangible ; PR2 (claim) reste **⏸️ en attente** de DUP organiques (le dashboard mesure en parallèle) — le claim est safe-by-construction, donc non urgent tant que `dup_pct=0`.
+
+### PR2 — Claim atomique (ferme GATE 2) — ⏸️ EN ATTENTE (DUP organiques)
 - Remplacer l'idempotence mémoire-process ([main.py:167-217](../backend/main.py)) par le claim `INSERT ON CONFLICT (intent_id) DO NOTHING` (§4.1) comme **source de vérité**.
 - Brancher la machine d'état Intent (§5.3) + réponses au conflit (SUCCEEDED→replay, RUNNING→202, FAILED→reclaim borné `MAX=3`, FAILED_TERMINAL→error).
 - Garder `_idem_results` en cache best-effort **devant** la DB (lecture rapide), non load-bearing.
 - *Gate* : IT-3 (course concurrente → 1 seul OpenAI), IT-4 (replay), IT-6 (N Jobs/1 Intent), non-régression /generate nominal.
 
-### PR3 — Endpoint statut + ré-attachement frontend (ferme GATE 1)
-- Backend : `GET /v1/intents/{intent_id}` (§7.2, GJ-OD-4).
-- Frontend : persister le **tuple d'intention** par `genKey` dans `SessionState` **avant** le POST (filet §3.1) ; mémoriser l'`intent_id` renvoyé ; sur recréation/restart, interroger le statut au lieu de re-POSTer. Polling DB rétrogradé en fallback.
-- *Gate* : IT-1, IT-5 (restart d'app → 1 seul Intent), IT-2 (gate-of-proof end-to-end).
+### PR3 — Reprise d'état (state recovery) après interruption — ▶️ MAINTENANT
+> **Design raffiné par l'observation prod (2026-07-01)** : le bug réel n'est pas un re-fire (GATE 1 « théorique »), c'est une **session vide** au kill-app car la détection inFlight vit en RAM (`pendingGenerationsProvider`, perdue au kill). Deux contraintes que l'observation impose :
+> 1. **Ré-attache par `session_id`, pas `intent_id`** — l'app tuée avant la réponse `/generate` n'a **jamais reçu** l'`intent_id`.
+> 2. **LECTURE SEULE, jamais de re-POST `/generate`** — PR2 (claim) n'existe pas encore, donc un re-POST **créerait** le doublon. La ré-attache doit être un statut read-only + reprise du polling existant.
+- **Backend** : `GET /v1/intents/latest?session_id=<id>` → `{intent_id, status, iteration, has_result}` (JWT, user-scoped, **read-only**). (`GET /v1/intents/{intent_id}` §7.2 = complément optionnel.)
+- **Frontend** : dans `_loadMessages` ([chat_screen.dart:1133-1167](../frontend/lib/features/chat/chat_screen.dart)), `inFlightResume = pendingGenerations.inFlight OR backend.status==RUNNING`. Si RUNNING → chemin existant (bulle chargement + `_startReconciliationPolling`). Best-effort (échec → comportement actuel).
+- *Gate* : kill-app mid-flight → réouverture → spinner + image auto (plus de session vide / reload manuel). Cœur image + `/generate` intouchés.
 
 ### PR4 — Réconciliation (timeout + repair)
 - Worker : stuck intents `RUNNING > 12 min` → `FAILED` (§11.1 #1, mutualisé « stuck holds » Billing) ; post-upload repair (#2) ; drift alert (#3).

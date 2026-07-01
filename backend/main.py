@@ -42,6 +42,7 @@ from intent_observer import (
     observe_job_start,
     observe_job_end,
     observe_intent_end,
+    get_latest_intent_for_session,
 )
 # Wave 5.17d — Free-tier scope (room + atmosphere allowlist for non-premium)
 from free_tier import check_restrictions
@@ -1304,6 +1305,25 @@ async def get_me_status(
         "effective_access_state": d.tier,                  # admin|premium|promo_unlimited|promo_limited|free|blocked
         "can_generate": d.can_generate,
     }
+
+
+@app.get("/v1/intents/latest")
+async def get_latest_intent(
+    session_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Generation Intent v1 — PR3 (READ-ONLY). État du dernier Intent d'une
+    session, pour que le client se ré-attache à une génération en cours après
+    un kill d'app (il n'a peut-être jamais reçu l'intent_id). Scopé à l'user du
+    JWT. AUCUNE écriture, AUCUN claim, AUCUN /generate → ne peut pas créer de
+    doublon (le claim atomique reste PR2). Fallback : {status:null} si rien.
+    """
+    row = await get_latest_intent_for_session(
+        user_id=current_user.user_id, session_id=session_id,
+    )
+    if row is None:
+        return {"intent_id": None, "status": None, "iteration": None, "has_result": False}
+    return row
 
 
 @app.post("/purchases/sync")
