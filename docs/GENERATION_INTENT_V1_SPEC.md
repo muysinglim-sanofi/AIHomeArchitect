@@ -360,6 +360,11 @@ Le frontend l'interroge sur ré-attachement (RUNNING) au lieu de re-POSTer. Le p
 - Logs `[INTENT-OBS] intent_start … result=NEW|DUP`, `job_start`, `job_end`, `intent_end`.
 - *Gate (prod)* : lire la gate-of-proof (§2.2) + « 1 Intent / N Jobs » sur logs+tables. **Ne rien activer (PR2) tant que ce n'est pas prouvé.**
 
+**PR1.1 — durcissement observation + dashboard** — [`backend/intent_observer.py`](../backend/intent_observer.py) + migration [`…pr1_1_dup_counter_and_dashboard.sql`](../supabase/migrations/20260701_generation_intent_v1_pr1_1_dup_counter_and_dashboard.sql)
+- **Transition terminale idempotente/safe-race** : `SUCCEEDED` gagne toujours ; un `FAILED`/`FAILED_TERMINAL` ne peut **jamais** écraser un `SUCCEEDED` (garde `.neq(status,'SUCCEEDED')` sur les écritures d'échec). Corrige une course où un duplicata concurrent aurait pu corrompre la donnée d'observation.
+- **`%DUP` en SQL** : colonne `fire_count` + RPC atomique `increment_intent_fire` (incrément sur chaque DUP). `fires = sum(fire_count)`, `DUP = fires − count(*)`.
+- **Dashboard** : vues `v_generation_intent_daily` (volume, %NEW/%DUP, succès/échec transient/terminal, running) + `v_generation_jobs_daily` (jobs/intent, transient vs non_transient). Décision PR2 sur données, pas sur tests manuels.
+
 ### PR2 — Claim atomique (ferme GATE 2)
 - Remplacer l'idempotence mémoire-process ([main.py:167-217](../backend/main.py)) par le claim `INSERT ON CONFLICT (intent_id) DO NOTHING` (§4.1) comme **source de vérité**.
 - Brancher la machine d'état Intent (§5.3) + réponses au conflit (SUCCEEDED→replay, RUNNING→202, FAILED→reclaim borné `MAX=3`, FAILED_TERMINAL→error).

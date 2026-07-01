@@ -191,6 +191,23 @@ async def observe_intent_start(
         # data vide = conflit ignoré (DUP).
         is_new = bool(getattr(result, "data", None))
         verdict = "NEW" if is_new else "DUP"
+        if not is_new:
+            # DUP — la MÊME intention est refirée (preuve GATE 2). Incrément
+            # ATOMIQUE de fire_count sur la ligne existante (RPC — un simple
+            # UPDATE SET x=x+1, non exprimable via PostgREST) pour que %DUP soit
+            # une métrique SQL de premier ordre. Best-effort : n'affecte rien.
+            try:
+                await asyncio.to_thread(
+                    lambda: supa.rpc(
+                        "increment_intent_fire", {"p_intent_id": intent_id}
+                    ).execute()
+                )
+            except Exception as inc_exc:
+                log.warning(
+                    "[INTENT-OBS] fire_count increment failed (swallowed) "
+                    "intent_id=%s err=%s: %s",
+                    intent_id, type(inc_exc).__name__, inc_exc,
+                )
         log.info(
             "[INTENT-OBS] intent_start intent_id=%s result=%s user=%s session=%s iter=%s",
             intent_id, verdict, user_id[:8], session_id or "(none)", iteration,
@@ -288,11 +305,20 @@ async def observe_intent_end(
         patch["result_ref"] = result_ref
     if error is not None:
         patch["error"] = error
+
+    def _run():
+        q = supa.table("generation_intents").update(patch).eq("intent_id", intent_id)
+        # Transition idempotente / safe-race : SUCCEEDED GAGNE toujours. Un
+        # statut d'échec (FAILED / FAILED_TERMINAL) ne doit JAMAIS écraser un
+        # SUCCEEDED qui aurait gagné une course de duplicata concurrent (le
+        # user a bien eu son image). SUCCEEDED lui-même n'a pas de garde (un
+        # succès ultérieur gagne légitimement sur un FAILED antérieur).
+        if status != "SUCCEEDED":
+            q = q.neq("status", "SUCCEEDED")
+        return q.execute()
+
     try:
-        await asyncio.to_thread(
-            lambda: supa.table("generation_intents")
-            .update(patch).eq("intent_id", intent_id).execute()
-        )
+        await asyncio.to_thread(_run)
         log.info("[INTENT-OBS] intent_end intent_id=%s status=%s", intent_id, status)
     except Exception as exc:
         log.warning(
