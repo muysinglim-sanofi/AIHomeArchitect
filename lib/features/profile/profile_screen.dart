@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/constants/build_info.dart';
 import '../../core/feature_flags.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/locale_provider.dart';
@@ -247,6 +248,19 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ],
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxxl)),
+            // Build marker — positively identifies which frontend code is on the
+            // device (TestFlight won't tell you the commit). See build_info.dart.
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Center(
+                  child: Text(
+                    kBuildTag,
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF9E9E9E)),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
