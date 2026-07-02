@@ -812,6 +812,41 @@ supa = create_client(
     os.environ["SUPABASE_SERVICE_ROLE_KEY"],
 )
 
+# ── Transport hardening (2026-07-02) — force PostgREST to HTTP/1.1 ────────────
+# OBSERVED in prod: ~2-min /generate stalls, with logs "pseudo-header in trailer",
+# BlockingIOError(11, 'Resource temporarily unavailable'), then a ReadTimeout ~120s
+# later → the lookup "fails open" and /generate continues (the stall lands BEFORE
+# the claim, in resolve_generation_access's admin/quota Supabase lookups — see the
+# [ACCESS-TIMING] logs).
+#   PROVEN : the errors are HTTP/2 framing corruption on the shared sync Supabase
+#            client, and the default ~120s timeout is what turns it into a 2-min hang.
+#   HYPOTHESIS (NOT yet proven) : the trigger is CONCURRENT access to that one
+#            HTTP/2 connection from many threads (every supa call runs in
+#            asyncio.to_thread ; getLatestIntent polling + reconcile worker + billing
+#            reprojections + claim/observe hooks now overlap). A single stale/expired
+#            keep-alive could produce the SAME symptom — not disambiguated yet.
+# This change is valid EITHER WAY : HTTP/1.1 uses a thread-safe connection POOL (each
+# concurrent request its own connection → kills the whole h2-corruption class), and
+# the 15s timeout means any stale connection fails fast instead of hanging ~2 min.
+# The [ACCESS-TIMING] instrumentation will CONFIRM or REFUTE the mechanism: if stalls
+# vanish and per-call timings stay low, the transport was responsible.
+# We REPLACE the session post-construction (copying base_url + the apikey/auth
+# headers supabase-py already built); injecting a bare httpx_client drops auth.
+# Verified against supabase-py 2.31.0 / httpx 0.28.1. Defensive: never bricks boot.
+try:
+    _pg_session = supa.postgrest.session
+    supa.postgrest.session = httpx.Client(
+        base_url=_pg_session.base_url,
+        headers=_pg_session.headers,          # apikey + authorization + x-client-info
+        timeout=httpx.Timeout(15.0, connect=5.0),
+        follow_redirects=True,
+        http2=False,                          # HTTP/1.1 pool → concurrency-safe
+    )
+    log.info("[Supabase] PostgREST session → HTTP/1.1 (concurrency-safe pool, timeout=15s)")
+except Exception as _supa_h1_exc:  # noqa: BLE001 — must never block startup
+    log.warning("[Supabase] could not switch PostgREST to HTTP/1.1 (%s: %s) — default kept",
+                type(_supa_h1_exc).__name__, _supa_h1_exc)
+
 
 # ── Wave 5.17a — session ownership validation ───────────────────────────────
 

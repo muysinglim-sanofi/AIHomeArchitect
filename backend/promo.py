@@ -122,10 +122,29 @@ async def resolve_generation_access(user_id: str, *, supa=None) -> AccessDecisio
     Only the 'free' tier consumes the usage_log quota + gets a watermark + is
     scope-restricted. promo/premium are clean, unlimited-room, off-ledger."""
     supa = supa or _get_supa()
+    # [ACCESS-TIMING] (2026-07-02) — per-call Supabase timing. Ces 4 lookups sont
+    # les PREMIERS accès Supabase de /generate ; en prod un stall de ~2 min a été
+    # observé ICI (is_admin_role / quota bloqués ~120s AVANT le claim, sur une
+    # connexion HTTP/2 corrompue). Logger la durée de CHAQUE appel pinpointe
+    # EXACTEMENT lequel bloque au prochain incident → prouve ou réfute l'hypothèse
+    # transport, au lieu de savoir seulement « avant le claim ». warn si ≥ 2 s.
+    def _tick(_name: str, _t0: float) -> None:
+        _dt = (time.monotonic() - _t0) * 1000.0
+        (log.warning if _dt >= 2000 else log.info)(
+            "[ACCESS-TIMING] %s took=%.0fms user=%s", _name, _dt, user_id[:8])
+
+    _t = time.monotonic()
     full = await has_admin_role(user_id, supa=supa)       # premium OR admin (cached 60s)
+    _tick("has_admin_role", _t)
+    _t = time.monotonic()
     is_admin = await is_admin_role(user_id, supa=supa)
+    _tick("is_admin_role", _t)
+    _t = time.monotonic()
     promo = await get_promo_access(user_id, supa=supa)
+    _tick("get_promo_access", _t)
+    _t = time.monotonic()
     q = await get_quota_status(user_id, supa=supa)
+    _tick("get_quota_status", _t)
     free_remaining = max(0, q.limit - q.used)
 
     ctx = dict(
