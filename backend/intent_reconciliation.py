@@ -65,13 +65,27 @@ async def _finalize(supa, intent_id: str, status: str, *, error: Optional[dict] 
             .eq("status", "RUNNING")
             .execute()
         )
-        return bool(getattr(res, "data", None))
+        transitioned = bool(getattr(res, "data", None))
     except Exception as exc:
         log.warning(
             "[RECONCILE] finalize failed intent=%s status=%s err=%s: %s",
             intent_id, status, type(exc).__name__, exc,
         )
         return False
+
+    # Billing PR1 — 2nd emitter: a reconciliation transition drives commit/release
+    # too (a repaired Intent MUST commit, else a real gen is never billed). Only
+    # when THIS pass actually transitioned it (guarded by .eq(status,'RUNNING'));
+    # idempotent by intent_id, so it never doubles a nominal-path effect.
+    if transitioned:
+        try:
+            import billing  # noqa: PLC0415
+            await billing.apply_billing_for_intent_transition(
+                intent_id=intent_id, new_status=status, supa=supa)
+        except Exception as bexc:
+            log.warning("[BILLING] reconcile hook failed (swallowed) intent=%s err=%s: %s",
+                        intent_id, type(bexc).__name__, bexc)
+    return transitioned
 
 
 async def reconcile_once(*, supa=None) -> dict:

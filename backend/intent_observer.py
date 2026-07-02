@@ -212,6 +212,17 @@ async def observe_intent_start(
             "[INTENT-OBS] intent_start intent_id=%s result=%s user=%s session=%s iter=%s",
             intent_id, verdict, user_id[:8], session_id or "(none)", iteration,
         )
+        # Billing PR1 — PURE RELAY of the RUNNING transition. All rules (trial,
+        # reserve/HOLD) live in billing.apply_billing_for_intent_transition. The
+        # hook decides NOTHING. Best-effort, idempotent, NO gate ; a billing
+        # failure never affects /generate.
+        try:
+            import billing  # noqa: PLC0415 — lazy to avoid import-order surprises
+            await billing.apply_billing_for_intent_transition(
+                intent_id=intent_id, new_status="RUNNING", user_id=user_id, supa=supa)
+        except Exception as bexc:
+            log.warning("[BILLING] reserve hook failed (swallowed) intent=%s err=%s: %s",
+                        intent_id, type(bexc).__name__, bexc)
         return verdict
     except Exception as exc:
         log.warning(
@@ -369,3 +380,13 @@ async def observe_intent_end(
             "[INTENT-OBS] intent_end FAILED (swallowed) intent_id=%s err=%s: %s",
             intent_id, type(exc).__name__, exc,
         )
+    # Billing PR1 — commit (SUCCEEDED) / release (FAILED*) on terminal transition.
+    # Idempotent, best-effort, NO gate. user_id + the release-guard status are
+    # read inside apply_billing from generation_intents.
+    try:
+        import billing  # noqa: PLC0415
+        await billing.apply_billing_for_intent_transition(
+            intent_id=intent_id, new_status=status, supa=supa)
+    except Exception as bexc:
+        log.warning("[BILLING] terminal hook failed (swallowed) intent=%s err=%s: %s",
+                    intent_id, type(bexc).__name__, bexc)
