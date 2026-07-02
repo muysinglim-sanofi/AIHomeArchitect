@@ -275,7 +275,7 @@ grant select on public.wallets        to authenticated;
 -- créés. Prix indicatifs ; la vérité mobile vient des stores.
 insert into public.products (sku, type, credits_granted, duration_days, price_usd, khqr_enabled) values
   ('weekly_pass', 'PASS',        60,  7,   7.99,  true),
-  ('annual_pass', 'PASS',        300, 365, 79.00, true),
+  ('annual_pass', 'PASS',        300, 365, 79.99, true),
   ('pack_10',     'CREDIT_PACK', 10,  null, 1.99, true),
   ('pack_25',     'CREDIT_PACK', 25,  null, 3.99, true),
   ('pack_50',     'CREDIT_PACK', 50,  null, 6.99, true),
