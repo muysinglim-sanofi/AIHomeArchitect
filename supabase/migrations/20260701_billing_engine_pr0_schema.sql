@@ -192,7 +192,28 @@ alter table public.ledger_entries enable row level security;
 drop policy if exists "ledger: owner read" on public.ledger_entries;
 create policy "ledger: owner read" on public.ledger_entries
   for select using (auth.uid() = user_id);
--- APPEND-ONLY : voir les grants plus bas — service_role n'a QUE SELECT+INSERT.
+
+-- APPEND-ONLY ENFORCEMENT — par TRIGGER, pas seulement par grants. Supabase
+-- accorde à service_role plus que SELECT+INSERT par défaut (TRUNCATE inclus) ;
+-- le grant limité est donc écrasé. Le trigger garantit l'invariant « aucun crédit
+-- modifié ni supprimé » (R3) pour TOUT LE MONDE, service_role compris. INSERT
+-- reste intact → le ledger s'append normalement.
+create or replace function public.ledger_entries_block_mutation()
+returns trigger language plpgsql as $$
+begin
+  raise exception 'ledger_entries is append-only — % is not allowed', tg_op;
+end;
+$$;
+
+drop trigger if exists trg_ledger_no_row_mutation on public.ledger_entries;
+create trigger trg_ledger_no_row_mutation
+  before update or delete on public.ledger_entries
+  for each row execute function public.ledger_entries_block_mutation();
+
+drop trigger if exists trg_ledger_no_truncate on public.ledger_entries;
+create trigger trg_ledger_no_truncate
+  before truncate on public.ledger_entries
+  for each statement execute function public.ledger_entries_block_mutation();
 
 
 -- ── wallets (projection recalculable du ledger) ──────────────
@@ -223,15 +244,22 @@ create policy "wallets: owner read" on public.wallets
 -- Comme Wave 5.17b / Intent PR0 : RLS filtre les lignes mais NE donne PAS le
 -- privilège table-level. On accorde explicitement. anon : RIEN.
 --
--- ⚠️ ledger_entries : service_role a SELECT + INSERT UNIQUEMENT (append-only).
---    Pas d'UPDATE, pas de DELETE → « aucun crédit supprimé » (R3) physique.
+-- NOTE : Supabase accorde par défaut à service_role PLUS que le grant explicite
+-- ci-dessous (TRUNCATE/REFERENCES/TRIGGER observés sur ledger_entries). L'append-
+-- only de ledger_entries N'EST DONC PAS garanti par les grants — il l'est par le
+-- TRIGGER ci-dessus (ledger_entries_block_mutation). Le grant limité + le revoke
+-- restent en defense-in-depth.
 
 grant select, insert, update on public.products       to service_role;
 grant select, insert, update on public.orders         to service_role;
 grant select, insert, update on public.payments       to service_role;
 grant select, insert, update on public.passes         to service_role;
-grant select, insert         on public.ledger_entries to service_role;   -- APPEND-ONLY
+grant select, insert         on public.ledger_entries to service_role;
 grant select, insert, update on public.wallets        to service_role;
+
+-- Defense in depth : retirer les privilèges de mutation que Supabase a pu
+-- ajouter par défaut (le TRIGGER reste la vraie garantie).
+revoke update, delete, truncate on public.ledger_entries from service_role;
 
 grant select on public.products       to authenticated;
 grant select on public.orders         to authenticated;
