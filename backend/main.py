@@ -38,11 +38,14 @@ from quota import (
 # short-circuit; client_request_id stays the active idempotency key.
 from intent_observer import (
     compute_intent_id,
-    observe_intent_start,
     observe_job_start,
     observe_job_end,
     observe_intent_end,
     get_latest_intent_for_session,
+    claim_generation_intent,
+    reclaim_generation_intent,
+    bump_claim,
+    CLAIM_COUNTERS,
 )
 # Generation Intent v1 — PR4 : reconciliation worker (lifecycle only, no billing).
 from intent_reconciliation import reconcile_once, RECONCILE_INTERVAL_SECONDS
@@ -1353,6 +1356,30 @@ async def _start_reconciliation_worker():
     log.info("[RECONCILE] worker started (interval=%ss)", RECONCILE_INTERVAL_SECONDS)
 
 
+@app.on_event("startup")
+async def _verify_claim_functions_deployed():
+    """Deploy guard — le claim atomique (PR2) est LOAD-BEARING. Si la migration
+    claim_intent/reclaim_intent n'est pas appliquée, l'anti-double est INACTIF
+    (le wrapper fail-open génère quand même). On le crie FORT au boot plutôt que
+    silencieusement à chaque requête. Sonde NON-POLLUANTE : reclaim d'un intent_id
+    inexistant = UPDATE qui ne matche rien (aucune ligne insérée). Appel RPC
+    DIRECT (pas via le wrapper qui avale les erreurs) pour détecter PGRST202
+    (fonction absente)."""
+    try:
+        await asyncio.to_thread(
+            lambda: supa.rpc(
+                "reclaim_intent", {"p_intent_id": "__startup_probe__", "p_max": 0}
+            ).execute()
+        )
+        log.info("[CLAIM] deploy guard OK — claim_intent/reclaim_intent present")
+    except Exception as exc:  # noqa: BLE001
+        log.error(
+            "[CLAIM] ⚠️ DEPLOY GUARD FAILED — claim functions missing/unreachable? "
+            "anti-double is INACTIVE until the PR2 migration is applied. err=%s: %s",
+            type(exc).__name__, exc,
+        )
+
+
 @app.post("/internal/reconcile")
 async def trigger_reconcile(request: Request):
     """PR4 — manual reconciliation pass (testing + prod cron). Gated by the
@@ -1364,6 +1391,20 @@ async def trigger_reconcile(request: Request):
     if request.headers.get("X-Reconcile-Secret") != secret:
         raise HTTPException(status_code=403, detail="forbidden")
     return await reconcile_once()
+
+
+@app.get("/internal/claim-stats")
+async def claim_stats(request: Request):
+    """PR2 — snapshot LIVE des issues du claim (won/running/replay/reclaim/
+    fail_open), depuis le dernier redéploiement. Gated par X-Reconcile-Secret.
+    Métrique DURABLE = les logs `[CLAIM-OUTCOME]` (survivent aux restarts) ; cet
+    endpoint est un raccourci de pilotage en temps réel. Aucun accès DB."""
+    secret = os.environ.get("RECONCILE_SECRET")
+    if not secret:
+        raise HTTPException(status_code=403, detail="claim-stats disabled (RECONCILE_SECRET unset)")
+    if request.headers.get("X-Reconcile-Secret") != secret:
+        raise HTTPException(status_code=403, detail="forbidden")
+    return {"counters": dict(CLAIM_COUNTERS), "total": sum(CLAIM_COUNTERS.values())}
 
 
 @app.post("/purchases/sync")
@@ -2417,14 +2458,12 @@ async def generate(
     # STABLE anchor (pinned version > V1 upload > immediate URL), hashed — never log the
     # URL. Atmosphere/room use the REQUEST intent, not the resolved style. No sensitive
     # data (no full prompt/URL/key/bytes).
-    # Generation Intent v1 — PR1 (OBSERVATION ONLY). compute_intent_id is the
-    # SINGLE authoritative implementation of the identity (spec §3, backend-
-    # authoritative) ; it replicates the old inline [INTENT-ID] recipe byte-for-
-    # byte so the gate-of-proof holds. observe_intent_start is placed BEFORE the
-    # idempotency guard on purpose : it records EVERY fire (NEW vs DUP) so prod
-    # logs measure the real duplicate rate (GATE 2) that the current guard would
-    # otherwise mask. NO behaviour change — no claim, no short-circuit ; a DUP is
-    # logged and we proceed exactly as today.
+    # Generation Intent v1 — compute_intent_id is the SINGLE authoritative
+    # implementation of the identity (spec §3, backend-authoritative) ; it
+    # replicates the old inline [INTENT-ID] recipe byte-for-byte so the
+    # gate-of-proof holds. PR2 : cet intent_id est ensuite CLAIMÉ (plus bas,
+    # après l'idempotence mémoire) — le claim atomique remplace l'observation
+    # PR1 (observe_intent_start) et devient la source de vérité anti-double.
     _intent = compute_intent_id(
         user_id=current_user.user_id, session_id=session_id or "",
         source_version_id=source_version_id, original_image_url=original_image_url,
@@ -2442,11 +2481,16 @@ async def generate(
         _intent.room, _intent.action, _intent.atmosphere, let_ai_decide, surprise_me_flag,
         _intent.revision, client_request_id.strip() or "(none)", request_id, generation_trigger or "unknown",
     )
-    # OBSERVATION — persist the Intent (RUNNING). Best-effort ; never raises.
-    await observe_intent_start(
-        intent_id=_intent.id, user_id=current_user.user_id, session_id=session_id,
-        iteration=iteration, intent=_intent.intent_dict, client_request_id=request_id,
-    )
+    # ── R2 (dur) — une vraie génération DOIT avoir une vraie session ──────────
+    # L'intent_id inclut la session : un session_id 'new'/'' casserait l'identité
+    # déterministe (deux gens de la « même » session non-corrélables, GATE 1). On
+    # refuse tôt, AVANT tout claim / OpenAI. Le frontend doit résoudre la session
+    # réelle avant /generate (invariant PR2b).
+    if (session_id or "").strip() in ("new", ""):
+        raise HTTPException(
+            status_code=400,
+            detail="session_id must reference a real session (not 'new')",
+        )
 
     # ── #4 — idempotency guard (defence-in-depth) ─────────────────────────────
     # Only when the client supplied a real idempotency key (a uuid fallback is
@@ -2500,6 +2544,93 @@ async def generate(
                      "(request_id=%s)", request_id)
         if _idem_key is not None:
             _idem_inflight.add(_idem_key)
+
+    # ── Generation Intent v1 — PR2 : CLAIM ATOMIQUE (LOAD-BEARING) ────────────
+    # Placé APRÈS l'idempotence mémoire (option B) : si la couche mémoire
+    # court-circuitait déjà (replay/attente), elle le fait TOUJOURS à l'identique
+    # → le claim n'engage QUE quand on va vraiment générer → zéro régression sur
+    # le chemin existant (V1 / switch / re-upload). Le claim remplace l'upsert
+    # d'observe_intent_start : INSERT ON CONFLICT → un seul process gagne (won) et
+    # exécute OpenAI ; les autres branchent SANS OpenAI (replay / 202 / re-claim).
+    # Ferme GATE 2. « Le frontend peut se tromper ; le backend ne doit jamais doubler. »
+    _claim_t0 = time.monotonic()
+    _claim = await claim_generation_intent(
+        intent_id=_intent.id, user_id=current_user.user_id, session_id=session_id,
+        iteration=iteration, intent=_intent.intent_dict, client_request_id=request_id,
+    )
+    log.info(
+        "[CLAIM] intent=%s won=%s status=%s reclaim=%d took=%.1fms",
+        _intent.id, _claim.won, _claim.status, _claim.reclaim_count,
+        (time.monotonic() - _claim_t0) * 1000.0,
+    )
+
+    if _claim.won:
+        log.info("[CLAIM-OUTCOME] outcome=won total=%d intent=%s",
+                 bump_claim("won"), _intent.id)
+    else:
+        # Doublon observé (preuve GATE 2 + garde le %DUP du dashboard). Best-effort.
+        try:
+            await asyncio.to_thread(
+                lambda: supa.rpc("increment_intent_fire", {"p_intent_id": _intent.id}).execute()
+            )
+        except Exception:  # noqa: BLE001 — observabilité, jamais fatale
+            pass
+        if _claim.status == "SUCCEEDED":
+            if _claim.result_ref:
+                # Replay BYTE-IDENTIQUE : on renvoie le PAYLOAD COMPLET stocké
+                # verbatim → le frontend reçoit exactement le même JSON qu'un
+                # succès normal, sans savoir qu'il y a eu replay. AUCUN OpenAI,
+                # AUCUN re-débit.
+                log.info("[CLAIM-OUTCOME] outcome=replay total=%d intent=%s (no OpenAI, no re-bill)",
+                         bump_claim("replay"), _intent.id)
+                return _claim.result_ref
+            # SUCCEEDED sans payload stocké (ex. intent réparé par la
+            # réconciliation PR4) : on n'invente PAS un JSON simplifié. On renvoie
+            # 202 → le frontend re-sonde et réconcilie via la table messages.
+            log.info("[CLAIM-OUTCOME] outcome=replay_no_payload total=%d intent=%s → 202",
+                     bump_claim("replay_no_payload"), _intent.id)
+            return JSONResponse(
+                status_code=202, content={"status": "running", "intent_id": _intent.id}
+            )
+        if _claim.status == "RUNNING":
+            # Une exécution est déjà en cours pour cette intention (2 devices, 2
+            # taps, retry timeout). Personne d'autre ne relance OpenAI.
+            log.info("[CLAIM-OUTCOME] outcome=running total=%d intent=%s → 202",
+                     bump_claim("running"), _intent.id)
+            return JSONResponse(
+                status_code=202, content={"status": "running", "intent_id": _intent.id}
+            )
+        if _claim.status in ("FAILED", "FAILED_TERMINAL"):
+            # Retry délibéré du MÊME intent : re-claim BORNÉ FAILED→RUNNING (max 3).
+            # FAILED_TERMINAL n'est jamais re-claim (reclaim_intent le refuse par
+            # `and status='FAILED'`). La transition est atomique (row-lock DB).
+            _re = await reclaim_generation_intent(intent_id=_intent.id, max_reclaims=3)
+            if not _re.won:
+                log.info(
+                    "[CLAIM-OUTCOME] outcome=failed_refused total=%d intent=%s status=%s reclaim=%d",
+                    bump_claim("failed_refused"), _intent.id, _claim.status, _claim.reclaim_count,
+                )
+                return JSONResponse(
+                    status_code=200,
+                    content={"status": _claim.status.lower(), "intent_id": _intent.id},
+                )
+            log.info("[CLAIM-OUTCOME] outcome=reclaim_won total=%d intent=%s reclaim=%d",
+                     bump_claim("reclaim_won"), _intent.id, _re.reclaim_count)
+            # on possède l'intent (RUNNING) → on continue vers OpenAI.
+
+    # ── won (ou re-claimed) → on POSSÈDE l'intent (RUNNING) ───────────────────
+    # Billing reserve (déplacé depuis observe_intent_start) : TRIAL(+3 1re gen) +
+    # HOLD(-1). PURE RELAY, best-effort, idempotent, AUCUN gate ; ne casse jamais
+    # /generate (règle Billing PR1). Seul le GAGNANT réserve → pas de double HOLD.
+    try:
+        import billing  # noqa: PLC0415 — lazy, évite les surprises d'ordre d'import
+        await billing.apply_billing_for_intent_transition(
+            intent_id=_intent.id, new_status="RUNNING",
+            user_id=current_user.user_id, supa=supa,
+        )
+    except Exception as bexc:  # noqa: BLE001
+        log.warning("[BILLING] reserve hook failed (swallowed) intent=%s err=%s: %s",
+                    _intent.id, type(bexc).__name__, bexc)
 
     # ── Wave 5.17b — Reserve quota slot BEFORE the OpenAI call ──────────────
     # INSERTs a 'in_progress' usage_log row. Counts immediately against the
@@ -3857,6 +3988,12 @@ async def generate(
                     _logical_key, _rec["count"], sorted(_rec["request_ids"]), _img_uuid,
                 )
             # ── END TEMP INSTRUMENTATION (START half) ──
+            # [OPENAI-CALL] — PERMANENT, intent-keyed. Un couple START/END par
+            # appel OpenAI effectif → preuve directe « 1 intention = N appels »
+            # en prod : SELECT sur intent=<id> doit montrer autant de END que
+            # d'images réellement facturées. (grep '[OPENAI-CALL]')
+            log.info("[OPENAI-CALL] START intent=%s attempt=%d/%d img=%s",
+                     _intent.id, _attempt, _MAX_ATTEMPTS, _img_uuid)
             response = await openai.images.edit(**edit_kwargs)
             # ── TEMP INSTRUMENTATION (2026-06-26) — REMOVE after diagnosis. ──
             log.info(
@@ -3901,6 +4038,8 @@ async def generate(
             _elapsed = time.monotonic() - _t0
             _timer.record("openai_api", _elapsed, attempt=_attempt, status="success")
             log.info("[OpenAI Attempt %d/%d] succeeded in %.1fs", _attempt, _MAX_ATTEMPTS, _elapsed)
+            log.info("[OPENAI-CALL] END intent=%s attempt=%d status=success elapsed=%.1fs",
+                     _intent.id, _attempt, _elapsed)
 
             b64 = response.data[0].b64_json
             if not b64:
@@ -4376,17 +4515,6 @@ async def generate(
                 type(msg_err).__name__, msg_err,
             )
 
-    # OBSERVATION — Intent SUCCEEDED (result_ref = the replay payload PR2 will
-    # serve on a same-intent re-fire). Best-effort ; never blocks the response.
-    await observe_intent_end(
-        _intent.id, "SUCCEEDED",
-        result_ref={
-            "after_image_url": public_url,
-            "version_id": _new_version.version_id,
-            "structural_identity": structural_identity_token,
-        },
-    )
-
     payload = {
         "after_image_url": public_url,
         "thumbnail_url": public_url,
@@ -4415,6 +4543,15 @@ async def generate(
         # False = backend write failed, frontend should do its own write.
         "message_persisted": _message_persisted,
     }
+
+    # OBSERVATION — Intent SUCCEEDED. On stocke le PAYLOAD COMPLET dans result_ref
+    # (pas un format réduit) : sur un re-tir de la MÊME intention, le claim renvoie
+    # ce result_ref VERBATIM → le frontend reçoit exactement le même JSON qu'un
+    # succès normal, sans savoir qu'il y a eu replay. Best-effort ; ne bloque pas
+    # la réponse. (Un intent réparé par PR4 n'aura pas ce payload → le replay
+    # bascule alors en 202 côté claim, jamais un JSON simplifié inventé.)
+    await observe_intent_end(_intent.id, "SUCCEEDED", result_ref=payload)
+
     _total_elapsed = time.monotonic() - _req_start
     _est_cost = estimate_cost_usd(
         quality=profile.quality,

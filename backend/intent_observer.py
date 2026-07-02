@@ -37,6 +37,28 @@ from typing import Any, Optional
 
 log = logging.getLogger("generation_intent.observer")
 
+# ── Compteurs d'issue du claim (PR2 — pilotage prod) ─────────────────────────
+# In-memory (remis à zéro au redéploiement) : donne un snapshot LIVE via
+# GET /internal/claim-stats. La métrique DURABLE reste le log `[CLAIM-OUTCOME]`
+# (grep sur une semaine de logs Render survit aux restarts). Outcomes attendus :
+#   won · running · replay · replay_no_payload · reclaim_won · failed_refused ·
+#   fail_open
+#
+# RÈGLE OPS (décision user, 2026-07-02) — fail-open est OBSERVABLE, pas aveugle :
+#   • fail_open == 0 durablement            → ne rien toucher.
+#   • fail_open > 0 (surtout récurrent)     → INCIDENT : analyser, et si ça
+#     persiste, basculer le wrapper en fail-CLOSED (lever 503, le frontend retry).
+# Décision pilotée par la donnée, pas par la peur. Le résiduel de double via
+# fail-open exige un hoquet claim-RPC + une concurrence même-intent SIMULTANÉS.
+import collections  # noqa: E402
+CLAIM_COUNTERS: "collections.Counter[str]" = collections.Counter()
+
+
+def bump_claim(outcome: str) -> int:
+    """Incrémente le compteur d'issue et renvoie le total courant (pour le log)."""
+    CLAIM_COUNTERS[outcome] += 1
+    return CLAIM_COUNTERS[outcome]
+
 
 def _get_supa():
     """Lazy import to avoid a circular dependency at module load (mirrors quota.py)."""
@@ -340,6 +362,100 @@ async def get_latest_intent_for_session(
             session_id, type(exc).__name__, exc,
         )
         return None
+
+
+@dataclass(frozen=True)
+class ClaimResult:
+    won: bool
+    status: Optional[str] = None
+    result_ref: Optional[dict] = None
+    reclaim_count: int = 0
+
+
+async def claim_generation_intent(
+    *, intent_id: str, user_id: str, session_id: Optional[str], iteration: int,
+    intent: dict, client_request_id: str, supa=None,
+) -> ClaimResult:
+    """PR2 — ATOMIC CLAIM (load-bearing). Appelle la fonction DB `claim_intent`
+    (INSERT ON CONFLICT). won=True → CE process exécute OpenAI ; won=False →
+    l'intent existe (status/result_ref renvoyés pour brancher).
+
+    POLITIQUE D'ERREUR (choisie explicitement — pas un `except: pass` aveugle) :
+
+      Catégorie d'échec              Comportement       Justification
+      ─────────────────────────────  ─────────────────  ──────────────────────────
+      Transitoire (timeout réseau,   FAIL-OPEN (won)    Un double exigerait CETTE
+      DB momentanément indispo,      + log ERROR        erreur rare ET un doublon
+      rollback de transaction)                          concurrent SIMULTANÉS →
+                                                        négligeable. Perdre la gen
+                                                        de l'user sur un hoquet DB
+                                                        serait pire.
+      Structurel (fonction absente   FAIL-OPEN (won)    Affecte TOUTE requête → pic
+      PGRST202, mauvais args,        + log ERROR        immédiat de logs ERROR +
+      bug de code)                                      détecté au boot par le
+                                                        deploy-guard startup. Fail-
+                                                        CLOSED ici = panne totale
+                                                        sur une erreur de déploiement.
+
+    Dans les DEUX cas on FAIL-OPEN (priorité : ne jamais perdre la génération de
+    l'utilisateur), MAIS on log au niveau ERROR avec le marqueur `[CLAIM] FAIL-OPEN`
+    → alertable et comptable en prod (≠ swallow silencieux). L'anti-double reste
+    garanti dès que la DB répond ; un FAIL-OPEN est un événement anormal, tracé.
+    """
+    supa = supa or _get_supa()
+    sid = _session_uuid_or_none(session_id)
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.rpc("claim_intent", {
+                "p_intent_id": intent_id,
+                "p_user_id": user_id,
+                "p_session_id": sid,
+                "p_iteration": iteration,
+                "p_intent": intent,
+                "p_client_request_id": client_request_id,
+            }).execute()
+        )
+        rows = getattr(res, "data", None) or []
+        if not rows:
+            # Réponse vide inattendue (la fonction renvoie TOUJOURS 1 ligne) →
+            # anomalie structurelle → FAIL-OPEN tracé.
+            _n = bump_claim("fail_open")
+            log.error("[CLAIM-OUTCOME] outcome=fail_open total=%d intent=%s — empty RPC "
+                      "result (function contract broken?)", _n, intent_id)
+            return ClaimResult(won=True, status="RUNNING")
+        r = rows[0]
+        return ClaimResult(
+            won=bool(r.get("won")), status=r.get("status"),
+            result_ref=r.get("result_ref"), reclaim_count=int(r.get("reclaim_count") or 0),
+        )
+    except Exception as exc:
+        _n = bump_claim("fail_open")
+        log.error("[CLAIM-OUTCOME] outcome=fail_open total=%d intent=%s — claim RPC raised "
+                  "%s: %s (anti-double bypassed for THIS request only)",
+                  _n, intent_id, type(exc).__name__, exc)
+        return ClaimResult(won=True, status="RUNNING")
+
+
+async def reclaim_generation_intent(
+    *, intent_id: str, max_reclaims: int, supa=None,
+) -> ClaimResult:
+    """PR2 — re-claim d'un intent FAILED (retry délibéré, borné). won=True si la
+    transition FAILED→RUNNING a eu lieu. FAILED_TERMINAL jamais re-claim."""
+    supa = supa or _get_supa()
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.rpc("reclaim_intent", {
+                "p_intent_id": intent_id, "p_max": max_reclaims,
+            }).execute()
+        )
+        rows = getattr(res, "data", None) or []
+        if not rows:
+            return ClaimResult(won=False)
+        r = rows[0]
+        return ClaimResult(won=bool(r.get("won")), reclaim_count=int(r.get("reclaim_count") or 0))
+    except Exception as exc:
+        log.warning("[CLAIM] reclaim RPC failed intent=%s err=%s", intent_id, exc)
+        return ClaimResult(won=False)
 
 
 async def observe_intent_end(
