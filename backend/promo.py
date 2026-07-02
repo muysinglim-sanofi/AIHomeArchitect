@@ -21,7 +21,10 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from quota import has_admin_role, is_admin_role, get_quota_status
+from quota import (
+    has_admin_role, is_admin_role, get_quota_status,
+    fetch_roles_flags, count_active_usage, decide_quota,
+)
 
 log = logging.getLogger("promo")
 
@@ -122,30 +125,51 @@ async def resolve_generation_access(user_id: str, *, supa=None) -> AccessDecisio
     Only the 'free' tier consumes the usage_log quota + gets a watermark + is
     scope-restricted. promo/premium are clean, unlimited-room, off-ledger."""
     supa = supa or _get_supa()
-    # [ACCESS-TIMING] (2026-07-02) — per-call Supabase timing. Ces 4 lookups sont
-    # les PREMIERS accès Supabase de /generate ; en prod un stall de ~2 min a été
-    # observé ICI (is_admin_role / quota bloqués ~120s AVANT le claim, sur une
-    # connexion HTTP/2 corrompue). Logger la durée de CHAQUE appel pinpointe
-    # EXACTEMENT lequel bloque au prochain incident → prouve ou réfute l'hypothèse
-    # transport, au lieu de savoir seulement « avant le claim ». warn si ≥ 2 s.
-    def _tick(_name: str, _t0: float) -> None:
-        _dt = (time.monotonic() - _t0) * 1000.0
-        (log.warning if _dt >= 2000 else log.info)(
-            "[ACCESS-TIMING] %s took=%.0fms user=%s", _name, _dt, user_id[:8])
+    # ── Variante B (2026-07-02) — les 3 lectures Supabase RÉELLEMENT indépendantes
+    # (rôles / promo / count usage_log) en PARALLÈLE au lieu de 4 appels séquentiels.
+    #   • is_admin est DÉRIVÉ de la lecture rôles (fetch_roles_flags) → 0 requête en
+    #     plus (supprime l'ancien is_admin_role redondant, même table).
+    #   • le count usage_log ne dépend pas des rôles → parallélisable ; decide_quota
+    #     applique la MÊME décision (bypass court-circuite le count via has_bypass).
+    # La décision d'accès (priorité plus bas) est INCHANGÉE — seule la concurrence de
+    # fetch change. return_exceptions=True + coercition fail-open : une erreur ne peut
+    # JAMAIS altérer la décision (parité avec les défauts fail-open existants ; ces
+    # helpers avalent déjà leurs erreurs, ceci est une ceinture-bretelles).
+    # [ACCESS-TIMING] par appel (chevauché) + total → mesure avant/après. warn ≥ 2 s.
+    _t0 = time.monotonic()
 
-    _t = time.monotonic()
-    full = await has_admin_role(user_id, supa=supa)       # premium OR admin (cached 60s)
-    _tick("has_admin_role", _t)
-    _t = time.monotonic()
-    is_admin = await is_admin_role(user_id, supa=supa)
-    _tick("is_admin_role", _t)
-    _t = time.monotonic()
-    promo = await get_promo_access(user_id, supa=supa)
-    _tick("get_promo_access", _t)
-    _t = time.monotonic()
-    q = await get_quota_status(user_id, supa=supa)
-    _tick("get_quota_status", _t)
+    async def _timed(_name, _coro):
+        _t = time.monotonic()
+        try:
+            return await _coro
+        finally:
+            _dt = (time.monotonic() - _t) * 1000.0
+            (log.warning if _dt >= 2000 else log.info)(
+                "[ACCESS-TIMING] %s took=%.0fms user=%s", _name, _dt, user_id[:8])
+
+    _roles_res, _promo_res, _usage_res = await asyncio.gather(
+        _timed("fetch_roles_flags", fetch_roles_flags(user_id, supa=supa)),
+        _timed("get_promo_access", get_promo_access(user_id, supa=supa)),
+        _timed("count_active_usage", count_active_usage(user_id, supa=supa)),
+        return_exceptions=True,
+    )
+
+    if isinstance(_roles_res, tuple):
+        full, is_admin = _roles_res            # (has_bypass, is_admin) — cf. fetch_roles_flags
+    else:
+        log.warning("[ACCESS] roles fetch raised — fail-open free: %s", _roles_res)
+        full, is_admin = False, False
+    if isinstance(_promo_res, dict):
+        promo = _promo_res
+    else:
+        log.warning("[ACCESS] promo fetch raised — fail-open no-promo: %s", _promo_res)
+        promo = {"unlimited_active": False, "limited_remaining": 0, "active_campaign": None}
+    used = _usage_res if isinstance(_usage_res, int) and not isinstance(_usage_res, bool) else 0
+
+    q = decide_quota(full, used)
     free_remaining = max(0, q.limit - q.used)
+    log.info("[ACCESS-TIMING] resolve_total took=%.0fms user=%s",
+             (time.monotonic() - _t0) * 1000.0, user_id[:8])
 
     ctx = dict(
         promo_unlimited_active=promo["unlimited_active"],

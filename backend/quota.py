@@ -79,22 +79,34 @@ class QuotaStatus:
 # (admin OR premium), respecting `expires_at`. Cache is per-uvicorn-worker —
 # multiple workers = duplicated lookups but no correctness issue.
 
-_role_cache: dict[str, tuple[float, bool]] = {}
+_role_cache: dict[str, tuple[float, bool, bool]] = {}   # user_id → (expires_at, has_bypass, is_admin)
 
 
-def _cache_lookup(user_id: str) -> Optional[bool]:
+def _cache_lookup(user_id: str) -> Optional[tuple[bool, bool]]:
     entry = _role_cache.get(user_id)
     if entry is None:
         return None
-    expires_at, has_bypass = entry
+    expires_at, has_bypass, is_admin = entry
     if expires_at < time.time():
         _role_cache.pop(user_id, None)
         return None
-    return has_bypass
+    return (has_bypass, is_admin)
 
 
-def _cache_set(user_id: str, has_bypass: bool) -> None:
-    _role_cache[user_id] = (time.time() + _ROLE_CACHE_TTL_SECONDS, has_bypass)
+def _cache_set(user_id: str, has_bypass: bool, is_admin: bool) -> None:
+    _role_cache[user_id] = (time.time() + _ROLE_CACHE_TTL_SECONDS, has_bypass, is_admin)
+
+
+def _role_active(expires_at, now_ts: float) -> bool:
+    """A user_roles row is active if no expiry, a future expiry, or an unparseable
+    expiry (assume active to avoid wrongly blocking). Shared by the role lookups."""
+    if expires_at is None:
+        return True
+    try:
+        from datetime import datetime
+        return datetime.fromisoformat(expires_at.replace("Z", "+00:00")).timestamp() > now_ts
+    except (ValueError, AttributeError):
+        return True
 
 
 # ── Supabase access ─────────────────────────────────────────────────────────
@@ -166,10 +178,16 @@ async def is_admin_role(user_id: str, *, supa=None) -> bool:
     return False
 
 
-async def has_admin_role(user_id: str, *, supa=None) -> bool:
-    """True iff the user has an active 'admin' or 'premium' role in
-    user_roles (or any other role in _BYPASS_ROLES). Cached 60s per user.
-    """
+async def fetch_roles_flags(user_id: str, *, supa=None) -> tuple[bool, bool]:
+    """UNE lecture `user_roles` → (has_bypass, is_admin). Cachée 60 s par user.
+
+    has_bypass = un rôle actif dans _BYPASS_ROLES (admin OU premium) ;
+    is_admin   = un rôle actif == 'admin' (sous-ensemble).
+
+    Source UNIQUE partagée par has_admin_role et par resolve_generation_access
+    (chemin parallèle) → supprime la requête `is_admin_role` redondante côté
+    resolver. Fail-open (False, False) — comme l'ancien has_admin_role : un
+    hoquet DB ne bloque personne (le quota via usage_log reste indépendant)."""
     cached = _cache_lookup(user_id)
     if cached is not None:
         return cached
@@ -188,37 +206,63 @@ async def has_admin_role(user_id: str, *, supa=None) -> bool:
             "[Wave 5.17b] role lookup failed open — user=%s error=%s",
             user_id, exc,
         )
-        # Fail open : if the DB is down, do NOT block the founder. The
-        # quota check below will catch genuine over-quota anonymous
-        # users via usage_log (which is queried independently).
-        _cache_set(user_id, False)
-        return False
+        _cache_set(user_id, False, False)
+        return (False, False)
 
     now_ts = time.time()
     has_bypass = False
+    is_admin = False
     for r in rows:
-        role = r.get("role")
-        if role not in _BYPASS_ROLES:
+        if not _role_active(r.get("expires_at"), now_ts):
             continue
-        expires_at = r.get("expires_at")
-        if expires_at is None:
-            # Permanent role (NULL expires_at) — always active
+        role = r.get("role")
+        if role in _BYPASS_ROLES:
             has_bypass = True
-            break
-        # expires_at is an ISO-8601 string from Supabase
-        try:
-            from datetime import datetime
-            expires_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-            if expires_dt.timestamp() > now_ts:
-                has_bypass = True
-                break
-        except (ValueError, AttributeError):
-            # Unparseable expiry — assume active to avoid blocking
-            has_bypass = True
-            break
+        if role == "admin":
+            is_admin = True
 
-    _cache_set(user_id, has_bypass)
-    return has_bypass
+    _cache_set(user_id, has_bypass, is_admin)
+    return (has_bypass, is_admin)
+
+
+async def has_admin_role(user_id: str, *, supa=None) -> bool:
+    """True iff the user has an active 'admin' or 'premium' role in user_roles.
+    Cached 60s per user. Delegates to fetch_roles_flags (the single roles read)."""
+    return (await fetch_roles_flags(user_id, supa=supa))[0]
+
+
+def decide_quota(has_bypass: bool, used: int) -> QuotaStatus:
+    """Décision quota PURE depuis (has_bypass, used). Aucun I/O. Ordre INCHANGÉ :
+    bypass → admin_bypass(used=0) ; used<limit → within_quota ; sinon quota_exhausted."""
+    if has_bypass:
+        return QuotaStatus(allowed=True, used=0, limit=FREE_TIER_LIMIT, reason="admin_bypass")
+    if used < FREE_TIER_LIMIT:
+        return QuotaStatus(allowed=True, used=used, limit=FREE_TIER_LIMIT, reason="within_quota")
+    return QuotaStatus(allowed=False, used=used, limit=FREE_TIER_LIMIT, reason="quota_exhausted")
+
+
+async def count_active_usage(user_id: str, *, supa=None) -> int:
+    """Compte les usage_log status != 'failed' (la consommation free-quota). L'index
+    partiel (user_id, status) WHERE status != 'failed' garde ça tendu. Fail-open → 0
+    (miroir du fail-open existant de get_quota_status = within_quota). Isolé pour que
+    resolve_generation_access le lance EN PARALLÈLE des lectures rôles + promo (le
+    count ne dépend pas du résultat rôles)."""
+    supa = supa or _get_supa()
+    try:
+        result = await asyncio.to_thread(
+            lambda: supa.table("usage_log")
+            .select("id", count="exact")
+            .eq("user_id", user_id)
+            .neq("status", "failed")
+            .execute()
+        )
+        return getattr(result, "count", None) or 0
+    except Exception as exc:
+        log.warning(
+            "[Wave 5.17b] quota count failed open — user=%s error=%s",
+            user_id, exc,
+        )
+        return 0
 
 
 async def get_quota_status(user_id: str, *, supa=None) -> QuotaStatus:
@@ -230,55 +274,15 @@ async def get_quota_status(user_id: str, *, supa=None) -> QuotaStatus:
       2. Count usage_log rows where status != 'failed'
       3. If count < FREE_TIER_LIMIT → allowed=True, reason='within_quota'
       4. Else → allowed=False, reason='quota_exhausted'
-    """
-    if await has_admin_role(user_id, supa=supa):
-        return QuotaStatus(
-            allowed=True,
-            used=0,            # admin doesn't burn quota
-            limit=FREE_TIER_LIMIT,
-            reason="admin_bypass",
-        )
 
-    supa = supa or _get_supa()
-    try:
-        # Count rows for this user where status != 'failed'. The partial
-        # index on (user_id, status) WHERE status != 'failed' makes this
-        # tight even with millions of rows.
-        result = await asyncio.to_thread(
-            lambda: supa.table("usage_log")
-            .select("id", count="exact")
-            .eq("user_id", user_id)
-            .neq("status", "failed")
-            .execute()
-        )
-        used = getattr(result, "count", None) or 0
-    except Exception as exc:
-        log.warning(
-            "[Wave 5.17b] quota count failed open — user=%s error=%s",
-            user_id, exc,
-        )
-        # Fail open to preserve uptime. The IP rate limit in rate_limit.py
-        # is the secondary defense against a viral abuse pattern.
-        return QuotaStatus(
-            allowed=True,
-            used=0,
-            limit=FREE_TIER_LIMIT,
-            reason="within_quota",
-        )
-
-    if used < FREE_TIER_LIMIT:
-        return QuotaStatus(
-            allowed=True,
-            used=used,
-            limit=FREE_TIER_LIMIT,
-            reason="within_quota",
-        )
-    return QuotaStatus(
-        allowed=False,
-        used=used,
-        limit=FREE_TIER_LIMIT,
-        reason="quota_exhausted",
-    )
+    Délègue à fetch_roles_flags + count_active_usage + decide_quota (résultat
+    INCHANGÉ ; les briques de fetch sont désormais réutilisables par le resolver
+    parallèle). Standalone : bypass court-circuite le count comme avant."""
+    has_bypass, _ = await fetch_roles_flags(user_id, supa=supa)
+    if has_bypass:
+        return decide_quota(True, 0)
+    used = await count_active_usage(user_id, supa=supa)
+    return decide_quota(False, used)
 
 
 async def reserve_generation(
