@@ -1762,6 +1762,46 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         generationAttempt: _genAttempt,
       );
 
+      // ── PR2b Slice 1 (#0) — /generate response contract ──────────────────
+      // PR2a's backend claim can return a NON-image response when THIS exact
+      // intent is a duplicate/concurrent fire (the claim was LOST) :
+      //   • {status:"running"} (HTTP 202) — another process owns this intent and
+      //     is generating it. Do NOT crash on the missing after_image_url (the
+      //     hard `as String` cast below would throw), do NOT show an error, do
+      //     NOT mark the key succeeded (a legit retry must stay allowed). Keep the
+      //     loading bubble and let the reconciliation poll render the OWNER's
+      //     result when it lands. Never re-POST /generate.
+      //   • {status:"failed"|"failed_terminal"} — the intent failed and re-claim
+      //     was refused → route to the existing failure UX.
+      //   • after_image_url present (normal success OR byte-identical replay) →
+      //     falls through to the unchanged success path below.
+      final respStatus = (result['status'] as String?) ?? '';
+      final respHasImage =
+          ((result['after_image_url'] as String?) ?? '').isNotEmpty;
+      if (!respHasImage && respStatus == 'running') {
+        debugPrint('[PR2b] /generate → 202 running (duplicate/concurrent intent) '
+            '— attaching to reconciliation, no re-fire, no error');
+        _longGenerationTimer?.cancel();
+        _longGenerationTimer = null;
+        // Same state the transport-error fallback relies on: loading bubble kept,
+        // _isGenerating still true, poll running → it renders the winner's image.
+        if (mounted && mySeq == _genSeq) {
+          _startReconciliationPolling(sessionId: _project.id);
+        }
+        return;
+      }
+      if (!respHasImage &&
+          (respStatus == 'failed' || respStatus == 'failed_terminal')) {
+        debugPrint('[PR2b] /generate → $respStatus (claim refused re-claim) '
+            '— routing to failure UX');
+        throw const GenerationException(
+          errorCode: 'GENERATION_FAILED',
+          userMessage:
+              'This generation could not be completed. Please try again.',
+          retryable: true,
+        );
+      }
+
       // Generation SUCCEEDED (await returned without throwing) → mark this
       // logical key done so an accidental re-fire of the SAME source+iteration
       // (e.g. auto-gen then Generate button) is rejected by the guard above.
