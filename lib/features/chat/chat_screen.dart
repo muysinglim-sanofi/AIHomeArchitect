@@ -36,6 +36,8 @@ import '../../core/providers/access_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/services/local_notification_service.dart';
 import '../../core/services/session_persistence_service.dart';
+import '../../core/services/pending_generation_store.dart';
+import '../../data/models/pending_generation.dart';
 import '../../data/services/generation_service.dart';
 import '../../data/services/supabase_service.dart';
 import '../paywall/paywall_sheet.dart';
@@ -226,6 +228,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   // Lazy-initialised in initState (async); nullable until ready so we can
   // safely no-op if hydration races with a backend call.
   SessionPersistenceService? _persistence;
+  // PR2b Slice 2 — durable "I intended to POST this /generate" store (recovery
+  // ONLY; the backend generation_intents is the source of truth). Created in
+  // _initPersistence. Written before the network POST, cleared on definitive
+  // terminal.
+  PendingGenerationStore? _pendingStore;
+  // PR2b Slice 2 (R2) — completes with the REAL session id once _initNewSession
+  // has created the Supabase row. A manual generate fired during the ~1s creation
+  // window awaits this so /generate NEVER posts 'new' (PR2a backend R2 → 400),
+  // and the user's tap is never dropped ("un tap = une intention"). completeError
+  // if session creation fails. Null for existing sessions (already real).
+  Completer<String>? _sessionReady;
 
   late final AnimationController _entryController;
   late final Animation<double> _fadeAnim;
@@ -375,6 +388,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       _currentStyle = style;
       _sessionTitle = 'New Design Session';
       _sourceImageFile = widget.sourceImageFile;
+      // PR2b Slice 2 (R2) — arm the "session ready" signal BEFORE kicking off
+      // creation, so a manual generate fired during the creation window can await
+      // the real id instead of posting 'new'.
+      _sessionReady = Completer<String>();
       _initNewSession();
     } else {
       // Look up from provider state (populated from Supabase).
@@ -512,6 +529,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   Future<void> _initPersistence() async {
     try {
       _persistence = await SessionPersistenceService.create();
+      _pendingStore = await PendingGenerationStore.create();
     } catch (e) {
       debugPrint('[Persistence] init failed (non-fatal): $e');
       return;
@@ -709,6 +727,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         });
       }
       debugPrint('[DB] _initNewSession() complete — _project.id updated to ${realProject.id}');
+      // PR2b Slice 2 (R2) — real id exists; release any manual generate awaiting it.
+      if (!(_sessionReady?.isCompleted ?? true)) {
+        _sessionReady!.complete(realProject.id);
+      }
 
       // Wave 4.10g — Supabase id is finalised; capture the initial snapshot
       // so even a pre-V1 app restart preserves room/style/AI-Decide context.
@@ -725,6 +747,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       debugPrint('[DB] _initNewSession() ERROR: $e');
       debugPrint('[DB] _initNewSession() STACK: $st');
       _abortV1Priming('init error: $e');
+      // PR2b Slice 2 (R2) — creation failed: release any awaiting generate with an
+      // empty-id sentinel so it aborts cleanly (never posts 'new', never hangs).
+      if (!(_sessionReady?.isCompleted ?? true)) {
+        _sessionReady!.complete('');
+      }
     }
   }
 
@@ -1525,6 +1552,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     debugPrint('[V1-GUARD] trigger=$trigger iteration=$genIteration '
         'source_hash=$srcHash decision=accepted reason=new_generation');
 
+    // ── PR2b Slice 2 (R2) — never POST 'new' ──────────────────────────────────
+    // /generate MUST target a real session id (PR2a backend R2 → 400 on 'new').
+    // If the session is still being created (a manual generate fired during the
+    // ~1s _initNewSession window), WAIT for the real id then continue — the tap is
+    // never dropped ("un tap = une intention"). The auto-V1 path runs AFTER
+    // creation, so this engages only for the rare manual case. After the wait,
+    // _project.id is real (completed right after _project is set in _initNewSession).
+    if (_project.id == 'new' || _project.id.isEmpty) {
+      final ready = _sessionReady;
+      if (ready == null) {
+        debugPrint('[R2] session="new" with no ready-signal → abort (unexpected)');
+        return;
+      }
+      debugPrint('[R2] session still creating — awaiting real id before /generate');
+      String realId = '';
+      try {
+        realId = await ready.future.timeout(const Duration(seconds: 20));
+      } catch (e) {
+        debugPrint('[R2] session creation timed out/failed → abort generate: $e');
+      }
+      if (!mounted) return;
+      if (realId.isEmpty || _project.id == 'new' || _project.id.isEmpty) {
+        debugPrint('[R2] no real session id after wait → abort generate');
+        return;
+      }
+      debugPrint('[R2] real session id ready ($realId) — continuing generate');
+    }
+
     // Mid-session source change → re-upload + reset the chain BEFORE reading the
     // generation source, so this generation runs as a fresh FIRST_VISION on the
     // new photo (iteration == 1).
@@ -1771,6 +1826,49 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // vision (room inference / atmosphere selection happen once). Later
       // refinements steer normally, so they are not re-sent.
       final isFirstVision = newCount == 1;
+      // ── PR2b Slice 2 — persist the INTENTION before the network POST ────────
+      // Compute the derived params ONCE into locals so the pending record and the
+      // /generate call use the EXACT same tuple (1:1, replayed verbatim — never
+      // recomputed). The pending is written BEFORE the await so a crash/kill
+      // mid-POST still leaves the intention recoverable (Slice 3). RECOVERY ONLY:
+      // generation_intents (backend) stays the source of truth — if they ever
+      // disagree, the backend wins (Slice 3 probes first, then clears the pending).
+      final roomTypeIdVal =
+          RoomTypeImages.idForLabel(context.l10n, _currentRoomType) ?? '';
+      final atmosphereIdVal = atmosphereIdFromLabel(styleLabel) ?? '';
+      final originalImageUrlVal = originalUrl ?? '';
+      final letAiDecideVal = _letAiDecide && isFirstVision;
+      final surpriseMeVal = _surpriseMe && isFirstVision;
+      final sourceModeVal =
+          _branchSourceVersionId != null ? 'SPECIFIC_VERSION' : '';
+      final sourceVersionIdVal = _branchSourceVersionId ?? '';
+      final uiLocaleVal = ref.read(localeProvider).languageCode;
+
+      await _pendingStore?.save(PendingGeneration(
+        sessionId: _project.id,
+        createdAtMs: DateTime.now().millisecondsSinceEpoch,
+        prompt: prompt,
+        beforeImageUrl: generationSource,
+        styleLabel: styleLabel,
+        roomType: _currentRoomType,
+        roomTypeId: roomTypeIdVal,
+        atmosphereId: atmosphereIdVal,
+        iteration: newCount,
+        history: history,
+        originalImageUrl: originalImageUrlVal,
+        clientRequestId: clientRequestId,
+        letAiDecide: letAiDecideVal,
+        surpriseMe: surpriseMeVal,
+        structuralIdentity: _structuralIdentity,
+        versions: _versions,
+        generationMode: _generationMode,
+        sourceMode: sourceModeVal,
+        sourceVersionId: sourceVersionIdVal,
+        uiLocale: uiLocaleVal,
+        generationTrigger: trigger,
+        generationAttempt: _genAttempt,
+      ));
+
       final result = await GenerationService().generate(
         sessionId: _project.id,
         prompt: prompt,
@@ -1778,29 +1876,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         styleLabel: styleLabel,
         roomType: _currentRoomType,
         // Wave 5.17d — canonical ids for the free-tier scope check.
-        // Backend rejects non-premium calls when these don't map to
-        // FREE_ROOMS / FREE_ATMOSPHERES (Living Room + Nordic/Soft Luxury).
-        roomTypeId: RoomTypeImages.idForLabel(context.l10n, _currentRoomType) ?? '',
-        atmosphereId: atmosphereIdFromLabel(styleLabel) ?? '',
+        roomTypeId: roomTypeIdVal,
+        atmosphereId: atmosphereIdVal,
         iteration: newCount,
         history: history,
-        originalImageUrl: originalUrl ?? '',   // structural anchor — keeps geometry stable
+        originalImageUrl: originalImageUrlVal, // structural anchor — keeps geometry stable
         clientRequestId: clientRequestId,
-        letAiDecide: _letAiDecide && isFirstVision,
-        surpriseMe: _surpriseMe && isFirstVision,
+        letAiDecide: letAiDecideVal,
+        surpriseMe: surpriseMeVal,
         // Wave 4.7.2 / 4.7.3 — round-trip the persisted protocol fields so
         // structural_identity_clause and version ledger survive across V2+.
         structuralIdentity: _structuralIdentity,
         versions: _versions,
-        // Wave 5.5.14c — per-generation bimodal intent. Default "preserve"
-        // matches today's behaviour; backend no-ops unless BIMODAL_ENABLED=1.
+        // Wave 5.5.14c — per-generation bimodal intent (backend no-ops unless BIMODAL_ENABLED=1).
         generationMode: _generationMode,
-        // BUG A fix — when a branch pin is set ("Continue this vision"), tell
-        // the backend to resolve the source from that exact version. Empty
-        // otherwise → backend keeps its V2+ LATEST default (linear chain).
-        sourceMode: _branchSourceVersionId != null ? 'SPECIFIC_VERSION' : '',
-        sourceVersionId: _branchSourceVersionId ?? '',
-        uiLocale: ref.read(localeProvider).languageCode,
+        // BUG A fix — branch pin → resolve source from that exact version.
+        sourceMode: sourceModeVal,
+        sourceVersionId: sourceVersionIdVal,
+        uiLocale: uiLocaleVal,
         generationTrigger: trigger,
         generationAttempt: _genAttempt,
       );
@@ -1850,6 +1943,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // (e.g. auto-gen then Generate button) is rejected by the guard above.
       // Failures throw → this line is skipped → retry stays allowed.
       _succeededGenKeys.add(genKey);
+      // PR2b Slice 2 — definitive success (image received) → drop the intention.
+      _pendingStore?.clear(_project.id);
 
       _longGenerationTimer?.cancel();
       _longGenerationTimer = null;
@@ -2047,6 +2142,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // Only now do we surface the failure to the user.
       _longGenerationTimer?.cancel();
       _longGenerationTimer = null;
+      // PR2b Slice 2 — definitive terminal (structured failure: paywall / failed)
+      // → drop the intention. (The transport-error catch below does NOT clear:
+      // the backend may still have succeeded — Slice 3 resolves it via the probe.)
+      _pendingStore?.clear(_project.id);
 
       // ── Wave 5.21e — Failed-generation history cleanup ────────────────
       // The user message we inserted before calling /generate must NOT

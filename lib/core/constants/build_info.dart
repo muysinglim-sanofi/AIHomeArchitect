@@ -5,4 +5,4 @@
 /// running this code — no ambiguity.
 ///
 /// BUMP this string whenever you cut a build you want to identify.
-const String kBuildTag = 'GI · PR2b-fenA · 2026-07-03a';
+const String kBuildTag = 'GI · PR2b-slice2 · 2026-07-03b';
