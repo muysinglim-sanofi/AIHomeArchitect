@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/message_model.dart';
 import '../../data/models/project_model.dart';
 import '../../data/services/supabase_service.dart';
+import '../services/pending_generation_store.dart';
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,19 @@ class SessionNotifier extends StateNotifier<List<ProjectModel>> {
   void deleteSession(String id) {
     if (mounted) state = [for (final p in state) if (p.id != id) p];
     _svc.deleteSession(id); // fire-and-forget (RLS-scoped to the current user)
+    // PR2b #5 — the session no longer exists → drop any durable pending so the
+    // recovery sweep never re-launches an OpenAI generation for a deleted session
+    // (orphan cost + a message that can't persist, FK gone). Fire-and-forget.
+    _clearPendingFor(id);
+  }
+
+  Future<void> _clearPendingFor(String id) async {
+    try {
+      final store = await PendingGenerationStore.create();
+      await store.clear(id);
+    } catch (e) {
+      debugPrint('[PendingStore] clear-on-delete failed for $id (non-fatal): $e');
+    }
   }
 
   void updateLatestPreview(String id, String previewUrl) {

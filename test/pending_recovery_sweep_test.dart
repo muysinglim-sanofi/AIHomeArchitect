@@ -202,4 +202,17 @@ void main() {
     expect(gen.generated, ['s1']); // exactly one → the guard held
     expect(await store.load('s1'), isNull);
   });
+
+  test('#5 deleted session (pending cleared) → sweep re-launches NOTHING',
+      () async {
+    final store = await storeWith([_p('s1', createdAtMs: now)]);
+    // Simulate the delete handler (SessionNotifier.deleteSession) clearing the
+    // pending. Even though the backend would report "no intent" for the (now
+    // deleted) session, the sweep must NOT re-launch an orphan generation.
+    await store.clear('s1');
+    final gen = FakeGen()..probe = {'intent_id': null};
+    await svc.sweep(gen: gen, store: store, nowMs: now);
+    expect(gen.generated, isEmpty); // no orphan OpenAI call
+    expect(await store.loadAll(), isEmpty);
+  });
 }
