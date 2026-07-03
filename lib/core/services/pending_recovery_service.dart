@@ -79,21 +79,27 @@ class PendingRecoveryService with WidgetsBindingObserver {
   }
 
   /// Sweep every durable pending. Idempotent + overlap-guarded. Non-fatal.
-  Future<void> sweep({String reason = 'unknown'}) async {
+  /// [gen]/[store]/[nowMs] are injectable for tests (default to the real deps).
+  Future<void> sweep({
+    String reason = 'unknown',
+    GenerationService? gen,
+    PendingGenerationStore? store,
+    int? nowMs,
+  }) async {
     if (_sweeping) {
       debugPrint('[Recovery] sweep($reason) skipped — already running');
       return;
     }
     _sweeping = true;
     try {
-      final store = await PendingGenerationStore.create();
-      final pendings = await store.loadAll();
+      final s = store ?? await PendingGenerationStore.create();
+      final pendings = await s.loadAll();
       if (pendings.isEmpty) return;
       debugPrint('[Recovery] sweep($reason) — ${pendings.length} pending');
-      final gen = GenerationService();
-      final now = DateTime.now().millisecondsSinceEpoch;
+      final g = gen ?? GenerationService();
+      final now = nowMs ?? DateTime.now().millisecondsSinceEpoch;
       for (final p in pendings) {
-        await _resolveOne(p, store, gen, now);
+        await _resolveOne(p, s, g, now);
       }
     } catch (e) {
       debugPrint('[Recovery] sweep($reason) failed (non-fatal): $e');

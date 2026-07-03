@@ -39,6 +39,7 @@ import '../../core/services/session_persistence_service.dart';
 import '../../core/services/pending_generation_store.dart';
 import '../../core/services/pending_recovery_service.dart';
 import '../../data/models/pending_generation.dart';
+import 'generate_response.dart';
 import '../../data/services/generation_service.dart';
 import '../../data/services/supabase_service.dart';
 import '../paywall/paywall_sheet.dart';
@@ -1932,31 +1933,31 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       //     was refused → route to the existing failure UX.
       //   • after_image_url present (normal success OR byte-identical replay) →
       //     falls through to the unchanged success path below.
-      final respStatus = (result['status'] as String?) ?? '';
-      final respHasImage =
-          ((result['after_image_url'] as String?) ?? '').isNotEmpty;
-      if (!respHasImage && respStatus == 'running') {
-        debugPrint('[PR2b] /generate → 202 running (duplicate/concurrent intent) '
-            '— attaching to reconciliation, no re-fire, no error');
-        _longGenerationTimer?.cancel();
-        _longGenerationTimer = null;
-        // Same state the transport-error fallback relies on: loading bubble kept,
-        // _isGenerating still true, poll running → it renders the winner's image.
-        if (mounted && mySeq == _genSeq) {
-          _startReconciliationPolling(sessionId: _project.id);
-        }
-        return;
-      }
-      if (!respHasImage &&
-          (respStatus == 'failed' || respStatus == 'failed_terminal')) {
-        debugPrint('[PR2b] /generate → $respStatus (claim refused re-claim) '
-            '— routing to failure UX');
-        throw const GenerationException(
-          errorCode: 'GENERATION_FAILED',
-          userMessage:
-              'This generation could not be completed. Please try again.',
-          retryable: true,
-        );
+      // ── PR2b Slice 1 (#0) — /generate response contract (pure classifier) ──
+      switch (classifyGenerateResult(result)) {
+        case GenerateResultKind.running:
+          // 202 — another process owns this intent. No crash, no error, no
+          // re-fire: keep the loading bubble and attach to the reconciliation
+          // poll so the winner's image renders here.
+          debugPrint('[PR2b] /generate → 202 running (duplicate/concurrent) '
+              '— attaching to reconciliation, no re-fire, no error');
+          _longGenerationTimer?.cancel();
+          _longGenerationTimer = null;
+          if (mounted && mySeq == _genSeq) {
+            _startReconciliationPolling(sessionId: _project.id);
+          }
+          return;
+        case GenerateResultKind.failed:
+          debugPrint('[PR2b] /generate → failed (claim refused re-claim) '
+              '— routing to failure UX');
+          throw const GenerationException(
+            errorCode: 'GENERATION_FAILED',
+            userMessage:
+                'This generation could not be completed. Please try again.',
+            retryable: true,
+          );
+        case GenerateResultKind.image:
+          break; // fall through to the unchanged success path below
       }
 
       // Generation SUCCEEDED (await returned without throwing) → mark this
