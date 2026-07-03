@@ -1330,6 +1330,11 @@ async def get_me_status(
     is_admin = d.tier == "admin"
     is_premium = d.tier in ("admin", "premium")            # subscription/admin ONLY (promo ≠ premium)
     unlimited = is_premium or d.promo_unlimited_active      # remaining_free is null only when truly unlimited
+    # Billing PR2b (voie a) — le resolver ne renvoie plus tier="blocked"/can_generate=False
+    # (pure identité). L'AFFICHAGE du quota reste sur free_remaining (usage_log,
+    # legacy — DÉCOUPLÉ du ledger). On recompose localement l'épuisement.
+    _exhausted = (not unlimited) and d.free_remaining <= 0
+    _can_generate = unlimited or d.free_remaining > 0
     return {
         # ── existing Sprint 1 fields (unchanged shape) ──
         "is_premium": is_premium,
@@ -1342,8 +1347,8 @@ async def get_me_status(
         "promo_generations_remaining": d.promo_generations_remaining,
         "promo_unlimited_active": d.promo_unlimited_active,
         "active_promo_campaign": d.active_promo_campaign,
-        "effective_access_state": d.tier,                  # admin|premium|promo_unlimited|promo_limited|free|blocked
-        "can_generate": d.can_generate,
+        "effective_access_state": "blocked" if _exhausted else d.tier,  # admin|premium|promo_*|free|blocked
+        "can_generate": _can_generate,
     }
 
 
@@ -2417,26 +2422,10 @@ async def generate(
         is_admin=_is_admin_bypass,
     )
 
-    if not _decision.can_generate:
-        log.info(
-            "[Sprint 1B] generation blocked — user=%s tier=%s free_remaining=%d",
-            current_user.user_id, _decision.tier, _decision.free_remaining,
-        )
-        raise HTTPException(
-            status_code=402,
-            detail={
-                "error_code": "QUOTA_EXHAUSTED",
-                "user_message": (
-                    "Your free architectural explorations are complete. "
-                    "Unlock unlimited redesigns and continue working with "
-                    "your AI Architect."
-                ),
-                "quota_used": max(0, FREE_TIER_LIMIT - _decision.free_remaining),
-                "quota_limit": FREE_TIER_LIMIT,
-                "retryable": False,
-                "request_id": "",
-            },
-        )
+    # Billing PR2b (voie a) — le gate quota N'EST PLUS ici. Le resolver ne renvoie
+    # plus tier="blocked" (pure identité) ; l'autorité quota passe au WALLET via
+    # billing.reserve_decision, APRÈS le scope (plus bas). Ce bloc `if not
+    # can_generate → 402` (usage_log) est donc retiré.
     log.info(
         "[Sprint 1B] access OK — user=%s tier=%s free_remaining=%d promo_remaining=%d promo_unlimited=%s",
         current_user.user_id, _decision.tier, _decision.free_remaining,
@@ -2466,6 +2455,36 @@ async def generate(
     elif _skip_scope_for_refine:
         log.info("[free-tier] scope check skipped for refinement (iteration=%d)",
                  iteration)
+
+    # ── Billing PR2b (voie a) — GATE WALLET (§2.3), LECTURE SEULE, AVANT le claim ─
+    # Le wallet (ledger) est désormais la source d'autorité du quota (remplace
+    # usage_log). entitled → bypass (aucune lecture) ; free → available_balance ≥ 1
+    # (available + TRIAL si pas encore accordé). AUCUNE écriture ici : le HOLD est
+    # posé APRÈS le claim-won → « aucune réservation avant ownership ». deny → 402
+    # propre, aucun intent créé, aucun HOLD. FAIL-OPEN sur hoquet DB (reason=fail_open).
+    import billing  # noqa: PLC0415 — lazy, évite les surprises d'ordre d'import
+    _gate = await billing.reserve_decision(
+        user_id=current_user.user_id, is_free=_decision.consumes_free_quota,
+    )
+    if not _gate.allow:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error_code": "QUOTA_EXHAUSTED",   # compat frontend (GenerationException.quotaExhausted)
+                "user_message": (
+                    "Your free architectural explorations are complete. "
+                    "Unlock unlimited redesigns and continue working with "
+                    "your AI Architect."
+                ),
+                "quota_used": FREE_TIER_LIMIT,
+                "quota_limit": FREE_TIER_LIMIT,
+                "wallet_available": _gate.wallet_available,
+                "reason": _gate.reason,            # insufficient_credits
+                "paywall": "pass",                 # PR2b : seul le trial existe → paywall=pass
+                "retryable": False,
+                "request_id": "",
+            },
+        )
 
     # ── Step 1: log request ───────────────────────────────────────────────────
     request_id = client_request_id.strip() or uuid.uuid4().hex
@@ -2659,17 +2678,13 @@ async def generate(
     # /generate (règle Billing PR1). Seul le GAGNANT réserve → pas de double HOLD.
     try:
         import billing  # noqa: PLC0415 — lazy, évite les surprises d'ordre d'import
-        # Billing PR2a — SHADOW du wallet-gate (§2.3) : logge la décision que le
-        # gate PR2b prendrait, SANS l'appliquer (aucun 402/HOLD/blocage). Placé
-        # AVANT le HOLD → lit le solde PRÉ-HOLD. is_free = seul le tier 'free'
-        # passe par le gate wallet (admin/premium/promo → bypass).
-        await billing.reserve_shadow(
-            user_id=current_user.user_id, intent_id=_intent.id,
-            is_free=_decision.consumes_free_quota, supa=supa,
-        )
+        # Billing PR2b (voie a) — HOLD du GAGNANT, APRÈS le claim. Le gate wallet
+        # (reserve_decision, plus haut) a déjà autorisé ; ici on POSE la réservation.
+        # is_free=consumes_free_quota → D-e : entitled n'écrit RIEN (ni TRIAL ni HOLD).
         await billing.apply_billing_for_intent_transition(
             intent_id=_intent.id, new_status="RUNNING",
-            user_id=current_user.user_id, supa=supa,
+            user_id=current_user.user_id,
+            is_free=_decision.consumes_free_quota, supa=supa,
         )
     except Exception as bexc:  # noqa: BLE001
         log.warning("[BILLING] reserve hook failed (swallowed) intent=%s err=%s: %s",
@@ -4154,6 +4169,7 @@ async def generate(
             await observe_intent_end(
                 _intent.id, "FAILED_TERMINAL",
                 error={"type": "content_policy", "message": "OPENAI_REJECTED"},
+                is_free=_decision.consumes_free_quota,
             )
             raise GenerationError(
                 error_code="OPENAI_REJECTED",
@@ -4191,6 +4207,7 @@ async def generate(
                 await observe_intent_end(
                     _intent.id, "FAILED_TERMINAL",
                     error={"type": _exc_type, "message": str(exc)[:200]},
+                    is_free=_decision.consumes_free_quota,
                 )
                 raise GenerationError(
                     error_code="OPENAI_FAILED",
@@ -4246,6 +4263,7 @@ async def generate(
         await observe_intent_end(
             _intent.id, "FAILED",
             error={"type": "exhausted", "message": "all_attempts_failed"},
+            is_free=_decision.consumes_free_quota,
         )
         raise GenerationError(
             error_code="OPENAI_FAILED",
@@ -4593,7 +4611,8 @@ async def generate(
     # succès normal, sans savoir qu'il y a eu replay. Best-effort ; ne bloque pas
     # la réponse. (Un intent réparé par PR4 n'aura pas ce payload → le replay
     # bascule alors en 202 côté claim, jamais un JSON simplifié inventé.)
-    await observe_intent_end(_intent.id, "SUCCEEDED", result_ref=payload)
+    await observe_intent_end(_intent.id, "SUCCEEDED", result_ref=payload,
+                             is_free=_decision.consumes_free_quota)
 
     _total_elapsed = time.monotonic() - _req_start
     _est_cost = estimate_cost_usd(

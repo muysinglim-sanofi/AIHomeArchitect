@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Optional
 
 log = logging.getLogger("billing")
@@ -189,63 +190,78 @@ async def grant_trial(*, user_id: str, supa=None) -> None:
         await _reproject_wallet(user_id=user_id, supa=supa)
 
 
-async def reserve_shadow(
-    *, user_id: str, intent_id: str, is_free: bool, supa=None,
-) -> None:
-    """Billing PR2a — SHADOW du wallet-gate (§2.3). CALCULE + LOGGE la décision
-    que le gate PR2b prendrait, SANS rien appliquer :
-      • AUCUN 402, AUCUN HOLD, AUCUN blocage, AUCUN impact user.
-      • LECTURE SEULE — écrit ZÉRO ligne ledger (best-effort, ne lève jamais).
-    But : MESURER, sur le trafic réel du chemin won (winner / reclaim-won
-    uniquement — l'appelant ne l'invoque qu'après le claim), combien de gens le
-    gate bloquerait, AVANT de l'activer en PR2b.
+@dataclass
+class ReserveDecision:
+    """Résultat du gate wallet (lecture seule). `wallet_available` = solde
+    available AVANT tout TRIAL pending ; `effective` = ce que le gate voit."""
+    allow: bool
+    wallet_available: int
+    effective: int
+    reason: str          # "" (allow) | "bypass" | "insufficient_credits" | "fail_open"
 
-    ⚠️ À appeler AVANT apply_billing(RUNNING) : on veut le solde PRÉ-HOLD (celui
-    que le gate verrait après avoir grant le TRIAL, mais avant le HOLD de CETTE
-    gen). Placé après, le HOLD de cette gen fausserait le calcul (off-by-one).
+
+async def reserve_decision(
+    *, user_id: str, is_free: bool, supa=None,
+) -> ReserveDecision:
+    """Billing PR2b (voie a) — GATE wallet (§2.3), **LECTURE SEULE**. Décide si
+    l'user peut lancer une génération. Appelé dans /generate AVANT le claim :
+    aucune écriture (le HOLD est posé APRÈS le claim-won) → respecte « aucune
+    réservation avant ownership ».
+      • entitled (is_free=False) → allow (bypass R8), AUCUNE lecture.
+      • free → effective = available + (TRIAL si pas encore accordé) ; allow = effective ≥ 1.
+    FAIL-OPEN sur erreur de lecture (fiabilité > double rare, cf. philosophie du
+    claim) : un hoquet DB ne bloque jamais un user ; observable via reason=fail_open.
     """
     supa = supa or _get_supa()
     if not is_free:
-        # admin / premium / promo → bypass (R8 + tiers entitled) : jamais de HOLD.
-        log.info("[BILLING-GATE] shadow intent=%s user=%s tier=entitled decision=bypass",
-                 intent_id, user_id[:8])
-        return
+        # admin / premium / promo → bypass (R8 + tiers entitled) : pas de gate wallet.
+        return ReserveDecision(allow=True, wallet_available=0, effective=0, reason="bypass")
     try:
         res = await asyncio.to_thread(
             lambda: supa.table("ledger_entries")
-            .select("entry_type, available_delta, idempotency_key")
+            .select("entry_type, available_delta")
             .eq("user_id", user_id).execute()
         )
         rows = getattr(res, "data", None) or []
-    except Exception as exc:  # noqa: BLE001 — lecture best-effort, n'impacte jamais /generate
-        log.warning("[BILLING-GATE] shadow read failed intent=%s user=%s err=%s",
-                    intent_id, user_id[:8], exc)
-        return
+    except Exception as exc:  # noqa: BLE001 — FAIL-OPEN : ne bloque jamais sur hoquet DB
+        log.warning("[BILLING-GATE] enforce read failed user=%s err=%s → fail-open allow",
+                    user_id[:8], exc)
+        return ReserveDecision(allow=True, wallet_available=0, effective=0, reason="fail_open")
     available = sum(int(r.get("available_delta") or 0) for r in rows)
     trial_granted = any(r.get("entry_type") == "TRIAL" for r in rows)
-    # Solde PRÉ-HOLD que verrait le gate PR2b : il grant le TRIAL (idempotent,
-    # +3 la 1re fois) PUIS exige available_balance ≥ 1. Ici on n'écrit rien — on
-    # ajoute juste le +3 « qui serait accordé » si le TRIAL n'est pas déjà là.
+    # Solde PRÉ-HOLD : le HOLD sera posé après le claim. On ajoute le +3 « qui
+    # serait accordé » (grant_trial idempotent) si le TRIAL n'est pas déjà là.
     effective = available + (0 if trial_granted else TRIAL_CREDITS)
     allow = effective >= 1
+    reason = "" if allow else "insufficient_credits"
     log.info(
-        "[BILLING-GATE] shadow intent=%s user=%s tier=free available=%d trial=%s "
-        "effective=%d decision=%s reason=%s",
-        intent_id, user_id[:8], available, "granted" if trial_granted else "pending",
-        effective, "allow" if allow else "deny",
-        "-" if allow else "insufficient_credits",
+        "[BILLING-GATE] enforce user=%s available=%d trial=%s effective=%d decision=%s reason=%s",
+        user_id[:8], available, "granted" if trial_granted else "pending",
+        effective, "allow" if allow else "deny", reason or "-",
     )
+    return ReserveDecision(
+        allow=allow, wallet_available=available, effective=effective, reason=reason)
 
 
 async def apply_billing_for_intent_transition(
-    *, intent_id: str, new_status: str, user_id: Optional[str] = None, supa=None,
+    *, intent_id: str, new_status: str, user_id: Optional[str] = None,
+    is_free: bool = True, supa=None,
 ) -> None:
-    """OBSERVABILITÉ (PR1) : projette l'effet ledger d'une transition d'Intent.
-    Point d'entrée UNIQUE appelé par les deux émetteurs. Idempotent, best-effort,
+    """Projette l'effet ledger d'une transition d'Intent (RUNNING/terminal).
+    Point d'entrée UNIQUE appelé par les émetteurs. Idempotent, best-effort,
+
+    Billing PR2b (D-e) — `is_free=False` (entitled admin/premium/promo) → **AUCUNE
+    écriture** (ni TRIAL, ni HOLD/COMMIT/RELEASE) : le ledger reste propre pour
+    les tiers non facturables (ils bypass le gate wallet). Défaut True → un
+    appelant non mis à jour facture (jamais un skip silencieux).
+    Suite du docstring d'origine :
     ne lève jamais, AUCUN gate. Projection directe (voir _decide) — pas de
     compensation ni de lecture du passé.
     """
     supa = supa or _get_supa()
+    # D-e — entitled : aucune écriture ledger (bypass le gate wallet).
+    if not is_free:
+        return
     decision = _decide(new_status)
     if decision is None:
         return

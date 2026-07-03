@@ -51,6 +51,31 @@ def _parse_ts(value) -> Optional[datetime]:
         return None
 
 
+async def _resolve_is_free(supa, intent_id: str) -> bool:
+    """D-e — résout is_free (tier==free) pour l'user d'un intent, best-effort.
+    Reconcile n'a pas le `_decision` de /generate → on lit le user de l'intent
+    puis on résout son tier. Défaut True (facture) si indéterminable — jamais un
+    skip silencieux (protège le RELEASE d'un vrai HOLD free). Edge accepté : si
+    l'user est devenu entitled depuis le RUNNING, au pire un RELEASE orphelin
+    pour un user qui bypass le gate de toute façon (inoffensif)."""
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("generation_intents")
+            .select("user_id").eq("intent_id", intent_id).limit(1).execute()
+        )
+        rows = getattr(res, "data", None) or []
+        user_id = rows[0].get("user_id") if rows else None
+        if not user_id:
+            return True
+        from promo import resolve_generation_access  # noqa: PLC0415 — lazy
+        d = await resolve_generation_access(user_id)
+        return bool(d.consumes_free_quota)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[RECONCILE] is_free resolve failed intent=%s err=%s → default free(bill)",
+                    intent_id, exc)
+        return True
+
+
 async def _finalize(supa, intent_id: str, status: str, *, error: Optional[dict] = None) -> bool:
     """UPDATE generation_intents vers un terminal, UNIQUEMENT si encore RUNNING
     (garde anti-clobber). Renvoie True si une ligne a effectivement transité."""
@@ -80,8 +105,10 @@ async def _finalize(supa, intent_id: str, status: str, *, error: Optional[dict] 
     if transitioned:
         try:
             import billing  # noqa: PLC0415
+            # D-e — entitled → aucune écriture (comme le chemin nominal).
+            _is_free = await _resolve_is_free(supa, intent_id)
             await billing.apply_billing_for_intent_transition(
-                intent_id=intent_id, new_status=status, supa=supa)
+                intent_id=intent_id, new_status=status, is_free=_is_free, supa=supa)
         except Exception as bexc:
             log.warning("[BILLING] reconcile hook failed (swallowed) intent=%s err=%s: %s",
                         intent_id, type(bexc).__name__, bexc)

@@ -234,17 +234,9 @@ async def observe_intent_start(
             "[INTENT-OBS] intent_start intent_id=%s result=%s user=%s session=%s iter=%s",
             intent_id, verdict, user_id[:8], session_id or "(none)", iteration,
         )
-        # Billing PR1 — PURE RELAY of the RUNNING transition. All rules (trial,
-        # reserve/HOLD) live in billing.apply_billing_for_intent_transition. The
-        # hook decides NOTHING. Best-effort, idempotent, NO gate ; a billing
-        # failure never affects /generate.
-        try:
-            import billing  # noqa: PLC0415 — lazy to avoid import-order surprises
-            await billing.apply_billing_for_intent_transition(
-                intent_id=intent_id, new_status="RUNNING", user_id=user_id, supa=supa)
-        except Exception as bexc:
-            log.warning("[BILLING] reserve hook failed (swallowed) intent=%s err=%s: %s",
-                        intent_id, type(bexc).__name__, bexc)
+        # NB (Billing PR2b) : le RUNNING/HOLD n'est PLUS émis ici. Le claim atomique
+        # (main.py) a remplacé observe_intent_start (aucun appelant) ; le HOLD est
+        # posé sur le chemin winner de /generate, gated par is_free (D-e).
         return verdict
     except Exception as exc:
         log.warning(
@@ -464,6 +456,7 @@ async def observe_intent_end(
     *,
     result_ref: Optional[dict] = None,
     error: Optional[dict] = None,
+    is_free: bool = True,
     supa=None,
 ) -> None:
     """UPDATE generation_intents vers un état terminal
@@ -502,7 +495,7 @@ async def observe_intent_end(
     try:
         import billing  # noqa: PLC0415
         await billing.apply_billing_for_intent_transition(
-            intent_id=intent_id, new_status=status, supa=supa)
+            intent_id=intent_id, new_status=status, is_free=is_free, supa=supa)
     except Exception as bexc:
         log.warning("[BILLING] terminal hook failed (swallowed) intent=%s err=%s: %s",
                     intent_id, type(bexc).__name__, bexc)

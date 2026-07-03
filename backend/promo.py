@@ -196,15 +196,14 @@ async def resolve_generation_access(user_id: str, *, supa=None) -> AccessDecisio
             bypass_scope=True, consumes_free_quota=False,
             consume_promo_on_success=True, **ctx,
         )
-    if free_remaining > 0:
-        return AccessDecision(
-            tier="free", can_generate=True, clean_watermark=False,
-            bypass_scope=False, consumes_free_quota=True,
-            consume_promo_on_success=False, **ctx,
-        )
+    # Billing PR2b (voie a) — le resolver ne décide PLUS l'épuisement du quota.
+    # Non-entitled → TOUJOURS tier="free" (pure identité). Le gate quota est le
+    # WALLET (billing.reserve_decision), appliqué dans /generate APRÈS le scope.
+    # `free_remaining` (usage_log) reste calculé pour l'AFFICHAGE legacy
+    # (status/chat), mais ne gate plus rien ici. Le tier "blocked" disparaît.
     return AccessDecision(
-        tier="blocked", can_generate=False, clean_watermark=False,
-        bypass_scope=False, consumes_free_quota=False,
+        tier="free", can_generate=True, clean_watermark=False,
+        bypass_scope=False, consumes_free_quota=True,
         consume_promo_on_success=False, **ctx,
     )
 
