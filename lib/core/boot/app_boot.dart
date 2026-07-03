@@ -24,6 +24,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/services/revenuecat_service.dart';
 import '../../firebase_options.dart';
 import '../services/local_notification_service.dart';
+import '../services/pending_recovery_service.dart';
 import '../services/push_service.dart';
 
 /// One-line boot timing log. Visible in release (Console.app on a TestFlight
@@ -119,6 +120,18 @@ class AppBoot {
       bootLog(sw, 'bg: push ready');
     } catch (e) {
       debugPrint('[Push] init() failed (non-fatal): $e');
+    }
+
+    // PR2b Slice 3 — recover generations INTENDED before a kill / sleep / network
+    // drop. Runs AFTER ensureSession (probe/re-launch need the auth). Registers
+    // the app-resume observer + runs one sweep now. Fire-and-forget; the service
+    // self-guards against overlap. Backend generation_intents stays the truth.
+    try {
+      PendingRecoveryService.instance.registerResumeSweep();
+      await PendingRecoveryService.instance.sweep(reason: 'startup');
+      bootLog(sw, 'bg: pending recovery swept');
+    } catch (e) {
+      debugPrint('[Recovery] boot sweep failed (non-fatal): $e');
     }
   }
 }
