@@ -189,6 +189,54 @@ async def grant_trial(*, user_id: str, supa=None) -> None:
         await _reproject_wallet(user_id=user_id, supa=supa)
 
 
+async def reserve_shadow(
+    *, user_id: str, intent_id: str, is_free: bool, supa=None,
+) -> None:
+    """Billing PR2a — SHADOW du wallet-gate (§2.3). CALCULE + LOGGE la décision
+    que le gate PR2b prendrait, SANS rien appliquer :
+      • AUCUN 402, AUCUN HOLD, AUCUN blocage, AUCUN impact user.
+      • LECTURE SEULE — écrit ZÉRO ligne ledger (best-effort, ne lève jamais).
+    But : MESURER, sur le trafic réel du chemin won (winner / reclaim-won
+    uniquement — l'appelant ne l'invoque qu'après le claim), combien de gens le
+    gate bloquerait, AVANT de l'activer en PR2b.
+
+    ⚠️ À appeler AVANT apply_billing(RUNNING) : on veut le solde PRÉ-HOLD (celui
+    que le gate verrait après avoir grant le TRIAL, mais avant le HOLD de CETTE
+    gen). Placé après, le HOLD de cette gen fausserait le calcul (off-by-one).
+    """
+    supa = supa or _get_supa()
+    if not is_free:
+        # admin / premium / promo → bypass (R8 + tiers entitled) : jamais de HOLD.
+        log.info("[BILLING-GATE] shadow intent=%s user=%s tier=entitled decision=bypass",
+                 intent_id, user_id[:8])
+        return
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("ledger_entries")
+            .select("entry_type, available_delta, idempotency_key")
+            .eq("user_id", user_id).execute()
+        )
+        rows = getattr(res, "data", None) or []
+    except Exception as exc:  # noqa: BLE001 — lecture best-effort, n'impacte jamais /generate
+        log.warning("[BILLING-GATE] shadow read failed intent=%s user=%s err=%s",
+                    intent_id, user_id[:8], exc)
+        return
+    available = sum(int(r.get("available_delta") or 0) for r in rows)
+    trial_granted = any(r.get("entry_type") == "TRIAL" for r in rows)
+    # Solde PRÉ-HOLD que verrait le gate PR2b : il grant le TRIAL (idempotent,
+    # +3 la 1re fois) PUIS exige available_balance ≥ 1. Ici on n'écrit rien — on
+    # ajoute juste le +3 « qui serait accordé » si le TRIAL n'est pas déjà là.
+    effective = available + (0 if trial_granted else TRIAL_CREDITS)
+    allow = effective >= 1
+    log.info(
+        "[BILLING-GATE] shadow intent=%s user=%s tier=free available=%d trial=%s "
+        "effective=%d decision=%s reason=%s",
+        intent_id, user_id[:8], available, "granted" if trial_granted else "pending",
+        effective, "allow" if allow else "deny",
+        "-" if allow else "insufficient_credits",
+    )
+
+
 async def apply_billing_for_intent_transition(
     *, intent_id: str, new_status: str, user_id: Optional[str] = None, supa=None,
 ) -> None:

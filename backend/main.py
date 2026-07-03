@@ -2659,6 +2659,14 @@ async def generate(
     # /generate (règle Billing PR1). Seul le GAGNANT réserve → pas de double HOLD.
     try:
         import billing  # noqa: PLC0415 — lazy, évite les surprises d'ordre d'import
+        # Billing PR2a — SHADOW du wallet-gate (§2.3) : logge la décision que le
+        # gate PR2b prendrait, SANS l'appliquer (aucun 402/HOLD/blocage). Placé
+        # AVANT le HOLD → lit le solde PRÉ-HOLD. is_free = seul le tier 'free'
+        # passe par le gate wallet (admin/premium/promo → bypass).
+        await billing.reserve_shadow(
+            user_id=current_user.user_id, intent_id=_intent.id,
+            is_free=_decision.consumes_free_quota, supa=supa,
+        )
         await billing.apply_billing_for_intent_transition(
             intent_id=_intent.id, new_status="RUNNING",
             user_id=current_user.user_id, supa=supa,
