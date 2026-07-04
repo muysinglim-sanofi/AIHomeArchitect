@@ -33,7 +33,21 @@ class RefineOutcome:
 
     @property
     def complete(self) -> bool:
+        # complet = vérif réussie ET tout appliqué ET pas de souci naturalness.
+        # VERIFICATION_UNAVAILABLE ⇒ jamais complet (on ne prétend pas au succès).
         return self.result.all_applied and not self.result.needs_refinement
+
+    @property
+    def verification_available(self) -> bool:
+        return self.result.available
+
+    @property
+    def retry_targets(self) -> list[Change]:
+        """Ce que le bouton Retry re-tente : les manquants en INCOMPLETE ;
+        TOUT en VERIFICATION_UNAVAILABLE (on ignore ce qui manque) ; rien si complet."""
+        if not self.result.available:
+            return list(self.changes)
+        return self.missing
 
 
 async def refine_step(client, image_bytes: bytes, mime: str, changes: list[Change],

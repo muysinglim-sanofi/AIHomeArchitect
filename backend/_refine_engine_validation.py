@@ -5,7 +5,7 @@ import sys
 
 import refine.engine as engine
 from refine.parser import Change
-from refine.verify import VerifyResult
+from refine.verify import VerifyResult, VerifyStatus
 
 _fails = 0
 def check(name, cond, got=""):
@@ -21,7 +21,8 @@ async def _fake_execute(client, image_bytes, mime, prompt):
 def _fake_verify_factory(applied_by_type):
     async def _fake_verify(client, original, omime, edited, changes):
         applied = [applied_by_type.get(c.type, True) for c in changes]
-        return VerifyResult(applied=applied, identity_preserved=True, needs_refinement=False)
+        status = VerifyStatus.VERIFIED if (applied and all(applied)) else VerifyStatus.INCOMPLETE
+        return VerifyResult(status=status, applied=applied, identity_preserved=True, needs_refinement=False)
     return _fake_verify
 
 engine.execute = _fake_execute
@@ -58,6 +59,16 @@ async def main():
     check("ne cible que le manquant (move)", [c.type for c in out3.changes] == ["move"])
     check("retry sur l'image précédente", _captured["src"] == b"PREV_IMAGE")
     check("complete=True après retry", out3.complete is True)
+
+    print("\n=== VERIFICATION_UNAVAILABLE (jamais complet, retry = tout) ===")
+    async def _fake_verify_unavail(client, original, omime, edited, changes):
+        return VerifyResult(status=VerifyStatus.VERIFICATION_UNAVAILABLE)
+    engine.verify = _fake_verify_unavail
+    out4 = await engine.refine_step(object(), b"SRC", "image/jpeg", chs, mode="default")
+    check("complete=False (pas de prétention)", out4.complete is False)
+    check("verification_available=False", out4.verification_available is False)
+    check("retry_targets = TOUS les changements", [c.type for c in out4.retry_targets] == ["remove","add","move"])
+    check("report = message honnête", out4.report == "Ayden couldn't automatically verify this result.", out4.report)
 
     print(f"\n{'ALL GREEN' if not _fails else str(_fails)+' FAILURE(S)'}")
     return 1 if _fails else 0
