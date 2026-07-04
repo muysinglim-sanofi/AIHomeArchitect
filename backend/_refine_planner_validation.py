@@ -4,7 +4,7 @@ import sys
 
 from refine.parser import parse_deterministic
 from refine.normalizer import normalize_changes
-from refine.planner import plan, ExecutionPlan, _COMBINABLE
+from refine.planner import plan, ExecutionPlan, _COMBINABLE, STRATEGY_COMBINED_EDIT
 
 _fails = 0
 def check(name, cond, got=""):
@@ -24,6 +24,11 @@ def main():
     p = plan(chs)
     order = [c.type for c in p.ordered_changes]
     check(f"ordre correct {order}", order == ["structure","remove","replace","add","modify","move"], str(order))
+
+    print("\n=== EXECUTION STRATEGY (seam) ===")
+    check("stratégie = combined_edit", p.strategy.kind == STRATEGY_COMBINED_EDIT, p.strategy.kind)
+    check("strategy.prompt == combined_prompt (compat)", p.strategy.prompt == p.combined_prompt)
+    check("strategy.changes = ordered_changes", p.strategy.changes == p.ordered_changes)
 
     print("\n=== PROMPT COMBINÉ ===")
     check("contient 'Apply ALL of these changes'", "Apply ALL of these changes" in p.combined_prompt)

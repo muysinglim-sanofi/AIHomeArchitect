@@ -15,7 +15,7 @@ from typing import Optional
 from refine.parser import Change, parse_changes
 from refine.normalizer import normalize_changes
 from refine.conflict import resolve_conflicts
-from refine.planner import plan
+from refine.planner import plan, STRATEGY_COMBINED_EDIT
 from refine.executor import execute
 from refine.verify import verify, build_report, missing_changes, VerifyResult
 
@@ -52,12 +52,21 @@ class RefineOutcome:
         return self.missing
 
 
+async def _execute_strategy(client, image_bytes: bytes, mime: str, p) -> bytes:
+    """Seam d'exécution : branche sur `p.strategy.kind`. Aujourd'hui une seule
+    stratégie (combined_edit → 1 génération). Les futures (full_redesign,
+    atmosphere_switch, sequential_forced) s'ajoutent ici sans toucher le reste."""
+    if p.strategy.kind == STRATEGY_COMBINED_EDIT:
+        return await execute(client, image_bytes, mime, p.strategy.prompt)
+    raise NotImplementedError(f"execution strategy not implemented: {p.strategy.kind}")
+
+
 async def refine_step(client, image_bytes: bytes, mime: str, changes: list[Change],
                       *, mode: str = "default") -> RefineOutcome:
     """UNE génération : resolve(conflits) → plan → execute → verify → report. = 1 crédit."""
     changes, conflicts = resolve_conflicts(changes)   # Normalizer → Conflict Resolver → Planner
     p = plan(changes, mode=mode)
-    edited = await execute(client, image_bytes, mime, p.combined_prompt)
+    edited = await _execute_strategy(client, image_bytes, mime, p)
     result = await verify(client, image_bytes, mime, edited, p.ordered_changes)
     report = build_report(result, p.ordered_changes)
     return RefineOutcome(image=edited, changes=p.ordered_changes, result=result,
