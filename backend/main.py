@@ -132,7 +132,7 @@ from prompt_engine.support_answers import (
 # action-refine / LLM error, the existing pools stay the byte-identical fallback.
 from prompt_engine.designer_voice import (
     designer_voice_enabled, generate_designer_voice,
-    exec_voice_enabled, generate_execution_voice,  # PR-B — Execution Voice
+    generate_execution_voice,  # PR-B — Execution Voice (always-on, fallback-only)
 )
 from prompt_engine.transformation_state_builder import (
     build_vision_caption,
@@ -1674,10 +1674,10 @@ async def resolve_design_ai_message(
     if should_generate or turn != TurnIntent.DESIGN_ADVICE:
         # PR-B — Execution Voice : sur un tour de GÉNÉRATION, remplacer le pool
         # aveugle par une courte ligne « architecte qui agit » liée au message.
-        # Flag AYDEN_EXEC_VOICE (default OFF) ; timeout court ; sur flag OFF /
-        # timeout / erreur / vide → fallback pool localisé BYTE-IDENTIQUE (ci-dessous).
-        # Ne se déclenche QUE sur should_generate=True (jamais OOS/Support/Advice).
-        if should_generate and exec_voice_enabled():
+        # Always-on (pas de flag) ; timeout court ; sur timeout / erreur / vide →
+        # fallback pool localisé BYTE-IDENTIQUE (ci-dessous). Ne se déclenche QUE
+        # sur should_generate=True (jamais OOS/Support/Advice).
+        if should_generate:
             _t0 = time.monotonic()
             try:
                 _exec = await asyncio.wait_for(

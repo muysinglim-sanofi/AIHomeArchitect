@@ -95,21 +95,15 @@ def _system_prompt(
 
 
 # ── PR-B — Execution Voice (GENERATION turns only) ───────────────────────────
-# When Ayden is about to GENERATE, he should speak like an architect who ACTS
-# (one short "I'll do X while preserving Y" line) instead of a blind canned pool.
-# Separate flag (AYDEN_EXEC_VOICE, default OFF — bench before enabling), separate
-# prompt (no debate, no opinion). Text-only (fast). Caller falls back to the
-# existing pools on flag OFF / timeout / error / empty → byte-identical.
+# When Ayden is about to GENERATE, he speaks like an architect who ACTS (one
+# short "I'll do X while preserving Y" line) instead of a blind canned pool.
+# Always-on (no flag — MVP phase); the caller falls back to the existing pools
+# on timeout / error / empty → byte-identical. Separate prompt (no debate, no
+# opinion). Text-only (fast).
 
 _EXEC_MODEL = "gpt-4o-mini"
 _EXEC_TIMEOUT_S = 2.0
 _EXEC_MAX_TOKENS = 60
-
-
-def exec_voice_enabled() -> bool:
-    """Functional flag AYDEN_EXEC_VOICE — default OFF. A new LLM voice on the
-    /chat hot path : stays off until the live bench validates it, then flip on."""
-    return os.environ.get("AYDEN_EXEC_VOICE", "0").strip().lower() in ("1", "true", "yes", "on")
 
 
 def _exec_system_prompt(room_type: str, atmosphere_label: str, language: str) -> str:

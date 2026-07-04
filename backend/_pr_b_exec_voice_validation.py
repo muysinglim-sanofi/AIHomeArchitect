@@ -4,13 +4,12 @@ PR-B Execution Voice — wiring validation for resolve_design_ai_message.
 Run:  PYTHONPATH=. python _pr_b_exec_voice_validation.py   (needs backend/.env)
 
 Deterministic, offline (no OpenAI): monkeypatches the exec-voice function, the
-flag, the designer voice and localize_reply, then drives resolve_design_ai_message
-directly. Proves the safety contract of the Execution Voice branch:
+designer voice and localize_reply, then drives resolve_design_ai_message
+directly. Proves the safety contract of the (always-on) Execution Voice branch:
 
-  • flag OFF                          → byte-identical pool fallback, voice NOT called
-  • flag ON + a sentence             → the exec voice is returned
-  • flag ON + LLM error/None/empty    → pool fallback (voice attempted once)
-  • flag ON + timeout (>2s)           → pool fallback (asyncio.wait_for hard cap)
+  • a sentence                        → the exec voice is returned
+  • LLM error / None / empty          → pool fallback (voice attempted once)
+  • timeout (>2s)                     → pool fallback (asyncio.wait_for hard cap)
   • advice turn (should_generate=False)→ voice NEVER called (only GENERATE turns)
 
 The fallback in every failing case is exactly `localize_reply(fallback_msg)` —
@@ -47,8 +46,7 @@ def _make_fake_exec(behavior):
     return fake_exec
 
 
-async def _run_case(name, *, flag, behavior, should_generate, msg, expect_kind):
-    main.exec_voice_enabled = lambda: flag
+async def _run_case(name, *, behavior, should_generate, msg, expect_kind):
     main.generate_execution_voice = _make_fake_exec(behavior)
     main.localize_reply = _fake_localize
     main.designer_voice_enabled = lambda: False  # neutralize the advice LLM
@@ -75,20 +73,18 @@ async def _run_case(name, *, flag, behavior, should_generate, msg, expect_kind):
 
 async def _main() -> int:
     r = []
-    r.append(await _run_case("flag OFF → byte-identical fallback, voice NOT called",
-        flag=False, behavior="line", should_generate=True, msg="Rotate the sofa.", expect_kind="fallback_uncalled"))
-    r.append(await _run_case("flag ON + sentence → execution voice returned",
-        flag=True, behavior="line", should_generate=True, msg="Rotate the sofa.", expect_kind="exec"))
-    r.append(await _run_case("flag ON + LLM error → fallback",
-        flag=True, behavior="raise", should_generate=True, msg="Rotate the sofa.", expect_kind="fallback_called"))
-    r.append(await _run_case("flag ON + None → fallback",
-        flag=True, behavior="none", should_generate=True, msg="Rotate the sofa.", expect_kind="fallback_called"))
-    r.append(await _run_case("flag ON + empty → fallback",
-        flag=True, behavior="empty", should_generate=True, msg="Rotate the sofa.", expect_kind="fallback_called"))
-    r.append(await _run_case("flag ON + timeout(2.5s) → fallback",
-        flag=True, behavior="timeout", should_generate=True, msg="Rotate the sofa.", expect_kind="fallback_called"))
+    r.append(await _run_case("sentence → execution voice returned",
+        behavior="line", should_generate=True, msg="Rotate the sofa.", expect_kind="exec"))
+    r.append(await _run_case("LLM error → fallback",
+        behavior="raise", should_generate=True, msg="Rotate the sofa.", expect_kind="fallback_called"))
+    r.append(await _run_case("None → fallback",
+        behavior="none", should_generate=True, msg="Rotate the sofa.", expect_kind="fallback_called"))
+    r.append(await _run_case("empty → fallback",
+        behavior="empty", should_generate=True, msg="Rotate the sofa.", expect_kind="fallback_called"))
+    r.append(await _run_case("timeout(2.5s) → fallback",
+        behavior="timeout", should_generate=True, msg="Rotate the sofa.", expect_kind="fallback_called"))
     r.append(await _run_case("advice turn (should_generate=False) → voice NEVER called",
-        flag=True, behavior="line", should_generate=False, msg="Where should I put the TV?", expect_kind="fallback_uncalled"))
+        behavior="line", should_generate=False, msg="Where should I put the TV?", expect_kind="fallback_uncalled"))
     fails = r.count(False)
     print(f"\n{'ALL GREEN' if not fails else str(fails) + ' FAILURE(S)'}  ({len(r) - fails}/{len(r)})")
     return 1 if fails else 0
