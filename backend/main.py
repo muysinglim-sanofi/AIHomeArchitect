@@ -130,7 +130,10 @@ from prompt_engine.support_answers import (
 # PR3 Designer Voice (Ayden Companion) — LLM voice for DESIGN_ADVICE turns only,
 # behind the functional flag AYDEN_VOICE (default OFF). When OFF / non-design /
 # action-refine / LLM error, the existing pools stay the byte-identical fallback.
-from prompt_engine.designer_voice import designer_voice_enabled, generate_designer_voice
+from prompt_engine.designer_voice import (
+    designer_voice_enabled, generate_designer_voice,
+    exec_voice_enabled, generate_execution_voice,  # PR-B — Execution Voice
+)
 from prompt_engine.transformation_state_builder import (
     build_vision_caption,
     build_clean_instruction,
@@ -1669,6 +1672,27 @@ async def resolve_design_ai_message(
     _room = room_type or "(none)"
 
     if should_generate or turn != TurnIntent.DESIGN_ADVICE:
+        # PR-B — Execution Voice : sur un tour de GÉNÉRATION, remplacer le pool
+        # aveugle par une courte ligne « architecte qui agit » liée au message.
+        # Flag AYDEN_EXEC_VOICE (default OFF) ; timeout court ; sur flag OFF /
+        # timeout / erreur / vide → fallback pool localisé BYTE-IDENTIQUE (ci-dessous).
+        # Ne se déclenche QUE sur should_generate=True (jamais OOS/Support/Advice).
+        if should_generate and exec_voice_enabled():
+            _t0 = time.monotonic()
+            try:
+                _exec = await asyncio.wait_for(
+                    generate_execution_voice(
+                        client, message=message, room_type=room_type,
+                        atmosphere_label=atmosphere_label, language=ui_locale),
+                    timeout=2.0,
+                )
+            except Exception:  # noqa: BLE001 — TimeoutError inclus → fallback pool
+                _exec = None
+            _ms = (time.monotonic() - _t0) * 1000.0
+            if _exec and _exec.strip():
+                log.info("[AYDEN-EXEC-VOICE] enabled latency_ms=%.0f", _ms)
+                return _exec.strip()
+            log.info("[AYDEN-EXEC-VOICE] fallback (timeout/empty/error) latency_ms=%.0f — pools", _ms)
         log.info(
             "[AYDEN-VOICE] disabled (turn=%s should_generate=%s) — pools fallback",
             getattr(turn, "value", turn), should_generate,

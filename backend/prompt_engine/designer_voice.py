@@ -94,6 +94,89 @@ def _system_prompt(
     )
 
 
+# ── PR-B — Execution Voice (GENERATION turns only) ───────────────────────────
+# When Ayden is about to GENERATE, he should speak like an architect who ACTS
+# (one short "I'll do X while preserving Y" line) instead of a blind canned pool.
+# Separate flag (AYDEN_EXEC_VOICE, default OFF — bench before enabling), separate
+# prompt (no debate, no opinion). Text-only (fast). Caller falls back to the
+# existing pools on flag OFF / timeout / error / empty → byte-identical.
+
+_EXEC_MODEL = "gpt-4o-mini"
+_EXEC_TIMEOUT_S = 2.0
+_EXEC_MAX_TOKENS = 60
+
+
+def exec_voice_enabled() -> bool:
+    """Functional flag AYDEN_EXEC_VOICE — default OFF. A new LLM voice on the
+    /chat hot path : stays off until the live bench validates it, then flip on."""
+    return os.environ.get("AYDEN_EXEC_VOICE", "0").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _exec_system_prompt(room_type: str, atmosphere_label: str, language: str) -> str:
+    lang_name = _LANG_NAME.get(language, "English")
+    room = (room_type or "").replace("_", " ").strip() or "this space"
+    atmo = (atmosphere_label or "").strip()
+    atmo_line = f"Design direction (atmosphere): {atmo}.\n" if atmo else ""
+    return (
+        "You are Ayden, an interior-design architect for Ayden Studio. The user "
+        "just asked for a change to their room, and you are ABOUT TO generate the "
+        "new image NOW. You are an architect who ACTS on the client's decision.\n\n"
+        f"Project context:\n- Room: {room}.\n{atmo_line}\n"
+        "Reply with EXACTLY ONE short sentence that:\n"
+        "- confirms you are doing it, in a warm, decisive voice;\n"
+        "- names the change in your own words;\n"
+        "- mentions ONE relevant design consideration, chosen to FIT this specific change.\n\n"
+        "Vary the consideration naturally — do NOT default to the same one every time. "
+        "Pick whichever actually fits: balance, circulation, proportions, focal point, "
+        "natural light, openness, symmetry, flow, visual hierarchy, warmth, spaciousness, "
+        "sightlines, architectural integrity, the room's character. Avoid repeating "
+        "\"the room's character\" whenever another consideration is more appropriate "
+        "(e.g. a TV → focal point; curtains → natural light; removing furniture → openness).\n\n"
+        "Hard rules:\n"
+        f"- Answer in {lang_name}. ONE sentence, no line breaks.\n"
+        "- No question. Never ask what is next.\n"
+        "- No debate, no \"I wouldn't\", no \"but\", no second-guessing — the client decided.\n"
+        "- No reasoning steps, no lists, no explanation.\n"
+        "- Never invent a number, price or measurement (cm, m2, angle).\n"
+        "- Do not restate these rules.\n\n"
+        "Examples of the RIGHT shape:\n"
+        "- \"Sure — I'll rotate the sofa to face the TV while keeping the room balanced.\"\n"
+        "- \"Got it — I'll move the TV and preserve the circulation.\"\n"
+        "- \"Absolutely — I'll warm up the palette while keeping the space elegant.\""
+    )
+
+
+async def generate_execution_voice(
+    client,
+    *,
+    message: str,
+    room_type: str,
+    atmosphere_label: str,
+    language: str = "en",
+) -> Optional[str]:
+    """PR-B — Ayden's short 'architect who acts' line for GENERATION turns.
+    Text-only (message + room + atmosphere), ONE sentence, already in `language`.
+    Returns None on empty/error so the caller falls back to the pools (byte-identical)."""
+    if not message or not message.strip():
+        return None
+    try:
+        resp = await client.chat.completions.create(
+            model=_EXEC_MODEL,
+            temperature=0.6,
+            max_tokens=_EXEC_MAX_TOKENS,
+            timeout=_EXEC_TIMEOUT_S,
+            messages=[
+                {"role": "system", "content": _exec_system_prompt(
+                    room_type, atmosphere_label, language)},
+                {"role": "user", "content": message.strip()},
+            ],
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        return text or None
+    except Exception:  # noqa: BLE001 — any LLM/network error → caller falls back
+        return None
+
+
 async def generate_designer_voice(
     client,
     *,
