@@ -52,6 +52,27 @@ class RefineOutcome:
         return self.missing
 
 
+@dataclass
+class GenerateResult:
+    """Sortie du chemin GEN-ONLY (Verify async, §14) : image + changements tentés,
+    SANS vérification (elle sera faite après affichage, en 2ᵉ appel stateless)."""
+    image: bytes
+    changes: list[Change]        # ordonnés (§10)
+    conflicts: list[str]         # incohérences résolues (log/transparence)
+    estimated_success: float     # [0,1] matrice — pour observabilité/UX
+
+
+async def refine_generate(client, image_bytes: bytes, mime: str, changes: list[Change],
+                          *, mode: str = "default") -> GenerateResult:
+    """UNE génération, SANS Verify (perceived-latency §14) : resolve → plan → execute.
+    L'endpoint renvoie l'image immédiatement puis vérifie via `verify()` en 2ᵉ appel."""
+    changes, conflicts = resolve_conflicts(changes)
+    p = plan(changes, mode=mode)
+    edited = await _execute_strategy(client, image_bytes, mime, p)
+    return GenerateResult(image=edited, changes=p.ordered_changes, conflicts=conflicts,
+                          estimated_success=p.estimated_success)
+
+
 async def _execute_strategy(client, image_bytes: bytes, mime: str, p) -> bytes:
     """Seam d'exécution : branche sur `p.strategy.kind`. Aujourd'hui une seule
     stratégie (combined_edit → 1 génération). Les futures (full_redesign,

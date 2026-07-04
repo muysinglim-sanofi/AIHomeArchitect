@@ -4685,3 +4685,167 @@ async def generate(
     _push_bg_tasks.add(_push_task)
     _push_task.add_done_callback(_push_bg_tasks.discard)
     return payload
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# REFINE ENGINE V2 — Moteur 2 (ISOLÉ). Ne touche NI /generate, NI le composer, NI la
+# DNA/préservation/identité structurelle (Moteur 1 GELÉ). Contrat §9/§14 :
+#   POST /refine         → status advisory (YELLOW/RED, 0 gen) | completed (image
+#                          immédiate, verification=deferred) | error
+#   POST /refine/verify  → verified | incomplete | unavailable + report + missing[]
+# Spec : docs/REFINE_ENGINE_V2.md. Réutilise l'infra partagée (openai, supa, auth,
+# storage 'generated', httpx) — aucune logique V1.
+# ═══════════════════════════════════════════════════════════════════════════════
+from refine.parser import parse_changes as _refine_parse, Change as _RefineChange
+from refine.advisor import advise as _refine_advise, build_advisory_message as _refine_advisory_msg
+from refine.normalizer import normalize_changes as _refine_normalize
+from refine.engine import refine_generate as _refine_generate
+from refine.verify import (verify as _refine_verify, build_report as _refine_build_report,
+                           missing_changes as _refine_missing)
+from refine.billing_hook import reserve as _refine_bill_reserve, commit as _refine_bill_commit
+
+_REFINE_MIME_FALLBACK = "image/jpeg"
+
+
+def _refine_change_to_dict(c: _RefineChange) -> dict:
+    return {"type": c.type, "object": c.object, "detail": c.detail,
+            "raw": c.raw, "normalized": c.normalized}
+
+
+def _refine_change_from_dict(d: dict) -> _RefineChange:
+    return _RefineChange(type=str(d.get("type", "modify")), object=str(d.get("object", "")),
+                         detail=str(d.get("detail", "")), raw=str(d.get("raw", "")),
+                         normalized=str(d.get("normalized", "")))
+
+
+async def _refine_fetch_bytes(url: str) -> tuple[bytes, str]:
+    """Télécharge une image (source/résultat). Patchable en test. Renvoie (bytes, mime)."""
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.get(url)
+        r.raise_for_status()
+        mime = (r.headers.get("content-type", _REFINE_MIME_FALLBACK).split(";")[0]
+                or _REFINE_MIME_FALLBACK)
+        return r.content, mime
+
+
+def _refine_upload(session_id: str, data: bytes) -> str:
+    """Upload le résultat refine dans le bucket 'generated' (même infra que /generate)."""
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    path = f"{session_id or 'refine'}/{ts}_refine_{uuid.uuid4().hex[:8]}.jpg"
+    supa.storage.from_("generated").upload(
+        path=path, file=data, file_options={"content-type": "image/jpeg"})
+    return supa.storage.from_("generated").get_public_url(path)
+
+
+def _refine_intent_id(session_id: str, message: str, before_image_url: str) -> str:
+    """ID déterministe (idempotence billing future) — pas de hash() salé."""
+    h = hashlib.sha1(f"{session_id}|{message}|{before_image_url}".encode()).hexdigest()[:16]
+    return f"refine:{session_id}:{h}"
+
+
+def _refine_fire_and_forget(coro, label: str) -> None:
+    """Logs/analytics/billing NON bloquants — jamais sur le chemin critique (§14)."""
+    try:
+        t = asyncio.create_task(coro)
+        _push_bg_tasks.add(t)
+        t.add_done_callback(_push_bg_tasks.discard)
+    except Exception:  # noqa: BLE001 — l'observabilité ne casse jamais la réponse
+        log.warning("[refine] fire-and-forget '%s' scheduling failed", label)
+
+
+@app.post("/refine")
+async def refine_endpoint(
+    session_id: str = Form(...),
+    message: str = Form(...),
+    before_image_url: str = Form(...),     # la vision EXISTANTE à modifier (storage URL)
+    room_type: str = Form(""),
+    confirm: bool = Form(False),           # passe outre un advisory (Continue anyway)
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Contrat unique (D-b) : advisory (YELLOW/RED, 0 gen) | completed (image immédiate,
+    verification=deferred). Moteur 2 isolé."""
+    if not await _validate_session_ownership(session_id=session_id, user_id=current_user.user_id):
+        raise HTTPException(status_code=403, detail={
+            "error_code": "SESSION_OWNERSHIP_DENIED",
+            "user_message": "This project belongs to a different account.", "retryable": False})
+
+    # 1) Parser
+    changes = await _refine_parse(message, client=openai)
+    if not changes:
+        return {"status": "error", "error": "empty_request",
+                "user_message": "I couldn't read a change to make — could you rephrase?"}
+
+    # 2) Request Advisor (AVANT génération). confirm=true → sauté (Continue anyway).
+    if not confirm:
+        advice = await _refine_advise(changes, room_type or None, client=openai)
+        if advice.overall.value != "green":
+            return {
+                "status": "advisory",
+                "advice": {
+                    "overall": advice.overall.value,
+                    "message": _refine_advisory_msg(advice),
+                    "min_confidence": advice.min_confidence,
+                    "flagged": [{"raw": a.change.raw, "verdict": a.verdict.value,
+                                 "reason": a.reason, "alternative": a.alternative,
+                                 "confidence": a.confidence} for a in advice.flagged],
+                },
+                "echo": {"changes": [_refine_change_to_dict(c) for c in changes],
+                         "room_type": room_type},
+            }
+
+    # 3) Billing reserve (câblé-DÉSACTIVÉ) — read-gate avant la génération
+    _intent = _refine_intent_id(session_id, message, before_image_url)
+    if not await _refine_bill_reserve(current_user.user_id, _intent, supa=supa):
+        raise HTTPException(status_code=402, detail={
+            "error_code": "REFINE_QUOTA", "user_message": "You're out of refine credits.",
+            "retryable": False})
+
+    # 4) GEN-ONLY (Verify async §14) : source → normalize → 1 gen → upload
+    src_bytes, src_mime = await _refine_fetch_bytes(before_image_url)
+    _refine_normalize(changes)
+    gen = await _refine_generate(openai, src_bytes, src_mime, changes, mode="default")
+    image_url = _refine_upload(session_id, gen.image)
+
+    # 5) fire-and-forget : commit crédit + observabilité (jamais bloquant)
+    _refine_fire_and_forget(_refine_bill_commit(current_user.user_id, _intent, supa=supa), "billing_commit")
+    log.info("[refine] user=%s session=%s changes=%d est_success=%.2f conflicts=%d",
+             current_user.user_id[:8], session_id, len(gen.changes), gen.estimated_success, len(gen.conflicts))
+
+    # 6) réponse IMMÉDIATE — l'image s'affiche tout de suite ; verify en 2e appel
+    return {
+        "status": "completed",
+        "image_url": image_url,
+        "verification": "deferred",
+        "estimated_success": gen.estimated_success,
+        "conflicts": gen.conflicts,
+        "changes": [_refine_change_to_dict(c) for c in gen.changes],
+        "before_image_url": before_image_url,
+    }
+
+
+@app.post("/refine/verify")
+async def refine_verify_endpoint(
+    before_image_url: str = Form(...),     # original
+    after_image_url: str = Form(...),      # résultat renvoyé par /refine
+    changes: str = Form(...),              # JSON list des changements (echo de /refine)
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Verify STATELESS (2e appel §14) : verified|incomplete|unavailable + report + missing[].
+    Gratuit (vision gpt-4o-mini, PAS une génération). Moteur 2 isolé."""
+    try:
+        parsed = [_refine_change_from_dict(d) for d in json.loads(changes or "[]")]
+    except Exception:  # noqa: BLE001
+        parsed = []
+    if not parsed:
+        return {"verification": "unavailable",
+                "report": "Ayden couldn't automatically verify this result.", "missing": []}
+    orig, orig_mime = await _refine_fetch_bytes(before_image_url)
+    edited, _ = await _refine_fetch_bytes(after_image_url)
+    result = await _refine_verify(openai, orig, orig_mime, edited, parsed)
+    return {
+        "verification": result.status.value,
+        "report": _refine_build_report(result, parsed),
+        "missing": [_refine_change_to_dict(c) for c in _refine_missing(result, parsed)],
+        "identity_preserved": result.identity_preserved,
+        "needs_refinement": result.needs_refinement,
+    }

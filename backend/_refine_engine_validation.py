@@ -60,6 +60,20 @@ async def main():
     check("retry sur l'image précédente", _captured["src"] == b"PREV_IMAGE")
     check("complete=True après retry", out3.complete is True)
 
+    print("\n=== refine_generate (GEN-ONLY, Verify async — aucun verify appelé) ===")
+    _verify_called = {"n": 0}
+    async def _spy_verify(*a, **k):
+        _verify_called["n"] += 1
+        return VerifyResult(status=VerifyStatus.VERIFIED)
+    engine.verify = _spy_verify
+    gen = await engine.refine_generate(object(), b"SRC", "image/jpeg",
+                                       [Change("add","flowers","","add flowers"),
+                                        Change("remove","table","","remove the table")])
+    check("image = sortie executor", gen.image == b"EDITED_IMAGE_BYTES")
+    check("changes ordonnés (remove avant add)", [c.type for c in gen.changes] == ["remove","add"], [c.type for c in gen.changes])
+    check("estimated_success calculé (>0)", gen.estimated_success > 0, gen.estimated_success)
+    check("Verify N'A PAS été appelé (async)", _verify_called["n"] == 0, _verify_called["n"])
+
     print("\n=== VERIFICATION_UNAVAILABLE (jamais complet, retry = tout) ===")
     async def _fake_verify_unavail(client, original, omime, edited, changes):
         return VerifyResult(status=VerifyStatus.VERIFICATION_UNAVAILABLE)
