@@ -191,21 +191,19 @@ async def advise(changes: list[Change], room_type: Optional[str] = None,
 
 
 def build_advisory_message(result: AdviceResult) -> Optional[str]:
-    """Message architecte (voix Ayden) si YELLOW/RED ; None si tout GREEN (aucune friction)."""
+    """Message architecte (voix Ayden) si YELLOW/RED ; None si tout GREEN (aucune friction).
+    D-c : on EXPLIQUE ce qui coince, mais on ne propose JAMAIS de drop partiel — l'action est
+    Continue (toute la requête) ou Edit. Pas de « do the sensible ones »."""
     if result.all_green:
         return None
     reds = [a for a in result.advices if a.verdict == Verdict.RED]
     yellows = [a for a in result.advices if a.verdict == Verdict.YELLOW]
-    greens = result.green_changes
     lines: list[str] = []
     for a in reds:
         alt = f" Would you like to {a.alternative}?" if a.alternative else ""
-        lines.append(f"As your architect, I don't think « {a.change.raw} » fits this room"
+        lines.append(f"As your architect, I don't recommend « {a.change.raw} »"
                      f"{(' — ' + a.reason) if a.reason else ''}.{alt}")
     for a in yellows:
         lines.append(f"« {a.change.raw} » may be difficult to achieve"
                      f"{(' — ' + a.reason) if a.reason else ''}. Try anyway?")
-    if greens and (reds or yellows):
-        lines.append("I can do the rest as asked: "
-                     + ", ".join(f"« {c.raw} »" for c in greens) + ".")
     return "\n".join(lines)

@@ -191,9 +191,30 @@ Retry**, là où l'user a explicitement accepté le coût. **Défaut = 1 gen ; R
 dit). **Zéro crédit caché** ↔ chaque crédit = une image montrée. Hook **CÂBLÉ mais DÉSACTIVÉ**
 (no-op) tant que Billing enforce n'est pas branché. Cf. [[billing_engine_v1_direction]].
 
-### Intégration (isolation dure — D2)
-**Nouvel endpoint `/refine` isolé** : NE touche JAMAIS `/generate` V1 ni le composer. Frontend :
-appel + UI (image + rapport ✅/□ + boutons Keep / Retry) — changement frontend, pas moteur.
+### Intégration (isolation dure — D2 ; D-a/D-b/D-c VALIDÉS user 2026-07-04)
+**Nouvel endpoint `/refine` isolé** : NE touche JAMAIS `/generate` V1 ni le composer.
+- **D-a — Frontière par INTENTION, pas par nombre de changements.** `/generate` = **créer une
+  nouvelle vision** ; `/refine` = **modifier une vision existante**. **TOUTE** modification d'une
+  image existante passe par `/refine`, qu'il y ait **1 ou N** changements (Add TV · Move TV ·
+  Move TV + Flowers · Remove table → tous `/refine`). Le frontend ne compte pas les changements
+  (« je veux raffiner cette image ») ; **le backend décide** (Advisor, Planner, retry…).
+- **D-b — Contrat de réponse UNIQUE** (un seul endpoint, un seul schéma), discriminé par `status` :
+  ```
+  status = "advisory"   → { status, advice:{overall, message, flagged[]}, echo:{changes, room_type} }
+                          (AUCUNE image — YELLOW/RED ; l'user relance en confirmant)
+  status = "completed"  → { status, image_url, report|null, verification, missing[], mode, conflicts[] }
+                          (GREEN → 1 génération faite, image montrée)
+  status = "error"      → { status, error }
+  ```
+  Relance **stateless** : le frontend renvoie les `changes` (echo) avec `confirm=true` pour passer
+  outre un advisory, ou les `missing` pour un retry — le backend ne garde pas d'état de session refine.
+- **D-c — UX advisory SIMPLIFIÉE (jamais de modification implicite de la requête)** :
+  - 🟢 GREEN → rien, génération directe.
+  - 🟡 YELLOW → « This may be difficult to achieve. Try anyway? » · boutons **[Continue]** / **[Edit request]**.
+  - 🔴 RED → « As your architect, I don't recommend… » (+ alternative) · boutons **[Continue anyway]** / **[Edit request]**.
+  - **« Do the sensible ones » SUPPRIMÉ** : l'app ne droppe JAMAIS un changement en douce. L'user
+    reste **maître de sa requête** : soit il continue (TOUT, y compris le risqué), soit il édite.
+- Frontend = appel + UI (advisory card OU image + rapport ✅/□ + boutons Keep / Retry) — pas moteur.
 
 ### QA — Golden Benchmark (régression permanente)
 Les **20 scénarios** (`qa_refine_benchmark.py`) = **golden benchmark**, rejoués à CHAQUE
@@ -381,14 +402,17 @@ déjà rattrapés par le Verify post-gen + pressentis par `predicted_partial`. H
 ### Agrégation & sortie
 - `Verdict` enum GREEN/YELLOW/RED ; `ChangeAdvice{change, verdict, reason, alternative, source}` ;
   `AdviceResult{advices}` avec `overall` = pire verdict, `green_changes`, `blocked/uncertain`.
-- **overall GREEN** → poursuite normale (Normalizer…). **YELLOW/RED** → réponse *advisory* **sans
-  image** (message + options) ; l'user relance en `proceed=all` (Try everything) ou `proceed=green`.
-- Impact **Composant 8** : `/refine` doit pouvoir répondre **advisory (sans image)** en plus de la
-  réponse image → à cadrer dans le contrat d'endpoint.
+- **overall GREEN** → poursuite normale (Normalizer…). **YELLOW/RED** → réponse `status:"advisory"`
+  **sans image** (message + `flagged[]`) ; l'user relance en **confirmant TOUTE la requête**
+  (`confirm=true`) ou édite. **Pas de proceed partiel** (D-c : « Do the sensible ones » supprimé —
+  jamais de drop implicite ; `green_changes` reste calculé pour la donnée mais n'alimente PAS de bouton).
+- Impact **Composant 8** : géré par le **contrat de réponse unique** (`status:"advisory"|"completed"`, §9 D-b).
 
 ### Décisions VALIDÉES (user 2026-07-04)
-**D1** RED override = oui ([Add anyway]) · **D2** YELLOW = pause légère (Try anyway) · **D3** MVP =
-L1+L2, Vision plus tard · **D4** placement Parser → Advisor → Normalizer.
+**D1** RED override = oui ([Continue anyway]) · **D2** YELLOW = pause légère (Continue/Edit) · **D3**
+MVP = L1+L2, Vision plus tard · **D4** placement Parser → Advisor → Normalizer · **D-a** tout refine
+d'une image existante → `/refine` · **D-b** contrat réponse unique (`status`) · **D-c** UX advisory
+simplifiée [Continue]/[Edit request], jamais de drop implicite.
 
 ## 8 — Décision de séquencement (mise à jour user 2026-07-04)
 - **PR0 (wording) : CLOS, succès négatif** — le prompt n'est pas le levier.

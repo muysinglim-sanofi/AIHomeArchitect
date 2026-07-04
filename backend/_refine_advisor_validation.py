@@ -89,7 +89,8 @@ async def main():
     check("green_changes = [move TV]", [c.type for c in res.green_changes] == ["move"], [c.raw for c in res.green_changes])
     check("1 seul flagged (Ferrari)", len(res.flagged) == 1 and res.flagged[0].verdict == Verdict.RED)
     msg = build_advisory_message(res)
-    check("message mentionne 'I can do the rest'", msg and "do the rest" in msg, msg)
+    check("D-c : PAS de drop implicite ('do the rest' absent)", msg and "do the rest" not in msg, msg)
+    check("green_changes calculé (donnée) mais pas proposé en bouton", [c.type for c in res.green_changes] == ["move"])
     check("Ferrari n'a PAS déclenché d'appel LLM (RED en L1)", all("ferrari" not in c.lower() for c in llm.calls), llm.calls)
 
     print("\n--- exemples de messages ---")
