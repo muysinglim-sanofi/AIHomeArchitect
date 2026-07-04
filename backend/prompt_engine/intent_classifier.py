@@ -145,6 +145,11 @@ _LOCAL_EDIT = re.compile(
     r"\b(add\s+(a|an|the|some)?|remove\s+(the|a)?|change\s+(the|a)?|replace\s+(the|a)?|"
     r"swap\s+(the|a)?|move\s+(the|a)?|put\s+(a|an|the)?|take\s+(out|away)|"
     r"get\s+rid\s+of|use\s+(a|an|different)|try\s+(a|an|the)|"
+    # PR-A — spatial-manipulation verbs + brighten/darken (interrogative or imperative).
+    # "turn" is scoped to spatial forms so "turn X into a bedroom" (design conversion) is untouched.
+    r"reverse\s+(the|a|it)?|rotate\s+(the|a|it)?|flip\s+(the|a|it)?|"
+    r"turn\s+(the|a|it)\s+(around|to\s*face|toward|towards)|"
+    r"face\s+(the|it|toward|towards)|brighten(\s+(the|a|it|up))?|darken(\s+(the|a|it))?|"
     r"different\s+(colour|color|material|fabric|finish|texture)|"
     # French — local edit verbs and show-me generation triggers
     r"ajoute|ajouter|enl[eè]ve|enlever|retire|retirer|remplace|remplacer|"
@@ -849,6 +854,48 @@ def resolve_confirmation(message: str, history: list[dict]) -> IntentClassificat
 
 # ── Classifier ────────────────────────────────────────────────────────────────
 
+# ── DESIGN_OPINION_QUESTION detector (PR-A : moved here from conversation_router
+# to avoid a circular import — classify_intent now consumes it directly).
+# The user ASKS for a design opinion rather than COMMANDING a change. High
+# precision (validated 10/10 opinions, 0 false-positives on commands): explicit
+# opinion frames + choice questions ("A or B?") + a first-person tentative
+# proposal ENDING in "?". Plain/polite commands ("make it warmer",
+# "can you make it warmer?") do NOT match → routed as edit commands.
+_DESIGN_OPINION_PATTERNS = [
+    r"\bshould\s+i\b",
+    r"\bdo\s+you\s+think\b",
+    r"\bwhat\s+do\s+you\s+think\b",
+    r"\byour\s+opinion\b",
+    r"\bdo\s+you\s+(recommend|suggest)\b",
+    r"\bwould\s+you\s+(recommend|suggest|go)\b",
+    r"\bis\s+it\s+(a\s+)?(good|bad|better|wise|smart|ok|okay|fine)\b",
+    r"\b(good|bad)\s+idea\b",
+    r"\bbetter\s+to\b",
+    r"\b\w+\s+or\s+\w+\s*\?",                      # choice question: "round or rectangular?"
+    # PR-A — advice/recommendation requests ("tell me where…", "where I should…",
+    # "where should/to put…"). These ASK for a placement opinion, not a command.
+    r"\btell\s+me\s+(where|which|whether|how|if)\b",
+    r"\bwhere\s+(should|shall|do|can|could|would|to)\b",
+    r"\bwhere\s+(i|we|you)\s+should\b",
+    r"\bdois-je\b",
+    r"\bdevrais-je\b",
+    r"\bqu'en\s+(penses|dis)-tu\b",
+    r"\bton\s+avis\b",
+    r"\b(bonne|mauvaise)\s+id[ée]e\b",
+    r"\bvaut-il\s+mieux\b",
+    r"\btu\s+(en\s+)?penses\b",
+    r"^\s*(i|je)\s+\w+.*\?\s*$",                   # 1st-person tentative proposal ending in "?"
+]
+_DESIGN_OPINION_COMPILED = [re.compile(p, re.IGNORECASE) for p in _DESIGN_OPINION_PATTERNS]
+
+
+def detect_design_opinion_question(message: str) -> bool:
+    """True when the user asks for a design opinion (vs commanding a change)."""
+    if not message or not message.strip():
+        return False
+    return any(p.search(message) for p in _DESIGN_OPINION_COMPILED)
+
+
 def classify_intent(user_message: str, iteration: int) -> IntentClassification:
     """
     Classify user message into conversation/generation intent.
@@ -917,23 +964,44 @@ def classify_intent(user_message: str, iteration: int) -> IntentClassification:
             reasoning="Praise without change request",
         )
 
-    # Pure design question with no change intent → conversation
-    if has_question and not has_refine and not has_local:
+    # TODO (future routing evolution) — replace this verb-based edit detection
+    # with GOAL-STATE intent detection : "does the user expect a NEW IMAGE?"
+    # rather than "does the message contain a modification verb?". The current
+    # deterministic gates depend on an edit-verb lexicon (_LOCAL_EDIT/_REFINE/…)
+    # that needs occasional additions ("reverse", "rotate", "face" were missing);
+    # a goal-state classifier (or a small LLM router) would remove that lexicon
+    # dependence. Deferred on purpose — deterministic gates keep zero latency/cost
+    # and are fully testable ; revisit when the lexicon maintenance cost grows.
+    # ── PR-A (routing) — intention de RÉSULTAT avant forme grammaticale ────────
+    # Une question grammaticale peut être fonctionnellement un ORDRE : « can you
+    # move/rotate/reverse the X? » attend une NOUVELLE IMAGE, pas un avis. Le « ? »
+    # (has_question) ne domine plus une intention d'édition.
+    #   • vraie demande d'opinion (should i / where should / do you think / A or B /
+    #     recommend / musing 1re pers.) → l'architecte CONSEILLE ;
+    #   • sinon, signal d'édition présent → GÉNÉRATION (commande polie exécutée) ;
+    #   • sinon (question pure, sans édition) → conseil.
+    if has_question:
+        _has_edit = has_refine or has_local or bool(_SCOPED_SIZE.search(msg))
+        if detect_design_opinion_question(msg):
+            return IntentClassification(
+                intent=ConversationIntent.CONVERSATION,
+                sub_intent=SubIntent.QUESTION,
+                confidence=0.80,
+                reasoning="Design opinion question → advice",
+            )
+        if _has_edit:
+            sub = SubIntent.LOCAL_EDIT if has_local and not has_refine else SubIntent.REFINE_ATMOSPHERE
+            return IntentClassification(
+                intent=ConversationIntent.GENERATE,
+                sub_intent=sub,
+                confidence=0.90,
+                reasoning="Polite edit command in interrogative form → generate",
+            )
         return IntentClassification(
             intent=ConversationIntent.CONVERSATION,
             sub_intent=SubIntent.QUESTION,
             confidence=0.75,
             reasoning="Design question without generation trigger",
-        )
-
-    # Question + change intent → mixed (architect answers, then offers generation)
-    if has_question and (has_refine or has_local):
-        sub = SubIntent.LOCAL_EDIT if has_local and not has_refine else SubIntent.REFINE_ATMOSPHERE
-        return IntentClassification(
-            intent=ConversationIntent.MIXED,
-            sub_intent=sub,
-            confidence=0.70,
-            reasoning="Question with embedded change intent",
         )
 
     # Clear refinement signal → generate (maps to STYLE_REFINEMENT path)

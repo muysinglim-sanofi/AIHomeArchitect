@@ -21,7 +21,10 @@ import re
 from enum import Enum
 from typing import Optional
 
-from prompt_engine.intent_classifier import ConversationIntent
+from prompt_engine.intent_classifier import (
+    ConversationIntent,
+    detect_design_opinion_question,  # PR-A : moved to intent_classifier ; re-exported here
+)
 # Out-of-Scope lives in its own module ; the router re-exports it so callers
 # have a single conversational-routing entry point.
 from prompt_engine.out_of_scope import detect_out_of_scope, get_out_of_scope_reply
@@ -100,44 +103,10 @@ def detect_preference(message: str) -> bool:
     return any(p.search(message) for p in _PREFERENCE_COMPILED)
 
 
-# ── New detector : DESIGN_OPINION_QUESTION ────────────────────────────────────
-# The user ASKS for a design opinion rather than commanding a change. The base
-# classifier reads an elliptical proposal like "I put the TV in front of the
-# window?" as an imperative → GENERATE, ignoring the "?" + opinion framing. This
-# detector lets /chat downgrade that GENERATE to a DESIGN_ADVICE turn so the
-# Designer voice answers with a recommendation instead of silently generating.
-# High precision (validated 10/10 opinions, 0 false-positives on commands):
-# explicit opinion frames + choice questions ("A or B?") + a first-person
-# tentative proposal ENDING in "?". Plain imperatives ("make it warmer", "add a
-# lamp", "can you make it warmer?") do NOT match.
-_DESIGN_OPINION_PATTERNS = [
-    r"\bshould\s+i\b",
-    r"\bdo\s+you\s+think\b",
-    r"\bwhat\s+do\s+you\s+think\b",
-    r"\byour\s+opinion\b",
-    r"\bdo\s+you\s+(recommend|suggest)\b",
-    r"\bwould\s+you\s+(recommend|suggest|go)\b",
-    r"\bis\s+it\s+(a\s+)?(good|bad|better|wise|smart|ok|okay|fine)\b",
-    r"\b(good|bad)\s+idea\b",
-    r"\bbetter\s+to\b",
-    r"\b\w+\s+or\s+\w+\s*\?",                      # choice question: "round or rectangular?"
-    r"\bdois-je\b",
-    r"\bdevrais-je\b",
-    r"\bqu'en\s+(penses|dis)-tu\b",
-    r"\bton\s+avis\b",
-    r"\b(bonne|mauvaise)\s+id[ée]e\b",
-    r"\bvaut-il\s+mieux\b",
-    r"\btu\s+(en\s+)?penses\b",
-    r"^\s*(i|je)\s+\w+.*\?\s*$",                   # 1st-person tentative proposal ending in "?"
-]
-_DESIGN_OPINION_COMPILED = [re.compile(p, re.IGNORECASE) for p in _DESIGN_OPINION_PATTERNS]
-
-
-def detect_design_opinion_question(message: str) -> bool:
-    """True when the user asks for a design opinion (vs commanding a change)."""
-    if not message or not message.strip():
-        return False
-    return any(p.search(message) for p in _DESIGN_OPINION_COMPILED)
+# ── DESIGN_OPINION_QUESTION detector — PR-A : la définition a été DÉPLACÉE dans
+# intent_classifier.py (classify_intent la consomme directement, sans import
+# circulaire). Elle reste ré-exportée ici (import ci-dessus + __all__) pour les
+# appelants existants (main.py PR3-router).
 
 
 # ── Facade : resolve one TurnIntent from existing + new signals ────────────────
