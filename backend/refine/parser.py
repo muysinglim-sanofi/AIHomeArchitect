@@ -20,11 +20,13 @@ TYPES = ("move", "add", "remove", "replace", "modify", "structure")
 
 @dataclass
 class Change:
-    """Un changement demandé, typé. `raw` = la clause d'origine (verbatim)."""
+    """Un changement demandé, typé. `raw` = la clause d'origine (verbatim).
+    `normalized` = instruction crisp posée par le Normalizer (Composant 2)."""
     type: str      # move | add | remove | replace | modify | structure
     object: str    # le nom principal ciblé  ("TV", "sofa", "dining table", "wall")
     detail: str    # qualificatif / cible / nouvelle valeur  ("to the right wall", "dark green")
     raw: str       # la clause d'origine
+    normalized: str = ""   # rempli par refine.normalizer.normalize_changes()
 
 
 # ── Classification déterministe (fallback) — ordre = priorité ────────────────

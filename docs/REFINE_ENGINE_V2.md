@@ -247,6 +247,29 @@ moins de changements). **JAMAIS 1 clic = N crédits.**
 3. **Planner** assemble le prompt final (changements normalisés, ordonnés) + la clause **Locked elements**.
 → Le Normalizer doit donc fournir les **deux formes** ; son design découle de ce Planner.
 
+## 11 — Normalizer (design FIGÉ, validé user 2026-07-04)
+**Rôle** : `Change → change.normalized` (str) — une **instruction single-edit crisp**. Valeur =
+donner au modèle une **CIBLE/SCOPE concret** (pas de l'emphase seule — PR0). **UNE seule forme**
+sert les deux usages (retry par-changement ET item de checklist combiné ; le Planner l'enveloppe).
+
+**N1 — 100% DÉTERMINISTE** (pas de LLM ici : prévisible, testable, stable ; pas besoin de l'image).
+
+### Règles par type (VALIDÉES)
+| Type | normalized |
+|---|---|
+| **MOVE** sans cible | « Reposition <obj> **onto a different wall, clearly away from its current spot** » (**N2**) |
+| **MOVE** rotate sans cible | « Rotate <obj> **to face the opposite direction** » |
+| **MOVE** avec cible | garde la cible (« Reposition the TV onto the right wall ») |
+| **REMOVE** | « **Completely remove** <obj>**, leaving that floor area empty** » (**N3**, contre-préservation) |
+| **REPLACE** | « Replace … **in the same position** » (**N3**, garde la masse) |
+| **ADD** sans lieu | placement par objet : flowers/books/décor → « **on the coffee table or main visible surface** » · rug → « on the floor under the main seating » · plant → « in a corner » · lamp → « in a corner / on a side surface » · art/mirror → « on the main wall » · curtains → « on the window » · défaut → « on the coffee table or main visible surface » |
+| **ADD** avec lieu | conservé tel quel |
+| **MODIFY** | expansion courante (warmer/darker/brighter → palette/lighting) ; sinon conservé |
+| **STRUCTURE** | expansion (« open the kitchen » → « …by removing the dividing wall, keeping the units in place ») ; sinon conservé |
+
+### Ne fait PAS
+Pas de regroupement/ordre (Planner) · pas de clause Locked (Planner) · juste 1 changement → 1 instruction claire.
+
 ## 8 — Décision de séquencement (mise à jour user 2026-07-04)
 - **PR0 (wording) : CLOS, succès négatif** — le prompt n'est pas le levier.
 - **HOTFIX Refine V2 : À CONSTRUIRE MAINTENANT** — profiter du blocage administratif Apple
