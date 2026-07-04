@@ -205,6 +205,48 @@ naturalness) **ne doit jamais baisser**.
 Parser → Normalizer → Smart Planner → 1-gen executor + affichage → Verify (gratuit) + rapport →
 Retry engine (séquentiel opt-in) → Billing hook (désactivé) → Frontend (UI + boutons Keep/Retry).
 
+## 10 — Smart Planner (design FIGÉ, validé user 2026-07-04)
+### Rôle
+Cerveau d'orchestration. **Ne touche pas aux images.** `Change[] → ExecutionPlan`
+(ordre + groupement + stratégie retry). **Le défaut est TOUJOURS 1 génération** (contrat) :
+le Planner ne splitte pas le défaut ; son analyse sert à ORDONNER le prompt, PRÉDIRE si
+1 gen suffira, et PILOTER le retry.
+
+### Entrée / Sortie
+- **In** : `Change[]` (Parser) + contexte `{mode: default|retry, missing: Change[] (si retry)}`.
+- **Out** : `ExecutionPlan` = `ordered_changes` · `compatibility` (par-changement :
+  `combinable|isolate`) · `default_prompt_spec` (le prompt combiné unique, ordonné) · `retry_policy=R1`.
+
+### Matrice de compatibilité (VALIDÉE, ancrée benchmark)
+| Type | 1-gen (bench) | Classe |
+|---|---|---|
+| ADD · REMOVE · MODIFY | 3/3 · 3/3 · ok | **combinable** |
+| REPLACE | 2/3 | **combinable, à surveiller** (masse principale) |
+| MOVE | **1/3** — les moves se concurrencent | **isolate** (≤ 1 move fiable/gen) + **emphase** |
+| STRUCTURE | 5/5 solo — recompose le canevas | **isolate / EN PREMIER** |
+
+### Ordre du prompt (VALIDÉ)
+```
+STRUCTURE → REMOVE → REPLACE → ADD → MODIFY → MOVE
+```
+STRUCTURE d'abord (change le canevas, les meubles s'éditent ensuite dessus) · **REPLACE avant
+ADD/MODIFY** (remplacer une masse principale — canapé/table — avant les ajouts décoratifs) ·
+**MOVE en dernier + mis en emphase** (le plus fragile).
+
+### Retry policy = R1 (VALIDÉ ; R2 rejeté)
+**1 clic = 1 génération = 1 crédit = 1 image affichée.** Refine initial = 1 gen (tous les
+changements). Incomplet → rapport Applied/Missing. « Retry missing changes » = **1 gen CIBLÉE
+sur les seuls manquants** (prompt focalisé → meilleure réussite). Encore incomplet → nouveau
+rapport → l'user re-décide. Le « séquentiel » émerge **entre les clics** (chaque clic cible
+moins de changements). **JAMAIS 1 clic = N crédits.**
+
+### Interaction avec le Normalizer
+1. **Planner** décide l'ordre + la compatibilité + le mode (default/retry).
+2. **Normalizer** produit, pour chaque changement, **une instruction crisp** — utilisée en
+   **par-changement** (gens ciblées / retry) ET assemblée en **combiné** (défaut).
+3. **Planner** assemble le prompt final (changements normalisés, ordonnés) + la clause **Locked elements**.
+→ Le Normalizer doit donc fournir les **deux formes** ; son design découle de ce Planner.
+
 ## 8 — Décision de séquencement (mise à jour user 2026-07-04)
 - **PR0 (wording) : CLOS, succès négatif** — le prompt n'est pas le levier.
 - **HOTFIX Refine V2 : À CONSTRUIRE MAINTENANT** — profiter du blocage administratif Apple
