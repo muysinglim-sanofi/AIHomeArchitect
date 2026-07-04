@@ -871,7 +871,10 @@ _DESIGN_OPINION_PATTERNS = [
     r"\bis\s+it\s+(a\s+)?(good|bad|better|wise|smart|ok|okay|fine)\b",
     r"\b(good|bad)\s+idea\b",
     r"\bbetter\s+to\b",
-    r"\b\w+\s+or\s+\w+\s*\?",                      # choice question: "round or rectangular?"
+    # choice question: "round or rectangular?" AND "… face the window or the TV?"
+    # (an optional article between "or" and the final noun — else the trailing
+    # noun evaded the pattern and a "face"/edit verb wrongly routed it to GENERATE).
+    r"\b\w+\s+or\s+(?:the|a|an|my|our|your)?\s*\w+\s*\?",
     # PR-A — advice/recommendation requests ("tell me where…", "where I should…",
     # "where should/to put…"). These ASK for a placement opinion, not a command.
     r"\btell\s+me\s+(where|which|whether|how|if)\b",

@@ -61,6 +61,7 @@ CASES = [
     ("Do you think the TV fits here?", "ADVICE"),
     ("What would you recommend?", "ADVICE"),
     ("Round or rectangular?", "ADVICE"),
+    ("Should the sofa face the window or the TV?", "ADVICE"),  # choice-Q w/ "face" + "or the X?"
     ("Could the TV go there?", "ADVICE"),
     ("Can you tell me where I should put the TV?", "ADVICE"),
     # polite frame but NOT a modification → ADVICE
