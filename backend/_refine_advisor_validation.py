@@ -48,9 +48,12 @@ async def main():
     check("ZÉRO appel LLM (fast-path)", llm.calls == [], llm.calls)
     check("message = None (aucune friction)", build_advisory_message(res) is None)
 
+    check("confidence GREEN L1 haute", all(a.confidence >= 0.9 for a in res.advices), [a.confidence for a in res.advices])
+
     print("\n=== L1 RED backstop : Ferrari dans une salle de bain ===")
     res = await advise([C("add","ferrari","add a Ferrari")], "bathroom", client=None)
     check("verdict RED", res.overall == Verdict.RED, res.overall)
+    check("confidence RED ≈ 0.9", abs(res.advices[0].confidence - 0.90) < 0.01, res.advices[0].confidence)
     check("source rules (backstop, sans LLM)", res.advices[0].source == "rules")
     check("alternative fournie (jamais un mur)", bool(res.advices[0].alternative), res.advices[0].alternative)
     msg = build_advisory_message(res)
@@ -70,6 +73,10 @@ async def main():
     check("verdict YELLOW (de L2)", res.overall == Verdict.YELLOW, res.overall)
     check("source = llm", res.advices[0].source == "llm")
     check("raison remontée", "free wall" in res.advices[0].reason, res.advices[0].reason)
+
+    print("\n=== confidence : escalade sans client = basse (non jugé) ===")
+    res_nc = await advise([C("add","fireplace","add a fireplace")], "living room", client=None)
+    check("escalade fail-open GREEN, confidence basse (0.5)", abs(res_nc.advices[0].confidence - 0.5) < 0.01, res_nc.advices[0].confidence)
 
     print("\n=== FAIL-OPEN L2 : panne LLM → GREEN (jamais bloquer) ===")
     class _BoomLLM:

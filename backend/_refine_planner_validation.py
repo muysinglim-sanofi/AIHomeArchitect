@@ -40,6 +40,15 @@ def main():
     check("isolate = structure + move", sorted(c.type for c in p.isolate) == ["move","structure"], str([c.type for c in p.isolate]))
     check("combinable = remove/replace/add/modify", all(c.type in _COMBINABLE for c in p.combinable) and len(p.combinable)==4)
 
+    print("\n=== estimated_success (matrice) ===")
+    check("3 ADD → succès élevé (~0.86)", abs(plan(pipe("add flowers, add books, add a rug")).estimated_success - 0.95**3) < 0.01,
+          plan(pipe("add flowers, add books, add a rug")).estimated_success)
+    es_move = plan(pipe("move the sofa to the left")).estimated_success
+    check("MOVE seul → succès bas (~0.45)", abs(es_move - 0.45) < 0.01, es_move)
+    es_mix = plan(pipe("move the TV to the left, add flowers, remove the table")).estimated_success
+    check("move+add+remove → bas (<0.45, MOVE pénalise)", es_mix < 0.45, es_mix)
+    check("1 REMOVE → haut (~0.95)", abs(plan(pipe("remove the table")).estimated_success - 0.95) < 0.01)
+
     print("\n=== PRÉDICTION 'predicted_partial' ===")
     p_adds = plan(pipe("add flowers, add books, add a rug"))
     check("3 ADD → predicted_partial=False", p_adds.predicted_partial is False)

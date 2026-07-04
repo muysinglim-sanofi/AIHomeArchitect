@@ -25,6 +25,11 @@ _ORDER = {"structure": 0, "remove": 1, "replace": 2, "add": 3, "modify": 4, "mov
 # Combinables (bench) : le reste (move/structure) = fragile → « isolate »
 _COMBINABLE = {"add", "remove", "modify", "replace"}
 
+# Prior de réussite par type EN 1 GÉNÉRATION (ancré benchmark : ADD/REMOVE ~3/3,
+# MODIFY ok, REPLACE 2/3, MOVE 1/3, STRUCTURE 5/5 solo). Sert estimated_success.
+_SUCCESS_PRIOR = {"add": 0.95, "remove": 0.95, "modify": 0.92,
+                  "replace": 0.78, "structure": 0.80, "move": 0.45}
+
 # Stratégies d'exécution (seam). Une seule implémentée aujourd'hui.
 STRATEGY_COMBINED_EDIT = "combined_edit"
 STRATEGY_FULL_REDESIGN = "full_redesign"        # réservé (futur)
@@ -57,6 +62,7 @@ class ExecutionPlan:
     combinable: list[Change] = field(default_factory=list)
     isolate: list[Change] = field(default_factory=list)   # move / structure (fragiles)
     predicted_partial: bool = False     # heuristique : 1 gen risque de ne pas tout appliquer
+    estimated_success: float = 1.0      # [0,1] proba que TOUT s'applique en 1 gen (matrice)
 
     @property
     def combined_prompt(self) -> str:
@@ -66,6 +72,18 @@ class ExecutionPlan:
 
 def _order_key(c: Change) -> tuple[int, ...]:
     return (_ORDER.get(c.type, 9),)
+
+
+def _estimated_success(ordered: list[Change]) -> float:
+    """Proba (approx. matrice) que TOUS les changements passent en 1 gen = produit des
+    priors par type (indépendance approchée). Purement matriciel — permettra plus tard
+    `estimated_success < seuil → Advisor YELLOW` sans re-architecturer."""
+    if not ordered:
+        return 1.0
+    p = 1.0
+    for c in ordered:
+        p *= _SUCCESS_PRIOR.get(c.type, 0.80)
+    return round(p, 3)
 
 
 def build_combined_prompt(changes: list[Change]) -> str:
@@ -103,4 +121,5 @@ def plan(changes: list[Change], *, mode: str = "default",
         combinable=combinable,
         isolate=isolate,
         predicted_partial=predicted_partial,
+        estimated_success=_estimated_success(ordered),
     )

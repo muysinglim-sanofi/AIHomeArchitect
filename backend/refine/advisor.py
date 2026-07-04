@@ -44,6 +44,7 @@ class ChangeAdvice:
     reason: str = ""         # 1 phrase architecte (YELLOW/RED)
     alternative: str = ""    # proposition concrète (RED)
     source: str = "rules"    # "rules" (L1) | "llm" (L2)
+    confidence: float = 0.9  # [0,1] — pour logger + apprendre (GREEN ratés / YELLOW faciles)
 
 
 @dataclass
@@ -69,6 +70,11 @@ class AdviceResult:
     @property
     def flagged(self) -> list[ChangeAdvice]:
         return [a for a in self.advices if a.verdict != Verdict.GREEN]
+
+    @property
+    def min_confidence(self) -> float:
+        """Confiance la plus basse du lot (pour logging / seuils futurs)."""
+        return min((a.confidence for a in self.advices), default=1.0)
 
 
 # ── Tables L1 (déterministes) ────────────────────────────────────────────────
@@ -142,8 +148,9 @@ _L2_SYS = (
     "plausible), YELLOW (possible but ambitious or spatially uncertain), or RED (physically "
     "absurd for this room). Be GENEROUS: default GREEN; reserve RED only for things that cannot "
     "sensibly exist in this room (vehicles, pools, large outdoor elements inside an interior). "
+    "confidence = how sure you are of the verdict, a number in [0,1]. "
     "For YELLOW/RED give ONE short architect sentence; for RED also give a concrete alternative. "
-    'JSON only: {"verdict":"GREEN|YELLOW|RED","reason":"","alternative":""}'
+    'JSON only: {"verdict":"GREEN|YELLOW|RED","confidence":0.0,"reason":"","alternative":""}'
 )
 
 
@@ -160,12 +167,16 @@ async def _l2_advise(change: Change, room_type: Optional[str], client) -> Change
         data = json.loads(t[t.find("{"):t.rfind("}") + 1])
         v = str(data.get("verdict", "GREEN")).strip().lower()
         verdict = {"green": Verdict.GREEN, "yellow": Verdict.YELLOW, "red": Verdict.RED}.get(v, Verdict.GREEN)
+        try:
+            conf = max(0.0, min(1.0, float(data.get("confidence", 0.7))))
+        except (TypeError, ValueError):
+            conf = 0.7
         return ChangeAdvice(change=change, verdict=verdict,
                             reason=str(data.get("reason", "")).strip(),
                             alternative=str(data.get("alternative", "")).strip(),
-                            source="llm")
+                            source="llm", confidence=conf)
     except Exception:  # noqa: BLE001 — panne de conseil → on ne bloque JAMAIS
-        return ChangeAdvice(change=change, verdict=Verdict.GREEN, source="llm")
+        return ChangeAdvice(change=change, verdict=Verdict.GREEN, source="llm", confidence=0.3)
 
 
 async def advise(changes: list[Change], room_type: Optional[str] = None,
@@ -176,17 +187,18 @@ async def advise(changes: list[Change], room_type: Optional[str] = None,
     for c in changes:
         verdict = _l1_classify(c, room_type)
         if verdict == "green":
-            advices.append(ChangeAdvice(change=c, verdict=Verdict.GREEN, source="rules"))
+            advices.append(ChangeAdvice(change=c, verdict=Verdict.GREEN, source="rules", confidence=0.97))
         elif verdict == "red":
             advices.append(ChangeAdvice(
-                change=c, verdict=Verdict.RED, source="rules",
+                change=c, verdict=Verdict.RED, source="rules", confidence=0.90,
                 reason=f"a {c.object or 'this'} doesn't sensibly belong in a {room_type or 'room like this'}",
                 alternative=_red_alternative(c, room_type)))
         else:  # escalate
             if client is not None:
                 advices.append(await _l2_advise(c, room_type, client))
             else:
-                advices.append(ChangeAdvice(change=c, verdict=Verdict.GREEN, source="rules"))
+                # pas de client : fail-open GREEN mais confiance BASSE (non jugé) — utile au logging
+                advices.append(ChangeAdvice(change=c, verdict=Verdict.GREEN, source="rules", confidence=0.5))
     return AdviceResult(advices=advices)
 
 

@@ -414,6 +414,44 @@ MVP = L1+L2, Vision plus tard · **D4** placement Parser → Advisor → Normali
 d'une image existante → `/refine` · **D-b** contrat réponse unique (`status`) · **D-c** UX advisory
 simplifiée [Continue]/[Edit request], jamais de drop implicite.
 
+## 14 — Perceived-latency & async (design FIGÉ, validé user 2026-07-04)
+Optimiser la **vitesse perçue** AVANT de figer l'API (après, c'est 10× plus cher). Cible : 100 000
+refinements/mois.
+
+### Audit du chemin critique (avant affichage image)
+| Composant | Latence (mesurée) | Bloquant | Sur chemin critique | Décision |
+|---|---|---|---|---|
+| Parser | ~1,6 s | oui | **oui** (la gen dépend du parse) | sync (irréductible) |
+| Advisor L1 | ~0 | non | rare | déjà gratuit |
+| Advisor L2 | ~1,2 s | oui si escalade | rare | sync mais rare |
+| **Génération** gpt-image-2 low | ~20-30 s | oui | **oui** (Moteur 1 gelé) | irréductible |
+| **Verify** | **~3,9 s** | **non** | **NON** | **→ ASYNC** |
+| Billing commit · logs · analytics · métriques | ~ms | non | non | **fire-and-forget** |
+
+**Gain perçu ≈ 4 s/refine** en sortant le Verify du chemin, **sans casser « 1 action = 1 gen »**
+(le Verify reste gratuit, juste déplacé après l'affichage).
+
+### Verify ASYNC (affine D-b — reste STATELESS)
+```
+POST /refine  → Parser → Advisor → (GREEN) → Gen → upload
+              → RÉPONSE IMMÉDIATE { status:"completed", image_url, changes, verification:"deferred" }
+Frontend affiche l'image tout de suite, PUIS :
+POST /refine/verify  { original_ref, edited_url, changes }   (stateless : le frontend porte la donnée)
+              → { verification:"verified|incomplete|unavailable", report, missing[] }
+              → Applied ✓ / Missing □ + bouton Retry apparaissent quand ça arrive (~4 s après l'image)
+```
+- Stateless (le frontend porte `changes`, comme la relance advisory/retry). Billing sur `/refine` seul.
+- Le Verify (`refine.verify.verify`, déjà autonome) devient un **2ᵉ appel** non bloquant.
+- **Fire-and-forget** côté backend : billing commit + logs + analytics ne bloquent jamais la réponse ;
+  un échec de commit → réconciliation (ne bloque pas l'user).
+
+### Champs d'observabilité (ajoutés — pour apprendre & piloter, pas encore câblés en décision)
+- **Advisor** : `ChangeAdvice.confidence` [0,1] (L1 rules : GREEN 0.97 / RED 0.90 / escalade-sans-client 0.5 ;
+  L2 : renvoyé par le modèle). Permettra de logger les **GREEN ratés** / **YELLOW faciles** → améliorer L1/L2.
+- **Planner** : `ExecutionPlan.estimated_success` [0,1] = produit des priors matriciels par type
+  (ADD/REMOVE 0.95 · MODIFY 0.92 · REPLACE 0.78 · STRUCTURE 0.80 · MOVE 0.45). Permettra plus tard
+  **`estimated_success < seuil → Advisor YELLOW`** sans re-architecturer.
+
 ## 8 — Décision de séquencement (mise à jour user 2026-07-04)
 - **PR0 (wording) : CLOS, succès négatif** — le prompt n'est pas le levier.
 - **HOTFIX Refine V2 : À CONSTRUIRE MAINTENANT** — profiter du blocage administratif Apple
