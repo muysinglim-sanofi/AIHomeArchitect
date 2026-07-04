@@ -23,23 +23,26 @@ from openai import AsyncOpenAI
 from refine.engine import refine
 from refine.verify import VerifyStatus
 
-SRC = "benchmarks/source"
 OUT = "benchmarks/refine_out"
 
-# (sid, catégorie, source.jpg, room_type, message)
+# MÉTHODOLOGIE : en prod /refine opère sur une VISION GÉNÉRÉE (meublée), pas sur la photo
+# vide. On utilise donc les générations V1 meublées `gpt-image-2 low` comme sources pour
+# les manipulations de meubles (source A+, contenu connu). Extérieurs = ajout sur vide (valide).
+LIVING = "benchmarks/out/living_room__gpt-image-2__low.png"   # sofa, table basse, TV, tapis, fauteuil, lampes, plantes, artwork
+KITCHEN = "benchmarks/out/kitchen__gpt-image-2__low.png"
+# (sid, catégorie, source, room_type, message)
 SCENARIOS = [
-    ("add1", "ADD",       "living_room.jpg", "living room", "Add a large potted plant in the corner and artwork on the main wall."),
-    ("rm1",  "REMOVE",    "living_room.jpg", "living room", "Remove the coffee table."),
-    ("rp1",  "REPLACE",   "living_room.jpg", "living room", "Replace the sofa with a dark leather sofa."),
-    ("md1",  "MODIFY",    "bedroom.jpg",     "bedroom",     "Make the room warmer and cosier."),
-    ("mv1",  "MOVE",      "living_room.jpg", "living room", "Move the sofa to the opposite wall."),
-    ("mix1", "MIXED",     "living_room.jpg", "living room", "Move the TV to the left, add flowers on the table and remove the rug."),
-    ("mix2", "MIXED",     "bedroom.jpg",     "bedroom",     "Make it brighter, add a rug and remove any clutter."),
-    ("cf1",  "CONFLICT",  "living_room.jpg", "living room", "Remove the coffee table and add a vase of flowers."),
-    ("st1",  "STRUCTURE", "kitchen.jpg",     "kitchen",     "Open the kitchen by removing the dividing wall."),
-    ("st2",  "STRUCTURE", "kitchen.jpg",     "kitchen",     "Add a large kitchen island in the centre."),
-    ("ext1", "ADD-EXT",   "terrace.jpg",     "terrace",     "Add an outdoor dining set and string lights."),
-    ("ext2", "ADD-EXT",   "garden.jpg",      "garden",      "Add a lounge sofa and a fire pit."),
+    ("add1", "ADD",       LIVING,  "living room", "Add a large round mirror on the wall above the sideboard and a floor pouf near the armchair."),
+    ("rm1",  "REMOVE",    LIVING,  "living room", "Remove the coffee table."),
+    ("rp1",  "REPLACE",   LIVING,  "living room", "Replace the beige sofa with a dark leather sofa."),
+    ("md1",  "MODIFY",    LIVING,  "living room", "Make the room cooler, with a lighter and more airy palette."),
+    ("mv1",  "MOVE",      LIVING,  "living room", "Move the armchair to the other side of the sofa."),
+    ("mix1", "MIXED",     LIVING,  "living room", "Move the TV to the left wall, add a bowl of fruit on the coffee table and remove the rug."),
+    ("cf1",  "CONFLICT",  LIVING,  "living room", "Remove the coffee table and add a vase of flowers."),
+    ("st1",  "STRUCTURE", KITCHEN, "kitchen",     "Open the kitchen by removing the dividing wall."),
+    ("st2",  "STRUCTURE", KITCHEN, "kitchen",     "Add a large kitchen island in the centre."),
+    ("ext1", "ADD-EXT",   "benchmarks/source/terrace.jpg", "terrace", "Add an outdoor dining set and string lights."),
+    ("ext2", "ADD-EXT",   "benchmarks/source/garden.jpg",  "garden",  "Add a lounge sofa and a fire pit."),
 ]
 
 client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"], max_retries=0,
@@ -47,11 +50,12 @@ client = AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"], max_retries=0,
 
 
 async def run_one(sid, cat, src, room, msg):
-    with open(f"{SRC}/{src}", "rb") as f:
+    with open(src, "rb") as f:
         img = f.read()
+    mime = "image/png" if src.lower().endswith(".png") else "image/jpeg"
     t0 = time.monotonic()
     try:
-        out = await refine(client, img, "image/jpeg", msg, parse_client=client)
+        out = await refine(client, img, mime, msg, parse_client=client)
     except Exception as e:  # noqa: BLE001
         return {"sid": sid, "cat": cat, "error": repr(e), "dt": time.monotonic() - t0}
     dt = time.monotonic() - t0
