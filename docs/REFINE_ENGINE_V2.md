@@ -311,6 +311,85 @@ ouverte **sans re-refactorer** : `full_redesign` (« make it a luxury villa »),
 `_choose_strategy()` (décision) + `engine._execute_strategy()` (exécution, branche sur `strategy.kind`).
 `ExecutionPlan.combined_prompt` conservé (property → `strategy.prompt`) pour compat.
 
+## 13 — Request Advisor (design FIGÉ, validé user 2026-07-04)
+**Philosophie** : Ayden **conseille avant de dépenser**. L'Advisor ne génère pas ; il juge la
+*plausibilité* d'une demande **vis-à-vis de la pièce**, en amont, pour ne pas gaspiller une
+génération sur l'impossible et incarner l'**architecte**. Complémentaire du Verify (a priori
+gratuit/sémantique ≠ a posteriori post-gen). Moteur 2 pur (jamais V1/composer/DNA/preserve).
+
+### Placement (VALIDÉ D4)
+```
+Parser → ★ REQUEST ADVISOR ★ → Normalizer → Conflict Resolver → Planner → Executor → Verify
+```
+L'Advisor gate **avant** de normaliser/optimiser ce qui pourrait être bloqué.
+**In** : `Change[]` (Parser) + **`room_type`** (métadonnée session, EN canonique — [[room_type_i18n_contract]]).
+**Out** : verdict **par changement** + verdict global + message architecte (voix Ayden — [[ayden_companion_direction]]).
+
+### Verdicts (3) — VALIDÉS
+| Verdict | Définition | UX | Génération |
+|---|---|---|---|
+| 🟢 **GREEN** | plausible (op sur existant, ou add de décor courant) | aucune friction | **immédiate** |
+| 🟡 **YELLOW** | faisable mais **ambitieux/incertain** | court message + **[Try anyway]** — **pause légère (D2)** | après confirmation |
+| 🔴 **RED** | **absurde pour cette pièce** (véhicule/piscine/outdoor en intérieur) | posture architecte + **alternative** + **[Add anyway]** | seulement si override |
+
+**Anti-paternalisme (dur)** : défaut = GREEN (dans le doute → GREEN) · **RED rare, jamais un mur**
+(toujours *pourquoi* + *alternative* + **override D1**) · YELLOW = heads-up, jamais un refus.
+**Message mixte** : verdict **par changement** ; jamais bloquer tout à cause d'un seul RED →
+[Do the sensible ones] / [Try everything] / [Adjust].
+
+### Architecture MVP = **L1 + L2** (L3 Vision = V3 — VALIDÉ D3)
+Tiered. La plupart des edits ne paient **rien** (fast-path L1).
+
+**L1 — Règles déterministes (pré-filtre, $0, ~0 ms).** Sortie : `GREEN | RED | ESCALATE`.
+- **GREEN direct (skip LLM)** si **chaque** changement est :
+  - `type ∈ {move, remove, modify, replace}` (opère sur de l'existant → toujours plausible), **ou**
+  - `type == add` **et** l'objet ∈ **`UNIVERSAL_DECOR`** :
+    `flowers, plant, tree(potted), lamp, floor lamp, rug, carpet, cushion(s), pillow(s), throw,
+     blanket, art, artwork, painting, mirror, frame, picture, poster, candle(s), vase, books,
+     clock, curtains, drapes, blinds, shelf, shelves, stool, pouf, side table, coffee table,
+     plant pot, tray, bowl`.
+- **RED direct (backstop, même si LLM down)** si la pièce est **INTÉRIEURE** et un `add`/`structure`
+  vise **`ABSURD_INTERIOR`** :
+    `car, ferrari, lamborghini, truck, van, motorcycle, boat, yacht, ship, canoe, airplane, plane,
+     jet, helicopter, tank, swimming pool, pool, pond, lake, waterfall, beach, horse, elephant,
+     cow, dinosaur, garage, building, mountain, forest`.
+  (Pièces **EXTÉRIEURES** — terrace/pool/garden/balcony/patio/driveway/facade — n'appliquent PAS
+   ce set : une voiture sur une allée, une piscine sur une terrasse = plausibles → ESCALATE/GREEN.)
+- **sinon → ESCALATE** (add d'objet non-trivial, structure non-évidente).
+- `INTERIOR_ROOMS` = bathroom, bedroom, kitchen, living room, dining room, office, hallway,
+  kids room, laundry, closet, entryway. `EXTERIOR_ROOMS` = terrace, pool, garden, balcony,
+  patio, driveway, facade, backyard.
+
+**L2 — LLM texte gpt-4o-mini (sur ESCALATE seulement, ~$0.0001, ~0,5 s). PAS de Vision.**
+Prompt (par changement escaladé) :
+```
+SYSTEM: You are Ayden, a pragmatic interior architect. Judge whether a requested change can
+plausibly be realized in the given ROOM via a photo edit. Verdict = GREEN (normal/plausible),
+YELLOW (possible but ambitious or spatially uncertain), or RED (physically absurd for this room).
+Be GENEROUS: default GREEN; reserve RED only for things that cannot sensibly exist in this room
+(vehicles, pools, large outdoor elements inside an interior). For YELLOW/RED give ONE short
+architect sentence; for RED also give a concrete alternative. JSON only:
+{"verdict":"GREEN|YELLOW|RED","reason":"","alternative":""}
+USER: Room: {room_type}
+Requested change: {change.raw}
+```
+Fail-open : erreur/JSON invalide L2 → **GREEN** (on ne bloque jamais sur une panne de conseil).
+
+**L3 — Vision (V3, différée).** Ne sert QUE les YELLOW **spatiaux** (« add TV mais aucun mur »),
+déjà rattrapés par le Verify post-gen + pressentis par `predicted_partial`. Hors MVP.
+
+### Agrégation & sortie
+- `Verdict` enum GREEN/YELLOW/RED ; `ChangeAdvice{change, verdict, reason, alternative, source}` ;
+  `AdviceResult{advices}` avec `overall` = pire verdict, `green_changes`, `blocked/uncertain`.
+- **overall GREEN** → poursuite normale (Normalizer…). **YELLOW/RED** → réponse *advisory* **sans
+  image** (message + options) ; l'user relance en `proceed=all` (Try everything) ou `proceed=green`.
+- Impact **Composant 8** : `/refine` doit pouvoir répondre **advisory (sans image)** en plus de la
+  réponse image → à cadrer dans le contrat d'endpoint.
+
+### Décisions VALIDÉES (user 2026-07-04)
+**D1** RED override = oui ([Add anyway]) · **D2** YELLOW = pause légère (Try anyway) · **D3** MVP =
+L1+L2, Vision plus tard · **D4** placement Parser → Advisor → Normalizer.
+
 ## 8 — Décision de séquencement (mise à jour user 2026-07-04)
 - **PR0 (wording) : CLOS, succès négatif** — le prompt n'est pas le levier.
 - **HOTFIX Refine V2 : À CONSTRUIRE MAINTENANT** — profiter du blocage administratif Apple
