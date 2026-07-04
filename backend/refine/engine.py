@@ -14,6 +14,7 @@ from typing import Optional
 
 from refine.parser import Change, parse_changes
 from refine.normalizer import normalize_changes
+from refine.conflict import resolve_conflicts
 from refine.planner import plan
 from refine.executor import execute
 from refine.verify import verify, build_report, missing_changes, VerifyResult
@@ -26,6 +27,7 @@ class RefineOutcome:
     result: VerifyResult
     report: Optional[str]        # None si complet (P3 : image seule)
     mode: str                    # "default" | "retry"
+    conflicts: list[str]         # incohérences résolues par le Conflict Resolver (log/transparence)
 
     @property
     def missing(self) -> list[Change]:
@@ -52,13 +54,14 @@ class RefineOutcome:
 
 async def refine_step(client, image_bytes: bytes, mime: str, changes: list[Change],
                       *, mode: str = "default") -> RefineOutcome:
-    """UNE génération : plan(changes) → execute → verify → report. = 1 crédit."""
+    """UNE génération : resolve(conflits) → plan → execute → verify → report. = 1 crédit."""
+    changes, conflicts = resolve_conflicts(changes)   # Normalizer → Conflict Resolver → Planner
     p = plan(changes, mode=mode)
     edited = await execute(client, image_bytes, mime, p.combined_prompt)
     result = await verify(client, image_bytes, mime, edited, p.ordered_changes)
     report = build_report(result, p.ordered_changes)
     return RefineOutcome(image=edited, changes=p.ordered_changes, result=result,
-                         report=report, mode=mode)
+                         report=report, mode=mode, conflicts=conflicts)
 
 
 async def refine(client, image_bytes: bytes, mime: str, message: str,
