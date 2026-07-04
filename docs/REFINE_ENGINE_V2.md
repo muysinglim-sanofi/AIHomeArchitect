@@ -137,14 +137,17 @@ le contrat fondateur d'Ayden.
 ### Flux
 ```
 Message
-  → 1. PARSER        → Change[] typés { type, object, detail, raw }
-  → 2. NORMALIZER    → instruction crisp par changement (désambiguïse "Move")
-  → 3. SMART PLANNER → UN seul prompt optimal réunissant TOUS les changements
+  → 1. PARSER            → Change[] typés { type, object, detail, raw }
+  → 2. NORMALIZER        → instruction crisp par changement (désambiguïse "Move")
+  → 2.5 CONFLICT RESOLVER → résout les incohérences inter-changements (remove X + add-sur-X…)
+  → 3. SMART PLANNER     → ExecutionStrategy (aujourd'hui : UN prompt combiné, tous les changements)
   → 4. UNE GÉNÉRATION GPT-Image (config refine, low)   ← la SEULE consommée par défaut
   → 5. AFFICHER TOUJOURS l'image                        ← elle appartient à l'user
-  → 6. VERIFY (invisible, GRATUIT — vision gpt-4o-mini, PAS une génération)
-        ├─ tout appliqué      → ✅ terminé (aucun rapport, image seule)
-        └─ incomplet/artefact → rapport transparent + décision user :
+  → 6. VERIFY (invisible, GRATUIT — vision gpt-4o-mini, PAS une génération) → 3 états :
+        ├─ VERIFIED                 → ✅ terminé (aucun rapport, image seule)
+        ├─ INCOMPLETE               → rapport Applied/Missing + décision user
+        └─ VERIFICATION_UNAVAILABLE → « Ayden couldn't automatically verify this result »
+                                       (JAMAIS « tout appliqué ») ; image montrée ; retry = tout
              Applied            Still missing
              ✓ Flowers          □ Move TV
              ✓ Champagne
@@ -158,14 +161,17 @@ Message
    **LLM gpt-4o-mini + fallback déterministe** (`edit_intent._split_changes`).
 2. **Normalizer** — réécrit chaque changement en instruction non ambiguë, surtout **Move**
    (« move the TV » → « move the TV to the opposite wall »).
-3. **Smart Planner** — compose **UN** prompt combiné optimal (tous les changements) pour la
-   génération par défaut. (Future intelligence : détecter les incompatibilités → prévenir l'user.)
+2.5. **Conflict Resolver** — résout les incohérences inter-changements (remove X + add-sur-X, etc.).
+   → détail **§12.1**.
+3. **Smart Planner** — émet une **ExecutionStrategy** (aujourd'hui : UN prompt combiné optimal,
+   tous les changements). Seam d'extension → **§12.3**.
 4. **1 Génération** — `images.edit`, config refine **gpt-image-2 low** (P1). **N'appelle JAMAIS
    le composer V1 / DNA / preserve.** Toujours **1 seul appel** par défaut.
 5. **Afficher toujours** — l'image est montrée quoi qu'il arrive (transparence : toute gen
    consommée appartient à l'user).
 6. **Verify — GRATUIT & invisible** — vision gpt-4o-mini (~$0.0001, **PAS une génération** →
-   c'est ce qui permet la transparence sans casser « 1 action = 1 gen »). 3 scores :
+   c'est ce qui permet la transparence sans casser « 1 action = 1 gen »). **3 états** (VERIFIED /
+   INCOMPLETE / VERIFICATION_UNAVAILABLE — jamais « tout appliqué » en cas d'échec, **§12.2**). 3 scores :
    - `applied` par changement · `identity_preserved` (**cadrage/caméra IGNORÉS**, drift composition = OK)
    - `naturalness` — si artefact visible → **message DOUX (P4)** : « Ayden noticed this version
      may need refinement. » (jamais de jargon technique).
@@ -269,6 +275,41 @@ sert les deux usages (retry par-changement ET item de checklist combiné ; le Pl
 
 ### Ne fait PAS
 Pas de regroupement/ordre (Planner) · pas de clause Locked (Planner) · juste 1 changement → 1 instruction claire.
+
+## 12 — Ajustements post-build (VALIDÉS user 2026-07-04, LIVRÉS + testés)
+Trois corrections d'architecture apportées après revue du moteur backend (composants isolés,
+Moteur 2 ; aucun contact V1/composer/DNA/preserve).
+
+### 12.1 — Conflict Resolver (nouveau composant : Normalizer → **Conflict Resolver** → Planner)
+`refine/conflict.py`. Le smoke a prouvé que le conflit n'est **PAS rare** : « remove coffee
+table + add flowers » faisait écrire « add flowers **on the coffee table** ». On résout ces
+incohérences **au niveau du pipeline**, plus jamais en cas particulier. 100 % déterministe, idempotent.
+| Règle | Conflit | Résolution |
+|---|---|---|
+| **R-A / R-E** | REMOVE/REPLACE/STRUCTURE-remove **X** + ADD *sur X* | re-placer l'ADD (surface neutre ; « on a remaining wall » si mur supprimé) |
+| **R-B** | REMOVE **X** + MOVE **X** | droppe le MOVE (pas de fantôme déplacé) |
+| **R-C** | MOVE **X**→A + MOVE **X**→B | garde le dernier |
+| **R-D** | REPLACE **X** *(in the same position)* + MOVE **X** | retire « in the same position » |
+Sortie : `(changes nettoyés, conflicts: list[str])` → `RefineOutcome.conflicts` (log/transparence).
+
+### 12.2 — Verify à **3 états** (fin du « fail-open menteur »)
+`refine/verify.py`. Sur échec de vérif, on ne prétend **PLUS** « tout appliqué ».
+| `VerifyStatus` | Sens | Rapport |
+|---|---|---|
+| **VERIFIED** | tout appliqué | None (image seule, P3) |
+| **INCOMPLETE** | vérif OK, certains manquent | Applied ✓ / Still missing □ |
+| **VERIFICATION_UNAVAILABLE** | la vérif a échoué | « Ayden couldn't automatically verify this result. » |
+- Un changement **non confirmé** (vision tronquée) est compté **MANQUANT**, jamais « appliqué ».
+- `complete = (status == VERIFIED et pas de souci naturalness)` → UNAVAILABLE ⇒ jamais complet.
+- `RefineOutcome.retry_targets` : manquants (INCOMPLETE) · **tous** (UNAVAILABLE — on ignore ce qui manque) · rien (VERIFIED).
+
+### 12.3 — Planner → **ExecutionStrategy** (seam d'extension)
+`refine/planner.py`. Le Planner sort une **ExecutionStrategy**, pas juste un prompt. Comportement
+identique aujourd'hui (`STRATEGY_COMBINED_EDIT` = 1 gen, checklist + Locked), mais la porte reste
+ouverte **sans re-refactorer** : `full_redesign` (« make it a luxury villa »), `atmosphere_switch`
+(« transform into Japandi » → route vers le switch existant), `sequential_forced`. Points d'extension :
+`_choose_strategy()` (décision) + `engine._execute_strategy()` (exécution, branche sur `strategy.kind`).
+`ExecutionPlan.combined_prompt` conservé (property → `strategy.prompt`) pour compat.
 
 ## 8 — Décision de séquencement (mise à jour user 2026-07-04)
 - **PR0 (wording) : CLOS, succès négatif** — le prompt n'est pas le levier.
