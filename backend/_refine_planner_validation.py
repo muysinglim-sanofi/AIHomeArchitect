@@ -49,6 +49,15 @@ def main():
     check("move+add+remove → bas (<0.45, MOVE pénalise)", es_mix < 0.45, es_mix)
     check("1 REMOVE → haut (~0.95)", abs(plan(pipe("remove the table")).estimated_success - 0.95) < 0.01)
 
+    print("\n=== STRUCTURE : mandat dynamique (préservation qui exclut la cible) ===")
+    ps = plan(pipe("remove the right wall"))
+    check("structure → mandat 'take PRIORITY over preservation'", "take PRIORITY over preservation" in ps.combined_prompt, ps.combined_prompt[-200:])
+    check("structure normalisée = mandat 'REAL architectural'", "REAL architectural change" in ps.ordered_changes[0].normalized)
+    check("close window → 'solid wall matching'", "solid wall matching" in plan(pipe("close the back window")).combined_prompt)
+    pf = plan(pipe("add flowers"))
+    check("non-structure → PAS de mandat structurel", "take PRIORITY over preservation" not in pf.combined_prompt)
+    check("non-structure → clause mobilier libre présente", "furniture is not fixed" in pf.combined_prompt.lower())
+
     print("\n=== PRÉDICTION 'predicted_partial' ===")
     p_adds = plan(pipe("add flowers, add books, add a rug"))
     check("3 ADD → predicted_partial=False", p_adds.predicted_partial is False)

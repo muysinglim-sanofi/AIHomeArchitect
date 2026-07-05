@@ -95,11 +95,31 @@ def _estimated_success(ordered: list[Change]) -> float:
     return round(p, 3)
 
 
+# Mandat structurel — ajouté à la clause de préservation UNIQUEMENT quand le plan contient
+# un `type=structure` (piloté par les Change[], pas par des phrases). Généralise le principe :
+# on ne préserve jamais l'élément que l'utilisateur demande explicitement de modifier.
+_STRUCT_MANDATE = (
+    "The structural change(s) above are EXPLICIT and take PRIORITY over preservation: realize "
+    "them as REAL architectural modifications — the targeted wall, window or opening is genuinely "
+    "removed, added or closed. Do NOT preserve the element being changed; preserve only the REST "
+    "of the architecture. "
+)
+
+
+def _preserve_clause(changes: list[Change]) -> str:
+    """Clause de préservation DYNAMIQUE : architecture seule + mobilier libre, et si un
+    changement `structure` est présent, on préfixe le mandat structurel (priorité + exclusion
+    de l'élément ciblé). Aucune règle basée sur des formulations particulières."""
+    if any(c.type == "structure" for c in changes):
+        return _STRUCT_MANDATE + _PRESERVE
+    return _PRESERVE
+
+
 def build_combined_prompt(changes: list[Change]) -> str:
-    """Assemble le prompt combiné : checklist ordonnée + clause de préservation
-    (architecture SEULE ; mobilier libre)."""
+    """Assemble le prompt combiné : checklist ordonnée + clause de préservation dynamique
+    (architecture seule ; mobilier libre ; mandat structurel si structure explicite)."""
     lines = "\n".join(f"({i + 1}) {c.normalized or c.raw}" for i, c in enumerate(changes))
-    return f"Apply ALL of these changes to this interior photo:\n{lines}\n\n{_PRESERVE}"
+    return f"Apply ALL of these changes to this interior photo:\n{lines}\n\n{_preserve_clause(changes)}"
 
 
 def _choose_strategy(ordered: list[Change], mode: str) -> ExecutionStrategy:

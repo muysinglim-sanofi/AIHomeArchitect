@@ -34,10 +34,12 @@ _TYPE_PATTERNS = [
     # structure = action structurelle explicite ; « wall » SEUL ne suffit pas
     # (« to the right wall » = destination d'un move, PAS un changement structurel).
     ("structure", re.compile(
+        # verbe structurel + (article) + 0-2 adjectifs (right/back/new/dividing…) + nom archi.
+        # Les ≤2 mots gardent « move the TV to the right wall » → MOVE (écart >2 mots = pas match).
         r"\b(partition\b|arch(?:way)?\b|door\s*way\b|"
         r"(?:add|build|create|put\s+up|open\s+up|knock\s+down|remove|break|demolish|"
-        r"take\s+down|move|extend|close)\s+(?:an?\s+|the\s+)?(?:dividing\s+|partition\s+)?"
-        r"(?:wall|window|opening|arch)\b|"
+        r"take\s+down|move|extend|close|seal|brick\s+up|wall\s+off)\s+(?:an?\s+|the\s+)?"
+        r"(?:\w+\s+){0,2}(?:wall|window|opening|arch)\b|"
         r"open\s+(?:up\s+)?the\s+kitchen|create\s+an?\s+(?:arch|opening)|"
         r"ceiling\b|extend\s+the\s+room)\b", re.I)),
     ("replace", re.compile(

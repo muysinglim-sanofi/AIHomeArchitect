@@ -42,6 +42,13 @@ _MODIFY_EXPAND = [
     (re.compile(r"\b(?:cosy|cozy|cozier|cosier)\b", re.I), "make the space feel cosier with warmer textiles and softer lighting"),
 ]
 
+# STRUCTURE — classes de VERBE (générique, piloté par l'action, PAS par des phrases
+# particulières). Chaque classe → un mandat architectural explicite bâti avec `change.object`.
+_STRUCT_REMOVE = re.compile(r"\b(remove|knock\s+down|take\s+down|demolish|break|tear\s+down|delete|get\s+rid\s+of)\b", re.I)
+_STRUCT_CLOSE = re.compile(r"\b(close|wall\s+off|block(?:\s+off)?|seal|fill\s+in|brick\s+up)\b", re.I)
+_STRUCT_OPEN = re.compile(r"\bopen(?:\s+up)?\b", re.I)
+_STRUCT_ADD = re.compile(r"\b(add|create|build|put\s+in|install|make)\b", re.I)
+
 
 def _clean(s: str) -> str:
     return (s or "").strip().rstrip(". ").strip()
@@ -55,6 +62,41 @@ def _cap(s: str) -> str:
 def _period(s: str) -> str:
     s = _clean(s)
     return (s + ".") if s else s
+
+
+def _struct_object(change: Change, raw: str) -> str:
+    """Nom de l'élément architectural ciblé, avec article (générique)."""
+    o = _clean(change.object)
+    if not o or len(o) < 2:
+        # fallback : la clause après le verbe, sinon le raw
+        m = re.search(r"\b(?:the|a|an|this|that)\s+([a-z][a-z\s]{1,28})", raw, re.I)
+        o = (m.group(1).strip() if m else _clean(raw))
+    if not re.match(r"(?i)^(the|a|an|this|that|these|those)\b", o):
+        o = "the " + o
+    return o
+
+
+def _normalize_structure(change: Change, raw: str, low: str) -> str:
+    """Mandat architectural EXPLICITE, bâti par CLASSE DE VERBE + object (générique).
+    Une structure explicitement demandée est prioritaire : on n'atténue jamais."""
+    obj = _struct_object(change, raw)
+    # « open the kitchen » (sans mur nommé) → mandat d'ouverture concret
+    if re.search(r"\bopen\s+(?:up\s+)?the\s+kitchen\b", low) and "wall" not in low:
+        return _period(f"{_cap(raw)} by removing the dividing wall as a REAL architectural change, "
+                       "keeping the kitchen units in place")
+    if _STRUCT_REMOVE.search(low):
+        return _period(f"Entirely remove {obj} as a REAL architectural change — {obj} is genuinely "
+                       "gone, opening up the space where it was")
+    if _STRUCT_CLOSE.search(low):
+        return _period(f"Close {obj} and replace it with a solid wall matching the surrounding wall "
+                       "finish and colour, leaving no opening there")
+    if _STRUCT_OPEN.search(low):
+        return _period(f"Open up {obj} as a REAL architectural change, removing the wall or partition "
+                       "that closes it")
+    if _STRUCT_ADD.search(low):
+        return _period(f"{_cap(raw)} — add it as a REAL new architectural element, matching the size, "
+                       "style and proportions of the existing ones")
+    return _period(f"{_cap(raw)} — realize this as a REAL architectural change to the room")
 
 
 def normalize(change: Change) -> str:
@@ -92,9 +134,7 @@ def normalize(change: Change) -> str:
         return _period(f"{_cap(raw)} {placement}")
 
     if t == "structure":
-        if re.search(r"\bopen\s+(?:up\s+)?the\s+kitchen\b", low) and "wall" not in low:
-            return _period(f"{_cap(raw)} by removing the dividing wall, keeping the kitchen units in place")
-        return _period(_cap(raw))
+        return _normalize_structure(change, raw, low)
 
     # modify
     for pat, exp in _MODIFY_EXPAND:
