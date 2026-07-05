@@ -1570,21 +1570,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     }
     if (!mounted || mySeq != _genSeq) return; // superseded par une gen plus récente
     final verification = (vres['verification'] as String?) ?? 'unavailable';
+    // SILENCE TOTAL sauf `incomplete` (décision user) — c'est le SEUL état où l'on SAIT
+    // précisément ce qui manque, donc le seul où un rapport + un Retry sont légitimes.
+    //   • verified    → image seule (P3), rien.
+    //   • unavailable → rien du tout (pas de bulle, pas de spinner — l'image reste).
+    if (verification != 'incomplete') return;
     final report = (vres['report'] as String?)?.trim() ?? '';
-    // P3 — tout appliqué et rien à signaler → aucun rapport (image seule).
-    if (verification == 'verified' && report.isEmpty) return;
     if (report.isEmpty) return;
     setState(() {
       _messages.add(MessageModel(
         id: 'refine_report_${DateTime.now().millisecondsSinceEpoch}',
-        content: report, // Applied ✓ / Still missing □  (ou message honnête si unavailable)
+        content: report, // Applied ✓ / Still missing □
         isAi: true,
         createdAt: DateTime.now(),
       ));
     });
     _scrollToBottom();
-    // NB (8b-4b) : le bouton [Retry missing changes] interactif + l'advisory card
-    // arrivent à l'étape suivante (widgets dédiés + ré-invocation ciblée).
+    // NB (8b-4b) : le bouton [Retry missing changes] interactif s'attache ICI (uniquement
+    // sur `incomplete`, où `missing[]` est connu) + l'advisory card = étape suivante.
   }
 
   Future<void> _generate({String? overridePrompt, String trigger = 'unknown'}) async {
