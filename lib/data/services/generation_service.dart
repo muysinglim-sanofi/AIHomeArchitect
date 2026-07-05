@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import '../../core/feature_flags.dart';
@@ -293,6 +294,105 @@ class GenerationService {
         );
       }
       rethrow;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // REFINE ENGINE V2 — chat refine sur une vision EXISTANTE (Moteur 2 isolé).
+  // Règle de routage (figée) : V1 / switch atmosphère / onboarding / surprise /
+  // auto-génération → /generate ; CHAT REFINE d'une vision existante → /refine.
+  // /generate n'est JAMAIS modifié ; aucun composer/DNA/preserve touché.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// POST /refine — modifie une vision existante. Contrat unique discriminé par
+  /// `status` :
+  ///   - "advisory"  → { status, advice:{overall, message, min_confidence, flagged[]},
+  ///                     echo:{changes, room_type} }  (AUCUNE image — YELLOW/RED)
+  ///   - "completed" → { status, image_url, verification:"deferred", estimated_success,
+  ///                     conflicts[], changes[], before_image_url }  (image immédiate)
+  ///   - "error"     → { status, error, user_message }
+  ///
+  /// [confirm] = true rejoue outre un advisory (Continue anyway → génère quand même).
+  /// Le Verify N'EST PAS lancé ici (async, §14) : l'appelant affiche l'image tout de
+  /// suite puis appelle [refineVerify] avec `changes` (echo) pour le rapport + retry.
+  ///
+  /// Lève [GenerationException] sur erreur structurée backend (402/403), comme /generate.
+  Future<Map<String, dynamic>> refine({
+    required String sessionId,
+    required String message,
+    required String beforeImageUrl, // la vision courante à modifier
+    String roomType = '',
+    bool confirm = false,
+  }) async {
+    final sw = Stopwatch()..start();
+    debugPrint('[PerfRefine] click→POST /refine  session=$sessionId  confirm=$confirm');
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        '/refine',
+        data: FormData.fromMap({
+          'session_id': sessionId,
+          'message': message,
+          'before_image_url': beforeImageUrl,
+          'room_type': roomType,
+          'confirm': confirm.toString(),
+        }),
+      );
+      sw.stop();
+      debugPrint('[PerfRefine] response OK in ${sw.elapsedMilliseconds}ms  '
+          'status=${res.data?['status']}');
+      return res.data!;
+    } on DioException catch (e) {
+      sw.stop();
+      debugPrint('[PerfRefine] response ERROR in ${sw.elapsedMilliseconds}ms  '
+          'type=${e.type.name}  status=${e.response?.statusCode}');
+      final data = e.response?.data;
+      if (data is Map) {
+        final Map payload = (data['detail'] is Map) ? data['detail'] as Map : data;
+        final errorCode = (payload['error_code'] as String?) ?? 'UNKNOWN';
+        throw GenerationException(
+          errorCode: errorCode,
+          userMessage: (payload['user_message'] as String?) ?? 'Refine failed.',
+          retryable: (payload['retryable'] as bool?) ?? true,
+          requestId: (payload['request_id'] as String?) ?? '',
+          // REFINE_QUOTA (billing enforce futur) → même feuille paywall que /generate.
+          quotaExhausted: errorCode == 'REFINE_QUOTA' || errorCode == 'QUOTA_EXHAUSTED',
+          quotaUsed: payload['quota_used'] as int?,
+          quotaLimit: payload['quota_limit'] as int?,
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// POST /refine/verify — vérification STATELESS (2e appel, §14 async). GRATUIT
+  /// (vision gpt-4o-mini, PAS une génération). Renvoie
+  ///   { verification: "verified"|"incomplete"|"unavailable", report, missing[],
+  ///     identity_preserved, needs_refinement }.
+  /// [changes] = l'echo `changes` renvoyé par [refine] (completed) — porté par le
+  /// frontend (stateless). NE bloque JAMAIS : sur toute erreur → "unavailable".
+  Future<Map<String, dynamic>> refineVerify({
+    required String beforeImageUrl,
+    required String afterImageUrl,
+    required List<dynamic> changes,
+  }) async {
+    try {
+      final res = await _dio.post<Map<String, dynamic>>(
+        '/refine/verify',
+        data: FormData.fromMap({
+          'before_image_url': beforeImageUrl,
+          'after_image_url': afterImageUrl,
+          'changes': jsonEncode(changes),
+        }),
+      );
+      return res.data!;
+    } catch (e) {
+      // Verify ne bloque jamais l'image déjà affichée (fail-open honnête).
+      debugPrint('[PerfRefine] verify failed (non-blocking): $e');
+      return {
+        'verification': 'unavailable',
+        'report': "Ayden couldn't automatically verify this result.",
+        'missing': <dynamic>[],
+      };
     }
   }
 }
