@@ -36,10 +36,19 @@ STRATEGY_FULL_REDESIGN = "full_redesign"        # réservé (futur)
 STRATEGY_ATMOSPHERE_SWITCH = "atmosphere_switch"  # réservé (futur)
 STRATEGY_SEQUENTIAL_FORCED = "sequential_forced"  # réservé (futur)
 
-_LOCKED = (
-    "Locked elements — everything not listed above stays exactly as it is: the "
-    "architecture, walls, windows, doors, flooring, ceiling, lighting direction, and "
-    "every other piece of furniture, material and colour."
+# PHILOSOPHIE REFINE (user 2026-07-05) : préserver UNIQUEMENT l'identité ARCHITECTURALE ;
+# le mobilier n'est JAMAIS verrouillé par défaut — il est librement déplaçable / réorganisable
+# / supprimable / remplaçable. Un « déplacer le canapé à l'autre bout » n'est PAS une entorse à
+# la préservation : c'est exactement ce que Refine doit permettre. (L'ancienne clause verrouillait
+# « every other piece of furniture » → elle étranglait tout MOVE majeur.)
+_PRESERVE = (
+    "Preserve ONLY the architectural identity of the room — the walls, windows, doors, "
+    "openings, ceiling and overall structure and volume — unless a change above explicitly "
+    "alters it. The furniture is NOT fixed: its layout, positions and the functional "
+    "arrangement are fully editable. Freely move, rotate, remove, replace and reorganize the "
+    "furniture and decor — including the OTHER pieces — as needed to realize the changes above "
+    "coherently and realistically. Keep it the SAME room: same architecture, same overall style "
+    "and same lighting mood."
 )
 
 
@@ -87,9 +96,10 @@ def _estimated_success(ordered: list[Change]) -> float:
 
 
 def build_combined_prompt(changes: list[Change]) -> str:
-    """Assemble le prompt combiné : checklist ordonnée + clause Locked elements."""
+    """Assemble le prompt combiné : checklist ordonnée + clause de préservation
+    (architecture SEULE ; mobilier libre)."""
     lines = "\n".join(f"({i + 1}) {c.normalized or c.raw}" for i, c in enumerate(changes))
-    return f"Apply ALL of these changes to this interior photo:\n{lines}\n\n{_LOCKED}"
+    return f"Apply ALL of these changes to this interior photo:\n{lines}\n\n{_PRESERVE}"
 
 
 def _choose_strategy(ordered: list[Change], mode: str) -> ExecutionStrategy:

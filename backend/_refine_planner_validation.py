@@ -32,7 +32,7 @@ def main():
 
     print("\n=== PROMPT COMBINÉ ===")
     check("contient 'Apply ALL of these changes'", "Apply ALL of these changes" in p.combined_prompt)
-    check("contient 'Locked elements'", "Locked elements" in p.combined_prompt)
+    check("contient la clause préservation (architecture seule)", "Preserve ONLY the architectural" in p.combined_prompt); check("mobilier NON verrouillé (furniture editable)", "furniture is NOT fixed" in p.combined_prompt.lower() or "fully editable" in p.combined_prompt)
     check("contient les 6 items numérotés", all(f"({i})" in p.combined_prompt for i in range(1,7)))
     check("utilise le normalized (remove renforcé)", "leaving that floor area empty" in p.combined_prompt)
 

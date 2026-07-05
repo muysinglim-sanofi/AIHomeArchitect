@@ -141,7 +141,7 @@ async def run_scenario(cat, sid, room, msg, exp_type, exp_conf):
     order_idx = [ranks.index(c.type) if c.type in ranks else 9 for c in p.ordered_changes]
     if order_idx != sorted(order_idx):
         rec["anomalies"].append(f"PLANNER: ordre §10 violé ({rec['planned']})")
-    if not p.combined_prompt or "Locked elements" not in p.combined_prompt:
+    if not p.combined_prompt or "Preserve ONLY the architectural" not in p.combined_prompt:
         rec["anomalies"].append("PLANNER: prompt combiné mal formé")
     rec["t_total"] = time.monotonic() - t0
     return rec

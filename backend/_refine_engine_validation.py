@@ -40,7 +40,7 @@ async def main():
     check("missing = [move]", [c.type for c in out.missing] == ["move"])
     check("complete = False", out.complete is False)
     check("report contient '□'", out.report and "□" in out.report)
-    check("prompt exécuté = prompt planifié (checklist+Locked)", "Locked elements" in _captured["prompt"] and "Apply ALL" in _captured["prompt"])
+    check("prompt exécuté = prompt planifié (checklist+preserve)", "Preserve ONLY the architectural" in _captured["prompt"] and "Apply ALL" in _captured["prompt"])
 
     print("\n=== refine (parse déterministe + défaut) ===")
     engine.verify = _fake_verify_factory({})   # tout appliqué

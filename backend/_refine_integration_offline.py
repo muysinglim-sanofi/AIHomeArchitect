@@ -83,7 +83,7 @@ async def main():
             npc = len(p.ordered_changes)
             if npc >= 2:
                 check("prompt multi = 'Apply ALL' + 'Locked elements'",
-                      "Apply ALL of these changes" in p.combined_prompt and "Locked elements" in p.combined_prompt)
+                      "Apply ALL of these changes" in p.combined_prompt and "Preserve ONLY the architectural" in p.combined_prompt)
             check("chaque changement normalisé (non vide)", all(c.normalized for c in p.ordered_changes))
             # 5) pas de message advisory quand tout est GREEN
             check("aucun message advisory (GREEN)", build_advisory_message(advice) is None)
