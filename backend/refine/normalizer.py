@@ -47,10 +47,10 @@ _MODIFY_EXPAND = [
 # ne doit JAMAIS passer par le placement décoratif (« on the coffee table ») ni par le verbe
 # structurel « open the wall ». Distinction par NATURE de l'objet, pas par formulation.
 _FUNCTIONAL_INSTALL = re.compile(
-    r"\b(kitchen|kitchenette|bathroom|en-?suite|shower\s+room|powder\s+room|dressing\s+room|"
-    r"walk-in\s+closet|walk-in\s+wardrobe|staircase|stairway|stairs|mezzanine|fireplace|hearth|"
-    r"home\s+bar|wet\s+bar|pantry|laundry(?:\s+room)?|mudroom|wine\s+cellar|home\s+cinema|"
-    r"home\s+thea(?:tre|ter))\b", re.I)
+    r"\b(kitchen|kitchenette|bathroom|en-?suite|shower\s+room|powder\s+room|"
+    r"dressing(?:\s+(?:room|area))?|walk-in\s+closet|walk-in\s+wardrobe|staircase|stairway|"
+    r"stairs|mezzanine|fireplace|hearth|home\s+bar|wet\s+bar|pantry|laundry(?:\s+room)?|"
+    r"mudroom|wine\s+cellar|home\s+cinema|home\s+thea(?:tre|ter))\b", re.I)
 # … mais SEULEMENT si on INSTALLE/CRÉE/CONVERTIT (pas « open the kitchen » = ouvrir l'existant,
 # qui reste un changement structurel de type « open up »).
 _FUNC_INSTALL_VERB = re.compile(r"\b(add|install|create|build|put\s+in|fit|convert|turn|make|set\s+up)\b", re.I)

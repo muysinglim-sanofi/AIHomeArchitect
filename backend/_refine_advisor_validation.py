@@ -75,8 +75,30 @@ async def main():
     check("raison remontée", "free wall" in res.advices[0].reason, res.advices[0].reason)
 
     print("\n=== confidence : escalade sans client = basse (non jugé) ===")
-    res_nc = await advise([C("add","fireplace","add a fireplace")], "living room", client=None)
+    res_nc = await advise([C("add","TV","add a TV")], "bathroom", client=None)  # ni décor ni fonctionnel ni structure
     check("escalade fail-open GREEN, confidence basse (0.5)", abs(res_nc.advices[0].confidence - 0.5) < 0.01, res_nc.advices[0].confidence)
+
+    print("\n=== CALIBRATION STRUCTURE / INSTALLATION FONCTIONNELLE (L1, canonicalisé) ===")
+    from refine.parser import parse_deterministic
+    async def verdict(msg, room="living room"):
+        return (await advise(parse_deterministic(msg), room, client=None)).overall.value
+    # structure explicite + ciblée/ajout → GREEN
+    for msg in ["remove the right wall", "close the back window", "add a new window on the right wall",
+                "add a partition wall", "knock down the dividing wall"]:
+        check(f"GREEN structure: {msg}", await verdict(msg) == "green")
+    # installation fonctionnelle explicite + plausible → GREEN
+    for msg in ["add an open kitchen with an island", "create a dressing area",
+                "convert this side into a bathroom", "convert the right side into an open kitchen"]:
+        check(f"GREEN fonctionnel: {msg}", await verdict(msg) == "green")
+    # structure AMBIGUË (cible non identifiable) → YELLOW
+    for msg in ["remove this wall", "remove the wall", "close the window"]:
+        check(f"YELLOW ambigu: {msg}", await verdict(msg) == "yellow", await verdict(msg))
+    # absurde → RED même si structure/typé (jamais auto-GREEN)
+    check("RED absurde: add a swimming pool (bedroom)", await verdict("add a swimming pool", "bedroom") == "red")
+    check("RED absurde: add a Ferrari (bathroom)", await verdict("add a Ferrari", "bathroom") == "red")
+    # non-régression mobilier
+    check("GREEN mobilier: move the TV to the left", await verdict("move the TV to the left") == "green")
+    check("GREEN décor: add flowers", await verdict("add flowers") == "green")
 
     print("\n=== FAIL-OPEN L2 : panne LLM → GREEN (jamais bloquer) ===")
     class _BoomLLM:

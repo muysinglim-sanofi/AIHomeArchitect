@@ -104,6 +104,23 @@ _ABSURD_INTERIOR = re.compile(
 
 _EXISTING_OPS = {"move", "remove", "modify", "replace"}
 
+# Réutilise la MÊME catégorie « installation fonctionnelle » que le Normalizer (pas une
+# nouvelle catégorie) : une zone fonctionnelle explicite et plausible est GREEN.
+from refine.normalizer import _FUNCTIONAL_INSTALL, _FUNC_INSTALL_VERB
+
+# STRUCTURE — ajout/ouverture/conversion d'un NOUVEL élément ou zone (pas d'ambiguïté de cible).
+_STRUCT_ADDITION = re.compile(r"^\s*(add|create|build|put|install|make|convert|open|fit|set\s+up)\b", re.I)
+# Cible IDENTIFIABLE d'un remove/close/replace structurel : qualificatif spatial ou pièce nommée.
+# Générique (mot-qualificatif), pas de phrase exacte. Absent → demande ambiguë (« quelle cloison ? »).
+_TARGET_QUALIFIER = re.compile(
+    r"\b(right|left|back|front|rear|north|south|east|west|side|dividing|partition|main|middle|"
+    r"central|first|second|third|between|load-bearing|far|near|entrance|kitchen|bedroom|"
+    r"bathroom|living|dining|hallway|corridor|garden|patio|terrace|street|window\s+side)\b", re.I)
+
+
+def _is_targeted(change: Change) -> bool:
+    return bool(_TARGET_QUALIFIER.search(f"{change.object} {change.raw}"))
+
 
 def _room_is_interior(room_type: Optional[str]) -> bool:
     """Défaut prudent : pièce inconnue traitée comme INTÉRIEURE (le set absurde s'applique)."""
@@ -116,20 +133,38 @@ def _room_is_interior(room_type: Optional[str]) -> bool:
 
 
 def _l1_classify(change: Change, room_type: Optional[str]) -> str:
-    """L1 déterministe → 'green' | 'red' | 'escalate'."""
+    """L1 déterministe → 'green' | 'yellow' | 'red' | 'escalate'. Décision fondée sur les
+    Change[] CANONICALISÉS (type + object), jamais sur des phrases exactes."""
     text = f"{change.object} {change.raw}"
-    if change.type in _EXISTING_OPS:
-        return "green"                                   # opère sur de l'existant
-    if change.type == "add":
-        if _room_is_interior(room_type) and _ABSURD_INTERIOR.search(text):
-            return "red"                                 # backstop absurde
-        if _UNIVERSAL_DECOR.search(text):
-            return "green"                               # décor courant
-        return "escalate"                                # add non-trivial → L2
+    raw_low = (change.raw or "").lower()
+
+    # 1) Absurde/irréalisable en intérieur (véhicule/piscine/outdoor) → RED, quel que soit le type.
+    #    → la structure ne devient JAMAIS auto-GREEN juste parce qu'elle est typée structure.
+    if _room_is_interior(room_type) and _ABSURD_INTERIOR.search(text):
+        return "red"
+
+    # 2) Installation fonctionnelle majeure EXPLICITE et plausible → GREEN
+    #    (add an open kitchen · create a dressing area · convert this side into a bathroom).
+    if _FUNCTIONAL_INSTALL.search(text) and _FUNC_INSTALL_VERB.search(raw_low):
+        return "green"
+
+    # 3) STRUCTURE explicite (canonicalisée) :
     if change.type == "structure":
-        if _room_is_interior(room_type) and _ABSURD_INTERIOR.search(text):
-            return "red"
-        return "escalate"                                # structure → jugement L2
+        if _STRUCT_ADDITION.match(raw_low):
+            return "green"                               # ajouter/ouvrir/convertir un élément → plausible
+        if _is_targeted(change):
+            return "green"                               # remove/close/replace d'une cible IDENTIFIABLE
+        return "yellow"                                  # ambiguë : « quelle cloison / fenêtre ? »
+
+    # 4) Opérations sur du mobilier existant → GREEN.
+    if change.type in _EXISTING_OPS:
+        return "green"
+
+    # 5) ADD : décor courant → GREEN ; sinon jugement L2.
+    if change.type == "add":
+        if _UNIVERSAL_DECOR.search(text):
+            return "green"
+        return "escalate"
     return "escalate"
 
 
@@ -193,6 +228,12 @@ async def advise(changes: list[Change], room_type: Optional[str] = None,
                 change=c, verdict=Verdict.RED, source="rules", confidence=0.90,
                 reason=f"a {c.object or 'this'} doesn't sensibly belong in a {room_type or 'room like this'}",
                 alternative=_red_alternative(c, room_type)))
+        elif verdict == "yellow":
+            # structure ambiguë : cible non identifiable (« quelle cloison ? »)
+            advices.append(ChangeAdvice(
+                change=c, verdict=Verdict.YELLOW, source="rules", confidence=0.60,
+                reason=f"I can't tell exactly which {c.object or 'element'} you mean — "
+                       "which side or which one should I change?"))
         else:  # escalate
             if client is not None:
                 advices.append(await _l2_advise(c, room_type, client))
