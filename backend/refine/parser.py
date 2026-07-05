@@ -65,6 +65,87 @@ def _classify(clause: str) -> str:
     return "modify"  # défaut sûr : une formulation qu'on n'a pas typée (le LLM ferait mieux)
 
 
+# ── Canonicalisation du type (POST-PARSE) ────────────────────────────────────
+# Un élément ARCHITECTURAL sous une action add/remove/replace/open/close DOIT être
+# typé STRUCTURE, quelle que soit la classification initiale du LLM. Générique : la
+# décision vient de la NATURE de l'objet + l'ACTION, jamais d'une phrase exacte.
+# Nom archi en TÊTE de l'objet (« right wall » oui ; « wall art »/« wall clock » NON).
+_ARCH_HEAD = re.compile(
+    r"\b(wall|window|opening|partition|ceiling|door\s*way|door|skylight|arch(?:way)?|"
+    r"facade|mezzanine|bay\s+window|french\s+doors?|sliding\s+doors?)s?\s*$", re.I)
+# Pièges : « X door » de meuble/électro n'est PAS une porte architecturale.
+_ARCH_FURNITURE_TRAP = re.compile(
+    r"\b(cabinet|cupboard|fridge|refrigerator|oven|wardrobe|closet|shower|car|glass\s+cabinet|"
+    r"barn|patio|screen|garage|pantry)\s+door\b", re.I)
+# Verbes structurels (au-delà de add/remove/replace) : open/close/knock/board/widen/lower…
+_STRUCT_VERB = re.compile(
+    r"\b(open|close|knock\s+(?:down|through)|demolish|break\s+through|take\s+down|tear\s+down|"
+    r"wall\s+off|seal|brick\s+up|board\s+up|widen|enlarge|lower|raise)\b", re.I)
+# Verbes de CONSTRUCTION non ambigus → STRUCTURE quel que soit l'objet (« wall off the
+# staircase » érige un mur ; « knock through X » perce). Ne s'appliquent pas au décor/meuble.
+_STRUCT_VERB_STRONG = re.compile(
+    r"\b(wall\s+off|brick\s+up|board\s+up|partition\s+off|knock\s+(?:down|through)|"
+    r"demolish|tear\s+down)\b", re.I)
+
+
+# Un mot archi APPARAÎT dans l'objet mais n'en est pas la tête → piège (wall art, ceiling fan).
+_ARCH_WORD = re.compile(r"\b(wall|window|ceiling|opening|partition|door|arch(?:way)?)\b", re.I)
+# « open (up) » EN TÊTE d'une PIÈCE/ZONE = ouvrir l'espace (abattre la cloison) = structurel.
+# Ancré en tête → « add a kitchen to the OPEN area » (adjectif) ne déclenche PAS ; « open the
+# curtains » non plus (objet non-zone).
+_OPEN_VERB_LEAD = re.compile(r"^\s*open(?:\s+up)?\b", re.I)
+_ZONE_OBJECT = re.compile(
+    r"\b(kitchen|kitchenette|bathroom|room|space|area|lounge|living(?:\s+room)?|"
+    r"dining(?:\s+room)?|hallway|studio|loft|conservatory)\b", re.I)
+
+
+def _is_arch_object(obj: str) -> bool:
+    """L'objet ciblé est-il un ÉLÉMENT architectural (nom en tête, hors pièges) ?"""
+    o = re.sub(r"^(the|a|an|this|that|these|those)\s+", "", (obj or "").strip(), flags=re.I)
+    if not o or _ARCH_FURNITURE_TRAP.search(o):
+        return False
+    return bool(_ARCH_HEAD.search(o))
+
+
+def _natural_type(raw: str) -> str:
+    """Type naturel d'après le verbe (pour DÉMOTER un faux positif structure)."""
+    low = (raw or "").lower()
+    if re.search(r"\b(remove|delete|knock|demolish|take\s+(?:out|away|down)|get\s+rid|tear)\b", low):
+        return "remove"
+    if re.search(r"\b(replace|swap)\b", low):
+        return "replace"
+    if re.search(r"\b(move|rotate|reposition|shift|relocate|slide)\b", low):
+        return "move"
+    if re.search(r"\b(add|place|install|hang|put|mount|introduce)\b", low):
+        return "add"
+    return "modify"
+
+
+def canonicalize_types(changes: list[Change]) -> list[Change]:
+    """Canonicalise le type d'après la NATURE de l'objet + l'ACTION (générique, idempotent) :
+      • PROMOTE : objet architectural + action add/remove/replace/open/close → STRUCTURE.
+      • DEMOTE  : typé structure mais objet à l'air-archi-mais-tête-déco (wall art, ceiling
+        fan, window seat, cabinet door) → type naturel.
+    « move the TV to the right wall » reste MOVE (objet=TV) ; « paint the wall » reste MODIFY
+    (hors gate) ; « open the kitchen » reste STRUCTURE (objet=kitchen, pas un piège archi)."""
+    for c in changes:
+        if c.type == "structure":
+            if not _is_arch_object(c.object) and _ARCH_WORD.search(c.object or ""):
+                c.type = _natural_type(c.raw)   # faux positif « wall art / ceiling fan »
+            continue
+        raw = c.raw or ""
+        if _STRUCT_VERB_STRONG.search(raw):     # verbe de construction non ambigu (obj-indépendant)
+            c.type = "structure"
+            continue
+        if _OPEN_VERB_LEAD.match(raw) and _ZONE_OBJECT.search(c.object or ""):   # « open (up) the kitchen »
+            c.type = "structure"
+            continue
+        action_ok = c.type in ("add", "remove", "replace") or bool(_STRUCT_VERB.search(raw))
+        if action_ok and _is_arch_object(c.object):
+            c.type = "structure"
+    return changes
+
+
 def _object_detail(clause: str) -> tuple[str, str]:
     """Heuristique bon-marché (fallback only) : « ... the X <rest> » → object=X, detail=rest."""
     m = re.search(r"\bthe\s+([a-z][a-z\s]{1,24}?)(\s+(?:to|on|with|in|into|for|near|toward|towards|"
@@ -80,7 +161,7 @@ def parse_deterministic(message: str) -> list[Change]:
     for clause in _split_changes(message or ""):
         obj, det = _object_detail(clause)
         out.append(Change(type=_classify(clause), object=obj, detail=det, raw=clause))
-    return out
+    return canonicalize_types(out)
 
 
 # ── Parser LLM (primaire) ─────────────────────────────────────────────────────
@@ -119,7 +200,7 @@ async def parse_llm(message: str, client) -> Optional[list[Change]]:
                 detail=str(c.get("detail", "")).strip(),
                 raw=str(c.get("raw", "")).strip() or message.strip(),
             ))
-        return chs or None
+        return canonicalize_types(chs) or None
     except Exception:  # noqa: BLE001 — toute panne LLM/JSON → fallback déterministe
         return None
 
