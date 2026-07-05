@@ -42,6 +42,19 @@ _MODIFY_EXPAND = [
     (re.compile(r"\b(?:cosy|cozy|cozier|cosier)\b", re.I), "make the space feel cosier with warmer textiles and softer lighting"),
 ]
 
+# INSTALLATION FONCTIONNELLE MAJEURE / conversion de zone — CATÉGORIE générique (comme
+# _UNIVERSAL_DECOR), pas un hardcode cuisine. Une zone fonctionnelle bâtie occupe une AIRE et
+# ne doit JAMAIS passer par le placement décoratif (« on the coffee table ») ni par le verbe
+# structurel « open the wall ». Distinction par NATURE de l'objet, pas par formulation.
+_FUNCTIONAL_INSTALL = re.compile(
+    r"\b(kitchen|kitchenette|bathroom|en-?suite|shower\s+room|powder\s+room|dressing\s+room|"
+    r"walk-in\s+closet|walk-in\s+wardrobe|staircase|stairway|stairs|mezzanine|fireplace|hearth|"
+    r"home\s+bar|wet\s+bar|pantry|laundry(?:\s+room)?|mudroom|wine\s+cellar|home\s+cinema|"
+    r"home\s+thea(?:tre|ter))\b", re.I)
+# … mais SEULEMENT si on INSTALLE/CRÉE/CONVERTIT (pas « open the kitchen » = ouvrir l'existant,
+# qui reste un changement structurel de type « open up »).
+_FUNC_INSTALL_VERB = re.compile(r"\b(add|install|create|build|put\s+in|fit|convert|turn|make|set\s+up)\b", re.I)
+
 # STRUCTURE — classes de VERBE (générique, piloté par l'action, PAS par des phrases
 # particulières). Chaque classe → un mandat architectural explicite bâti avec `change.object`.
 _STRUCT_REMOVE = re.compile(r"\b(remove|knock\s+down|take\s+down|demolish|break|tear\s+down|delete|get\s+rid\s+of)\b", re.I)
@@ -104,6 +117,15 @@ def normalize(change: Change) -> str:
     raw = _clean(change.raw)
     low = raw.lower()
     t = change.type
+
+    # Installation fonctionnelle MAJEURE / conversion de zone — PRIORITÉ sur tout le reste
+    # (jamais « on the coffee table », jamais « open the wall »). Générique par catégorie +
+    # verbe d'installation ; « open the kitchen » (ouvrir l'existant) reste structurel.
+    if _FUNCTIONAL_INSTALL.search(f"{change.object} {raw}") and _FUNC_INSTALL_VERB.search(low):
+        return _period(
+            f"{_cap(raw)} — install it as a FULL, working functional zone occupying its own area of "
+            "the room, with proper built-in units, fixtures and a realistic layout; this is a MAJOR "
+            "functional installation, NOT a small object placed on a surface")
 
     if t == "move":
         if re.search(r"\brotate\b", low) and not _MOVE_TARGET.search(low):

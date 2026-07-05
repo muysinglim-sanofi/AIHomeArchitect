@@ -59,6 +59,19 @@ def main():
     pw = norm("structure", "add a partition wall")
     check("structure partition → conservé", "partition wall" in pw.lower(), pw)
 
+    print("\n=== INSTALLATION FONCTIONNELLE (zone ≠ décoratif ≠ open-wall) ===")
+    fk = norm("add", "add an open kitchen with an island")
+    check("kitchen add → zone fonctionnelle (PAS coffee table)",
+          "functional installation" in fk.lower() and "coffee table" not in fk.lower(), fk)
+    ck = norm("structure", "convert the right side into a kitchen")
+    check("convert→kitchen → zone (PAS 'removing the wall')",
+          "functional installation" in ck.lower() and "removing the wall" not in ck.lower(), ck)
+    ff = norm("add", "add a fireplace")
+    check("fireplace add → zone fonctionnelle (PAS 'on the main wall')",
+          "functional installation" in ff.lower() and "on the main wall" not in ff.lower(), ff)
+    okk = norm("structure", "open the kitchen")
+    check("open the kitchen → reste STRUCTUREL (dividing wall)", "removing the dividing wall" in okk.lower(), okk)
+
     print("\n=== IDEMPOTENCE ===")
     idem = norm("remove", "Completely remove the coffee table, leaving that floor area empty")
     check("remove déjà normalisé → pas de double 'leaving'", idem.lower().count("leaving") == 1, idem)
