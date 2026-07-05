@@ -87,19 +87,30 @@ async def main_test():
         check("ISOLATION: AUCUNE génération sur advisory", _calls["gen"] == 0, _calls["gen"])
         check("ISOLATION: AUCUN upload sur advisory", _calls["upload"] == 0, _calls["upload"])
 
-        # ── 2) COMPLETED (GREEN) → image immédiate + verification deferred ──
+        # ── 2) COMPLETED (GREEN) → image immédiate + verification deferred + LEDGER ──
         main._refine_advise = _advise_factory(Verdict.GREEN)
         _calls.update(gen=0, upload=0, advise=0)
         r = await _post(c, "/refine", {"session_id": "s1", "message": "move the sofa left",
-                                       "before_image_url": "https://x/a.jpg", "room_type": "living room"})
+                                       "before_image_url": "https://x/a.jpg", "room_type": "living room",
+                                       "structural_identity": "TOKEN_ABC", "versions": "[]",
+                                       "style_label": "Warm Modern", "iteration": "3"})
         j = r.json()
         check("completed: status=completed", j.get("status") == "completed", j)
-        check("completed: image_url renvoyée", j.get("image_url", "").startswith("https://"))
+        check("completed: after_image_url (contrat /generate)", j.get("after_image_url", "").startswith("https://"))
+        check("completed: image_url alias", j.get("image_url", "").startswith("https://"))
         check("completed: verification=deferred (async)", j.get("verification") == "deferred", j.get("verification"))
         check("completed: estimated_success présent", isinstance(j.get("estimated_success"), (int, float)))
         check("completed: changes echo présent", len(j.get("changes", [])) == 1)
         check("completed: 1 génération", _calls["gen"] == 1, _calls["gen"])
         check("completed: 1 upload", _calls["upload"] == 1, _calls["upload"])
+        # LEDGER adapter (orchestration) — refine = version 1re classe
+        check("ledger: structural_identity HÉRITÉ (echo verbatim)", j.get("structural_identity") == "TOKEN_ABC", j.get("structural_identity"))
+        check("ledger: version_id présent", isinstance(j.get("version_id"), str) and j.get("version_id").startswith("v_"))
+        check("ledger: version_record.generated_image_url = image", (j.get("version_record") or {}).get("generated_image_url") == j.get("image_url"))
+        check("ledger: version_record hérite le token", (j.get("version_record") or {}).get("structural_identity_token") == "TOKEN_ABC")
+        check("ledger: version_record.vision_number = iteration", (j.get("version_record") or {}).get("vision_number") == 3)
+        check("ledger: versions sérialisé non vide", isinstance(j.get("versions"), str) and len(j.get("versions")) > 2)
+        check("ledger: source_mode_used = REFINE", (j.get("version_record") or {}).get("source_mode_used") == "REFINE")
 
         # ── 3) CONFIRM=true → saute l'Advisor (Continue anyway) ─────────────
         main._refine_advise = _advise_factory(Verdict.RED)

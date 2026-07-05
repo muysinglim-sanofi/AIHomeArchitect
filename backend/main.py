@@ -4760,10 +4760,18 @@ async def refine_endpoint(
     before_image_url: str = Form(...),     # la vision EXISTANTE à modifier (storage URL)
     room_type: str = Form(""),
     confirm: bool = Form(False),           # passe outre un advisory (Continue anyway)
+    # ── Ledger adapter (ORCHESTRATION seulement — le package refine/ ignore tout ceci) ──
+    # Le frontend echo l'état lignée ; l'endpoint (pas le moteur) construit le VersionRecord
+    # et renvoie le MÊME contrat versions que /generate → refine = version de 1ʳᵉ classe.
+    versions: str = Form(""),              # ledger client (JSON) round-trip
+    structural_identity: str = Form(""),   # token identité — HÉRITÉ (le refine préserve l'identité)
+    style_label: str = Form(""),           # atmosphère courante (pour le record)
+    iteration: int = Form(1),              # numéro de vision de ce refine
+    source_version_id: str = Form(""),     # version affichée dont ce refine dérive
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Contrat unique (D-b) : advisory (YELLOW/RED, 0 gen) | completed (image immédiate,
-    verification=deferred). Moteur 2 isolé."""
+    verification=deferred). Moteur 2 isolé ; adaptateur ledger au niveau endpoint."""
     if not await _validate_session_ownership(session_id=session_id, user_id=current_user.user_id):
         raise HTTPException(status_code=403, detail={
             "error_code": "SESSION_OWNERSHIP_DENIED",
@@ -4811,10 +4819,43 @@ async def refine_endpoint(
     log.info("[refine] user=%s session=%s changes=%d est_success=%.2f conflicts=%d",
              current_user.user_id[:8], session_id, len(gen.changes), gen.estimated_success, len(gen.conflicts))
 
-    # 6) réponse IMMÉDIATE — l'image s'affiche tout de suite ; verify en 2e appel
+    # 6) LEDGER ADAPTER (orchestration) — construit le VersionRecord ICI, PAS dans le
+    #    moteur. Le refine PRÉSERVE l'identité → il HÉRITE `structural_identity` verbatim
+    #    (court-circuite tout le calcul/merge d'identité de /generate). Utilise uniquement
+    #    les utilitaires purs de version_state (jamais composer/DNA/preserve).
+    _prior_versions = parse_versions(versions)
+    _refine_record = VersionRecord(
+        version_id=new_version_id(),
+        vision_number=iteration,
+        source_mode_used="REFINE",
+        source_version_id_used=source_version_id or "",
+        source_image_url_used=before_image_url,
+        generated_image_url=image_url,
+        atmosphere=style_label,
+        user_request=message[:240],
+        structural_permission=any(c.type == "structure" for c in gen.changes),
+        structural_identity_token=structural_identity,   # HÉRITÉ (identité préservée)
+        # un refine = édition explicite de l'espace → lignée « customized » pour qu'un
+        # switch d'atmosphère ultérieur PRÉSERVE ce travail (ne re-source pas V1).
+        lineage_customized=True,
+    )
+    _updated_versions = _prior_versions + [_refine_record]
+
+    # 7) réponse IMMÉDIATE — MÊME contrat que /generate (refine = version 1ʳᵉ classe :
+    #    historique, branching, continue-from) + extras refine (verify async, observabilité)
     return {
         "status": "completed",
-        "image_url": image_url,
+        # ── contrat commun /generate (le frontend traite un refine comme une version ──
+        "after_image_url": image_url,
+        "image_url": image_url,                 # alias (compat appelants refine)
+        "ai_message": "",                        # pas de caption LLM ; la voix vient du verify/advisory
+        "room_type": room_type,
+        "structural_identity": structural_identity,   # hérité (echo)
+        "version_id": _refine_record.version_id,
+        "version_record": version_to_dict(_refine_record),
+        "versions": serialize_versions(_updated_versions),
+        "message_persisted": False,              # le frontend insère le message (comme fallback /generate)
+        # ── extras spécifiques refine (async verify §14 + observabilité) ──
         "verification": "deferred",
         "estimated_success": gen.estimated_success,
         "conflicts": gen.conflicts,
