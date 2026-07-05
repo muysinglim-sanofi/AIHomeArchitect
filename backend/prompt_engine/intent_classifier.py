@@ -228,10 +228,13 @@ _CONFIRMATION = re.compile(
 # _STRUCTURAL does not catch functional reassignment ("turn the rear room into
 # a bedroom"), the flagship pending case.
 _DESIGN_CONVERSION = re.compile(
-    r"\b(turn|convert|transform|make|change|repurpose|use)\s+(the\s+|this\s+|it\s+|that\s+)?"
-    r"\w+(\s+\w+){0,3}?\s+(into\s+a|to\s+a|as\s+a|a)\s+"
-    r"(bed\s*room|bedroom|office|studio|kitchen|lounge|nursery|gym|library|"
-    r"closet|dressing|dining|guest\s+room|play\s*room|workspace)",
+    r"\b(turn|convert|transform|make|change|repurpose|use|redesign)\s+"
+    r"(the\s+|this\s+|it\s+|that\s+)?\w+(\s+\w+){0,6}?\s+(into|to|as)\s+"
+    r"(an?\s+|the\s+)?(open\s+)?"
+    r"(bed\s*room|bedroom|office|studio|kitchen(?:ette)?|lounge|nursery|gym|library|"
+    r"closet|dressing(?:\s+(?:room|area))?|dining(?:\s+room)?|guest\s+room|play\s*room|"
+    r"workspace|bathroom|en-?suite|shower\s+room|powder\s+room|laundry(?:\s+room)?|pantry|"
+    r"home\s+office|home\s+bar|wet\s+bar|walk-in|home\s+cinema|home\s+thea(?:tre|ter))",
     re.IGNORECASE,
 )
 
@@ -947,6 +950,17 @@ def classify_intent(user_message: str, iteration: int) -> IntentClassification:
             sub_intent=SubIntent.STRUCTURAL_CHANGE,
             confidence=0.90,
             reasoning="Structural signal detected",
+        )
+
+    # Conversion fonctionnelle de zone (« convert the right side into an open kitchen ») =
+    # commande d'EXÉCUTION, pas une suggestion créative → génère. Sauf si c'est formulé en
+    # question d'opinion (« should I convert… ? ») → l'architecte conseille.
+    if bool(_DESIGN_CONVERSION.search(msg)) and not detect_design_opinion_question(msg):
+        return IntentClassification(
+            intent=ConversationIntent.GENERATE,
+            sub_intent=SubIntent.STRUCTURAL_CHANGE,
+            confidence=0.88,
+            reasoning="Functional zone conversion → generate",
         )
 
     # Explicit atmosphere redirect always generates
