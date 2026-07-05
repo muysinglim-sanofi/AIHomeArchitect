@@ -212,6 +212,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   late List<MessageModel> _messages;
   late int _iterationCount;
 
+  // Refine Engine V2 — stash du dernier refine `completed` pour le Verify ASYNC
+  // (2e appel /refine/verify, §14). Renseigné juste avant le chemin succès partagé ;
+  // consommé après affichage de l'image (8b-4).
+  List<dynamic> _lastRefineChanges = const <dynamic>[];
+  String _lastRefineBeforeUrl = '';
+  String _lastRefineAfterUrl = '';
+
   // Wave 4.7.2 — persisted architectural identity token (one-time capture at
   // V1, round-tripped on V2+ so structural_identity_clause stays present).
   String _structuralIdentity = '';
@@ -1542,6 +1549,44 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     return verbs.any((v) => lower.startsWith(v));
   }
 
+  /// 8b-4 — Verify ASYNC du refine (§14). L'image est DÉJÀ affichée ; on appelle
+  /// /refine/verify (gratuit, non bloquant, stateless) puis on ajoute le rapport
+  /// Applied ✓ / Missing □ SEULEMENT si incomplet (P3). Fail-open : jamais bloquant.
+  /// [mySeq] = l'identité de la génération, pour ignorer un résultat périmé.
+  Future<void> _kickoffRefineVerify(int mySeq) async {
+    if (_lastRefineChanges.isEmpty || _lastRefineAfterUrl.isEmpty) return;
+    final changes = _lastRefineChanges;
+    final beforeUrl = _lastRefineBeforeUrl;
+    final afterUrl = _lastRefineAfterUrl;
+    Map<String, dynamic> vres;
+    try {
+      vres = await GenerationService().refineVerify(
+        beforeImageUrl: beforeUrl,
+        afterImageUrl: afterUrl,
+        changes: changes,
+      );
+    } catch (_) {
+      return; // le Verify ne bloque JAMAIS l'image déjà montrée
+    }
+    if (!mounted || mySeq != _genSeq) return; // superseded par une gen plus récente
+    final verification = (vres['verification'] as String?) ?? 'unavailable';
+    final report = (vres['report'] as String?)?.trim() ?? '';
+    // P3 — tout appliqué et rien à signaler → aucun rapport (image seule).
+    if (verification == 'verified' && report.isEmpty) return;
+    if (report.isEmpty) return;
+    setState(() {
+      _messages.add(MessageModel(
+        id: 'refine_report_${DateTime.now().millisecondsSinceEpoch}',
+        content: report, // Applied ✓ / Still missing □  (ou message honnête si unavailable)
+        isAi: true,
+        createdAt: DateTime.now(),
+      ));
+    });
+    _scrollToBottom();
+    // NB (8b-4b) : le bouton [Retry missing changes] interactif + l'advisory card
+    // arrivent à l'étape suivante (widgets dédiés + ré-invocation ciblée).
+  }
+
   Future<void> _generate({String? overridePrompt, String trigger = 'unknown'}) async {
     // ── Shared generation authorization guard (P0 duplicate-billing fix) ──────
     // EVERY entry point (auto / button / switch / chat / resume / any future)
@@ -1848,6 +1893,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // vision (room inference / atmosphere selection happen once). Later
       // refinements steer normally, so they are not re-sent.
       final isFirstVision = newCount == 1;
+      // ── Refine Engine V2 routing (coupe nette) — un message d'édition sur une
+      // vision EXISTANTE va vers /refine, PAS /generate. V1 / switch / onboarding /
+      // surprise / auto restent sur /generate. Discriminateur : trigger 'chat' d'un
+      // message tapé ET au moins une vision déjà rendue.
+      final bool refineV2 = trigger == 'chat' && _iterationCount >= 1;
       // ── PR2b Slice 2 — persist the INTENTION before the network POST ────────
       // Compute the derived params ONCE into locals so the pending record and the
       // /generate call use the EXACT same tuple (1:1, replayed verbatim — never
@@ -1866,59 +1916,114 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       final sourceVersionIdVal = _branchSourceVersionId ?? '';
       final uiLocaleVal = ref.read(localeProvider).languageCode;
 
-      await _pendingStore?.save(PendingGeneration(
-        sessionId: _project.id,
-        createdAtMs: DateTime.now().millisecondsSinceEpoch,
-        prompt: prompt,
-        beforeImageUrl: generationSource,
-        styleLabel: styleLabel,
-        roomType: _currentRoomType,
-        roomTypeId: roomTypeIdVal,
-        atmosphereId: atmosphereIdVal,
-        iteration: newCount,
-        history: history,
-        originalImageUrl: originalImageUrlVal,
-        clientRequestId: clientRequestId,
-        letAiDecide: letAiDecideVal,
-        surpriseMe: surpriseMeVal,
-        structuralIdentity: _structuralIdentity,
-        versions: _versions,
-        generationMode: _generationMode,
-        sourceMode: sourceModeVal,
-        sourceVersionId: sourceVersionIdVal,
-        uiLocale: uiLocaleVal,
-        generationTrigger: trigger,
-        generationAttempt: _genAttempt,
-      ));
+      // Pending-store = recovery replay path, which re-POSTs /generate. A refine
+      // must NOT be replayed through /generate → skip the durable pending write for
+      // refineV2 (mid-gen kill recovery for refine = follow-up ; billing disabled).
+      if (!refineV2) {
+        await _pendingStore?.save(PendingGeneration(
+          sessionId: _project.id,
+          createdAtMs: DateTime.now().millisecondsSinceEpoch,
+          prompt: prompt,
+          beforeImageUrl: generationSource,
+          styleLabel: styleLabel,
+          roomType: _currentRoomType,
+          roomTypeId: roomTypeIdVal,
+          atmosphereId: atmosphereIdVal,
+          iteration: newCount,
+          history: history,
+          originalImageUrl: originalImageUrlVal,
+          clientRequestId: clientRequestId,
+          letAiDecide: letAiDecideVal,
+          surpriseMe: surpriseMeVal,
+          structuralIdentity: _structuralIdentity,
+          versions: _versions,
+          generationMode: _generationMode,
+          sourceMode: sourceModeVal,
+          sourceVersionId: sourceVersionIdVal,
+          uiLocale: uiLocaleVal,
+          generationTrigger: trigger,
+          generationAttempt: _genAttempt,
+        ));
+      }
 
-      final result = await GenerationService().generate(
-        sessionId: _project.id,
-        prompt: prompt,
-        beforeImageUrl: generationSource,      // editing chain for display/reveal
-        styleLabel: styleLabel,
-        roomType: _currentRoomType,
-        // Wave 5.17d — canonical ids for the free-tier scope check.
-        roomTypeId: roomTypeIdVal,
-        atmosphereId: atmosphereIdVal,
-        iteration: newCount,
-        history: history,
-        originalImageUrl: originalImageUrlVal, // structural anchor — keeps geometry stable
-        clientRequestId: clientRequestId,
-        letAiDecide: letAiDecideVal,
-        surpriseMe: surpriseMeVal,
-        // Wave 4.7.2 / 4.7.3 — round-trip the persisted protocol fields so
-        // structural_identity_clause and version ledger survive across V2+.
-        structuralIdentity: _structuralIdentity,
-        versions: _versions,
-        // Wave 5.5.14c — per-generation bimodal intent (backend no-ops unless BIMODAL_ENABLED=1).
-        generationMode: _generationMode,
-        // BUG A fix — branch pin → resolve source from that exact version.
-        sourceMode: sourceModeVal,
-        sourceVersionId: sourceVersionIdVal,
-        uiLocale: uiLocaleVal,
-        generationTrigger: trigger,
-        generationAttempt: _genAttempt,
-      );
+      // ── Service call — the ONE branch (D-a) : chat refine → /refine ; everything
+      // else (V1 / switch / onboarding / surprise / auto) → /generate, UNCHANGED.
+      // /refine returns the SAME contract as /generate (after_image_url, structural_
+      // identity, versions, version_id) so the success path below is fully shared →
+      // refines are first-class versions (history, continue-from, branching).
+      final Map<String, dynamic> result;
+      if (refineV2) {
+        result = await GenerationService().refine(
+          sessionId: _project.id,
+          message: prompt,
+          beforeImageUrl: generationSource,
+          roomType: _currentRoomType,
+          styleLabel: styleLabel,
+          iteration: newCount,
+          structuralIdentity: _structuralIdentity,
+          versions: _versions,
+          sourceVersionId: sourceVersionIdVal,
+        );
+        // Contrat unique (D-b) : advisory (YELLOW/RED — 0 image) ou error → PAS de
+        // chemin image. On intercepte ICI, avant classifyGenerateResult.
+        final rStatus = (result['status'] as String?) ?? 'completed';
+        if (rStatus != 'completed') {
+          _longGenerationTimer?.cancel();
+          _longGenerationTimer = null;
+          if (!mounted || mySeq != _genSeq) return;
+          pendingNotifier.clear(sessionIdForLifecycle);
+          final String bubble = (rStatus == 'advisory')
+              ? (((result['advice'] as Map?)?['message'] as String?) ??
+                  "Let me know how you'd like to proceed.")
+              : ((result['user_message'] as String?) ??
+                  "I couldn't apply that — could you rephrase?");
+          setState(() {
+            _isGenerating = false;
+            _messages.removeWhere((m) => m.type == MessageType.loading);
+            _messages.add(MessageModel(
+              id: 'refine_${rStatus}_${DateTime.now().millisecondsSinceEpoch}',
+              content: bubble,
+              isAi: true,
+              createdAt: DateTime.now(),
+            ));
+          });
+          _scrollToBottom();
+          return;
+        }
+        // completed → stash for the async Verify 2nd call (8b-4).
+        _lastRefineChanges = (result['changes'] as List<dynamic>?) ?? const <dynamic>[];
+        _lastRefineBeforeUrl = generationSource;
+        _lastRefineAfterUrl = (result['after_image_url'] as String?) ?? '';
+      } else {
+        result = await GenerationService().generate(
+          sessionId: _project.id,
+          prompt: prompt,
+          beforeImageUrl: generationSource,      // editing chain for display/reveal
+          styleLabel: styleLabel,
+          roomType: _currentRoomType,
+          // Wave 5.17d — canonical ids for the free-tier scope check.
+          roomTypeId: roomTypeIdVal,
+          atmosphereId: atmosphereIdVal,
+          iteration: newCount,
+          history: history,
+          originalImageUrl: originalImageUrlVal, // structural anchor — keeps geometry stable
+          clientRequestId: clientRequestId,
+          letAiDecide: letAiDecideVal,
+          surpriseMe: surpriseMeVal,
+          // Wave 4.7.2 / 4.7.3 — round-trip the persisted protocol fields so
+          // structural_identity_clause and version ledger survive across V2+.
+          structuralIdentity: _structuralIdentity,
+          versions: _versions,
+          // Wave 5.5.14c — per-generation bimodal intent (backend no-ops unless BIMODAL_ENABLED=1).
+          generationMode: _generationMode,
+          // BUG A fix — branch pin → resolve source from that exact version.
+          sourceMode: sourceModeVal,
+          sourceVersionId: sourceVersionIdVal,
+          uiLocale: uiLocaleVal,
+          generationTrigger: trigger,
+          generationAttempt: _genAttempt,
+        );
+      }
 
       // ── PR2b Slice 1 (#0) — /generate response contract ──────────────────
       // PR2a's backend claim can return a NON-image response when THIS exact
@@ -2127,6 +2232,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       _maybeAutoNameSession(); // CHANTIER C — name the session from room + atmo
       _persistSession();
       _scrollToBottom();
+
+      // 8b-4 — Verify ASYNC (§14) : l'image est DÉJÀ affichée ; on vérifie en 2e
+      // appel (gratuit, non bloquant) et on ajoute le rapport Applied/Missing quand
+      // il arrive. Ne s'applique qu'au chat-refine V2.
+      if (refineV2) {
+        unawaited(_kickoffRefineVerify(mySeq));
+      }
 
       // Reveal-chain observability: which images form this step's pair and
       // why (V1 evolves the original upload; V2+ evolves the previous vision).

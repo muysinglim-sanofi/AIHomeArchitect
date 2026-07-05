@@ -323,6 +323,14 @@ class GenerationService {
     required String beforeImageUrl, // la vision courante à modifier
     String roomType = '',
     bool confirm = false,
+    // Ledger echo (l'endpoint construit le VersionRecord ; le frontend round-trip
+    // l'état lignée pour que le refine soit une version de 1ʳᵉ classe — mêmes clés
+    // renvoyées que /generate). Le package refine/ backend ne voit jamais ceci.
+    String styleLabel = '',
+    int iteration = 1,
+    String structuralIdentity = '',
+    String versions = '',
+    String sourceVersionId = '',
   }) async {
     final sw = Stopwatch()..start();
     debugPrint('[PerfRefine] click→POST /refine  session=$sessionId  confirm=$confirm');
@@ -335,6 +343,11 @@ class GenerationService {
           'before_image_url': beforeImageUrl,
           'room_type': roomType,
           'confirm': confirm.toString(),
+          'style_label': styleLabel,
+          'iteration': iteration.toString(),
+          'structural_identity': structuralIdentity,
+          'versions': versions,
+          'source_version_id': sourceVersionId,
         }),
       );
       sw.stop();
