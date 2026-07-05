@@ -70,6 +70,10 @@ async def main_test():
     main._refine_fetch_bytes = _fake_fetch
     main._refine_upload = _fake_upload
     main._refine_generate = _fake_generate
+    _persist_calls = []
+    def _fake_persist(session_id, before_url, after_url, style_label):
+        _persist_calls.append((session_id, after_url, style_label)); return True
+    main._refine_persist_message = _fake_persist
 
     transport = ASGITransport(app=main.app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
@@ -111,6 +115,9 @@ async def main_test():
         check("ledger: version_record.vision_number = iteration", (j.get("version_record") or {}).get("vision_number") == 3)
         check("ledger: versions sérialisé non vide", isinstance(j.get("versions"), str) and len(j.get("versions")) > 2)
         check("ledger: source_mode_used = REFINE", (j.get("version_record") or {}).get("source_mode_used") == "REFINE")
+        # Q1 fix — persistance serveur du message (ferme la fenêtre kill post-gen/pré-insert)
+        check("Q1: message persisté serveur (message_persisted=True)", j.get("message_persisted") is True, j.get("message_persisted"))
+        check("Q1: persist appelé avec l'after_image_url", len(_persist_calls) == 1 and _persist_calls[0][1] == j.get("image_url"))
 
         # ── 3) CONFIRM=true → saute l'Advisor (Continue anyway) ─────────────
         main._refine_advise = _advise_factory(Verdict.RED)

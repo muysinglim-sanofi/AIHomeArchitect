@@ -4737,6 +4737,25 @@ def _refine_upload(session_id: str, data: bytes) -> str:
     return supa.storage.from_("generated").get_public_url(path)
 
 
+def _refine_persist_message(session_id: str, before_url: str, after_url: str, style_label: str) -> bool:
+    """Persiste le message image_result côté serveur AVANT de répondre (ferme la
+    fenêtre Q1 : kill post-gen/pré-insert → la réouverture réhydrate le refine).
+    Calque de /generate (Wave 5.6). Best-effort ; patchable en test. Renvoie True si écrit."""
+    if not session_id or session_id == "new":
+        return False
+    try:
+        supa.from_("messages").insert({
+            "session_id": session_id, "role": "ai", "content": "",
+            "message_type": "image_result",
+            "before_image_url": before_url, "after_image_url": after_url,
+            "style_label": style_label,
+        }).execute()
+        return True
+    except Exception as exc:  # noqa: BLE001 — l'échec d'écriture ne bloque pas la réponse
+        log.warning("[refine] server-side message insert failed: %s: %s", type(exc).__name__, exc)
+        return False
+
+
 def _refine_intent_id(session_id: str, message: str, before_image_url: str) -> str:
     """ID déterministe (idempotence billing future) — pas de hash() salé."""
     h = hashlib.sha1(f"{session_id}|{message}|{before_image_url}".encode()).hexdigest()[:16]
@@ -4841,6 +4860,10 @@ async def refine_endpoint(
     )
     _updated_versions = _prior_versions + [_refine_record]
 
+    # 6b) persistance serveur du message (ferme la fenêtre Q1 — kill post-gen/pré-insert).
+    #     Si écrit, le frontend saute son insert de secours (comme /generate).
+    _msg_persisted = _refine_persist_message(session_id, before_image_url, image_url, style_label)
+
     # 7) réponse IMMÉDIATE — MÊME contrat que /generate (refine = version 1ʳᵉ classe :
     #    historique, branching, continue-from) + extras refine (verify async, observabilité)
     return {
@@ -4854,7 +4877,7 @@ async def refine_endpoint(
         "version_id": _refine_record.version_id,
         "version_record": version_to_dict(_refine_record),
         "versions": serialize_versions(_updated_versions),
-        "message_persisted": False,              # le frontend insère le message (comme fallback /generate)
+        "message_persisted": _msg_persisted,     # True = écrit serveur ; False = fallback frontend
         # ── extras spécifiques refine (async verify §14 + observabilité) ──
         "verification": "deferred",
         "estimated_success": gen.estimated_success,
