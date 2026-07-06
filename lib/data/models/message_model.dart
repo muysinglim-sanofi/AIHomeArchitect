@@ -101,6 +101,13 @@ class GeneratedResult {
   // Null everywhere except the Full Reveal nav extra → the screen falls back.
   final String? sourceDisplayLabel;
 
+  /// PR0 (2026-07-06) — the generation's request_id (the id sent to /generate
+  /// and echoed back). OBSERVABILITY ONLY: lets the image card report its
+  /// first-visible-frame to [PerfC2P] keyed by the same id. Null for
+  /// DB-loaded/legacy results (no click to attribute) → the card simply skips
+  /// click-to-pixel logging for those.
+  final String? requestId;
+
   const GeneratedResult({
     required this.beforeImageUrl,
     required this.afterImageUrl,
@@ -108,7 +115,20 @@ class GeneratedResult {
     required this.projectId,
     this.roomType,
     this.sourceDisplayLabel,
+    this.requestId,
   });
+
+  /// PR0 — only ever used to SET a non-null [requestId] on a DB-rebuilt result
+  /// (reconcile path). Passing null leaves the existing value untouched.
+  GeneratedResult copyWith({String? requestId}) => GeneratedResult(
+        beforeImageUrl: beforeImageUrl,
+        afterImageUrl: afterImageUrl,
+        styleLabel: styleLabel,
+        projectId: projectId,
+        roomType: roomType,
+        sourceDisplayLabel: sourceDisplayLabel,
+        requestId: requestId ?? this.requestId,
+      );
 }
 
 /// The (source image, room) an atmosphere switch should evolve from when the
@@ -163,3 +183,36 @@ class MessageModel {
 /// chat) — must never change it. Pure → unit-testable.
 bool sessionHasVision(Iterable<MessageModel> messages) =>
     messages.any((m) => m.type == MessageType.imageResult);
+
+/// PR0 — re-attach the ORIGINAL client request_id to the NEWEST imageResult of a
+/// reconcile/DB-rebuilt timeline, so a LONG (>60s) generation adopted via polling
+/// still emits exactly one [PerfC2P]. DB rows carry no request_id, so the rebuilt
+/// [GeneratedResult] is otherwise requestId=null → no click-to-pixel for long
+/// gens. Pure → testable. Guarantees:
+///   • never mints an id — uses the caller's original (in-flight) id;
+///   • idempotent — NO-OP if the newest imageResult ALREADY has a request_id
+///     (covers the HTTP-success path and the HTTP+reconcile double-success race,
+///     so exactly one result is ever attributed);
+///   • no-op on empty id, or when there is no attributable imageResult.
+/// Returns a new list (only the target element replaced) or the same list unchanged.
+List<MessageModel> attachRequestIdToLatestImage(
+    List<MessageModel> messages, String requestId) {
+  if (requestId.isEmpty) return messages;
+  final idx = messages.lastIndexWhere(
+      (m) => m.type == MessageType.imageResult && m.result != null);
+  if (idx < 0) return messages;
+  final target = messages[idx];
+  if (target.result!.requestId != null) return messages; // already attributed
+  final out = List<MessageModel>.of(messages);
+  out[idx] = MessageModel(
+    id: target.id,
+    content: target.content,
+    isAi: target.isAi,
+    type: target.type,
+    result: target.result!.copyWith(requestId: requestId),
+    advisory: target.advisory,
+    refineReport: target.refineReport,
+    createdAt: target.createdAt,
+  );
+  return out;
+}

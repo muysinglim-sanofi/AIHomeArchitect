@@ -41,5 +41,16 @@ void main() {
     test('unknown/absent status, no image → image (legacy default)', () {
       expect(classifyGenerateResult({}), GenerateResultKind.image);
     });
+
+    test('PR0: extra client-only _serverTimingMs key does not change classification', () {
+      expect(
+          classifyGenerateResult(
+              {'after_image_url': 'http://x/y.jpg', '_serverTimingMs': 16.0}),
+          GenerateResultKind.image);
+      expect(
+          classifyGenerateResult(
+              {'status': 'running', '_serverTimingMs': null}),
+          GenerateResultKind.running);
+    });
   });
 }

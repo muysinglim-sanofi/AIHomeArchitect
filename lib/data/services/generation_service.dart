@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import '../../core/feature_flags.dart';
+import '../../core/perf/perf_c2p.dart'; // PR0 — parse Server-Timing header (observability)
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -245,6 +246,14 @@ class GenerationService {
         '[PerfGen] response OK in ${sw.elapsedMilliseconds}ms  '
         'request_id=$clientRequestId',
       );
+      // PR0 — read + keep the Server-Timing header (server app ms) for the
+      // click-to-pixel breakdown. Client-only key; NEVER touches the backend
+      // contract. Absent/malformed → null (fail-safe, never blocks the gen).
+      final data = res.data;
+      if (data != null) {
+        data['_serverTimingMs'] =
+            PerfC2P.parseServerTimingMs(res.headers.value('server-timing'));
+      }
       return res.data!;
     } on DioException catch (e) {
       sw.stop();
@@ -331,6 +340,7 @@ class GenerationService {
     String structuralIdentity = '',
     String versions = '',
     String sourceVersionId = '',
+    String clientRequestId = '', // PR0 — same id as PerfC2P, for backend correlation
   }) async {
     final sw = Stopwatch()..start();
     debugPrint('[PerfRefine] click→POST /refine  session=$sessionId  confirm=$confirm');
@@ -348,11 +358,18 @@ class GenerationService {
           'structural_identity': structuralIdentity,
           'versions': versions,
           'source_version_id': sourceVersionId,
+          'client_request_id': clientRequestId, // PR0 — correlate [PERF SUMMARY] ↔ [PerfC2P]
         }),
       );
       sw.stop();
       debugPrint('[PerfRefine] response OK in ${sw.elapsedMilliseconds}ms  '
           'status=${res.data?['status']}');
+      // PR0 — same as /generate: keep Server-Timing for click-to-pixel. Fail-safe.
+      final data = res.data;
+      if (data != null) {
+        data['_serverTimingMs'] =
+            PerfC2P.parseServerTimingMs(res.headers.value('server-timing'));
+      }
       return res.data!;
     } on DioException catch (e) {
       sw.stop();

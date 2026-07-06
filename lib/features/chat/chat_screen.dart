@@ -9,6 +9,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../../core/feature_flags.dart';
+import '../../core/perf/perf_c2p.dart'; // PR0 — click-to-pixel telemetry (observability)
 import '../cards/card_catalog.dart';
 import '../cards/widgets/atmosphere_hero_card.dart';
 import '../cards/widgets/room_card.dart';
@@ -166,6 +167,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   int _genAttempt = 0;
   final Set<String> _succeededGenKeys = {};
   final Map<String, String> _requestIdForKey = {};
+  // PR0 — the in-flight generation's client request_id, so a LONG gen (>60s)
+  // adopted via the reconcile/DB-rebuild path can re-attach the SAME id to its
+  // rebuilt result (else requestId=null → no [PerfC2P] for long gens). Set when
+  // the gen starts; cleared on the terminal (HTTP success / reconcile / abandon).
+  String? _inFlightRequestId;
   List<String> _dynamicSuggestions = [];
   // Tracks the editing chain: starts null (use original upload), then
   // advances to each new generation so refinements build on the last output.
@@ -1205,6 +1211,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           final pending = await _pendingStore?.load(_project.id);
           if (!mounted) return;
           if (pending != null) {
+            // PR0 robustness — rehydrate the in-flight request_id from the DURABLE
+            // pending record. The volatile _inFlightRequestId was lost when the
+            // previous ChatScreen was disposed on navigation; the pending record
+            // (SharedPreferences) is the persisted source of truth and still
+            // carries the ORIGINAL clientRequestId. The PerfC2P singleton also
+            // survives, so after nav-away-then-back the reconcile re-attach still
+            // fires exactly one [PerfC2P] keyed on the same id. Never minted here.
+            if (pending.clientRequestId.isNotEmpty) {
+              _inFlightRequestId = pending.clientRequestId;
+            }
             // The recovery service owns this pending → guarded sweep resolves it
             // (probe → re-launch verbatim / attach / clear). Show loading + poll so
             // the re-launched result renders here without a manual refresh.
@@ -1981,6 +1997,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // surprise / auto restent sur /generate. Discriminateur : trigger 'chat' d'un
       // message tapé ET au moins une vision déjà rendue.
       final bool refineV2 = trigger == 'chat' && _iterationCount >= 1;
+      // PR0 — click-to-pixel: start the monotonic clock keyed by the SAME
+      // request_id the backend echoes back + logs in [PERF SUMMARY]. The clock
+      // starts here (≈ tap) so click_to_http_start captures the pre-POST work.
+      // Observability only — no branch, no behaviour change.
+      _inFlightRequestId = clientRequestId; // PR0 — kept for the reconcile (>60s) path
+      PerfC2P.instance.beginRequest(
+        clientRequestId,
+        genType: refineV2
+            ? 'refine'
+            : newCount == 1
+                ? 'v1'
+                : trigger == 'switch'
+                    ? 'switch'
+                    : 'v2',
+        iteration: newCount,
+      );
       // ── PR2b Slice 2 — persist the INTENTION before the network POST ────────
       // Compute the derived params ONCE into locals so the pending record and the
       // /generate call use the EXACT same tuple (1:1, replayed verbatim — never
@@ -2034,6 +2066,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // /refine returns the SAME contract as /generate (after_image_url, structural_
       // identity, versions, version_id) so the success path below is fully shared →
       // refines are first-class versions (history, continue-from, branching).
+      // PR0 — the POST is about to leave the client (captures pre-POST pending-
+      // save/source work in click_to_http_start).
+      PerfC2P.instance.markHttpStart(clientRequestId);
       final Map<String, dynamic> result;
       if (refineV2) {
         result = await GenerationService().refine(
@@ -2047,6 +2082,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           versions: _versions,
           sourceVersionId: sourceVersionIdVal,
           confirm: refineConfirm, // 8b-3 [Try anyway] → passe outre l'advisory
+          clientRequestId: clientRequestId, // PR0 — correlate backend PERF ↔ PerfC2P
         );
         // Contrat unique (D-b) : advisory (YELLOW/RED — 0 image) ou error → PAS de
         // chemin image. On intercepte ICI, avant classifyGenerateResult.
@@ -2086,6 +2122,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
             }
           });
           _scrollToBottom();
+          PerfC2P.instance.discard(clientRequestId); // PR0 — advisory/error: no pixel to time
+          _inFlightRequestId = null;
           return;
         }
         // completed → stash for the async Verify 2nd call (8b-4).
@@ -2139,6 +2177,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       //   • after_image_url present (normal success OR byte-identical replay) →
       //     falls through to the unchanged success path below.
       // ── PR2b Slice 1 (#0) — /generate response contract (pure classifier) ──
+      // PR0 — backend response received (image path). serverAppMs comes from the
+      // Server-Timing header (unknown if absent/malformed — never blocks).
+      PerfC2P.instance.markResponse(
+        clientRequestId,
+        serverAppMs: (result['_serverTimingMs'] as num?)?.toDouble(),
+      );
       switch (classifyGenerateResult(result)) {
         case GenerateResultKind.running:
           // 202 — another process owns this intent. No crash, no error, no
@@ -2322,6 +2366,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
             // Bind the room to this vision so a later atmosphere switch on it
             // restores ITS room, not a stale session global (cross-vision leak).
             roomType: _currentRoomType,
+            // PR0 — carry the request_id so the image card reports its
+            // first-visible-frame to PerfC2P keyed by the same id.
+            requestId: clientRequestId,
           ),
           createdAt: DateTime.now(),
         ));
@@ -2332,6 +2379,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       _maybeAutoNameSession(); // CHANTIER C — name the session from room + atmo
       _persistSession();
       _scrollToBottom();
+      _inFlightRequestId = null; // PR0 — HTTP success attributed the card directly
 
       // 8b-4 — Verify ASYNC (§14) : l'image est DÉJÀ affichée ; on vérifie en 2e
       // appel (gratuit, non bloquant) et on ajoute le rapport Applied/Missing quand
@@ -2594,10 +2642,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         // Result shown → drop the (possibly re-injected) loading bubble and
         // clear the lifecycle flag so it never re-injects or badges again.
         ref.read(pendingGenerationsProvider.notifier).clear(sessionId);
+        // PR0 — the result was rebuilt from the DB (rows carry NO client
+        // request_id), so re-attach the ORIGINAL in-flight id to the newest
+        // imageResult → a long (>60s) gen still emits exactly one [PerfC2P].
+        // attachRequestIdToLatestImage is idempotent (no-op if the HTTP-success
+        // path already attributed it) → no double log on the race.
+        final reconReqId = _inFlightRequestId;
         setState(() {
           _isGenerating = false;
           _messages.removeWhere((m) => m.type == MessageType.loading);
+          if (reconReqId != null && reconReqId.isNotEmpty) {
+            final patched = attachRequestIdToLatestImage(_messages, reconReqId);
+            if (!identical(patched, _messages)) {
+              _messages
+                ..clear()
+                ..addAll(patched);
+            }
+          }
         });
+        if (reconReqId != null && reconReqId.isNotEmpty) {
+          // The reconcile poll IS the "response" for a long gen (no HTTP return).
+          PerfC2P.instance.markResponse(reconReqId, serverAppMs: null);
+        }
+        _inFlightRequestId = null;
         return;
       }
 
@@ -2605,6 +2672,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         stop(timer);
         _genSeq++;
         if (!mounted) return;
+        // PR0 — terminal abandon: no pixel will ever render → free the tracker.
+        if (_inFlightRequestId != null) {
+          PerfC2P.instance.discard(_inFlightRequestId!);
+          _inFlightRequestId = null;
+        }
         // Give up → clear the lifecycle flag so the spinner can't re-inject.
         ref.read(pendingGenerationsProvider.notifier).clear(sessionId);
         final failMsg = context.l10n.genTookLonger;
@@ -3816,6 +3888,17 @@ class _GeneratedImageCardState extends State<_GeneratedImageCard> {
       if (mounted) {
         setState(
             () => _aspectRatio = info.image.width / info.image.height);
+      }
+      // PR0 — click-to-pixel: image decoded → mark loaded, then record the
+      // FIRST VISIBLE FRAME after the next frame actually paints. Guarded once
+      // per request_id inside PerfC2P; markFirstVisibleFrame touches no widget
+      // state so it is safe even if this card is disposed before the callback.
+      final c2pReqId = widget.result.requestId;
+      if (c2pReqId != null && c2pReqId.isNotEmpty) {
+        PerfC2P.instance.markImageLoaded(c2pReqId);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          PerfC2P.instance.markFirstVisibleFrame(c2pReqId);
+        });
       }
       _sizeStream?.removeListener(_sizeListener!);
     });
