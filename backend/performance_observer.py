@@ -145,7 +145,9 @@ class PipelineTimer:
         return 0.0
 
     def log_summary(self, logger, total_elapsed_s: float, payload_bytes: int,
-                    prompt_chars: int, est_cost_usd: float) -> None:
+                    prompt_chars: int, est_cost_usd: float,
+                    model: str = "", quality: str = "", iteration: int = 0,
+                    generation_type: str = "", preflight_ms: float = 0.0) -> None:
         """Emit a single [PERF SUMMARY] line with all stage timings.
 
         2026-06-18 — added the pre-image stages (history_norm, normalize, the 4
@@ -153,11 +155,21 @@ class PipelineTimer:
         measured, not assumed. backend_ms = total minus the OpenAI image call =
         everything our code spends; the openai_ms / backend_ms split answers
         "our code or OpenAI?". Pure instrumentation — no behaviour change.
+
+        PR0 (2026-07-06) — added model/quality/iteration/generation_type +
+        preflight_ms. WHY: the PERF line carried neither model nor quality, so
+        gpt-image-2/low prod records were NOT separable from historical
+        gpt-image-1/medium in the logs; and total_ms started AFTER the pre-flight
+        gates (auth/ownership/access/claim/billing/quota) so ~2.5-6s of Supabase
+        RTT were unmeasured. These fields close both blind spots. New args are
+        optional with inert defaults → any existing caller is byte-identical.
+        Still pure instrumentation — no behaviour change.
         """
         _total_ms = total_elapsed_s * 1000
         _openai_ms = self.total_openai_ms()
         logger.info(
-            "[PERF SUMMARY] request_id=%s  total_ms=%.0f  backend_ms=%.0f"
+            "[PERF SUMMARY] request_id=%s  total_ms=%.0f  backend_ms=%.0f  preflight_ms=%.0f"
+            "  model=%s  quality=%s  iteration=%d  gen_type=%s"
             "  fetch_ms=%.0f  history_ms=%.0f  normalize_ms=%.0f"
             "  cls_room_ms=%.0f  cls_intent_ms=%.0f  cls_transform_ms=%.0f  cls_editmode_ms=%.0f"
             "  accumulate_ms=%.0f  struct_id_ms=%.0f  vision_ms=%.0f  prompt_ms=%.0f  mask_ms=%.0f"
@@ -167,6 +179,11 @@ class PipelineTimer:
             self.request_id,
             _total_ms,
             _total_ms - _openai_ms,
+            preflight_ms,
+            model or "unknown",
+            quality or "unknown",
+            iteration,
+            generation_type or "unknown",
             self.stage_ms("image_fetch"),
             self.stage_ms("history_norm"),
             self.stage_ms("normalize"),

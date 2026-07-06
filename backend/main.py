@@ -781,6 +781,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _server_timing_mw(request: Request, call_next):
+    """PR0 (2026-07-06) — measure the FULL request wall-time (INCLUDING the auth
+    Depends, which runs before the handler body, and response serialization) and
+    expose it to the client via the standard `Server-Timing` header, so the app
+    can reconstruct click-to-pixel without log access. Pure passthrough: the
+    response is returned unchanged; a failure to add the header must NEVER affect
+    the response. No behaviour change."""
+    _t0 = time.monotonic()
+    response = await call_next(request)
+    try:
+        response.headers["Server-Timing"] = f"app;dur={(time.monotonic() - _t0) * 1000.0:.0f}"
+    except Exception:  # noqa: BLE001 — observability must never break a response
+        pass
+    return response
+
 # Wave 5.17d — Mount the RevenueCat webhook router. The endpoint is
 # POST /webhooks/revenuecat ; see revenuecat_webhook.py for the contract.
 app.include_router(revenuecat_router)
@@ -2385,6 +2402,12 @@ async def generate(
     ui_locale: str = Form("en"),          # Phase 1 — authoritative reply/caption language (en|fr|km). Does NOT touch the generation prompt (English-internal).
     current_user: CurrentUser = Depends(get_current_user),  # Wave 5.17a
 ):
+    # PR0 (2026-07-06) — TRUE handler-entry timestamp (before any pre-flight
+    # gate). The PERF timer _req_start starts far below (after auth/ownership/
+    # access/claim/billing/quota) so those ~2.5-6s of Supabase RTT were invisible
+    # in total_ms. preflight_ms (= _req_start − _handler_entry) is emitted in the
+    # PERF SUMMARY. Pure observability; no branch, no behaviour change.
+    _handler_entry = time.monotonic()
     # ── Step 0: resolve generation profile ───────────────────────────────────
     profile = get_active_profile()
 
@@ -4645,7 +4668,25 @@ async def generate(
         openai_attempts=_timer.openai_attempt_count(),
         vision_calls=1,
     )
-    _timer.log_summary(log, _total_elapsed, _payload_bytes_est, len(design_prompt), _est_cost)
+    # PR0 — enrich the PERF line so gpt-image-2/low prod records are separable
+    # from historical gpt-image-1/medium, and the pre-flight gates are measured.
+    _gen_type = ("v1" if iteration == 1
+                 else "switch" if generation_trigger == "switch"
+                 else "v2")
+    # Log the EFFECTIVE quality sent to the model, NOT profile.quality. gpt-image-2
+    # hard-overrides quality→"low" just before edit_kwargs (main.py ~4011), so
+    # profile.quality (=medium on MOBILE_MVP_BASELINE) is the KNOWN cosmetic
+    # PRE-override value (see memory gpt_image_2_migration, "piège #1"). Logging
+    # profile.quality would make PR0 perpetuate the very "quality=medium" artifact
+    # it exists to dispel.
+    _effective_quality = ("low" if IMAGE_MODEL.startswith("gpt-image-2")
+                          else profile.quality)
+    _timer.log_summary(
+        log, _total_elapsed, _payload_bytes_est, len(design_prompt), _est_cost,
+        model=IMAGE_MODEL, quality=_effective_quality, iteration=iteration,
+        generation_type=_gen_type,
+        preflight_ms=(_req_start - _handler_entry) * 1000.0,
+    )
     log.info(
         "[Generation Cost] mode=%s  duration=%.1fs  "
         "quality=%s  input_fidelity=%s  size=%s  "
@@ -4787,17 +4828,21 @@ async def refine_endpoint(
     style_label: str = Form(""),           # atmosphère courante (pour le record)
     iteration: int = Form(1),              # numéro de vision de ce refine
     source_version_id: str = Form(""),     # version affichée dont ce refine dérive
+    client_request_id: str = Form(""),     # PR0 — id partagé avec PerfC2P (correlation obs)
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Contrat unique (D-b) : advisory (YELLOW/RED, 0 gen) | completed (image immédiate,
     verification=deferred). Moteur 2 isolé ; adaptateur ledger au niveau endpoint."""
+    _handler_entry = time.monotonic()  # PR0 — true entry for the /refine [PERF SUMMARY]
     if not await _validate_session_ownership(session_id=session_id, user_id=current_user.user_id):
         raise HTTPException(status_code=403, detail={
             "error_code": "SESSION_OWNERSHIP_DENIED",
             "user_message": "This project belongs to a different account.", "retryable": False})
 
     # 1) Parser
+    _t_parse = time.monotonic()
     changes = await _refine_parse(message, client=openai)
+    _parser_ms = (time.monotonic() - _t_parse) * 1000.0
     if not changes:
         return {"status": "error", "error": "empty_request",
                 "user_message": "I couldn't read a change to make — could you rephrase?"}
@@ -4828,15 +4873,35 @@ async def refine_endpoint(
             "retryable": False})
 
     # 4) GEN-ONLY (Verify async §14) : source → normalize → 1 gen → upload
+    _t_fetch = time.monotonic()
     src_bytes, src_mime = await _refine_fetch_bytes(before_image_url)
+    _refine_fetch_ms = (time.monotonic() - _t_fetch) * 1000.0
     _refine_normalize(changes)
+    _t_openai = time.monotonic()
     gen = await _refine_generate(openai, src_bytes, src_mime, changes, mode="default")
+    _refine_openai_ms = (time.monotonic() - _t_openai) * 1000.0
+    _t_up = time.monotonic()
     image_url = _refine_upload(session_id, gen.image)
+    _refine_upload_ms = (time.monotonic() - _t_up) * 1000.0
 
     # 5) fire-and-forget : commit crédit + observabilité (jamais bloquant)
     _refine_fire_and_forget(_refine_bill_commit(current_user.user_id, _intent, supa=supa), "billing_commit")
     log.info("[refine] user=%s session=%s changes=%d est_success=%.2f conflicts=%d",
              current_user.user_id[:8], session_id, len(gen.changes), gen.estimated_success, len(gen.conflicts))
+    # PR0 — uniform [PERF SUMMARY] for /refine (V3 had NO latency line at all).
+    # Shares the key field names with /generate so a single grep aggregates both.
+    # refine has no pre-flight gates / struct-capture ; the parser is the extra
+    # TEXT-LLM stage on the critical path. Pure observability.
+    _refine_total_ms = (time.monotonic() - _handler_entry) * 1000.0
+    log.info(
+        "[PERF SUMMARY] request_id=%s  total_ms=%.0f  backend_ms=%.0f  preflight_ms=0"
+        "  model=%s  quality=%s  iteration=%d  gen_type=refine"
+        "  parser_ms=%.0f  fetch_ms=%.0f  openai_ms=%.0f  upload_ms=%.0f  changes=%d",
+        (client_request_id.strip() or _intent),  # PR0 — same id as PerfC2P (correlation)
+        _refine_total_ms, _refine_total_ms - _refine_openai_ms,
+        IMAGE_MODEL, "low", iteration,
+        _parser_ms, _refine_fetch_ms, _refine_openai_ms, _refine_upload_ms, len(gen.changes),
+    )
 
     # 6) LEDGER ADAPTER (orchestration) — construit le VersionRecord ICI, PAS dans le
     #    moteur. Le refine PRÉSERVE l'identité → il HÉRITE `structural_identity` verbatim
