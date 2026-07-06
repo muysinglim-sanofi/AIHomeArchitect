@@ -7,7 +7,15 @@
 // line) and [imageResult] (the generated render). Future branching
 // waves will derive a vision graph from these events without touching
 // the backend schema.
-enum MessageType { text, imageResult, loading, system, branchEvent, advisory }
+enum MessageType {
+  text,
+  imageResult,
+  loading,
+  system,
+  branchEvent,
+  advisory,
+  refineReport
+}
 
 /// Refine V2 (8b-3) — données d'une carte advisory (YELLOW/RED de l'Advisor).
 /// Porte le message d'origine pour relancer /refine avec confirm=true (Try anyway)
@@ -21,6 +29,53 @@ class AdvisoryInfo {
     required this.originalMessage,
     this.roomType = '',
   });
+}
+
+/// Refine V2 (8b-4b) — données d'une carte « Still missing » (verify INCOMPLETE).
+/// [report] = texte Applied ✓ / Still missing □ construit par le backend (P3).
+/// [missingRaws] = les instructions EXACTES (champ `raw`) des seuls changements NON
+/// appliqués (dédupliquées, ordre préservé) → [Retry] les rejoue de façon CIBLÉE sur
+/// l'image incomplète (confirm=true, pas de re-advisory).
+/// [afterUrl] + [sourceVersionId] = l'ANCRE de la vision incomplète EXACTE. Sans elle,
+/// un Retry cliqué sur une vieille carte s'appliquerait à la vision courante (« bonne
+/// modif, mauvaise vision »). [afterUrl] est comparé au tip actif pour n'autoriser le
+/// Retry que si cette vision est toujours la source active.
+/// N'existe QUE sur `verification == incomplete`. [Keep] masque les boutons.
+class RefineReportInfo {
+  final String report;
+  final List<String> missingRaws;
+  final String afterUrl; // ancre : l'image incomplète exacte (= tip au moment T)
+  final String sourceVersionId; // ancre secondaire (version du résultat incomplet)
+  const RefineReportInfo({
+    required this.report,
+    required this.missingRaws,
+    required this.afterUrl,
+    this.sourceVersionId = '',
+  });
+}
+
+/// 8b-4b — un [Retry] n'est autorisé QUE si la carte est ancrée à l'image
+/// actuellement active (le tip de la lignée). Empêche d'appliquer les changements
+/// manquants d'une vision ANCIENNE sur une vision plus récente — le seul risque
+/// capable d'appliquer une modif correcte sur la mauvaise vision. Pur → testable.
+bool refineRetryAllowed(RefineReportInfo info, String? activeSourceUrl) {
+  if (info.missingRaws.isEmpty) return false;
+  if (info.afterUrl.isEmpty) return false;
+  return info.afterUrl == activeSourceUrl;
+}
+
+/// 8b-4b — dédup en préservant l'ordre (comparaison trimée, insensible à la casse)
+/// pour ne jamais renvoyer deux fois la même instruction au parser refine, et pour
+/// écarter les entrées vides. Pur → testable.
+List<String> dedupePreservingOrder(Iterable<String> items) {
+  final seen = <String>{};
+  final out = <String>[];
+  for (final raw in items) {
+    final s = raw.trim();
+    if (s.isEmpty) continue;
+    if (seen.add(s.toLowerCase())) out.add(s);
+  }
+  return out;
 }
 
 class GeneratedResult {
@@ -87,6 +142,7 @@ class MessageModel {
   final MessageType type;
   final GeneratedResult? result;
   final AdvisoryInfo? advisory; // non-null quand type == MessageType.advisory
+  final RefineReportInfo? refineReport; // non-null quand type == refineReport
   final DateTime createdAt;
 
   const MessageModel({
@@ -96,6 +152,7 @@ class MessageModel {
     this.type = MessageType.text,
     this.result,
     this.advisory,
+    this.refineReport,
     required this.createdAt,
   });
 }

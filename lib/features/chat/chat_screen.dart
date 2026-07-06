@@ -218,9 +218,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   List<dynamic> _lastRefineChanges = const <dynamic>[];
   String _lastRefineBeforeUrl = '';
   String _lastRefineAfterUrl = '';
+  String _lastRefineVersionId = ''; // 8b-4b — ancre secondaire de la vision incomplète
 
   // 8b-3 — advisory cards déjà traitées (Try anyway / Edit) → boutons masqués.
   final Set<String> _handledAdvisories = {};
+  // 8b-4b — rapports « Still missing » déjà traités (Retry / Keep) → boutons masqués.
+  final Set<String> _handledReports = {};
 
   // Wave 4.7.2 — persisted architectural identity token (one-time capture at
   // V1, round-tripped on V2+ so structural_identity_clause stays present).
@@ -1580,23 +1583,43 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     if (verification != 'incomplete') return;
     final report = (vres['report'] as String?)?.trim() ?? '';
     if (report.isEmpty) return;
+    // 8b-4b — sur `incomplete`, `missing[]` est CONNU : on porte les instructions
+    // (`raw`) des seuls changements non appliqués pour un [Retry] CIBLÉ. Fallback
+    // `normalized` si `raw` vide ; dédup (ordre préservé) + drop des vides.
+    final missingRaws = dedupePreservingOrder([
+      for (final m in (vres['missing'] as List<dynamic>? ?? const <dynamic>[]))
+        if (m is Map)
+          ((m['raw'] as String?)?.trim().isNotEmpty ?? false)
+              ? (m['raw'] as String).trim()
+              : ((m['normalized'] as String?)?.trim() ?? ''),
+    ]);
     setState(() {
       _messages.add(MessageModel(
         id: 'refine_report_${DateTime.now().millisecondsSinceEpoch}',
         content: report, // Applied ✓ / Still missing □
         isAi: true,
+        type: MessageType.refineReport,
+        refineReport: RefineReportInfo(
+          report: report,
+          missingRaws: missingRaws,
+          // ANCRE : cette carte est liée à l'image incomplète EXACTE ; le Retry
+          // n'est autorisé que tant qu'elle reste le tip actif (cf. refineRetryAllowed).
+          afterUrl: afterUrl,
+          sourceVersionId: _lastRefineVersionId,
+        ),
         createdAt: DateTime.now(),
       ));
     });
     _scrollToBottom();
-    // NB (8b-4b) : le bouton [Retry missing changes] interactif s'attache ICI (uniquement
-    // sur `incomplete`, où `missing[]` est connu) + l'advisory card = étape suivante.
   }
 
   /// 8b-3 — [Try anyway] / [Continue anyway] : relance /refine avec confirm=true sur le
   /// message d'origine → DÉTERMINISTE (passe outre l'Advisor, bypass total du classifieur).
   void _onAdvisoryTryAnyway(MessageModel m) {
     if (m.advisory == null || _busy) return;
+    // Contrat final : RED n'est JAMAIS forçable — aucun confirm=true depuis RED.
+    // (Le bouton n'existe pas pour RED ; garde défensive contre tout futur chemin.)
+    if (m.advisory!.verdict == 'red') return;
     setState(() => _handledAdvisories.add(m.id));
     _generate(
       overridePrompt: m.advisory!.originalMessage,
@@ -1608,6 +1631,43 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   /// 8b-3 — [Edit request] : on masque les boutons ; l'user reformule sa demande.
   void _onAdvisoryEdit(MessageModel m) {
     setState(() => _handledAdvisories.add(m.id));
+  }
+
+  /// 8b-4b — [Retry missing changes] : rejoue UNIQUEMENT les changements non appliqués
+  /// (`missingRaws`), de façon CIBLÉE, sur l'image incomplète déjà affichée
+  /// (_generationSourceUrl pointe dessus depuis le chemin succès). confirm=true → pas de
+  /// re-advisory (l'user a vu le résultat et veut compléter). Réutilise /refine tel quel.
+  /// 8b-4b — le [Retry] d'une carte est autorisé UNIQUEMENT si :
+  ///   • la carte est encore ancrée au tip actif (refineRetryAllowed) — sinon on
+  ///     appliquerait les manquants d'une vieille vision sur une plus récente ; ET
+  ///   • aucun re-upload n'est en attente (_sourceReplaced) — sinon _generate
+  ///     réinitialiserait l'itération (fresh V1) et router­ait vers /generate sur la
+  ///     NOUVELLE photo au lieu de /refine sur l'image incomplète.
+  bool _canRetryReport(RefineReportInfo? info) =>
+      info != null &&
+      !_sourceReplaced &&
+      refineRetryAllowed(info, _generationSourceUrl);
+
+  void _onRefineRetry(MessageModel m) {
+    final info = m.refineReport;
+    if (info == null || _busy) return;
+    // GARDE D'ANCRAGE (HIGH) : double garde (le bouton est déjà masqué si périmé).
+    if (!_canRetryReport(info)) return;
+    setState(() => _handledReports.add(m.id));
+    // missingRaws est déjà dédupliqué à la construction ; re-dédup défensif.
+    final raws = dedupePreservingOrder(info.missingRaws);
+    // Un seul manquant → l'instruction telle quelle ; plusieurs → jointure naturelle.
+    final retryMessage = raws.length == 1 ? raws.first : raws.join(', ');
+    _generate(
+      overridePrompt: retryMessage,
+      trigger: 'chat',
+      refineConfirm: true,
+    );
+  }
+
+  /// 8b-4b — [Keep this version] : l'user garde le résultat partiel ; on masque les boutons.
+  void _onRefineKeep(MessageModel m) {
+    setState(() => _handledReports.add(m.id));
   }
 
   Future<void> _generate({String? overridePrompt, String trigger = 'unknown', bool refineConfirm = false}) async {
@@ -2032,6 +2092,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         _lastRefineChanges = (result['changes'] as List<dynamic>?) ?? const <dynamic>[];
         _lastRefineBeforeUrl = generationSource;
         _lastRefineAfterUrl = (result['after_image_url'] as String?) ?? '';
+        // 8b-4b — ancre de CETTE vision incomplète (id de version renvoyé par le ledger).
+        _lastRefineVersionId = (result['version_id'] as String?) ?? '';
       } else {
         result = await GenerationService().generate(
           sessionId: _project.id,
@@ -3004,6 +3066,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                         handled: _handledAdvisories.contains(msg.id),
                         onTryAnyway: () => _onAdvisoryTryAnyway(msg),
                         onEdit: () => _onAdvisoryEdit(msg),
+                      ),
+                    MessageType.refineReport => _RefineReportCard(
+                        key: ValueKey(msg.id),
+                        message: msg,
+                        handled: _handledReports.contains(msg.id),
+                        canRetry: _canRetryReport(msg.refineReport),
+                        // Périmée = il RESTE des manquants mais la carte n'est plus le
+                        // tip actif (une vision plus récente / re-upload a suivi).
+                        stale: (msg.refineReport?.missingRaws.isNotEmpty ?? false) &&
+                            !_canRetryReport(msg.refineReport),
+                        onRetry: () => _onRefineRetry(msg),
+                        onKeep: () => _onRefineKeep(msg),
                       ),
                   };
                 },
@@ -4886,8 +4960,9 @@ class _AdvisoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Contrat final : YELLOW → [Try anyway] + [Edit request] ; RED → [Edit request]
+    // SEULEMENT (jamais forçable, aucun confirm=true possible depuis une carte RED).
     final isRed = message.advisory?.verdict == 'red';
-    final primaryLabel = isRed ? 'Continue anyway' : 'Try anyway';
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -4916,30 +4991,146 @@ class _AdvisoryCard extends StatelessWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  GestureDetector(
-                    onTap: onTryAnyway,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: AppColors.textPrimary,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        primaryLabel,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: AppColors.surface,
-                              fontWeight: FontWeight.w600,
-                            ),
+                  // Bouton d'override UNIQUEMENT pour YELLOW. RED n'en a pas.
+                  if (!isRed) ...[
+                    GestureDetector(
+                      onTap: onTryAnyway,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: AppColors.textPrimary,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Try anyway',
+                          style:
+                              Theme.of(context).textTheme.labelLarge?.copyWith(
+                                    color: AppColors.surface,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
+                    const SizedBox(width: 8),
+                  ],
                   GestureDetector(
                     onTap: onEdit,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                       child: Text(
                         'Edit request',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 8b-4b — carte « Still missing » (verify INCOMPLETE). Affiche le rapport
+/// Applied ✓ / Still missing □ + actions DÉTERMINISTES :
+///   • [Retry missing changes] → rejoue les seuls changements manquants (confirm=true),
+///     UNIQUEMENT si [canRetry] (la carte est encore le tip actif — cf. _canRetryReport).
+///   • [Keep this version]      → garde le partiel ; masque les boutons.
+/// [stale] = il reste des manquants MAIS la carte n'est plus la vision active (une
+/// vision plus récente / un re-upload a suivi) → on retire [Retry] (jamais appliquer
+/// sur la mauvaise vision) et on l'explique par une ligne discrète.
+class _RefineReportCard extends StatelessWidget {
+  final MessageModel message;
+  final bool handled;
+  final bool canRetry;
+  final bool stale;
+  final VoidCallback onRetry;
+  final VoidCallback onKeep;
+  const _RefineReportCard({
+    super.key,
+    required this.message,
+    required this.handled,
+    required this.canRetry,
+    required this.stale,
+    required this.onRetry,
+    required this.onKeep,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.85,
+        ),
+        margin: const EdgeInsets.fromLTRB(2, 2, 0, 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.textTertiary.withAlpha(70)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              message.content, // Applied ✓ / Still missing □ (P3, multi-ligne)
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.5,
+                    fontSize: 14.5,
+                  ),
+            ),
+            // Carte périmée : on explique pourquoi le Retry a disparu.
+            if (!handled && stale) ...[
+              const SizedBox(height: 8),
+              Text(
+                'This version is no longer the latest — retry unavailable.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textTertiary,
+                      fontStyle: FontStyle.italic,
+                    ),
+              ),
+            ],
+            if (!handled) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (canRetry) ...[
+                    GestureDetector(
+                      onTap: onRetry,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 9),
+                        decoration: BoxDecoration(
+                          color: AppColors.textPrimary,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Retry missing changes',
+                          style:
+                              Theme.of(context).textTheme.labelLarge?.copyWith(
+                                    color: AppColors.surface,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  GestureDetector(
+                    onTap: onKeep,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 9),
+                      child: Text(
+                        'Keep this version',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(
                               color: AppColors.textSecondary,
                             ),
