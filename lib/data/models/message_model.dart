@@ -7,7 +7,21 @@
 // line) and [imageResult] (the generated render). Future branching
 // waves will derive a vision graph from these events without touching
 // the backend schema.
-enum MessageType { text, imageResult, loading, system, branchEvent }
+enum MessageType { text, imageResult, loading, system, branchEvent, advisory }
+
+/// Refine V2 (8b-3) — données d'une carte advisory (YELLOW/RED de l'Advisor).
+/// Porte le message d'origine pour relancer /refine avec confirm=true (Try anyway)
+/// de façon DÉTERMINISTE, sans repasser par le classifieur /chat.
+class AdvisoryInfo {
+  final String verdict; // 'yellow' | 'red'
+  final String originalMessage; // le message user d'origine → relance confirm=true
+  final String roomType;
+  const AdvisoryInfo({
+    required this.verdict,
+    required this.originalMessage,
+    this.roomType = '',
+  });
+}
 
 class GeneratedResult {
   final String beforeImageUrl;
@@ -72,6 +86,7 @@ class MessageModel {
   final bool isAi;
   final MessageType type;
   final GeneratedResult? result;
+  final AdvisoryInfo? advisory; // non-null quand type == MessageType.advisory
   final DateTime createdAt;
 
   const MessageModel({
@@ -80,6 +95,7 @@ class MessageModel {
     required this.isAi,
     this.type = MessageType.text,
     this.result,
+    this.advisory,
     required this.createdAt,
   });
 }

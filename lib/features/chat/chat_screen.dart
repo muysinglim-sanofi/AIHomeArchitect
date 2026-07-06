@@ -219,6 +219,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   String _lastRefineBeforeUrl = '';
   String _lastRefineAfterUrl = '';
 
+  // 8b-3 — advisory cards déjà traitées (Try anyway / Edit) → boutons masqués.
+  final Set<String> _handledAdvisories = {};
+
   // Wave 4.7.2 — persisted architectural identity token (one-time capture at
   // V1, round-tripped on V2+ so structural_identity_clause stays present).
   String _structuralIdentity = '';
@@ -1590,7 +1593,24 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     // sur `incomplete`, où `missing[]` est connu) + l'advisory card = étape suivante.
   }
 
-  Future<void> _generate({String? overridePrompt, String trigger = 'unknown'}) async {
+  /// 8b-3 — [Try anyway] / [Continue anyway] : relance /refine avec confirm=true sur le
+  /// message d'origine → DÉTERMINISTE (passe outre l'Advisor, bypass total du classifieur).
+  void _onAdvisoryTryAnyway(MessageModel m) {
+    if (m.advisory == null || _busy) return;
+    setState(() => _handledAdvisories.add(m.id));
+    _generate(
+      overridePrompt: m.advisory!.originalMessage,
+      trigger: 'chat',
+      refineConfirm: true,
+    );
+  }
+
+  /// 8b-3 — [Edit request] : on masque les boutons ; l'user reformule sa demande.
+  void _onAdvisoryEdit(MessageModel m) {
+    setState(() => _handledAdvisories.add(m.id));
+  }
+
+  Future<void> _generate({String? overridePrompt, String trigger = 'unknown', bool refineConfirm = false}) async {
     // ── Shared generation authorization guard (P0 duplicate-billing fix) ──────
     // EVERY entry point (auto / button / switch / chat / resume / any future)
     // routes through here. Reject (a) a concurrent fire and (b) an accidental
@@ -1966,6 +1986,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           structuralIdentity: _structuralIdentity,
           versions: _versions,
           sourceVersionId: sourceVersionIdVal,
+          confirm: refineConfirm, // 8b-3 [Try anyway] → passe outre l'advisory
         );
         // Contrat unique (D-b) : advisory (YELLOW/RED — 0 image) ou error → PAS de
         // chemin image. On intercepte ICI, avant classifyGenerateResult.
@@ -1975,20 +1996,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           _longGenerationTimer = null;
           if (!mounted || mySeq != _genSeq) return;
           pendingNotifier.clear(sessionIdForLifecycle);
-          final String bubble = (rStatus == 'advisory')
-              ? (((result['advice'] as Map?)?['message'] as String?) ??
-                  "Let me know how you'd like to proceed.")
-              : ((result['user_message'] as String?) ??
-                  "I couldn't apply that — could you rephrase?");
           setState(() {
             _isGenerating = false;
             _messages.removeWhere((m) => m.type == MessageType.loading);
-            _messages.add(MessageModel(
-              id: 'refine_${rStatus}_${DateTime.now().millisecondsSinceEpoch}',
-              content: bubble,
-              isAi: true,
-              createdAt: DateTime.now(),
-            ));
+            if (rStatus == 'advisory') {
+              // 8b-3 — carte advisory avec bouton [Try anyway]/[Continue anyway] déterministe.
+              final advice = (result['advice'] as Map?) ?? const {};
+              _messages.add(MessageModel(
+                id: 'refine_advisory_${DateTime.now().millisecondsSinceEpoch}',
+                content: (advice['message'] as String?) ??
+                    "Let me know how you'd like to proceed.",
+                isAi: true,
+                type: MessageType.advisory,
+                advisory: AdvisoryInfo(
+                  verdict: (advice['overall'] as String?) ?? 'yellow',
+                  originalMessage: prompt,
+                  roomType: _currentRoomType,
+                ),
+                createdAt: DateTime.now(),
+              ));
+            } else {
+              _messages.add(MessageModel(
+                id: 'refine_error_${DateTime.now().millisecondsSinceEpoch}',
+                content: (result['user_message'] as String?) ??
+                    "I couldn't apply that — could you rephrase?",
+                isAi: true,
+                createdAt: DateTime.now(),
+              ));
+            }
           });
           _scrollToBottom();
           return;
@@ -2962,6 +2997,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
                         key: ValueKey(msg.id),
                         message: msg,
                         index: index,
+                      ),
+                    MessageType.advisory => _AdvisoryCard(
+                        key: ValueKey(msg.id),
+                        message: msg,
+                        handled: _handledAdvisories.contains(msg.id),
+                        onTryAnyway: () => _onAdvisoryTryAnyway(msg),
+                        onEdit: () => _onAdvisoryEdit(msg),
                       ),
                   };
                 },
@@ -4825,6 +4867,94 @@ class _SheetRoomLabel extends StatelessWidget {
 // contract — and routing / session / generation — is unchanged.
 
 // ── System message bubble ─────────────────────────────────────────────────────
+
+// 8b-3 — carte advisory (YELLOW/RED de l'Advisor). Affiche le message architecte + deux
+// actions DÉTERMINISTES : [Try anyway]/[Continue anyway] (relance confirm=true) et [Edit
+// request] (masque les boutons). Une fois traitée (handled), les boutons disparaissent.
+class _AdvisoryCard extends StatelessWidget {
+  final MessageModel message;
+  final bool handled;
+  final VoidCallback onTryAnyway;
+  final VoidCallback onEdit;
+  const _AdvisoryCard({
+    super.key,
+    required this.message,
+    required this.handled,
+    required this.onTryAnyway,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isRed = message.advisory?.verdict == 'red';
+    final primaryLabel = isRed ? 'Continue anyway' : 'Try anyway';
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.85,
+        ),
+        margin: const EdgeInsets.fromLTRB(2, 2, 0, 12),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.textTertiary.withAlpha(70)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              message.content,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.5,
+                    fontSize: 14.5,
+                  ),
+            ),
+            if (!handled) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: onTryAnyway,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: AppColors.textPrimary,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        primaryLabel,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: AppColors.surface,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: onEdit,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                      child: Text(
+                        'Edit request',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _SystemMessageBubble extends StatelessWidget {
   final MessageModel message;
