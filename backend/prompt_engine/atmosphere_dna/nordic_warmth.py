@@ -60,7 +60,7 @@ for _d in [
         # Allows TV placement on existing wall OR media console; explicitly
         # forbids creating a new wall. Standardized across all atmospheres
         # to prevent wall-invention side effects.
-        room_specific_constraints=["layered rugs permitted — wool flatweave under pile", "include a television as the living-room focal point, seating arranged toward it — clearly present on an existing wall or low media console, never a new wall or by converting glazing into a wall"],
+        room_specific_constraints=["layered rugs permitted — wool flatweave under pile", "include a television as the living-room focal point, in the primary seating's forward sightline, on an existing wall or low media console, never a new wall or by converting glazing into a wall"],
         # Wave 5.5.34b — dropped "visible bedroom door" reference. Bench
         # 2026-05-25 showed the model literally invented a bedroom zone +
         # glass partition when the photo had no bedroom. Replaced with the

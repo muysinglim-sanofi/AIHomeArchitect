@@ -78,7 +78,7 @@ for _d in [
         # create a wall for the TV). New wording allows TV on existing
         # wall OR media console and explicitly forbids creating a new
         # wall. TV remains mandatory ("visible in living area").
-        room_specific_constraints=["include a television as the living-room focal point, seating arranged toward it — clearly present on an existing wall or low media console, never a new wall or by converting glazing into a wall", "balanced furniture placement — not haphazard"],
+        room_specific_constraints=["include a television as the living-room focal point, in the primary seating's forward sightline, on an existing wall or low media console, never a new wall or by converting glazing into a wall", "balanced furniture placement — not haphazard"],
         # Wave 5.5.36 — added "visible kitchen" continuity matching the WM
         # pattern. Previous wording mentioned dining + hallway but never
         # kitchen, contributing to "coin cuisine perdu" in bench 2026-05-25.

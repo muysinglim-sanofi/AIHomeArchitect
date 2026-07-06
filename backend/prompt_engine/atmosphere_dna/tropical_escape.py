@@ -57,7 +57,7 @@ for _d in [
         # Wave 5.5.49 — adopting universal media console flex pattern
         # (standardization across all atmospheres). Allows TV on existing
         # wall OR media console; explicitly forbids creating a new wall.
-        room_specific_constraints=["include a television as the living-room focal point, seating arranged toward it — clearly present on an existing wall or low media console, never a new wall or by converting glazing into a wall", "where the photographed apartment shows an open side to terrace or garden, preserve and emphasize that opening"],
+        room_specific_constraints=["include a television as the living-room focal point, in the primary seating's forward sightline, on an existing wall or low media console, never a new wall or by converting glazing into a wall", "where the photographed apartment shows an open side to terrace or garden, preserve and emphasize that opening"],
         # Wave 5.5.35 — drop hard "into terrace" (assumed terrace exists,
         # leak source on indoor apartments). Add explicit "visible kitchen"
         # continuity matching the WM pattern. Terrace kept as conditional.
