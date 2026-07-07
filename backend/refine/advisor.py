@@ -107,6 +107,10 @@ _EXISTING_OPS = {"move", "remove", "modify", "replace"}
 # Réutilise la MÊME catégorie « installation fonctionnelle » que le Normalizer (pas une
 # nouvelle catégorie) : une zone fonctionnelle explicite et plausible est GREEN.
 from refine.normalizer import _FUNCTIONAL_INSTALL, _FUNC_INSTALL_VERB
+# Wave 4.9.5 — taxonomie PARTAGÉE des pièces/zones (source unique = intent_classifier).
+# Import unidirectionnel refine→prompt_engine (aucun cycle : intent_classifier n'importe
+# jamais refine). Réutilisée pour la calibration L1 des conversions de zone.
+from prompt_engine.intent_classifier import _FUNCTIONAL_ROOM_RE
 
 # STRUCTURE — ajout/ouverture/conversion d'un NOUVEL élément ou zone (pas d'ambiguïté de cible).
 _STRUCT_ADDITION = re.compile(r"^\s*(add|create|build|put|install|make|convert|open|fit|set\s+up)\b", re.I)
@@ -114,7 +118,8 @@ _STRUCT_ADDITION = re.compile(r"^\s*(add|create|build|put|install|make|convert|o
 # Générique (mot-qualificatif), pas de phrase exacte. Absent → demande ambiguë (« quelle cloison ? »).
 _TARGET_QUALIFIER = re.compile(
     r"\b(right|left|back|front|rear|north|south|east|west|side|dividing|partition|main|middle|"
-    r"central|first|second|third|between|load-bearing|far|near|entrance|kitchen|bedroom|"
+    r"central|first|second|third|between|load-bearing|far|near|entrance|corner|nook|alcove|"
+    r"kitchen|bedroom|"
     r"bathroom|living|dining|hallway|corridor|garden|patio|terrace|street|window\s+side)\b", re.I)
 
 
@@ -132,6 +137,24 @@ def _room_is_interior(room_type: Optional[str]) -> bool:
     return True
 
 
+# Wave 4.9.5 — cible de conversion EXPLICITE : un qualificatif spatial dans le detail,
+# OU une redirection "into / instead of" dans la clause (la destination EST la cible).
+_REPLACE_TARGET = re.compile(
+    r"\b(instead\s+of|in\s+place\s+of|in\s+the\s+place\s+of|into|replacing)\b", re.I)
+# Garde-fou anti-meuble : un MEUBLE nommé d'après une pièce ("dining table",
+# "bedroom lamp", "office chair", "kitchen island") n'est PAS une installation de zone.
+_FURNISH_TAIL = re.compile(
+    r"\b(table|desk|chair|island|counter|counters|cabinet|cabinets|lamp|light|sink|unit|"
+    r"units|set|rug|sofa|couch|bed|shelf|shelves|stool|bench|mirror|rack|stand|pouf|"
+    r"ottoman|armoire|wardrobe|door|window)\b", re.I)
+
+
+def _has_explicit_target(change: Change) -> bool:
+    """Une cible spatiale (detail) ou une redirection into/instead-of (clause) est présente."""
+    return bool(_TARGET_QUALIFIER.search(change.detail or "")
+                or _REPLACE_TARGET.search(change.raw or ""))
+
+
 def _l1_classify(change: Change, room_type: Optional[str]) -> str:
     """L1 déterministe → 'green' | 'yellow' | 'red' | 'escalate'. Décision fondée sur les
     Change[] CANONICALISÉS (type + object), jamais sur des phrases exactes."""
@@ -147,6 +170,17 @@ def _l1_classify(change: Change, room_type: Optional[str]) -> str:
     #    (add an open kitchen · create a dressing area · convert this side into a bathroom).
     if _FUNCTIONAL_INSTALL.search(text) and _FUNC_INSTALL_VERB.search(raw_low):
         return "green"
+
+    # 2.5) Wave 4.9.5 — conversion de ZONE fonctionnelle hors _FUNCTIONAL_INSTALL
+    #      (bedroom/office/sleeping area/lounge/…), via la taxonomie PARTAGÉE _FUNCTIONAL_ROOM_RE.
+    #      Rend le verdict COHÉRENT quel que soit le type posé par le Parser (add vs structure) —
+    #      supprime l'incohérence prouvée (« add a bedroom » → RED L2 vs « I would like a
+    #      bedroom » → GREEN). Contrat : cible explicite → GREEN ; cible absente/ambiguë → YELLOW.
+    #      Garde-fou anti-meuble (« dining table ») via _FURNISH_TAIL sur l'objet.
+    if (_FUNC_INSTALL_VERB.search(raw_low)
+            and _FUNCTIONAL_ROOM_RE.search(text)
+            and not _FURNISH_TAIL.search(change.object or "")):
+        return "green" if _has_explicit_target(change) else "yellow"
 
     # 3) STRUCTURE explicite (canonicalisée) :
     if change.type == "structure":
