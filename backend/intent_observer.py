@@ -356,6 +356,47 @@ async def get_latest_intent_for_session(
         return None
 
 
+async def get_intent_by_id(
+    *,
+    user_id: str,
+    intent_id: str,
+    supa=None,
+) -> Optional[dict]:
+    """Phase 1 (Generation Orchestrator) — LECTURE SEULE par id, pour la récupération
+    unifiée (GET /v1/intents/by-id/{id}). Le backend est service-role (RLS bypassée),
+    donc on filtre EXPLICITEMENT sur user_id → jamais l'intent d'autrui. Renvoie
+    `{intent_id, status, iteration, has_result, result_ref}` ou None. Best-effort."""
+    supa = supa or _get_supa()
+    if not intent_id:
+        return None
+    try:
+        result = await asyncio.to_thread(
+            lambda: supa.table("generation_intents")
+            .select("intent_id, status, iteration, result_ref")
+            .eq("intent_id", intent_id)
+            .eq("user_id", user_id)          # owner check EXPLICITE (pas seulement la RLS)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(result, "data", None) or []
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "intent_id": row.get("intent_id"),
+            "status": row.get("status"),
+            "iteration": row.get("iteration"),
+            "has_result": row.get("result_ref") is not None,
+            "result_ref": row.get("result_ref"),   # métadonnées compactes durables
+        }
+    except Exception as exc:
+        log.warning(
+            "[INTENT-OBS] get_by_id failed (swallowed) intent=%s err=%s: %s",
+            intent_id, type(exc).__name__, exc,
+        )
+        return None
+
+
 @dataclass(frozen=True)
 class ClaimResult:
     won: bool

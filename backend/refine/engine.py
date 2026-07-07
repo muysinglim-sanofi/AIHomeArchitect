@@ -62,15 +62,44 @@ class GenerateResult:
     estimated_success: float     # [0,1] matrice — pour observabilité/UX
 
 
-async def refine_generate(client, image_bytes: bytes, mime: str, changes: list[Change],
-                          *, mode: str = "default") -> GenerateResult:
-    """UNE génération, SANS Verify (perceived-latency §14) : resolve → plan → execute.
-    L'endpoint renvoie l'image immédiatement puis vérifie via `verify()` en 2ᵉ appel."""
+@dataclass
+class PreparedRefine:
+    """Préparation PURE (0 réseau) d'une étape refine : le Plan figé + les conflits.
+    Phase 1 (Generation Orchestrator) : frappée UNE fois ; le retry n'entoure QUE
+    l'appel image avec `prompt`/`plan` FIGÉS (jamais un re-plan légèrement différent)."""
+    plan: object                  # refine.planner.Plan — .strategy.prompt/.ordered_changes/.estimated_success
+    conflicts: list[str]
+
+    @property
+    def prompt(self) -> str:
+        return self.plan.strategy.prompt
+
+    @property
+    def ordered_changes(self) -> list[Change]:
+        return self.plan.ordered_changes
+
+    @property
+    def estimated_success(self) -> float:
+        return self.plan.estimated_success
+
+
+def prepare(changes: list[Change], *, mode: str = "default") -> PreparedRefine:
+    """PUR, déterministe, 0 appel réseau : resolve_conflicts → plan. UNE SEULE source
+    de logique de préparation — refine_generate / refine_step / l'orchestrateur
+    délèguent tous ici (pas de deux implémentations parallèles qui divergeraient)."""
     changes, conflicts = resolve_conflicts(changes)
     p = plan(changes, mode=mode)
-    edited = await _execute_strategy(client, image_bytes, mime, p)
-    return GenerateResult(image=edited, changes=p.ordered_changes, conflicts=conflicts,
-                          estimated_success=p.estimated_success)
+    return PreparedRefine(plan=p, conflicts=conflicts)
+
+
+async def refine_generate(client, image_bytes: bytes, mime: str, changes: list[Change],
+                          *, mode: str = "default") -> GenerateResult:
+    """UNE génération, SANS Verify (perceived-latency §14). Délègue à prepare() (prep
+    unique) + _execute_strategy. L'endpoint renvoie l'image puis vérifie en 2ᵉ appel."""
+    prepared = prepare(changes, mode=mode)
+    edited = await _execute_strategy(client, image_bytes, mime, prepared.plan)
+    return GenerateResult(image=edited, changes=prepared.ordered_changes,
+                          conflicts=prepared.conflicts, estimated_success=prepared.estimated_success)
 
 
 async def _execute_strategy(client, image_bytes: bytes, mime: str, p) -> bytes:
@@ -84,14 +113,13 @@ async def _execute_strategy(client, image_bytes: bytes, mime: str, p) -> bytes:
 
 async def refine_step(client, image_bytes: bytes, mime: str, changes: list[Change],
                       *, mode: str = "default") -> RefineOutcome:
-    """UNE génération : resolve(conflits) → plan → execute → verify → report. = 1 crédit."""
-    changes, conflicts = resolve_conflicts(changes)   # Normalizer → Conflict Resolver → Planner
-    p = plan(changes, mode=mode)
-    edited = await _execute_strategy(client, image_bytes, mime, p)
-    result = await verify(client, image_bytes, mime, edited, p.ordered_changes)
-    report = build_report(result, p.ordered_changes)
-    return RefineOutcome(image=edited, changes=p.ordered_changes, result=result,
-                         report=report, mode=mode, conflicts=conflicts)
+    """UNE génération : prepare(resolve+plan) → execute → verify → report. = 1 crédit."""
+    prepared = prepare(changes, mode=mode)            # prep unique (partagée)
+    edited = await _execute_strategy(client, image_bytes, mime, prepared.plan)
+    result = await verify(client, image_bytes, mime, edited, prepared.ordered_changes)
+    report = build_report(result, prepared.ordered_changes)
+    return RefineOutcome(image=edited, changes=prepared.ordered_changes, result=result,
+                         report=report, mode=mode, conflicts=prepared.conflicts)
 
 
 async def refine(client, image_bytes: bytes, mime: str, message: str,
