@@ -211,48 +211,100 @@ _EXPLICIT_GENERATE = re.compile(
 
 # Anchored: the WHOLE message must be a bare confirmation. "ok but change the
 # sofa" is NOT a confirmation (it carries a new edit) and routes normally.
+# Wave 4.9.4 (PR-1) — compound confirmations ("ok go ahead", "yes do it") and the
+# "anyway"/"now" suffix ("do it anyway", "go ahead anyway") were NOT recognized:
+# the old whole-string anchor only matched ONE token. A go-ahead is now an optional
+# affirmation prefix + a go-ahead core (either alone), with an optional trailing
+# anyway/now/please. A negation/deferral veto (below) keeps "do not go ahead",
+# "yes maybe later", "ok but don't do it", "ok explain first" OUT.
+_CONF_AFF = (
+    r"yes|yeah|yep|yup|ya|ok|okay|k|sure|alright|all\s*right|right|perfect|"
+    r"oui|ouais|d'accord|parfait"
+)
+_CONF_CORE = (
+    r"continue|go\s+ahead|go\s+on|do\s+it|do\s+that|just\s+do\s+it|go\s+for\s+it|"
+    r"make\s+it|proceed|generate|render|show(?:\s+me)?(?:\s+(?:it|that|the\s+result))?|"
+    r"try\s+it|please\s+do|sounds?\s+good|that\s+works|perfect\s+go|"
+    r"let'?s?\s+(?:do\s+it|go|see|try|continue)|"
+    r"vas-y|allons-y|on\s+y\s+va|continue[zr]?|g[eé]n[eè]re|affiche(?:-le|-moi)?|"
+    r"fais(?:-le)?|c'est\s+bon"
+)
 _CONFIRMATION = re.compile(
-    r"^\s*(yes|yeah|yep|yup|ya|ok|okay|k|sure|alright|all\s*right|right|"
-    r"continue|go\s+ahead|go\s+on|do\s+it|just\s+do\s+it|"
-    r"let'?s?\s+(do\s+it|go|see|try|continue)|go\s+for\s+it|make\s+it|"
-    r"proceed|generate|render|show(\s+me)?(\s+(it|that|the\s+result))?|"
-    r"try\s+it|please\s+do|do\s+that|sounds?\s+good|that\s+works|perfect\s+go|"
-    # French
-    r"oui|ouais|ok\s+vas-y|d'accord|vas-y|allons-y|on\s+y\s+va|continue[zr]?|"
-    r"g[eé]n[eè]re|affiche(-le|-moi)?|fais(-le)?|c'est\s+bon|parfait\s+vas-y"
-    r")[\s!.]*$",
+    rf"^\s*(?:please\s+)?"
+    rf"(?:(?:{_CONF_AFF})[\s,]*(?:{_CONF_CORE})?|(?:{_CONF_CORE}))"
+    rf"(?:\s+(?:anyway|now|please))?[\s!.]*$",
+    re.IGNORECASE,
+)
+# Negation / deferral veto — a message carrying any of these is NEVER a bare
+# go-ahead, even if it also contains a confirmation word ("ok but don't do it").
+_CONFIRMATION_VETO = re.compile(
+    r"\b(?:don'?t|do\s+not|doesn'?t|won'?t|can'?t|cannot|not|never|"
+    r"maybe|later|wait|first|explain|but|however|instead|"
+    r"no|non|pas|jamais|attends?|d'abord|plut[oô]t)\b",
     re.IGNORECASE,
 )
 
 # Concrete "convert/turn this space into a <room>" — intent_classifier's
 # _STRUCTURAL does not catch functional reassignment ("turn the rear room into
 # a bedroom"), the flagship pending case.
+# Wave 4.9.5 — taxonomie PARTAGÉE des pièces/zones fonctionnelles (source UNIQUE).
+# Extraite verbatim de l'ancienne alternation de _DESIGN_CONVERSION (+ sleeping/reading
+# nook), réutilisée par _DESIGN_CONVERSION, par _WISH (restreint) et importée par
+# refine.advisor pour la calibration L1 — pas de liste concurrente.
+_FUNCTIONAL_ROOM = (
+    r"bed\s*room|bedroom|office|studio|kitchen(?:ette)?|lounge|nursery|gym|library|"
+    r"closet|dressing(?:\s+(?:room|area))?|dining(?:\s+room|\s+area)?|guest\s+room|play\s*room|"
+    r"workspace|bathroom|en-?suite|shower\s+room|powder\s+room|laundry(?:\s+room)?|pantry|"
+    r"home\s+office|home\s+bar|wet\s+bar|walk-in|home\s+cinema|home\s+thea(?:tre|ter)|"
+    r"sleeping\s+(?:area|nook|zone|space)|sleep\s+area|reading\s+nook"
+)
+_FUNCTIONAL_ROOM_RE = re.compile(rf"\b(?:{_FUNCTIONAL_ROOM})\b", re.IGNORECASE)
+
 _DESIGN_CONVERSION = re.compile(
     r"\b(turn|convert|transform|make|change|repurpose|use|redesign)\s+"
     r"(the\s+|this\s+|it\s+|that\s+)?\w+(\s+\w+){0,6}?\s+(into|to|as)\s+"
-    r"(an?\s+|the\s+)?(open\s+)?"
-    r"(bed\s*room|bedroom|office|studio|kitchen(?:ette)?|lounge|nursery|gym|library|"
-    r"closet|dressing(?:\s+(?:room|area))?|dining(?:\s+room)?|guest\s+room|play\s*room|"
-    r"workspace|bathroom|en-?suite|shower\s+room|powder\s+room|laundry(?:\s+room)?|pantry|"
-    r"home\s+office|home\s+bar|wet\s+bar|walk-in|home\s+cinema|home\s+thea(?:tre|ter))",
+    rf"(an?\s+|the\s+)?(open\s+)?(?:{_FUNCTIONAL_ROOM})",
     re.IGNORECASE,
 )
 
 
 def is_confirmation(message: str) -> bool:
-    """True if the whole message is a bare go-ahead confirmation (Task 2)."""
-    return bool(_CONFIRMATION.match((message or "").strip()))
+    """True if the whole message is a bare go-ahead confirmation (Task 2).
+
+    Wave 4.9.4 (PR-1): recognizes compound forms ("ok go ahead", "yes do it") and
+    the "anyway"/"now" suffix ("do it anyway"), while a negation/deferral veto keeps
+    "do not go ahead", "yes maybe later", "ok but don't do it", "ok explain first" out.
+    """
+    s = (message or "").strip()
+    if not s or _CONFIRMATION_VETO.search(s):
+        return False
+    return bool(_CONFIRMATION.match(s))
+
+
+# Wave 4.9.4 (PR-1) + 4.9.5 — "wish"-phrased design requests ("I would like a bedroom
+# in the rear space", "I want a kitchen on the right", "I'd like a dressing area in that
+# corner"). No imperative verb → the edit/convert patterns above miss them, yet they ARE
+# concrete pending requests. RESTREINT (4.9.5) à la taxonomie partagée _FUNCTIONAL_ROOM :
+# un désir doit porter sur une PIÈCE/ZONE fonctionnelle, sinon "I want a refund /
+# subscription / explanation" créerait un faux pending design.
+_WISH = re.compile(
+    r"\b(?:i\s+(?:would\s+like|want|wish\s+for|need|would\s+love)|i'?d\s+like|"
+    r"je\s+(?:voudrais|veux|aimerais|souhaite))\s+"
+    r"(?:a|an|the|some|another|un|une|des)\s+"
+    rf"(?:[\w-]+\s+){{0,3}}(?:{_FUNCTIONAL_ROOM})\b",
+    re.IGNORECASE,
+)
 
 
 def _has_design_request(text: str) -> bool:
     """A prior user turn carrying a concrete design / edit / refine / redirect /
-    functional-conversion request (reuses existing compiled patterns)."""
+    functional-conversion / wish request (reuses existing compiled patterns)."""
     if not text:
         return False
     return bool(
         _DESIGN_CONVERSION.search(text) or _STRUCTURAL.search(text)
         or _REDIRECT.search(text) or _LOCAL_EDIT.search(text)
-        or _REFINE.search(text)
+        or _REFINE.search(text) or _WISH.search(text)
     )
 
 
@@ -286,6 +338,8 @@ def pending_design_sub_intent(history: list[dict]) -> SubIntent | None:
             return SubIntent.LOCAL_EDIT
         if _REFINE.search(text):
             return SubIntent.REFINE_ATMOSPHERE
+        if _WISH.search(text):                    # PR-1 — wish-phrased pending request
+            return SubIntent.LOCAL_EDIT
         if scanned >= 3:  # only the recent window; avoid stale matches
             break
     return None
