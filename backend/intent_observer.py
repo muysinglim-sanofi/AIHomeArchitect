@@ -499,10 +499,14 @@ async def observe_intent_end(
     error: Optional[dict] = None,
     is_free: bool = True,
     supa=None,
-) -> None:
+) -> bool:
     """UPDATE generation_intents vers un état terminal
     (SUCCEEDED | FAILED | FAILED_TERMINAL). `updated_at` est posé par le
     trigger DB. Best-effort — ne bloque jamais /generate.
+
+    RENVOIE bool : True si l'UPDATE a été exécuté (le lifecycle terminal EST persisté),
+    False si l'écriture a échoué. L'orchestrateur exige un SUCCEEDED strict (ne répond
+    'completed' que si True) ; /generate ignore le retour (comportement inchangé).
     """
     supa = supa or _get_supa()
     patch: dict[str, Any] = {"status": status, "completed_at": "now()"}
@@ -522,14 +526,32 @@ async def observe_intent_end(
             q = q.neq("status", "SUCCEEDED")
         return q.execute()
 
+    _ok = False
     try:
-        await asyncio.to_thread(_run)
-        log.info("[INTENT-OBS] intent_end intent_id=%s status=%s", intent_id, status)
+        _res = await asyncio.to_thread(_run)
+        # STRICT : True seulement si une ligne a RÉELLEMENT transité (PostgREST
+        # renvoie les lignes modifiées dans .data). Un execute() sans exception mais
+        # 0 ligne (intent absent / filtre non-matché / déjà transité) ≠ persisté.
+        _ok = bool(getattr(_res, "data", None))
+        log.info("[INTENT-OBS] intent_end intent_id=%s status=%s rows=%d",
+                 intent_id, status, len(getattr(_res, "data", None) or []))
     except Exception as exc:
         log.warning(
             "[INTENT-OBS] intent_end FAILED (swallowed) intent_id=%s err=%s: %s",
             intent_id, type(exc).__name__, exc,
         )
+    # STRICT SUCCEEDED : si 0 ligne modifiée, un read-back de contrôle peut confirmer
+    # que l'intent est DÉJÀ SUCCEEDED avec un result_ref (course concurrente / config
+    # de représentation minimale) → alors seulement on considère persisté.
+    if status == "SUCCEEDED" and not _ok:
+        try:
+            _rb = await asyncio.to_thread(
+                lambda: supa.table("generation_intents").select("status, result_ref")
+                .eq("intent_id", intent_id).limit(1).execute())
+            _row = (getattr(_rb, "data", None) or [None])[0] or {}
+            _ok = (_row.get("status") == "SUCCEEDED" and _row.get("result_ref") is not None)
+        except Exception:  # noqa: BLE001
+            _ok = False
     # Billing PR1 — commit (SUCCEEDED) / release (FAILED*) on terminal transition.
     # Idempotent, best-effort, NO gate. user_id + the release-guard status are
     # read inside apply_billing from generation_intents.
@@ -540,3 +562,53 @@ async def observe_intent_end(
     except Exception as bexc:
         log.warning("[BILLING] terminal hook failed (swallowed) intent=%s err=%s: %s",
                     intent_id, type(bexc).__name__, bexc)
+    return _ok
+
+
+async def get_intent_result_ref(intent_id: str, *, supa=None) -> Optional[dict]:
+    """Lit le result_ref durable d'un intent (source de vérité du get-or-create refine).
+    None si absent/erreur. Best-effort, LECTURE SEULE."""
+    supa = supa or _get_supa()
+    if not intent_id:
+        return None
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("generation_intents").select("result_ref")
+            .eq("intent_id", intent_id).limit(1).execute())
+        rows = getattr(res, "data", None) or []
+        return (rows[0].get("result_ref") if rows else None) or None
+    except Exception as exc:
+        log.warning("[INTENT-OBS] get_result_ref failed intent=%s err=%s: %s",
+                    intent_id, type(exc).__name__, exc)
+        return None
+
+
+async def set_intent_result_ref(intent_id: str, result_ref: dict, *, supa=None) -> bool:
+    """Écrit le result_ref durable AVANT la transition SUCCEEDED (statut INCHANGÉ) →
+    si le flip SUCCEEDED crashe, le reconcile finalise depuis ce result_ref.
+
+    STRICT : renvoie True seulement si une ligne a été modifiée, OU si un read-back
+    confirme que le result_ref (par result_version_id) est bien enregistré."""
+    supa = supa or _get_supa()
+    if not intent_id or result_ref is None:
+        return False
+    try:
+        _res = await asyncio.to_thread(
+            lambda: supa.table("generation_intents").update({"result_ref": result_ref})
+            .eq("intent_id", intent_id).execute())
+        if getattr(_res, "data", None):
+            return True
+    except Exception as exc:
+        log.warning("[INTENT-OBS] set_result_ref failed intent=%s err=%s: %s",
+                    intent_id, type(exc).__name__, exc)
+        return False
+    # 0 ligne (ou représentation minimale) → read-back de contrôle
+    try:
+        _rb = await asyncio.to_thread(
+            lambda: supa.table("generation_intents").select("result_ref")
+            .eq("intent_id", intent_id).limit(1).execute())
+        _cur = (getattr(_rb, "data", None) or [None])[0] or {}
+        _rr = _cur.get("result_ref") or {}
+        return _rr.get("result_version_id") == result_ref.get("result_version_id")
+    except Exception:  # noqa: BLE001
+        return False

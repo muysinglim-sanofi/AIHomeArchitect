@@ -105,8 +105,10 @@ async def _finalize(supa, intent_id: str, status: str, *, error: Optional[dict] 
     if transitioned:
         try:
             import billing  # noqa: PLC0415
-            # D-e — entitled → aucune écriture (comme le chemin nominal).
-            _is_free = await _resolve_is_free(supa, intent_id)
+            # refine (Phase 1) : billing OFF → is_free=False (0 écriture ledger),
+            # comme le chemin nominal /refine. Sinon résolution normale (D-e entitled).
+            _is_free = (False if str(intent_id or "").startswith("refine:")
+                        else await _resolve_is_free(supa, intent_id))
             await billing.apply_billing_for_intent_transition(
                 intent_id=intent_id, new_status=status, is_free=_is_free, supa=supa)
         except Exception as bexc:
@@ -128,7 +130,7 @@ async def reconcile_once(*, supa=None) -> dict:
     try:
         res = await asyncio.to_thread(
             lambda: supa.table("generation_intents")
-            .select("intent_id, session_id, iteration, started_at, created_at")
+            .select("intent_id, session_id, iteration, started_at, created_at, result_ref, intent")
             .eq("status", "RUNNING")
             .limit(_MAX_SCAN)
             .execute()
@@ -144,6 +146,19 @@ async def reconcile_once(*, supa=None) -> dict:
         intent_id = r.get("intent_id")
         sid = r.get("session_id")
         started_raw = r.get("started_at") or r.get("created_at")
+
+        # Résultat DURABLE et COMPLET déjà persisté (crash entre la persist et le flip
+        # SUCCEEDED — cf. orchestrateur §5/§6). SCOPÉ : uniquement si le result_ref porte
+        # le marqueur finalizable=True (tous les artefacts durables) ET engine=refine —
+        # jamais un JSON partiel, jamais un intent V1 (qui n'écrit pas ce contrat).
+        _rr = r.get("result_ref")
+        _im = r.get("intent") if isinstance(r.get("intent"), dict) else {}
+        if (isinstance(_rr, dict) and _rr.get("finalizable") is True
+                and _im.get("engine") == "refine"):
+            if await _finalize(supa, intent_id, "SUCCEEDED"):
+                counts["repaired"] += 1
+                log.info("[RECONCILE] repaired intent=%s → SUCCEEDED (finalizable, engine=refine)", intent_id)
+            continue
 
         # Landed? An image_result for this session created AT/AFTER this Intent
         # started (timestamp correlation → robust to re-upload iteration resets).
