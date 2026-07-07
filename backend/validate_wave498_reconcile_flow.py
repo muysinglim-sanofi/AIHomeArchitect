@@ -59,7 +59,8 @@ async def main():
     store = {"generation_intents": [
         {"intent_id": iid, "status": "RUNNING", "session_id": "s1",
          "started_at": "2020-01-01T00:00:00+00:00", "created_at": "2020-01-01T00:00:00+00:00",
-         "result_ref": None, "iteration": 2, "intent": {"engine": "refine"}}],
+         "result_ref": None, "iteration": 2,
+         "intent": {"engine": "refine", "billing_enabled": False}}],
         "messages": []}
     supa = FakeSupa(store)
 
@@ -90,7 +91,8 @@ async def main():
     check("1b reconcile repare l'intent → SUCCEEDED", row["status"] == "SUCCEEDED" and counts["repaired"] == 1, counts)
     check("1c result_ref intact (récupérable) après finalisation",
           row["result_ref"]["result_version_id"] == identity.refine_result_version_id(iid))
-    check("1d billing refine OFF dans le reconcile (is_free=False)", seen["is_free"] is False, seen)
+    check("1d billing refine OFF (métadonnée) : le reconcile NE facture PAS (0 appel billing)",
+          seen["n"] == 0, seen)
 
     print("\n=== 2. non-régression : RUNNING sans result_ref + vieux → FAILED (timeout) ===")
     store2 = {"generation_intents": [

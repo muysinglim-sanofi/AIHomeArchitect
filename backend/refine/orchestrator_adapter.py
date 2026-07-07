@@ -15,6 +15,7 @@ Moteur 2 isolé : n'importe NI main NI /generate.
 """
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import Awaitable, Callable, Optional
 
 from refine import identity
@@ -146,8 +147,7 @@ def build_response_fn(*, prior_versions_json: str = "", conflicts=None, changes=
             "intent_id": result_ref.get("intent_id", ""),
             "result_version_id": rec.version_id,
             "version_id": rec.version_id,
-            "version_record": {"version_id": rec.version_id, "source_mode_used": rec.source_mode_used,
-                               "source_version_id_used": rec.source_version_id_used},
+            "version_record": asdict(rec),      # contrat complet (parité /generate)
             "source_version_id": rec.source_version_id_used,
             "source_mode": _REFINE_SOURCE_MODE,
             "room_type": result_ref.get("room_type", ""),

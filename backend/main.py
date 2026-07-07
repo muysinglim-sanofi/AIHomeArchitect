@@ -1408,6 +1408,24 @@ async def get_latest_intent(
     return row
 
 
+@app.get("/v1/intents/by-id/{intent_id}")
+async def get_intent_by_id_route(
+    intent_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Generation Intent v1 — récupération UNIFIÉE par id (Phase 1). Chemin littéral
+    'by-id/{id}' → JAMAIS de collision avec /v1/intents/latest. Owner check EXPLICITE
+    (user_id + intent_id) : le backend est service-role, on NE se repose PAS sur la RLS.
+    Renvoie {intent_id, status, iteration, has_result, result_ref} ou 404. READ-ONLY."""
+    from intent_observer import get_intent_by_id  # local — évite de toucher le bloc d'import
+    info = await get_intent_by_id(user_id=current_user.user_id, intent_id=intent_id)
+    if info is None:
+        raise HTTPException(status_code=404, detail={
+            "error_code": "INTENT_NOT_FOUND",
+            "user_message": "This edit could not be found.", "retryable": False})
+    return info
+
+
 # ── Generation Intent v1 — PR4 reconciliation (lifecycle only, no billing) ────
 _reconcile_bg_tasks: set = set()
 
@@ -4792,10 +4810,16 @@ async def generate(
 from refine.parser import parse_changes as _refine_parse, Change as _RefineChange
 from refine.advisor import advise as _refine_advise, build_advisory_message as _refine_advisory_msg
 from refine.normalizer import normalize_changes as _refine_normalize
-from refine.engine import refine_generate as _refine_generate
+from refine.engine import refine_generate as _refine_generate, prepare as _refine_prepare
 from refine.verify import (verify as _refine_verify, build_report as _refine_build_report,
                            missing_changes as _refine_missing)
-from refine.billing_hook import reserve as _refine_bill_reserve, commit as _refine_bill_commit
+from refine.billing_hook import (reserve as _refine_bill_reserve, commit as _refine_bill_commit,
+                                 refine_billing_enabled as _refine_billing_enabled)
+# Phase 1 — Generation Orchestrator (lifecycle persistant partagé) branché sur /refine.
+import intent_observer as _io
+from refine import identity as _refine_identity, orchestrator_adapter as _refine_adapter
+from generation_orchestrator import (run_generation as _run_generation,
+                                     OrchestratorError as _OrchestratorError)
 
 _REFINE_MIME_FALLBACK = "image/jpeg"
 
@@ -4865,6 +4889,47 @@ def _refine_fire_and_forget(coro, label: str) -> None:
         log.warning("[refine] fire-and-forget '%s' scheduling failed", label)
 
 
+# ── Phase 1 : IO déterministe pour l'orchestrateur (upload upsert, message idempotent) ──
+async def _refine_upload_deterministic(path: str, data: bytes) -> str:
+    """Upload UPSERT sur un chemin DÉTERMINISTE (keyé intent_id) → UN SEUL objet logique
+    quel que soit le nombre de re-runs. Renvoie l'URL publique DURABLE (bucket public)."""
+    def _do():
+        try:
+            supa.storage.from_("generated").upload(
+                path=path, file=data,
+                file_options={"content-type": "image/jpeg", "upsert": "true"})
+        except Exception as exc:  # noqa: BLE001 — objet déjà présent (re-run) → overwrite
+            log.warning("[refine] upload upsert fallback→update path=%s err=%s", path, exc)
+            supa.storage.from_("generated").update(
+                path=path, file=data, file_options={"content-type": "image/jpeg"})
+        return supa.storage.from_("generated").get_public_url(path)
+    return await asyncio.to_thread(_do)
+
+
+async def _refine_persist_message_idempotent(session_id: str, before_url: str, after_url: str,
+                                             style_label: str, intent_id: str) -> bool:
+    """Message image_result IDEMPOTENT : lookup (session, message_type, after_image_url)
+    AVANT insertion → jamais dupliqué sur un re-run, jamais manquant. Best-effort."""
+    if not session_id or session_id == "new":
+        return False
+    def _do():
+        try:
+            ex = (supa.from_("messages").select("id")
+                  .eq("session_id", session_id).eq("message_type", "image_result")
+                  .eq("after_image_url", after_url).limit(1).execute())
+            if getattr(ex, "data", None):
+                return True   # déjà présent → idempotent (0 doublon)
+            supa.from_("messages").insert({
+                "session_id": session_id, "role": "ai", "content": "",
+                "message_type": "image_result", "before_image_url": before_url,
+                "after_image_url": after_url, "style_label": style_label}).execute()
+            return True
+        except Exception as exc:  # noqa: BLE001
+            log.warning("[refine] idempotent message insert failed: %s: %s", type(exc).__name__, exc)
+            return False
+    return await asyncio.to_thread(_do)
+
+
 @app.post("/refine")
 async def refine_endpoint(
     session_id: str = Form(...),
@@ -4881,10 +4946,13 @@ async def refine_endpoint(
     iteration: int = Form(1),              # numéro de vision de ce refine
     source_version_id: str = Form(""),     # version affichée dont ce refine dérive
     client_request_id: str = Form(""),     # PR0 — id partagé avec PerfC2P (correlation obs)
+    operation_id: str = Form(""),          # Phase 1 — 1 soumission utilisateur = 1 operation_id (idempotence)
+    retry_of_intent_id: str = Form(""),    # Phase 1 — Retry après FAILED (INFORMATIF : trace, jamais réouverture)
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Contrat unique (D-b) : advisory (YELLOW/RED, 0 gen) | completed (image immédiate,
-    verification=deferred). Moteur 2 isolé ; adaptateur ledger au niveau endpoint."""
+    verification=deferred) | running (lost-claim récupérable). Moteur 2 isolé ; le
+    lifecycle persistant est délégué au Generation Orchestrator (Phase 1)."""
     _handler_entry = time.monotonic()  # PR0 — true entry for the /refine [PERF SUMMARY]
     # Structural-capture kill-switch (2026-07-07) — in off mode the refine inherits
     # an EMPTY passport: any stale token the client still round-trips is dropped so
@@ -4923,91 +4991,79 @@ async def refine_endpoint(
                          "room_type": room_type},
             }
 
-    # 3) Billing reserve (câblé-DÉSACTIVÉ) — read-gate avant la génération
-    _intent = _refine_intent_id(session_id, message, before_image_url)
-    if not await _refine_bill_reserve(current_user.user_id, _intent, supa=supa):
-        raise HTTPException(status_code=402, detail={
-            "error_code": "REFINE_QUOTA", "user_message": "You're out of refine credits.",
-            "retryable": False})
+    # 3) GREEN → génération sous le Generation Orchestrator (lifecycle persistant partagé).
+    #    operation_id OBLIGATOIRE : 1 soumission utilisateur = 1 operation_id → idempotence
+    #    (double-tap/timeout/retry technique = même op ; regenerate/Retry-après-FAILED = nouvelle op).
+    _op = (operation_id or client_request_id or "").strip()
+    if not _op:
+        raise HTTPException(status_code=422, detail={
+            "error_code": "MISSING_OPERATION_ID",
+            "user_message": "Missing operation id for this edit.", "retryable": False})
 
-    # 4) GEN-ONLY (Verify async §14) : source → normalize → 1 gen → upload
-    _t_fetch = time.monotonic()
-    src_bytes, src_mime = await _refine_fetch_bytes(before_image_url)
-    _refine_fetch_ms = (time.monotonic() - _t_fetch) * 1000.0
-    _refine_normalize(changes)
-    _t_openai = time.monotonic()
-    gen = await _refine_generate(openai, src_bytes, src_mime, changes, mode="default")
-    _refine_openai_ms = (time.monotonic() - _t_openai) * 1000.0
-    _t_up = time.monotonic()
-    image_url = _refine_upload(session_id, gen.image)
-    _refine_upload_ms = (time.monotonic() - _t_up) * 1000.0
+    _refine_normalize(changes)                     # normalize UNE fois (créatif)
+    prepared = _refine_prepare(changes)            # resolve_conflicts + plan → plan/prompt FIGÉS (une fois)
+    _billing_enabled = _refine_billing_enabled()   # AYDEN_REFINE_BILLING (défaut OFF)
+    _struct_perm = any(c.type == "structure" for c in prepared.ordered_changes)
 
-    # 5) fire-and-forget : commit crédit + observabilité (jamais bloquant)
-    _refine_fire_and_forget(_refine_bill_commit(current_user.user_id, _intent, supa=supa), "billing_commit")
-    log.info("[refine] user=%s session=%s changes=%d est_success=%.2f conflicts=%d",
-             current_user.user_id[:8], session_id, len(gen.changes), gen.estimated_success, len(gen.conflicts))
-    # PR0 — uniform [PERF SUMMARY] for /refine (V3 had NO latency line at all).
-    # Shares the key field names with /generate so a single grep aggregates both.
-    # refine has no pre-flight gates / struct-capture ; the parser is the extra
-    # TEXT-LLM stage on the critical path. Pure observability.
+    intent_id = _refine_identity.refine_intent_id(current_user.user_id, session_id, _op)
+    intent_meta = {
+        **_refine_identity.build_intent_meta(
+            operation_id=_op, source_version_id=source_version_id,
+            changes_sig=_refine_identity.changes_signature(prepared.ordered_changes),
+            edit_mode="refine", iteration=iteration, room_type=room_type, atmosphere=style_label,
+            retry_of_intent_id=(retry_of_intent_id.strip() or None)),
+        "billing_enabled": _billing_enabled,       # métadonnée persistée (le reconcile la LIT)
+    }
+
+    async def _msg_fn(*, session_id, before_url, after_url, style_label, intent_id, result_version_id):
+        await _refine_persist_message_idempotent(session_id, before_url, after_url, style_label, intent_id)
+
+    persist_fn = _refine_adapter.build_persist_result_fn(
+        upload_fn=_refine_upload_deterministic,
+        get_result_ref_fn=_io.get_intent_result_ref, set_result_ref_fn=_io.set_intent_result_ref,
+        persist_message_fn=_msg_fn, source_image_url=before_image_url, atmosphere=style_label,
+        room_type=room_type, style_label=style_label, user_request=message,
+        structural_permission=_struct_perm, structural_identity_token=structural_identity)
+    response_fn = _refine_adapter.build_response_fn(
+        prior_versions_json=versions, conflicts=prepared.conflicts,
+        changes=[_refine_change_to_dict(c) for c in prepared.ordered_changes],
+        estimated_success=prepared.estimated_success)
+    execute_fn = _refine_adapter.build_execute_fn(openai, prepared.prompt)
+
+    try:
+        resp = await _run_generation(
+            kind="refine", user_id=current_user.user_id, session_id=session_id,
+            operation_id=_op, intent_id=intent_id, intent_meta=intent_meta,
+            iteration=iteration, is_free=False,           # billing OFF (Phase 1) → 0 écriture ledger
+            source_image_url=before_image_url, max_attempts=2,
+            fetch_source_fn=_refine_fetch_bytes, execute_fn=execute_fn,
+            persist_result_fn=persist_fn, build_response_fn=response_fn,
+            request_id=(client_request_id.strip() or _op))
+    except _OrchestratorError as oe:
+        # erreur STRUCTURÉE (502/503) — jamais un 500 brut vers le frontend
+        raise GenerationError(error_code=oe.error_code, user_message=oe.user_message,
+                              retryable=oe.retryable, request_id=oe.request_id,
+                              status_code=oe.status_code, session_id=session_id)
+
     _refine_total_ms = (time.monotonic() - _handler_entry) * 1000.0
     log.info(
-        "[PERF SUMMARY] request_id=%s  total_ms=%.0f  backend_ms=%.0f  preflight_ms=0"
-        "  model=%s  quality=%s  iteration=%d  gen_type=refine"
-        "  parser_ms=%.0f  fetch_ms=%.0f  openai_ms=%.0f  upload_ms=%.0f  changes=%d",
-        (client_request_id.strip() or _intent),  # PR0 — same id as PerfC2P (correlation)
-        _refine_total_ms, _refine_total_ms - _refine_openai_ms,
-        IMAGE_MODEL, "low", iteration,
-        _parser_ms, _refine_fetch_ms, _refine_openai_ms, _refine_upload_ms, len(gen.changes),
+        "[PERF SUMMARY] request_id=%s  total_ms=%.0f  model=%s  quality=low  iteration=%d"
+        "  gen_type=refine  parser_ms=%.0f  status=%s  intent=%s",
+        (client_request_id.strip() or _op), _refine_total_ms, IMAGE_MODEL, iteration,
+        _parser_ms, resp.get("status"), intent_id,
     )
 
-    # 6) LEDGER ADAPTER (orchestration) — construit le VersionRecord ICI, PAS dans le
-    #    moteur. Le refine PRÉSERVE l'identité → il HÉRITE `structural_identity` verbatim
-    #    (court-circuite tout le calcul/merge d'identité de /generate). Utilise uniquement
-    #    les utilitaires purs de version_state (jamais composer/DNA/preserve).
-    _prior_versions = parse_versions(versions)
-    _refine_record = VersionRecord(
-        version_id=new_version_id(),
-        vision_number=iteration,
-        source_mode_used="REFINE",
-        source_version_id_used=source_version_id or "",
-        source_image_url_used=before_image_url,
-        generated_image_url=image_url,
-        atmosphere=style_label,
-        user_request=message[:240],
-        structural_permission=any(c.type == "structure" for c in gen.changes),
-        structural_identity_token=structural_identity,   # HÉRITÉ (identité préservée)
-        # un refine = édition explicite de l'espace → lignée « customized » pour qu'un
-        # switch d'atmosphère ultérieur PRÉSERVE ce travail (ne re-source pas V1).
-        lineage_customized=True,
-    )
-    _updated_versions = _prior_versions + [_refine_record]
-
-    # 6b) persistance serveur du message (ferme la fenêtre Q1 — kill post-gen/pré-insert).
-    #     Si écrit, le frontend saute son insert de secours (comme /generate).
-    _msg_persisted = _refine_persist_message(session_id, before_image_url, image_url, style_label)
-
-    # 7) réponse IMMÉDIATE — MÊME contrat que /generate (refine = version 1ʳᵉ classe :
-    #    historique, branching, continue-from) + extras refine (verify async, observabilité)
+    # RUNNING (lost-claim) → statut RÉCUPÉRABLE, aucune génération, pas d'extras 'completed'.
+    if resp.get("status") != "completed":
+        return resp
+    # 'completed' → merge des extras endpoint (identité héritée + kill-switch + before).
     return {
-        "status": "completed",
-        # ── contrat commun /generate (le frontend traite un refine comme une version ──
-        "after_image_url": image_url,
-        "image_url": image_url,                 # alias (compat appelants refine)
-        "ai_message": "",                        # pas de caption LLM ; la voix vient du verify/advisory
-        "room_type": room_type,
-        "structural_identity": structural_identity,   # hérité (echo) — "" en mode off
-        "structural_capture_disabled": _refine_cap_off,  # kill-switch → frontend efface le token
-        "version_id": _refine_record.version_id,
-        "version_record": version_to_dict(_refine_record),
-        "versions": serialize_versions(_updated_versions),
-        "message_persisted": _msg_persisted,     # True = écrit serveur ; False = fallback frontend
-        # ── extras spécifiques refine (async verify §14 + observabilité) ──
-        "verification": "deferred",
-        "estimated_success": gen.estimated_success,
-        "conflicts": gen.conflicts,
-        "changes": [_refine_change_to_dict(c) for c in gen.changes],
+        **resp,
+        "structural_identity": structural_identity,       # hérité (echo) — "" en mode off
+        "structural_capture_disabled": _refine_cap_off,   # kill-switch → frontend efface le token
         "before_image_url": before_image_url,
+        "message_persisted": True,                        # persist idempotent a écrit/vérifié le message
+        "room_type": room_type,
     }
 
 

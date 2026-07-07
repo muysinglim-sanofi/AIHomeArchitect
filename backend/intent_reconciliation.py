@@ -76,9 +76,14 @@ async def _resolve_is_free(supa, intent_id: str) -> bool:
         return True
 
 
-async def _finalize(supa, intent_id: str, status: str, *, error: Optional[dict] = None) -> bool:
+async def _finalize(supa, intent_id: str, status: str, *, error: Optional[dict] = None,
+                    intent_meta: Optional[dict] = None) -> bool:
     """UPDATE generation_intents vers un terminal, UNIQUEMENT si encore RUNNING
-    (garde anti-clobber). Renvoie True si une ligne a effectivement transité."""
+    (garde anti-clobber). Renvoie True si une ligne a effectivement transité.
+
+    Billing : piloté par la MÉTADONNÉE `intent.billing_enabled` (persistée à la
+    génération), PAS par le format de l'intent_id. billing_enabled=False (ex. refine
+    Phase 1) → aucune écriture facturant l'utilisateur."""
     patch = {"status": status, "completed_at": "now()"}
     if error is not None:
         patch["error"] = error
@@ -103,12 +108,13 @@ async def _finalize(supa, intent_id: str, status: str, *, error: Optional[dict] 
     # when THIS pass actually transitioned it (guarded by .eq(status,'RUNNING'));
     # idempotent by intent_id, so it never doubles a nominal-path effect.
     if transitioned:
+        # Billing désactivé par métadonnée persistée (jamais déduit de l'intent_id).
+        if isinstance(intent_meta, dict) and intent_meta.get("billing_enabled") is False:
+            return transitioned
         try:
             import billing  # noqa: PLC0415
-            # refine (Phase 1) : billing OFF → is_free=False (0 écriture ledger),
-            # comme le chemin nominal /refine. Sinon résolution normale (D-e entitled).
-            _is_free = (False if str(intent_id or "").startswith("refine:")
-                        else await _resolve_is_free(supa, intent_id))
+            # D-e — entitled → aucune écriture (comme le chemin nominal).
+            _is_free = await _resolve_is_free(supa, intent_id)
             await billing.apply_billing_for_intent_transition(
                 intent_id=intent_id, new_status=status, is_free=_is_free, supa=supa)
         except Exception as bexc:
@@ -155,7 +161,7 @@ async def reconcile_once(*, supa=None) -> dict:
         _im = r.get("intent") if isinstance(r.get("intent"), dict) else {}
         if (isinstance(_rr, dict) and _rr.get("finalizable") is True
                 and _im.get("engine") == "refine"):
-            if await _finalize(supa, intent_id, "SUCCEEDED"):
+            if await _finalize(supa, intent_id, "SUCCEEDED", intent_meta=_im):
                 counts["repaired"] += 1
                 log.info("[RECONCILE] repaired intent=%s → SUCCEEDED (finalizable, engine=refine)", intent_id)
             continue
@@ -185,7 +191,7 @@ async def reconcile_once(*, supa=None) -> dict:
             counts["warnings"] += 1
 
         if landed:
-            if await _finalize(supa, intent_id, "SUCCEEDED"):
+            if await _finalize(supa, intent_id, "SUCCEEDED", intent_meta=_im):
                 counts["repaired"] += 1
                 log.info("[RECONCILE] repaired intent=%s → SUCCEEDED (image present)", intent_id)
             continue
@@ -196,6 +202,7 @@ async def reconcile_once(*, supa=None) -> dict:
                 supa, intent_id, "FAILED",
                 error={"type": "reconciled_timeout",
                        "message": f"RUNNING > {JOB_TIMEOUT_MINUTES}min, no image"},
+                intent_meta=_im,
             ):
                 counts["timeout_failed"] += 1
                 log.info("[RECONCILE] timeout-failed intent=%s (age > %dmin, no image)",
