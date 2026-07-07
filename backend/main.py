@@ -183,6 +183,23 @@ def _struct_id_cache_put(key: str, token: str) -> None:
     _STRUCT_ID_CACHE[key] = token
 
 
+def _resolve_structural_capture_mode() -> str:
+    """Single source of truth for STRUCTURAL_CAPTURE_MODE (kill-switch, 2026-07-07).
+
+    Accepts only "off" | "double". Default "off" (benched: no preservation gain
+    vs the 4–84s V1 latency + 2 gpt-4o calls). Any unknown/invalid value fails
+    safe to "off" with one consistent warning. Used identically by /generate and
+    /refine so the two endpoints can never diverge on interpretation.
+    """
+    raw = os.environ.get("STRUCTURAL_CAPTURE_MODE", "off").strip().lower()
+    if raw not in ("off", "double"):
+        log.warning(
+            "[StructCapMode] unknown STRUCTURAL_CAPTURE_MODE=%r → fail-safe 'off'", raw
+        )
+        return "off"
+    return raw
+
+
 # ── #4 — /generate idempotency (defence-in-depth against duplicate generations)
 # In-memory, per-process, keyed by user:client_request_id (only when the client
 # supplied an idempotency key). Two jobs:
@@ -3120,8 +3137,25 @@ async def generate(
     # Graceful: EMPTY_IDENTITY -> "" clause -> falls back to Wave 4.7.1 behaviour.
     _t_sid = time.monotonic()  # PERF: time the full structural-identity resolution
     _si_source = "none"
+    _struct_calls = 0  # real gpt-4o structural captures on this request (PERF)
     structural_id_obj: ApartmentStructuralIdentity = EMPTY_IDENTITY
-    if structural_identity.strip():
+    # Structural-capture kill-switch (2026-07-07). Benched OFF by default: 45
+    # single-shot + 18 lineage images (V1→switch→refine) showed NO architecture-
+    # preservation gain vs the 4–84s V1 latency + 2 gpt-4o calls the capture adds.
+    #   off    = zero passport RECEIVED, captured, extracted, recovered, reused or
+    #            injected — even if the client still POSTs an old token; empty
+    #            clause; empty token echoed back so stale passports die.
+    #   double = strict historical behaviour (the whole chain below) — rollback.
+    # Unknown value => fail-safe to off with an explicit warning.
+    _cap_mode = _resolve_structural_capture_mode()
+    if _cap_mode == "off":
+        structural_id_obj = EMPTY_IDENTITY
+        _si_source = "disabled"
+        log.info(
+            "[StructCapMode] off — capture disabled (client token ignored, "
+            "0 calls, empty passport, no cache, no recovery)"
+        )
+    elif structural_identity.strip():
         structural_id_obj = from_token(structural_identity)
         _si_source = "client_session" if structural_id_obj.is_present else "none"
     elif iteration == 1:
@@ -3172,6 +3206,7 @@ async def generate(
                     _capture_structural_text(image_bytes),
                     _capture_structural_text(image_bytes),
                 )
+                _struct_calls += 2  # PERF — two real structural captures (parallel)
                 _identity_a = extract_from_description(_cap_a)
                 _identity_b = extract_from_description(_cap_b)
                 structural_id_obj, _merge_decisions = safe_union_merge(
@@ -3244,6 +3279,7 @@ async def generate(
                 _capture_structural_text(image_bytes),
                 _resolve_orientation_consensus(image_bytes),
             )
+            _struct_calls += 1  # PERF — one real structural capture (recovery)
             structural_id_obj = extract_from_description(_cap_text)
             if (
                 _orient_consensus is not None
@@ -3260,7 +3296,19 @@ async def generate(
     structural_identity_token = to_token(structural_id_obj)
     # PERF: V1 = the ~7s parallel vision capture (vision_capture_v1); V2+ =
     # near-0 token decode; recovery path = a re-capture when the token was lost.
-    _timer.record("struct_id", time.monotonic() - _t_sid)
+    # OFF = 0 work (kill-switch); force struct_id_ms=0 so the metric is exact.
+    _struct_id_ms = 0.0 if _cap_mode == "off" else (time.monotonic() - _t_sid) * 1000.0
+    _timer.record("struct_id", _struct_id_ms / 1000.0)
+    # effective_chars = the identity ACTUALLY applied to the prompt (0 in off even
+    # if the client POSTed an old token, since it is ignored above).
+    _si_effective_chars = 0 if _cap_mode == "off" else len(structural_identity_token)
+    log.info(
+        "[StructCapMode] structural_capture_mode=%s  structural_identity_input_chars=%d  "
+        "structural_identity_effective_chars=%d  structural_identity_output_chars=%d  "
+        "structural_calls_count=%d  struct_id_ms=%.0f  structural_identity_source=%s",
+        _cap_mode, len(structural_identity or ""), _si_effective_chars,
+        len(structural_identity_token), _struct_calls, _struct_id_ms, _si_source,
+    )
     log.info(
         "[StructuralIdentity] present=%s  source=%s  facts=%d  token_chars=%d  iteration=%d",
         structural_id_obj.is_present, _si_source,
@@ -4641,6 +4689,10 @@ async def generate(
         # on every subsequent /generate so the apartment's structural identity is
         # captured ONCE (at V1) and reused deterministically forever.
         "structural_identity": structural_identity_token,
+        # Kill-switch (2026-07-07): tell the client capture is off so it DROPS any
+        # stale local token (empty responses alone don't, due to its isNotEmpty
+        # guard). Absent/false in double mode → historical frontend behaviour.
+        "structural_capture_disabled": _cap_mode == "off",
         # Wave 4.7.3: client persists the ledger + this record and echoes
         # `versions` back so source_mode=LATEST/SPECIFIC_VERSION resolve correctly.
         "version_id": _new_version.version_id,
@@ -4834,6 +4886,12 @@ async def refine_endpoint(
     """Contrat unique (D-b) : advisory (YELLOW/RED, 0 gen) | completed (image immédiate,
     verification=deferred). Moteur 2 isolé ; adaptateur ledger au niveau endpoint."""
     _handler_entry = time.monotonic()  # PR0 — true entry for the /refine [PERF SUMMARY]
+    # Structural-capture kill-switch (2026-07-07) — in off mode the refine inherits
+    # an EMPTY passport: any stale token the client still round-trips is dropped so
+    # it can never resurface downstream. double = historical inherit-verbatim.
+    _refine_cap_off = _resolve_structural_capture_mode() == "off"
+    if _refine_cap_off:
+        structural_identity = ""
     if not await _validate_session_ownership(session_id=session_id, user_id=current_user.user_id):
         raise HTTPException(status_code=403, detail={
             "error_code": "SESSION_OWNERSHIP_DENIED",
@@ -4938,7 +4996,8 @@ async def refine_endpoint(
         "image_url": image_url,                 # alias (compat appelants refine)
         "ai_message": "",                        # pas de caption LLM ; la voix vient du verify/advisory
         "room_type": room_type,
-        "structural_identity": structural_identity,   # hérité (echo)
+        "structural_identity": structural_identity,   # hérité (echo) — "" en mode off
+        "structural_capture_disabled": _refine_cap_off,  # kill-switch → frontend efface le token
         "version_id": _refine_record.version_id,
         "version_record": version_to_dict(_refine_record),
         "versions": serialize_versions(_updated_versions),

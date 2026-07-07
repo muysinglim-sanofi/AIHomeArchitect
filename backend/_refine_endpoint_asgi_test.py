@@ -6,7 +6,13 @@ déclenche AUCUNE génération ; /generate reste enregistré et intact. I/O mock
 réel OpenAI/Supabase/réseau). Run: PYTHONIOENCODING=utf-8 PYTHONPATH=. python _refine_endpoint_asgi_test.py"""
 import asyncio
 import json
+import os
 import sys
+
+# This suite validates the HISTORICAL refine behaviour (token inherited verbatim),
+# which is the `double` branch. The kill-switch default is now `off` (empties the
+# inherited token), so pin double here to keep testing the inherit path.
+os.environ["STRUCTURAL_CAPTURE_MODE"] = "double"
 
 from httpx import ASGITransport, AsyncClient
 
