@@ -76,6 +76,55 @@ String _timeAgo(DateTime date) {
 /// the chat screen and the project gallery can never desync.
 String _brandSignature(String s) => brandSignature(s);
 
+/// Pure — the structural-identity token to keep after ANY authoritative source
+/// (a /generate|/refine reply, or a ledger/version entry) provides one.
+///
+/// Kill-switch (2026-07-07). The rule is uniform so no stale passport can survive
+/// in off mode:
+///   • [captureDisabled] true (backend `structural_capture_disabled`) → clear ('').
+///   • [returned] == null  → source did NOT carry the field → KEEP current (legacy
+///     / a reconcile payload that simply omits it). Never invents emptiness.
+///   • [returned] present (incl. '') → adopt VERBATIM. An empty value from an
+///     authoritative source (off response, or a ledger token persisted empty in
+///     off) therefore CLEARS the stale local token instead of a silent no-op.
+/// Rollback-safe: in double mode the flag is absent/false and a healthy V2+ always
+/// returns a NON-empty token, so adoption is unchanged; the only present-empty case
+/// is a V1 with no facts, where there is no prior token to lose.
+String adoptStructuralIdentity(
+    String current, String? returned, bool captureDisabled) {
+  if (captureDisabled) return '';
+  if (returned == null) return current;
+  return returned;
+}
+
+/// Pure — the structural-identity token stored for [afterUrl] in the round-tripped
+/// version [ledgerJson]. Returns the token VERBATIM when the URL is found
+/// (including '' for an off-mode lineage, so the caller clears a stale token), and
+/// null ONLY when the URL is absent from the ledger (caller keeps current). Query
+/// strings are ignored in the path match (signed tokens differ across reloads).
+String? lookupStructuralTokenInLedger(String ledgerJson, String afterUrl) {
+  if (ledgerJson.isEmpty || afterUrl.isEmpty) return null;
+  String path(String u) {
+    final q = u.indexOf('?');
+    return q >= 0 ? u.substring(0, q) : u;
+  }
+
+  final want = path(afterUrl);
+  try {
+    final list = jsonDecode(ledgerJson);
+    if (list is! List) return null;
+    for (final v in list) {
+      if (v is Map &&
+          v['generated_image_url'] is String &&
+          path(v['generated_image_url'] as String) == want) {
+        final t = v['structural_identity_token'];
+        return (t is String) ? t : null;
+      }
+    }
+  } catch (_) {/* malformed ledger → no restore */}
+  return null;
+}
+
 // ── Chat screen ───────────────────────────────────────────────────────────────
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -865,7 +914,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       if (FeatureFlags.reuploadKeepLineage && !isLatest) {
         _branchSourceVersionId = _versionIdForUrl(vision.afterImageUrl);
         final token = _structuralTokenForUrl(vision.afterImageUrl);
-        if (token != null && token.isNotEmpty) _structuralIdentity = token;
+        // Adopt verbatim: null (URL absent) keeps current; '' (off-lineage entry)
+        // clears the stale token; a real token restores the lineage identity.
+        _structuralIdentity =
+            adoptStructuralIdentity(_structuralIdentity, token, false);
       }
     });
     _persistSession(); // Wave 4.10g — survive atmosphere swap
@@ -990,24 +1042,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   // up in the round-tripped ledger (same path-match as _versionIdForUrl). Lets
   // continue-from-vision restore the CLICKED vision's lineage identity so the
   // pinned image and the structural identity stay in the same lineage (no
-  // cross-lineage desync after a re-upload). Null if not found / no token.
-  String? _structuralTokenForUrl(String afterUrl) {
-    if (_versions.isEmpty || afterUrl.isEmpty) return null;
-    final wantPath = _urlPath(afterUrl);
-    try {
-      final list = jsonDecode(_versions);
-      if (list is! List) return null;
-      for (final v in list) {
-        if (v is Map &&
-            v['generated_image_url'] is String &&
-            _urlPath(v['generated_image_url'] as String) == wantPath) {
-          final t = v['structural_identity_token'];
-          return (t is String && t.isNotEmpty) ? t : null;
-        }
-      }
-    } catch (_) {/* malformed ledger → no restore */}
-    return null;
-  }
+  // cross-lineage desync after a re-upload).
+  //
+  // Returns VERBATIM: the stored token when the URL is found (including '' when
+  // the lineage was generated in off mode), and null ONLY when the URL is absent
+  // from the ledger. The caller then adopts verbatim, so an off-lineage entry
+  // (token '') CLEARS the stale local token instead of a silent no-op. A missing
+  // URL keeps the current identity (legacy pre-persistence behaviour).
+  String? _structuralTokenForUrl(String afterUrl) =>
+      lookupStructuralTokenInLedger(_versions, afterUrl);
 
   Future<void> _continueFromVision(GeneratedResult result) async {
     final afterUrl = result.afterImageUrl;
@@ -1077,7 +1120,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // selection (token == current). Only meaningful with the ledger retained.
       if (FeatureFlags.reuploadKeepLineage) {
         final token = _structuralTokenForUrl(afterUrl);
-        if (token != null && token.isNotEmpty) _structuralIdentity = token;
+        // Adopt verbatim: null (URL absent) keeps current; '' (off-lineage entry)
+        // clears the stale token; a real token restores the lineage identity.
+        _structuralIdentity =
+            adoptStructuralIdentity(_structuralIdentity, token, false);
       }
       if (branchMessage != null) _messages.add(branchMessage);
     });
@@ -2243,9 +2289,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         if (returnedVersions != null && returnedVersions.isNotEmpty) {
           _versions = returnedVersions;
         }
-        if (returnedIdentity != null && returnedIdentity.isNotEmpty) {
-          _structuralIdentity = returnedIdentity;
-        }
+        _structuralIdentity = adoptStructuralIdentity(_structuralIdentity,
+            returnedIdentity, result['structural_capture_disabled'] == true);
         if (returnedRoom.isNotEmpty && _currentRoomType.trim().isEmpty) {
           _currentRoomType = RoomTypeImages.enLabelForId(returnedRoom) ?? returnedRoom;
         }
@@ -2339,9 +2384,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         if (returnedRoom.isNotEmpty && _currentRoomType.trim().isEmpty) {
           _currentRoomType = RoomTypeImages.enLabelForId(returnedRoom) ?? returnedRoom;
         }
-        if (returnedIdentity != null && returnedIdentity.isNotEmpty) {
-          _structuralIdentity = returnedIdentity;
-        }
+        _structuralIdentity = adoptStructuralIdentity(_structuralIdentity,
+            returnedIdentity, result['structural_capture_disabled'] == true);
         if (returnedVersions != null && returnedVersions.isNotEmpty) {
           _versions = returnedVersions;
         }
@@ -2748,7 +2792,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
             if (FeatureFlags.reuploadKeepLineage) {
               _branchSourceVersionId = _versionIdForUrl(v.afterUrl);
               final token = _structuralTokenForUrl(v.afterUrl);
-              if (token != null && token.isNotEmpty) _structuralIdentity = token;
+              // Adopt verbatim (see the two sites above): '' clears a stale token.
+              _structuralIdentity =
+                  adoptStructuralIdentity(_structuralIdentity, token, false);
             }
             _messages.add(MessageModel(
               id: 'sys_${DateTime.now().millisecondsSinceEpoch}',
