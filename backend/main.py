@@ -326,7 +326,15 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
             "Analyse this space (interior OR exterior). Reply with EXACTLY four "
             "fields separated by ' | ', nothing else:\n"
             "room_type | recommended_atmosphere | confidence | reason\n"
-            "- room_type: classify into EXACTLY ONE canonical type. Interior: "
+            "- room_type: classify into EXACTLY ONE canonical type. CRITICAL "
+            "INTERIOR RULE: if the photo is taken from INSIDE a room (interior "
+            "walls, a ceiling and an indoor floor are visible), it is an INTERIOR "
+            "type EVEN IF a balcony, terrace, garden, pool or city view is visible "
+            "THROUGH a window or a glass/sliding door. A visible outdoor view, "
+            "skyline, natural light or large glazing is NOT evidence of an exterior "
+            "room. Pick an exterior type ONLY when the camera is physically OUTSIDE, "
+            "standing on that outdoor surface, with no interior ceiling or enclosing "
+            "room around it. Interior: "
             "living_room, bedroom, kitchen, dining_room, office, bathroom, "
             "entrance, hallway, other. Exterior: terrace, balcony, garden, "
             "pool_area, facade, driveway. Never return a generic label such as "
@@ -374,6 +382,13 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
         )
     try:
         b64 = base64.b64encode(image_bytes).decode()
+        # Déterminisme (RCA 2026-07-08) : _classify_ayden était le SEUL appel vision
+        # NON couvert par VISION_DETERMINISTIC → le room_type variait d'un run à
+        # l'autre sur une image limite (prouvé : mêmes bytes → living_room 5/6,
+        # balcony 1/6). On pinne temperature=0 + seed pour que la MÊME photo donne
+        # le MÊME room à chaque fois (temp=0 = argmax = le mode observé).
+        _vd = os.environ.get("VISION_DETERMINISTIC", "1") != "0"
+        _det_kw = {"temperature": 0, "seed": 42} if _vd else {}
         resp = await openai.chat.completions.create(
             model="gpt-4o",
             messages=[{
@@ -388,6 +403,7 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
                 ],
             }],
             max_tokens=40,
+            **_det_kw,
         )
         raw = (resp.choices[0].message.content or "").strip()
         parts = [p.strip().lower() for p in raw.split("|")]
@@ -405,10 +421,37 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
         log.info("  [AydenVision] classifier=%s  room=%s  atmosphere=%s  confidence=%s",
                  "unified" if _unified else "legacy",
                  out["room"] or "(none)", out["atmosphere"] or "(none)", out["confidence"])
+        log.info("  [AydenVision] model=gpt-4o  temperature=%s  seed=%s  prompt_hash=%s  image_sha256=%s",
+                 "0" if _vd else "default", "42" if _vd else "none",
+                 hashlib.sha1(_prompt_text.encode()).hexdigest()[:12],
+                 hashlib.sha256(image_bytes).hexdigest()[:16])
     except Exception as exc:
         log.warning("  [AydenVision] classify failed (non-fatal): %s: %s",
                     type(exc).__name__, exc)
     return out
+
+
+def resolve_stage_exterior(ayden_room, ayden_conf, kw_room, kw_conf, exterior_rooms):
+    """Safety gate (RCA 2026-07-08). PURE. Une pièce intérieure mal lue (pièce vide,
+    vue à travers une baie) peut être classée EXTÉRIEUR → un STAGE extérieur
+    DESTRUCTEUR sur un intérieur. On rejette un extérieur NON corroboré et on
+    retombe en intérieur quand :
+      • le classifieur keyword (indépendant, issu de vision_analysis) voit un
+        INTÉRIEUR avec assez de confiance (indice indoor fort) → on prend cet
+        intérieur ; OU
+      • la confiance Ayden est 'low' (incertain) → fallback living_room.
+    Les vrais extérieurs (confiance high/medium, aucun signal indoor keyword) passent
+    INCHANGÉS → on NE casse PAS les vrais balcons/terrasses/façades. Un room non
+    extérieur passe tel quel. Retourne (room_effectif, raison|None)."""
+    if ayden_room not in exterior_rooms:
+        return ayden_room, None
+    kw_indoor = bool(kw_room and kw_room not in exterior_rooms and (kw_conf or 0.0) >= 0.6)
+    if kw_indoor:
+        return kw_room, (f"exterior '{ayden_room}' overridden by confident indoor "
+                         f"keyword '{kw_room}' (conf={kw_conf:.2f})")
+    if ayden_conf == "low":
+        return "living_room", f"low-confidence exterior '{ayden_room}' → interior fallback"
+    return ayden_room, None
 
 
 # SPECIFIC_ROOM_STAGE — interior rooms allowed to reuse the STAGE contract on a
@@ -3361,6 +3404,7 @@ async def generate(
     if prompt_en is not prompt:
         log.info("  [normalize] %s->en  %r -> %r", ui_locale, prompt[:60], prompt_en[:60])
 
+    classification = None  # keyword room classifier — corroboration du safety gate
     if let_ai_decide and room_description:
         log.info("--- Let AI Decide: classifying room from vision ---")
         _t_cr = time.monotonic()
@@ -3425,6 +3469,21 @@ async def generate(
     # STAGE consumes the room type (Option B: always re-imagine; swap happens after
     # composition; "" exterior/unclear ⇒ preserve).
     _detected_room = _ayden_vision["room"] if (_want_stage and _ayden_vision) else ""
+    # Safety gate (RCA 2026-07-08) — un intérieur mal lu en extérieur ne doit pas
+    # déclencher un STAGE extérieur destructeur. Corroboration par le classifieur
+    # keyword (vision_analysis) ou par une confiance 'low'. Les vrais extérieurs
+    # (high/medium conf, aucun signal indoor) passent inchangés. N'agit que sur le
+    # chemin STAGE (_detected_room non vide) et uniquement sur un extérieur.
+    if _detected_room:
+        _gated_room, _gate_reason = resolve_stage_exterior(
+            _detected_room, (_ayden_vision or {}).get("confidence", "low"),
+            classification.primary_room if classification else "",
+            classification.confidence if classification else 0.0,
+            _EXTERIOR_ROOMS,
+        )
+        if _gate_reason:
+            log.info("[AydenSafetyGate] %s", _gate_reason)
+            _detected_room = _gated_room
     # AYDEN_UNIFIED_VISION — STAGE is an INTERIOR furnish contract; an exterior
     # space must NOT be staged. Route exteriors to PRESERVE: keep _stage_room ""
     # (so apply_stage_mode is skipped) but still propagate the detected room below
