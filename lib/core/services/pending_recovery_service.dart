@@ -9,10 +9,17 @@ enum RecoveryAction {
   /// Probe request FAILED (network/backend down) — do NOTHING; retry next sweep.
   skip,
 
-  /// Backend HAS an intent (RUNNING / SUCCEEDED / FAILED) — the backend wins;
-  /// just drop the pending. Display of RUNNING/SUCCEEDED is handled by the
-  /// per-session probe (_loadMessages) + homepage derive-from-backend.
+  /// Backend has a TERMINAL intent (SUCCEEDED / FAILED) — the backend wins; drop
+  /// the pending. Display/adoption of a SUCCEEDED result is handled by the
+  /// per-session probe (_loadMessages) + homepage derive-from-backend adoption.
   clearOnly,
+
+  /// Backend intent is RUNNING — the generation is still going server-side. KEEP
+  /// the pending (garde-fou 1 : dernier filet si l'app meurt avant l'adoption) ;
+  /// une sweep ultérieure re-sonde et résout sur la transition terminale. Ne
+  /// déclenche JAMAIS de relaunch (réservé au no-intent confirmé) → aucun double
+  /// POST.
+  keepRunning,
 
   /// Backend confirms NO intent AND the pending is fresh — re-launch verbatim.
   relaunch,
@@ -72,7 +79,15 @@ class PendingRecoveryService with WidgetsBindingObserver {
   }) {
     if (probe == null) return RecoveryAction.skip; // request failed — never act blind
     final hasIntent = probe['intent_id'] != null;
-    if (hasIntent) return RecoveryAction.clearOnly; // backend wins
+    if (hasIntent) {
+      // Garde-fou 1 — ne PAS effacer le pending tant que la gen tourne (RUNNING) :
+      // c'est le dernier filet si l'app meurt avant l'adoption. On ne clear qu'au
+      // terminal (SUCCEEDED/FAILED). Un intent RUNNING ne déclenche jamais de
+      // relaunch (réservé au no-intent confirmé) → aucun double POST.
+      final status = probe['status'] as String?;
+      if (status == 'RUNNING') return RecoveryAction.keepRunning;
+      return RecoveryAction.clearOnly; // terminal → backend gagne
+    }
     final ageMs = nowMs - pending.createdAtMs;
     if (ageMs > maxAgeMs) return RecoveryAction.dropStale;
     return RecoveryAction.relaunch;
@@ -120,9 +135,13 @@ class PendingRecoveryService with WidgetsBindingObserver {
         debugPrint('[Recovery] ${p.sessionId} probe failed → skip (retry next sweep)');
         return;
       case RecoveryAction.clearOnly:
-        debugPrint('[Recovery] ${p.sessionId} intent exists (backend wins) → clear pending');
+        debugPrint('[Recovery] ${p.sessionId} intent terminal (backend wins) → clear pending');
         await store.clear(p.sessionId);
         return;
+      case RecoveryAction.keepRunning:
+        debugPrint('[Recovery] ${p.sessionId} intent RUNNING → KEEP pending '
+            '(backend still generating; adoption/clear on terminal)');
+        return; // garde-fou 1 : ne PAS clear — filet de récupération conservé
       case RecoveryAction.dropStale:
         final ageH = ((nowMs - p.createdAtMs) / 3600000).toStringAsFixed(1);
         debugPrint('[Recovery] ${p.sessionId} age=${ageH}h > 2h, no intent → DROP (not re-launched)');

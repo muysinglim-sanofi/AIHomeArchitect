@@ -42,13 +42,13 @@ void main() {
       );
     });
 
-    test('intent exists RUNNING → clearOnly (backend wins)', () {
+    test('intent exists RUNNING → keepRunning (garde-fou 1 : pending conservé)', () {
       expect(
         PendingRecoveryService.decide(
             pending: _p(createdAtMs: now),
             probe: {'intent_id': 'abc', 'status': 'RUNNING'},
             nowMs: now),
-        RecoveryAction.clearOnly,
+        RecoveryAction.keepRunning,
       );
     });
 

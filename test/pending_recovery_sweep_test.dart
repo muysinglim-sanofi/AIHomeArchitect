@@ -110,12 +110,12 @@ void main() {
     expect(await store.load('s1'), isNull); // cleared on success
   });
 
-  test('intent RUNNING → clearOnly, NO re-launch (backend wins)', () async {
+  test('intent RUNNING → keepRunning, pending KEPT, NO re-launch', () async {
     final store = await storeWith([_p('s1', createdAtMs: now)]);
     final gen = FakeGen()..probe = {'intent_id': 'x', 'status': 'RUNNING'};
     await svc.sweep(gen: gen, store: store, nowMs: now);
-    expect(gen.generated, isEmpty);
-    expect(await store.load('s1'), isNull);
+    expect(gen.generated, isEmpty); // jamais de POST sur RUNNING
+    expect(await store.load('s1'), isNotNull); // garde-fou 1 : filet conservé
   });
 
   test('intent SUCCEEDED → clearOnly, no re-launch', () async {

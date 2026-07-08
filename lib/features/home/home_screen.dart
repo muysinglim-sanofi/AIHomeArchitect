@@ -22,6 +22,7 @@ import '../../shared/widgets/app_dots.dart';
 import '../../shared/widgets/app_pill.dart';
 import '../../shared/widgets/reveal_hero.dart';
 import '../../shared/widgets/sticky_action_bar.dart';
+import 'home_adoption.dart';
 
 // ── Wave 4.1 — Homepage UX Optimization ───────────────────────────────────────
 // Image-led, calm, action-forward. Consumes the Wave 4 spine (RevealHero /
@@ -77,6 +78,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   // yet → getLatestIntent would still return the PREVIOUS terminal Intent) is
   // never wrongly cleared. We only clear from the second observation on.
   final Set<String> _reconcileSeen = {};
+  // One-shot : l'adoption de lancement (_deriveRecentFromBackend) doit tourner dès
+  // que sessionProvider est peuplé. _load() est async → au post-frame la liste peut
+  // être vide (early-return) ; un ref.listen relance alors la dérivation quand elle
+  // se peuple. Ce flag garantit UNE seule dérivation de lancement (les ticks live
+  // restent gérés par le poller _reconcilePending).
+  bool _derivedOnce = false;
+  // M-C : garde anti-intent-périmé. getLatestIntent renvoie le DERNIER intent par
+  // created_at ; sur une re-génération, le nouvel intent RUNNING peut ne pas être
+  // encore écrit → le poll verrait le terminal PRÉCÉDENT. On n'agit sur un markError
+  // qu'après avoir observé RUNNING pour cette gen (adopt reste protégé par l'égalité
+  // preview==after ; clearSpinner est bénin).
+  final Set<String> _seenRunning = {};
+  // Snackbar : true pendant la dérivation de lancement → on pose le badge "Ready"
+  // sans empiler de toasts (ceux-ci sont réservés aux complétions live du poll).
+  bool _derivingInitial = false;
 
   @override
   void initState() {
@@ -118,6 +134,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     ];
     // Stop tracking ids that are no longer in flight.
     _reconcileSeen.removeWhere((id) => !inFlightIds.contains(id));
+    _seenRunning.removeWhere((id) => !inFlightIds.contains(id));
     if (inFlightIds.isEmpty) return;
     final svc = GenerationService();
     for (final id in inFlightIds) {
@@ -127,15 +144,58 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       try {
         final probe = await svc.getLatestIntent(id);
         if (!mounted) return;
-        // Latest Intent no longer RUNNING → no gen in progress → clear the stale
-        // spinner. RUNNING (or probe unavailable) → leave it untouched.
-        if (probe != null && probe['status'] != 'RUNNING') {
-          ref.read(pendingGenerationsProvider.notifier).clear(id);
-          _reconcileSeen.remove(id);
+        // Mémorise avoir vu CETTE gen RUNNING (garde M-C ci-dessous).
+        if (probe?['status'] == 'RUNNING') _seenRunning.add(id);
+        // Fix "adopt completed generations" — une gen qui se termine hors-session
+        // laisse sa donnée côté backend mais la carte garde son ancien preview.
+        // Sur un terminal SUCCEEDED + after_image_url, on ADOPTE l'image (au lieu de
+        // simplement nettoyer le spinner → la carte retombait sur la source).
+        // RUNNING ou probe indisponible → on laisse le spinner. Décision pure +
+        // applier I/O (mutualisé avec _deriveRecentFromBackend).
+        final sessions = ref.read(sessionProvider);
+        final idx = sessions.indexWhere((p) => p.id == id);
+        final preview = idx >= 0 ? sessions[idx].afterImageUrl : null;
+        final decision =
+            decideHomeAdoption(probe: probe, currentPreview: preview);
+        // M-C : ne pas poser un badge "Failed" sur un intent potentiellement PÉRIMÉ
+        // (le terminal du dernier intent alors qu'une nouvelle gen démarre). On
+        // exige d'avoir observé RUNNING pour cette gen avant d'agir sur markError.
+        if (decision.action == HomeAdoptionAction.markError &&
+            !_seenRunning.contains(id)) {
+          continue;
         }
+        _applyHomeAdoption(id, decision, inFlightContext: true);
       } catch (_) {
         // best-effort — a failed probe never clears a live spinner
       }
+    }
+  }
+
+  /// Applique la décision d'adoption (I/O : état mémoire + DB). Mutualisé par les
+  /// deux chemins. [inFlightContext] = true quand l'appel vient du poller de
+  /// spinner (_reconcilePending) : on nettoie/mute le spinner ; false au lancement
+  /// (_deriveRecentFromBackend) : on peut (re)poser un spinner RUNNING mais on ne
+  /// (re)flague jamais une erreur/clear d'une vieille session à chaque lancement.
+  void _applyHomeAdoption(String sessionId, HomeAdoptionDecision d,
+      {required bool inFlightContext}) {
+    if (!mounted) return;
+    // Mutations d'état déléguées à la fonction libre TESTABLE (fige la couture).
+    applyAdoptionToNotifiers(
+      sessions: ref.read(sessionProvider.notifier),
+      pending: ref.read(pendingGenerationsProvider.notifier),
+      sessionId: sessionId,
+      decision: d,
+      inFlightContext: inFlightContext,
+      currentLifecycle: ref.read(pendingGenerationsProvider)[sessionId],
+    );
+    if (d.action == HomeAdoptionAction.adopt) {
+      debugPrint('[Home] adopted completed vision session=$sessionId');
+    }
+    // Grace-set : dès qu'un terminal est résolu, l'id n'a plus à être re-sondé.
+    if (d.action == HomeAdoptionAction.adopt ||
+        d.action == HomeAdoptionAction.markError ||
+        d.action == HomeAdoptionAction.clearSpinner) {
+      _reconcileSeen.remove(sessionId);
     }
   }
 
@@ -146,31 +206,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   /// Intent is still RUNNING. Only SETS here (clearing stays in _reconcilePending);
   /// a RUNNING status is authoritative, so there is no false-positive risk.
   Future<void> _deriveRecentFromBackend() async {
-    if (!mounted) return;
+    if (!mounted || _derivedOnce) return;
     final sessions = ref.read(sessionProvider);
-    if (sessions.isEmpty) return;
+    if (sessions.isEmpty) return; // pas encore chargées → relancé via ref.listen
+    _derivedOnce = true;          // one-shot (pas de re-dérivation à chaque rebuild)
+    _derivingInitial = true;      // #7 : badge "Ready" sans empiler de snackbars
     final recent = [...sessions]
       ..sort((a, b) => b.lastUpdatedAt.compareTo(a.lastUpdatedAt));
-    // A gen in flight is on a very recently-active session (a gen takes ~70s).
-    // Only probe sessions touched in the last 10 min → ~0 probes on a normal
-    // launch, and never probes old/mock sessions. Sorted desc → break on the
-    // first stale one.
+    // Deux populations à sonder au lancement (les flags RAM sont perdus) :
+    //  • récemment actives (< 10 min) → détecter un intent RUNNING pour (re)poser le
+    //    spinner (comportement historique) ;
+    //  • SANS preview locale → candidates à une gen terminée hors-session : la donnée
+    //    existe côté backend (image + message + result_ref) mais la carte retombe sur
+    //    la source → ADOPTER. Couvre kill app / autre appareil / heures plus tard.
+    // Borné à 6 probes → ~0 sur un lancement normal (les récentes ont déjà une
+    // preview et sont donc ignorées).
     final cutoff = DateTime.now().subtract(const Duration(minutes: 10));
     final svc = GenerationService();
-    for (final p in recent.take(6)) {
-      if (p.lastUpdatedAt.isBefore(cutoff)) break;
-      try {
-        final probe = await svc.getLatestIntent(p.id);
-        if (!mounted) return;
-        if (probe != null &&
-            probe['status'] == 'RUNNING' &&
-            ref.read(pendingGenerationsProvider)[p.id] !=
-                GenerationLifecycle.inFlight) {
-          ref.read(pendingGenerationsProvider.notifier).markInFlight(p.id);
+    var probed = 0;
+    try {
+      for (final p in recent) {
+        if (probed >= 6) break;
+        final recentlyActive = p.lastUpdatedAt.isAfter(cutoff);
+        final previewLess = (p.afterImageUrl ?? '').isEmpty;
+        if (!recentlyActive && !previewLess) continue;
+        probed++;
+        try {
+          final probe = await svc.getLatestIntent(p.id);
+          if (!mounted) return;
+          final decision =
+              decideHomeAdoption(probe: probe, currentPreview: p.afterImageUrl);
+          _applyHomeAdoption(p.id, decision, inFlightContext: false);
+        } catch (_) {
+          // best-effort
         }
-      } catch (_) {
-        // best-effort
       }
+    } finally {
+      _derivingInitial = false; // fin de la fenêtre "pas de snackbar"
     }
   }
 
@@ -208,6 +280,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       pendingGenerationsProvider,
       (previous, next) {
         if (!mounted) return;
+        // M-B / #7 : ne toaster QUE si l'accueil est la route visible (pas quand
+        // l'utilisateur est dans le chat, derrière la route poussée) ET pas pendant
+        // la dérivation de lancement (le badge sur la carte suffit ; évite les
+        // toasts empilés / une snackbar sur un écran non regardé). Le badge, lui,
+        // se met à jour dans tous les cas.
+        final onHome = ModalRoute.of(context)?.isCurrent ?? false;
+        if (!onHome || _derivingInitial) return;
         for (final entry in next.entries) {
           final prevState = previous?[entry.key];
           final newState = entry.value;
@@ -224,6 +303,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         }
       },
     );
+
+    // Fix "adopt completed generations" — _load() est async : au post-frame la
+    // liste de sessions peut être vide (→ la dérivation de lancement early-return).
+    // Dès qu'elle se peuple, relancer UNE fois pour adopter une gen terminée
+    // hors-session (ex. générée puis app fermée avant l'adoption).
+    ref.listen<List<ProjectModel>>(sessionProvider, (prev, next) {
+      if (!_derivedOnce && next.isNotEmpty) {
+        _deriveRecentFromBackend();
+      }
+    });
 
     return Scaffold(
       backgroundColor: AppColors.background,
