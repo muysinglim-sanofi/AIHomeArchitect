@@ -72,6 +72,15 @@ _GRANTING_EVENTS = frozenset({
     "TRANSFER",
 })
 
+# RC-PR2 — event types that also CREDIT the wallet (Payment/Order/Pass +
+# ledger GRANT) IN ADDITION to the premium role (dual-write). Strictly the two
+# real acquisition events ; UNCANCELLATION/PRODUCT_CHANGE/NON_RENEWING/TRANSFER
+# keep the premium-role write only (special semantics, out of RC-PR2 scope).
+_CREDIT_GRANTING_EVENTS = frozenset({
+    "INITIAL_PURCHASE",
+    "RENEWAL",
+})
+
 # Event types that EXPIRE an entitlement. RC sends `expiration_at_ms`
 # in the past for these — we update the row so has_admin_role returns
 # False on the next check.
@@ -185,6 +194,7 @@ async def revenuecat_webhook(request: Request) -> dict:
 
     if event_type in _GRANTING_EVENTS:
         expires_iso = _ms_to_iso(expiration_at_ms)
+        # (1) Autorité actuelle CONSERVÉE (dual-write RC-PR2, ne rien retirer).
         await _upsert_premium(
             supa=supa,
             user_id=app_user_id,
@@ -192,11 +202,21 @@ async def revenuecat_webhook(request: Request) -> dict:
             event_type=event_type,
             event_id=event_id,
         )
+        # (2) RC-PR2 — crédite le wallet EN PLUS, sur les vrais achats. Peut lever
+        #     HTTPException(500) → non-2xx → RevenueCat retente (retry-safe car
+        #     grant_purchase est idempotent). _upsert_premium ci-dessus est déjà
+        #     idempotent, donc le retry ne double rien.
+        grant_info = None
+        if event_type in _CREDIT_GRANTING_EVENTS:
+            grant_info = await _dual_write_grant(
+                supa=supa, event=event, user_id=app_user_id, expires_iso=expires_iso,
+            )
         return {
             "ok": True,
             "action": "premium_granted",
             "user_id": app_user_id,
             "expires_at": expires_iso,
+            "grant": grant_info,
         }
 
     if event_type in _REVOKING_EVENTS:
@@ -229,6 +249,71 @@ async def revenuecat_webhook(request: Request) -> dict:
 # ── Internal helpers ────────────────────────────────────────────────────────
 
 import asyncio  # noqa: E402  — used by the awaitable helpers below
+
+
+async def _dual_write_grant(*, supa, event: dict, user_id: str, expires_iso: Optional[str]) -> dict:
+    """RC-PR2 — crédite le wallet (Payment/Order/Pass + ledger GRANT) en plus du
+    rôle premium. Politique STRICTE (chemin argent) :
+      • pas de skip muet : product non mappé → HTTPException(500) (RC retente,
+        l'anomalie est visible dashboard + logs) ;
+      • pas de fail-open : toute erreur RPC → HTTPException(500) (RC retente ;
+        grant_purchase est idempotent donc le retry est sûr) ;
+      • SANDBOX crédite normalement (décision RC-PR2) — l'environment est tracé
+        dans payment.raw_payload (on passe l'event complet).
+    """
+    import billing  # noqa: PLC0415 — lazy (évite tout cycle d'import au chargement)
+
+    product_id = event.get("product_id") or ""
+    transaction_id = event.get("transaction_id") or ""
+    environment = event.get("environment") or ""
+
+    if not product_id or not transaction_id:
+        # Champs indispensables absents : LOUD (jamais un skip silencieux). Un
+        # retry ne les fera pas apparaître → on n'impose pas de boucle non-2xx.
+        log.warning(
+            "[RC-PR2] grant SKIPPED (missing fields, loud) user=%s product_id=%r tx=%r env=%s",
+            user_id, product_id, transaction_id, environment or "-",
+        )
+        return {"credited": False, "reason": "missing_fields",
+                "product_id": product_id or None, "transaction_id": transaction_id or None}
+
+    try:
+        result = await billing.grant_purchase(
+            user_id=user_id,
+            provider="revenuecat",
+            provider_transaction_id=transaction_id,   # transaction_id DU CYCLE
+            store_product_id=product_id,
+            amount=event.get("price"),
+            currency=event.get("currency"),
+            ends_at_iso=expires_iso,                  # autorité = RC expiration
+            raw_payload=event,                        # environment vit ici (audit)
+            supa=supa,
+        )
+    except billing.ProductNotMapped as exc:
+        log.error(
+            "[RC-PR2] product NOT mapped → non-2xx (RC retry) user=%s product_id=%s env=%s",
+            user_id, exc.store_product_id, environment or "-",
+        )
+        raise HTTPException(status_code=500, detail="product_not_mapped")
+    except Exception as exc:  # noqa: BLE001 — chemin argent : PAS de fail-open
+        log.error(
+            "[RC-PR2] grant_purchase FAILED → non-2xx (RC retry) user=%s tx=%s err=%s: %s",
+            user_id, transaction_id, type(exc).__name__, exc,
+        )
+        raise HTTPException(status_code=500, detail="grant_failed")
+
+    log.info(
+        "[RC-PR2] grant OK user=%s tx=%s status=%s credited=%s credits=%d env=%s",
+        user_id, transaction_id, result.status, result.credited, result.credits, environment or "-",
+    )
+    return {
+        "credited": result.credited,
+        "status": result.status,
+        "credits": result.credits,
+        "order_id": result.order_id,
+        "pass_id": result.pass_id,
+        "environment": environment or None,
+    }
 
 
 async def _upsert_premium(

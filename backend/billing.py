@@ -278,3 +278,116 @@ async def apply_billing_for_intent_transition(
     entry_type, delta, prefix = decision
     await _emit(supa, user_id=user_id, entry_type=entry_type, delta=delta,
                 key=f"{prefix}:{intent_id}", intent_id=intent_id)
+
+
+# ── RC-PR2 — ACQUISITION (achat/renouvellement → Payment/Order/Pass/GRANT) ────
+#
+# Chemin ARGENT, distinct de la consommation ci-dessus. Règles propres :
+#   • PAS de fail-open : un échec DOIT remonter (l'appelant renvoie non-2xx →
+#     RevenueCat retente). Un crédit payé silencieusement perdu est inacceptable.
+#   • PAS de skip muet : un produit non mappé lève ProductNotMapped (l'appelant
+#     répond non-2xx pour retry — un achat payé ne doit jamais être avalé).
+#   • Idempotence + atomicité vivent dans le RPC billing_grant_purchase (1 txn).
+# Frontière RC-PR3 : ce chemin CRÉDITE/OBSERVE, il n'enforce rien (reserve_decision
+# bypasse encore les premium). Le débit wallet des payants = RC-PR3.
+
+
+class ProductNotMapped(Exception):
+    """Aucun product actif ne matche le store product_id de l'achat. Erreur
+    PERMANENTE (retry ne corrige pas) mais on la remonte quand même : l'appelant
+    répond non-2xx pour la rendre VISIBLE (dashboard RC + logs), jamais un skip."""
+
+    def __init__(self, store_product_id: str):
+        self.store_product_id = store_product_id
+        super().__init__(f"no active product mapped for store id {store_product_id!r}")
+
+
+@dataclass
+class GrantResult:
+    """Retour de grant_purchase. `status` = 'granted' (1er traitement) |
+    'already_processed' (redélivrance idempotente). `credited` = True seulement
+    si une NOUVELLE ligne GRANT a été écrite ce coup-ci."""
+    ok: bool
+    status: str
+    credited: bool
+    credits: int
+    order_id: Optional[str]
+    pass_id: Optional[str]
+
+
+async def _resolve_product(supa, store_product_id: str) -> Optional[dict]:
+    """products actif dont revenuecat_product_id OU apple_product_id == l'id store.
+    Le mapping est figé en base (migration ticket 0). Renvoie la ligne ou None."""
+    res = await asyncio.to_thread(
+        lambda: supa.table("products")
+        .select("id, type, credits_granted, duration_days")
+        .or_(
+            f"revenuecat_product_id.eq.{store_product_id},"
+            f"apple_product_id.eq.{store_product_id}"
+        )
+        .eq("active", True)
+        .limit(1)
+        .execute()
+    )
+    rows = getattr(res, "data", None) or []
+    return rows[0] if rows else None
+
+
+async def grant_purchase(
+    *,
+    user_id: str,
+    provider: str,
+    provider_transaction_id: str,
+    store_product_id: str,
+    amount=None,
+    currency: Optional[str] = None,
+    ends_at_iso: Optional[str] = None,
+    raw_payload: Optional[dict] = None,
+    supa=None,
+) -> GrantResult:
+    """Achat/renouvellement → Payment + Order + Pass + ledger GRANT → wallet
+    crédité, via le RPC atomique billing_grant_purchase. NE swallow AUCUNE erreur
+    (≠ chemin conso) : mapping absent → ProductNotMapped ; échec RPC → propagé.
+
+    `provider_transaction_id` DOIT être le transaction_id du CYCLE (chaque RENEWAL
+    = nouveau → nouveau Pass+GRANT), jamais original_transaction_id.
+    """
+    supa = supa or _get_supa()
+    product = await _resolve_product(supa, store_product_id)
+    if product is None:
+        raise ProductNotMapped(store_product_id)
+
+    res = await asyncio.to_thread(
+        lambda: supa.rpc(
+            "billing_grant_purchase",
+            {
+                "p_user_id": user_id,
+                "p_provider": provider,
+                "p_provider_transaction_id": provider_transaction_id,
+                "p_product_id": product["id"],
+                "p_credits": int(product["credits_granted"]),
+                "p_duration_days": product.get("duration_days"),
+                "p_amount": amount,
+                "p_currency": currency,
+                "p_ends_at": ends_at_iso,
+                "p_raw_payload": raw_payload or {},
+            },
+        ).execute()
+    )
+    data = getattr(res, "data", None)
+    if isinstance(data, list):
+        data = data[0] if data else None
+    data = data or {}
+    result = GrantResult(
+        ok=bool(data.get("ok")),
+        status=data.get("status") or "unknown",
+        credited=bool(data.get("credited")),
+        credits=int(data.get("credits") or 0),
+        order_id=data.get("order_id"),
+        pass_id=data.get("pass_id"),
+    )
+    log.info(
+        "[BILLING] grant_purchase user=%s tx=%s status=%s credited=%s credits=%d",
+        user_id[:8], provider_transaction_id, result.status, result.credited, result.credits,
+    )
+    return result
