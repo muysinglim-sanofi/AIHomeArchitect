@@ -342,11 +342,45 @@ async def get_latest_intent_for_session(
         if not rows:
             return None
         row = rows[0]
+        _status = row.get("status")
+        _rr = row.get("result_ref")
+        # Fix "adopt completed generations" — expose l'URL de l'image générée
+        # (LECTURE SEULE, additif) pour que l'accueil ADOPTE une gen terminée
+        # hors-session (le résultat existe côté backend mais la carte retombe sur
+        # la source). UNE colonne result_ref, DEUX formes : V1 /generate stocke le
+        # payload complet (clé after_image_url) ; /refine stocke generated_image_url.
+        # Gaté sur SUCCEEDED : on n'expose l'URL qu'au terminal succès (jamais un
+        # result_ref mi-vol écrit avant la transition, cf. fenêtres de crash refine).
+        _after = ""
+        if _status == "SUCCEEDED" and isinstance(_rr, dict):
+            _after = _rr.get("after_image_url") or _rr.get("generated_image_url") or ""
+        # Repli LECTURE SEULE : un intent V1 réparé par le worker de réconciliation
+        # atteint SUCCEEDED SANS result_ref (le repair n'écrit que le statut) —
+        # l'image existe pourtant (message image_result persisté, Wave 5.6). On la
+        # récupère depuis le dernier image_result de la session pour rester adoptable.
+        # Toujours read-only (SELECT), aucune génération, aucune écriture.
+        if _status == "SUCCEEDED" and not _after:
+            try:
+                _msg = await asyncio.to_thread(
+                    lambda: supa.table("messages")
+                    .select("after_image_url")
+                    .eq("session_id", sid)
+                    .eq("message_type", "image_result")
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                _mrows = getattr(_msg, "data", None) or []
+                if _mrows:
+                    _after = _mrows[0].get("after_image_url") or ""
+            except Exception:
+                pass  # best-effort : sans URL la carte reste simplement sur la source
         return {
             "intent_id": row.get("intent_id"),
-            "status": row.get("status"),
+            "status": _status,
             "iteration": row.get("iteration"),
-            "has_result": row.get("result_ref") is not None,
+            "has_result": _rr is not None,
+            "after_image_url": _after,
         }
     except Exception as exc:
         log.warning(

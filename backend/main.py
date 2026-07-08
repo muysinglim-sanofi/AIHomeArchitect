@@ -1447,7 +1447,8 @@ async def get_latest_intent(
         user_id=current_user.user_id, session_id=session_id,
     )
     if row is None:
-        return {"intent_id": None, "status": None, "iteration": None, "has_result": False}
+        return {"intent_id": None, "status": None, "iteration": None,
+                "has_result": False, "after_image_url": None}
     return row
 
 
