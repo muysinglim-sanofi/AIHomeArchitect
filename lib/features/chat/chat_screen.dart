@@ -714,6 +714,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     debugPrint('[Timing] _initNewSession START (t=0)');
     debugPrint('[DB] _initNewSession() started — title: "$_sessionTitle" room: "$_currentRoomType" style: "$_currentStyle"');
     try {
+      // Perf mini-ticket (2026-07-08) — #3 : lancer la COMPRESSION en PARALLÈLE de
+      // createSession (locale, n'a pas besoin du session_id) → son coût se cache sous
+      // createSession, le POST part plus tôt. Orchestration seule : MÊMES bytes, même
+      // qualité d'image source (aucune réduction de taille ici).
+      final imageFile = _sourceImageFile;
+      Future<Uint8List?>? compressFuture;
+      int rawLen = 0;
+      if (imageFile != null) {
+        debugPrint('[Timing] compression start @ ${sw.elapsedMilliseconds}ms');
+        rawLen = await imageFile.length();
+        compressFuture = _compressSource(imageFile.path); // concurrent — PAS d'await ici
+      }
+
+      debugPrint('[Timing] createSession start @ ${sw.elapsedMilliseconds}ms');
       final realProject = await ref.read(sessionProvider.notifier).createSession(
         title: _sessionTitle,
         roomType: _currentRoomType,
@@ -724,34 +738,48 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
 
       // Upload source image (fire after session exists so we have the real ID for the path).
       String? beforeUrl;
-      final imageFile = _sourceImageFile;
       if (imageFile != null) {
         debugPrint('[DB] _initNewSession() uploading source image…');
         try {
-          // Wave 6.15 — compress the source before upload (2.2 MB raw → ~0.6 MB)
-          // so the upload (and thus the generation start) is ~3-4s faster. Falls
-          // back to the raw bytes if compression fails.
-          final rawLen = await imageFile.length();
-          final compressed = await _compressSource(imageFile.path);
+          // La compression a tourné pendant createSession → cet await est ~instantané.
+          final compressed =
+              compressFuture == null ? null : await compressFuture;
           final bytes = compressed ?? await imageFile.readAsBytes();
           debugPrint(
-              '[Compress] source ${(rawLen / 1024).round()} KB → ${(bytes.length / 1024).round()} KB @ ${sw.elapsedMilliseconds}ms');
+              '[Compress] source ${(rawLen / 1024).round()} KB → ${(bytes.length / 1024).round()} KB done @ ${sw.elapsedMilliseconds}ms');
           final filename = 'source_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          debugPrint('[Timing] uploadSourceImage start @ ${sw.elapsedMilliseconds}ms');
           beforeUrl = await _svc.uploadSourceImage(
             sessionId: realProject.id,
             filename: filename,
             bytes: bytes,
           );
-          await _svc.updateBeforeImageUrl(realProject.id, beforeUrl);
-          // Wave 5.3.2 — propagate the upload URL into sessionProvider so the
-          // reveal screen's _sessionOriginalUrl() lookup resolves to the real
-          // initial upload (previously it stayed null until next session reload,
-          // causing the hold-to-original overlay to fall back to the per-step
-          // generation source — i.e. the latest render — on V2+ refinements).
-          ref.read(sessionProvider.notifier)
-              .updateBeforeImageUrl(realProject.id, beforeUrl);
-          debugPrint('[Timing] uploadSourceImage (${(bytes.length / 1024).round()} KB) done @ ${sw.elapsedMilliseconds}ms');
+          debugPrint('[Timing] uploadSourceImage done @ ${sw.elapsedMilliseconds}ms');
           debugPrint('[DB] _initNewSession() source image uploaded — url: $beforeUrl');
+          // #2 — persister l'URL en DB en FIRE-AND-FORGET : le POST prend `beforeUrl`
+          // directement (via le setState _project plus bas), PAS la ligne DB. Ce write
+          // ne sert qu'au reload/reveal ultérieur → il ne doit pas bloquer le départ de
+          // la gen. Erreur loggée, jamais avalée silencieusement.
+          final urlForDb = beforeUrl;
+          final sidForDb = realProject.id;
+          debugPrint('[Timing] updateBeforeImageUrl scheduled @ ${sw.elapsedMilliseconds}ms');
+          unawaited(() async {
+            try {
+              await _svc.updateBeforeImageUrl(sidForDb, urlForDb);
+              debugPrint('[Timing] updateBeforeImageUrl done (async) @ ${sw.elapsedMilliseconds}ms');
+            } catch (e) {
+              debugPrint('[DB] updateBeforeImageUrl failed (non-fatal, fire-and-forget): $e');
+            }
+          }());
+          // Wave 5.3.2 — propagation EN MÉMOIRE (synchrone) pour le reveal screen ;
+          // indépendante du write DB fire-and-forget ci-dessus. Garde `mounted` :
+          // si l'écran est disposé pendant l'upload, `ref` est mort → sinon on lève
+          // "Cannot use ref after disposed" (faussement loggé comme échec upload). Le
+          // write DB f&f a déjà persisté l'URL ; l'état mémoire se re-remplit au reload.
+          if (mounted) {
+            ref.read(sessionProvider.notifier)
+                .updateBeforeImageUrl(realProject.id, beforeUrl);
+          }
         } catch (uploadErr) {
           debugPrint('[DB] _initNewSession() image upload failed (non-fatal): $uploadErr');
         }
@@ -766,14 +794,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         await _savePendingV1AutoGen(realProject.id, beforeUrl);
       }
 
-      // Persist the initial AI greeting.
-      await _svc.insertMessage(
-        sessionId: realProject.id,
-        role: 'ai',
-        content: _messages.first.content,
-      );
-      debugPrint('[Timing] insertMessage(greeting) done @ ${sw.elapsedMilliseconds}ms');
-      debugPrint('[DB] _initNewSession() initial greeting persisted');
+      // #1 — persister le greeting en FIRE-AND-FORGET : il est cosmétique, déjà présent
+      // dans _messages (affiché localement), et la gen n'en dépend pas → l'auto-gen part
+      // ~0,5 s plus tôt. Si des messages user ont été bufferisés pendant l'init (rare),
+      // on l'attend d'abord pour préserver l'ordre chronologique en DB. Erreur loggée.
+      final greetingContent = _messages.first.content;
+      final greetingSid = realProject.id;
+      Future<void> persistGreeting() async {
+        try {
+          await _svc.insertMessage(
+              sessionId: greetingSid, role: 'ai', content: greetingContent);
+          debugPrint('[Timing] greeting persisted (async) @ ${sw.elapsedMilliseconds}ms');
+        } catch (e) {
+          debugPrint('[DB] greeting insert failed (non-fatal, fire-and-forget): $e');
+        }
+      }
+      debugPrint('[Timing] greeting scheduled @ ${sw.elapsedMilliseconds}ms');
+      if (_pendingMessages.isNotEmpty) {
+        await persistGreeting(); // préserve l'ordre chronologique avant le flush
+      } else {
+        unawaited(persistGreeting());
+      }
 
       // Flush user messages that arrived before the session row existed.
       if (_pendingMessages.isNotEmpty) {
