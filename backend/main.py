@@ -1409,7 +1409,7 @@ async def _read_wallet_snapshot(user_id: str) -> dict:
         return {}
 
 
-def _pass_still_active(expires_iso: Optional[str]) -> bool:
+def _pass_still_active(expires_iso: "str | None") -> bool:
     """True si pass_expires_at est dans le futur (le wallet peut être stale : un
     premium bypasse le débit → sa projection n'est pas rafraîchie en continu)."""
     if not expires_iso:
