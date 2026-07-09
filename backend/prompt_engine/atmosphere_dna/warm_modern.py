@@ -82,7 +82,7 @@ for _d in [
         # existing wall…" was omitted (bare wall → model plays safe). Ported the
         # emphatic focal-TV phrasing from Japandi so the TV reliably renders,
         # keeping the never-new-wall / never-glass→wall guards.
-        room_specific_constraints=["seating in conversation grouping", "include a television as the living-room focal point, in the primary seating's forward sightline, on an existing wall or low media console, never a new wall or by converting glazing into a wall"],
+        room_specific_constraints=["seating in conversation grouping", "include a television as the living-room focal point, placed on an existing wall or low media console directly in front of the primary seating, never behind the sofa, never behind the main seating, never on the rear wall behind the seating, never a new wall, and never by converting glazing into a wall. When a television is included, the television axis has priority over the garden/window view axis: arrange the main sofa so it faces the TV directly; keep the garden view as a side view or background view, never as the sofa's primary facing direction if that would place the TV behind the seating."],
         visible_transition_logic="oak floor and warm plaster continue into adjacent rooms; brass accents echo through visible kitchen or hallway",
         negative_rules=["no cold grey palette", "no chrome hardware", "no matching 3-piece suite", "no floating furniture without visible support"],
     ),

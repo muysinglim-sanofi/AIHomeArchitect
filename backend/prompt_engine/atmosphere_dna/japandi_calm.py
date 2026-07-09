@@ -65,7 +65,7 @@ for _d in [
         # a new wall, never converting a glazed partition into a wall) since
         # Japandi sources are also glass-heavy. A TV is furniture/decor → allowed
         # under preserve mode. Bench for forced-TV look on TV-less sources.
-        room_specific_constraints=["include a television as the living-room focal point, in the primary seating's forward sightline, on an existing wall or low media console, never a new wall or by converting glazing into a wall", "maximum 6 decorative objects in room", "solid neutral rug or no rug — no pattern"],
+        room_specific_constraints=["include a television as the living-room focal point, placed on an existing wall or low media console directly in front of the primary seating, never behind the sofa, never behind the main seating, never on the rear wall behind the seating, never a new wall, and never by converting glazing into a wall. When a television is included, the television axis has priority over the garden/window view axis: arrange the main sofa so it faces the TV directly; keep the garden view as a side view or background view, never as the sofa's primary facing direction if that would place the TV behind the seating.", "maximum 6 decorative objects in room", "solid neutral rug or no rug — no pattern"],
         # Wave 5.14c — dropped the "plaster walls" plural noun (mirror
         # of the Wave 5.5.39 material_palette fix that missed this
         # field). The noun was being read as wall entities to
