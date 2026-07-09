@@ -197,11 +197,11 @@ const Map<String, String> frTranslations = {
   'atmoSubtitle_tropical_escape': "Inspiré des resorts de luxe de Bali",
 
   // Paywall (V2)
-  'pwHeadline': "Donnez vie à la maison de vos rêves",
+  'pwHeadline': "Créez votre maison de rêve avec l'IA",
   // V2 hero — découpé pour le retour ligne + le mot accent en or.
-  'pwHeadlineLead': "Donnez ",
-  'pwHeadlineAccent': "vie",
-  'pwHeadlineTrail': " à la maison\nde vos rêves",
+  'pwHeadlineLead': "Créez votre",
+  'pwHeadlineAccent': "avec l'IA",
+  'pwHeadlineTrail': "maison de rêve",
   'pwSubheadline':
       "Redessinez votre espace avec votre architecte IA personnel.",
   'pwLovedBy': "Adoré par ",
@@ -231,10 +231,17 @@ const Map<String, String> frTranslations = {
   'pwGuarantee': "Satisfaction garantie 7 jours",
   'pwGuaranteeSub': "Pas convaincu ? Remboursement intégral sous 7 jours.",
   'pwSecurePayments': "Paiements sécurisés",
-  'pwFeatUnlimited': "Générations illimitées",
-  'pwFeatHd': "Rendus haute qualité",
-  'pwFeatAllStyles': "Tous styles et pièces",
+  'pwFeatUnlimited': "Chaque pièce",
+  'pwFeatHd': "Rendus HD",
+  'pwFeatAllStyles': "Tous les styles",
   'pwFeatNoWatermark': "Sans filigrane",
+  // Contenu des cartes (V2) — langage « espaces », jamais « crédits »/« générations ».
+  'pwPlanBadgeAnnual': "Maison complète",
+  'pwPlanBadgeWeekly': "Démarrage rapide",
+  'pwAnnualSpaces': "Jusqu'à 300 espaces",
+  'pwAnnualSpacesSub': "Idéal pour condos, maisons et rénovations",
+  'pwWeeklySpaces': "Jusqu'à 30 espaces",
+  'pwWeeklySpacesSub': "Idéal pour maisons et appartements",
   'pwUnlockPremium': "Débloquer Premium",
   'pwCancelAnytime': "Annulable à tout moment. Sans engagement.",
   'pwAlreadySubscribed': "Déjà abonné ? ",
@@ -298,10 +305,10 @@ const Map<String, String> frTranslations = {
   'stFreePlan': "Forfait gratuit",
   'stPremiumActive': "Premium actif",
   'stAdminFullAccess': "Admin · accès complet",
-  'stUnlimited': "Générations illimitées · toutes les pièces et ambiances",
-  'stGenerationSingular': "génération gratuite restante",
-  'stGenerationPlural': "générations gratuites restantes",
-  'stPassCreditsRemaining': "{n} générations restantes",
+  'stUnlimited': "Accès complet · toutes les pièces et ambiances",
+  'stGenerationSingular': "espace gratuit restant",
+  'stGenerationPlural': "espaces gratuits restants",
+  'stPassCreditsRemaining': "{n} espaces restants",
   'stPassValidUntil': "Valable jusqu'au {date}",
 
   // Chat reupload / design-direction sheet

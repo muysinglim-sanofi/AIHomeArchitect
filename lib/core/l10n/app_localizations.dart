@@ -263,6 +263,12 @@ class AppLocalizations {
   String get pwFeatHd => _get('pwFeatHd');
   String get pwFeatAllStyles => _get('pwFeatAllStyles');
   String get pwFeatNoWatermark => _get('pwFeatNoWatermark');
+  String get pwPlanBadgeAnnual => _get('pwPlanBadgeAnnual');
+  String get pwPlanBadgeWeekly => _get('pwPlanBadgeWeekly');
+  String get pwAnnualSpaces => _get('pwAnnualSpaces');
+  String get pwAnnualSpacesSub => _get('pwAnnualSpacesSub');
+  String get pwWeeklySpaces => _get('pwWeeklySpaces');
+  String get pwWeeklySpacesSub => _get('pwWeeklySpacesSub');
   String get pwUnlockPremium => _get('pwUnlockPremium');
   String get pwCancelAnytime => _get('pwCancelAnytime');
   String get pwAlreadySubscribed => _get('pwAlreadySubscribed');

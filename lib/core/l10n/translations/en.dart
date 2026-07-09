@@ -195,11 +195,11 @@ const Map<String, String> enTranslations = {
   'atmoSubtitle_tropical_escape': 'Inspired by Bali luxury resorts',
 
   // Paywall (V2)
-  'pwHeadline': 'Bring your dream home to life',
-  // V2 hero — split for the controlled line break + gold accent word.
-  'pwHeadlineLead': 'Bring your dream\nhome to ',
-  'pwHeadlineAccent': 'life',
-  'pwHeadlineTrail': '',
+  'pwHeadline': 'Design your dream home with AI',
+  // V2 hero — 3 stacked lines: L1 (Lead) + L2 (Trail) serif, L3 (Accent) gold script.
+  'pwHeadlineLead': 'Design your',
+  'pwHeadlineAccent': 'with AI',
+  'pwHeadlineTrail': 'dream home',
   'pwSubheadline': 'Redesign your space with your personal AI architect.',
   'pwLovedBy': 'Loved by ',
   'pwHomeowners': ' homeowners',
@@ -228,10 +228,17 @@ const Map<String, String> enTranslations = {
   'pwGuarantee': '7-day satisfaction guarantee',
   'pwGuaranteeSub': 'Not in love? Get a full refund within 7 days.',
   'pwSecurePayments': 'Secure payments',
-  'pwFeatUnlimited': 'Unlimited Generations',
-  'pwFeatHd': 'High Quality Renders',
-  'pwFeatAllStyles': 'All Styles & Rooms',
-  'pwFeatNoWatermark': 'No Watermark',
+  'pwFeatUnlimited': 'Every room',
+  'pwFeatHd': 'HD renders',
+  'pwFeatAllStyles': 'All styles',
+  'pwFeatNoWatermark': 'No watermark',
+  // Plan-card content (V2) — spaces language, no "credits"/"generations".
+  'pwPlanBadgeAnnual': 'Full Home',
+  'pwPlanBadgeWeekly': 'Quick Start',
+  'pwAnnualSpaces': 'Design up to 300 spaces',
+  'pwAnnualSpacesSub': 'Perfect for condos, homes & renovations',
+  'pwWeeklySpaces': 'Design up to 30 spaces',
+  'pwWeeklySpacesSub': 'Perfect for homes & apartments',
   'pwUnlockPremium': 'Unlock Premium',
   'pwCancelAnytime': 'Cancel anytime. No commitment.',
   'pwAlreadySubscribed': 'Already subscribed? ',
@@ -289,10 +296,10 @@ const Map<String, String> enTranslations = {
   'stFreePlan': 'Free plan',
   'stPremiumActive': 'Premium active',
   'stAdminFullAccess': 'Admin · full access',
-  'stUnlimited': 'Unlimited generations · every room & atmosphere',
-  'stGenerationSingular': 'free generation left',
-  'stGenerationPlural': 'free generations left',
-  'stPassCreditsRemaining': '{n} generations remaining',
+  'stUnlimited': 'Full access · every room & atmosphere',
+  'stGenerationSingular': 'free space left',
+  'stGenerationPlural': 'free spaces left',
+  'stPassCreditsRemaining': '{n} spaces remaining',
   'stPassValidUntil': 'Valid until {date}',
 
   // Chat reupload / design-direction sheet

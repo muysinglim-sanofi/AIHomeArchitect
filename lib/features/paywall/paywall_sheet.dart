@@ -62,6 +62,11 @@ const Color _textPrimary = Colors.white;
 const Color _textMuted = Color(0xFFD8D1C8);
 const Color _textDim = Color(0xFF8C857B);
 const Color _borderSubtle = Color(0xFF2A241D);
+// Antique champagne gold — luxe, NOT a bright/canva yellow.
+const Color _goldBright = Color(0xFFD6B25E); // MAIN gold: text, price, borders
+const Color _goldLight = Color(0xFFE7CB82); // light highlight / glow / sheen only
+const Color _champagne = Color(0xFFFFF3DC); // warm off-white for headings/cards
+const Color _planMuted = Color(0xFFC8B99B); // muted warm grey for descriptions
 
 /// Removes the Android overscroll STRETCH (and the glow) from the paywall
 /// scroll view. The stretch was distorting the hero layer on overscroll and
@@ -485,12 +490,33 @@ class _PaywallSheetState extends State<PaywallSheet> {
                   // ── Single global CTA → purchases the SELECTED plan ──
                   _PrimaryPaywallButton(
                     label: context.l10n.pwUnlockPremium,
-                    color: _gold,
-                    enabled: !_busy && selectedPkg != null,
+                    color: _goldBright,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFFE2C06B),
+                        Color(0xFFC79B3A),
+                        Color(0xFFB8862C),
+                      ],
+                    ),
+                    leadingIcon: Icons.workspace_premium_rounded,
+                    showArrow: true,
+                    // Always live (bright) — never a dead washed button. If the
+                    // store returned no offering (e.g. billing unconfigured),
+                    // tapping surfaces a clear message instead of doing nothing.
+                    enabled: !_busy,
                     loading: _busy,
-                    onTap: selectedPkg == null
+                    onTap: _busy
                         ? null
-                        : () => _onPurchasePressed(selectedPkg),
+                        : () {
+                            if (selectedPkg == null) {
+                              setState(() => _errorMessage =
+                                  context.l10n.pwErrNotAvailable);
+                            } else {
+                              _onPurchasePressed(selectedPkg);
+                            }
+                          },
                   ),
                   const SizedBox(height: 11),
                   Text(
@@ -1448,6 +1474,12 @@ class _CheckList extends StatelessWidget {
 class _PrimaryPaywallButton extends StatelessWidget {
   final String label;
   final Color color;
+  // When set, the button fills with this gradient (bright gold CTA). Falls
+  // back to the flat [color] otherwise (legacy per-card buttons).
+  final Gradient? gradient;
+  // Premium CTA extras: a leading icon (e.g. crown) + a trailing arrow.
+  final IconData? leadingIcon;
+  final bool showArrow;
   final bool enabled;
   final bool loading;
   final VoidCallback? onTap;
@@ -1455,6 +1487,9 @@ class _PrimaryPaywallButton extends StatelessWidget {
   const _PrimaryPaywallButton({
     required this.label,
     required this.color,
+    this.gradient,
+    this.leadingIcon,
+    this.showArrow = false,
     required this.enabled,
     this.loading = false,
     required this.onTap,
@@ -1462,40 +1497,75 @@ class _PrimaryPaywallButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const Color ink = Color(0xFF120E08);
+    final Color glow = gradient != null ? _goldBright : color;
+    const TextStyle labelStyle = TextStyle(
+      color: ink,
+      fontSize: 16.5,
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.2,
+    );
+    final Widget inner;
+    if (loading) {
+      inner = const Center(
+        child: SizedBox(
+          height: 20,
+          width: 20,
+          child: CircularProgressIndicator(strokeWidth: 2.2, color: ink),
+        ),
+      );
+    } else if (leadingIcon != null) {
+      inner = Row(
+        children: [
+          const SizedBox(width: 18),
+          const Spacer(),
+          Icon(leadingIcon, color: ink, size: 20),
+          const SizedBox(width: 8),
+          Text(label, style: labelStyle),
+          const Spacer(),
+          showArrow
+              ? const Icon(Icons.arrow_forward_ios_rounded, color: ink, size: 16)
+              : const SizedBox(width: 18),
+        ],
+      );
+    } else {
+      inner = Center(
+        child: Text(label, textAlign: TextAlign.center, style: labelStyle),
+      );
+    }
     return SizedBox(
       width: double.infinity,
       child: AnimatedOpacity(
         opacity: enabled ? 1.0 : 0.5,
         duration: const Duration(milliseconds: 150),
-        child: Material(
-          color: color,
-          borderRadius: BorderRadius.circular(14),
-          // Soft elevation — premium weight without a flashy gradient.
-          elevation: enabled ? 6 : 0,
-          shadowColor: color.withValues(alpha: 0.45),
-          child: InkWell(
-            onTap: (enabled && !loading) ? onTap : null,
-            borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: loading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.2, color: Colors.black),
-                      )
-                    : Text(
-                        label,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontSize: 15.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: gradient,
+            color: gradient == null ? color : null,
+            borderRadius: BorderRadius.circular(18),
+            border: gradient != null
+                ? Border.all(
+                    color: _goldLight.withValues(alpha: 0.55), width: 1)
+                : null,
+            boxShadow: enabled
+                ? [
+                    BoxShadow(
+                      color: glow.withValues(alpha: 0.22),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: (enabled && !loading) ? onTap : null,
+              borderRadius: BorderRadius.circular(18),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 17),
+                child: inner,
               ),
             ),
           ),
@@ -1685,23 +1755,6 @@ class _RestoreAndDismissActions extends StatelessWidget {
 // Frontend/UI only — no pricing/RevenueCat/subscription logic touched.
 // ════════════════════════════════════════════════════════════════════════════
 
-// Editorial serif (Cormorant) for emotional titles — same family as the card /
-// atmosphere design system. Sans stays for functional pricing/benefits.
-TextStyle _serif({
-  required double fontSize,
-  FontWeight fontWeight = FontWeight.w500,
-  Color color = _textPrimary,
-  double height = 1.1,
-  double letterSpacing = 0,
-}) =>
-    GoogleFonts.cormorantGaramond(
-      fontSize: fontSize,
-      fontWeight: fontWeight,
-      color: color,
-      height: height,
-      letterSpacing: letterSpacing,
-    );
-
 /// FIXED full-sheet vertical fade (Wave 6.19). Sibling of the image — never
 /// animates. Darkens the WHOLE paywall progressively so the living-room image
 /// dissolves into the warm dark interface and the pricing sits on the SAME
@@ -1840,44 +1893,65 @@ class _HeadlineV2 extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    // Editorial serif, white, with the accent word in gold. Stronger shadows so
-    // the text stays legible while the PHOTO shows through behind it (no black
-    // backing). Controlled line breaks come from the localized lead/trail.
-    final base = _serif(fontSize: 33, fontWeight: FontWeight.w600, height: 1.05)
-        .copyWith(
-      color: Colors.white,
-      // Softer, more natural — reads as legible, not "treated" (Wave 6.22).
-      shadows: const [
-        Shadow(color: Color(0x99000000), blurRadius: 10),
-        Shadow(color: Color(0x4D000000), blurRadius: 4),
-      ],
+    final double w = MediaQuery.sizeOf(context).width;
+    final bool small = w < 380;
+    // 3-line editorial hierarchy: "Design your" (serif), "dream home" (larger
+    // serif), "with AI" (fine antique-gold script signature — deliberately small,
+    // NOT a huge word). Strong shadows keep it legible over the photo.
+    const List<Shadow> shadows = [
+      Shadow(color: Color(0xB3000000), blurRadius: 12),
+      Shadow(color: Color(0x66000000), blurRadius: 4),
+    ];
+    final l1 = GoogleFonts.playfairDisplay(
+      color: _champagne,
+      fontSize: small ? 30 : 32,
+      height: 0.95,
+      fontWeight: FontWeight.w500,
+      letterSpacing: -0.5,
+      shadows: shadows,
+    );
+    final l2 = GoogleFonts.playfairDisplay(
+      color: _champagne,
+      fontSize: small ? 37 : 40,
+      height: 0.95,
+      fontWeight: FontWeight.w600,
+      letterSpacing: -0.9,
+      shadows: shadows,
+    );
+    final l3 = GoogleFonts.greatVibes(
+      color: _goldBright,
+      fontSize: small ? 29 : 32,
+      height: 0.82,
+      fontWeight: FontWeight.w400,
+      shadows: shadows,
     );
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(text: l10n.pwHeadlineLead),
-              TextSpan(
-                text: l10n.pwHeadlineAccent,
-                style: const TextStyle(color: _gold),
-              ),
-              TextSpan(text: l10n.pwHeadlineTrail),
-            ],
-          ),
-          textAlign: TextAlign.center,
-          style: base,
+        Text(l10n.pwHeadlineLead, textAlign: TextAlign.center, style: l1),
+        Transform.translate(
+          offset: const Offset(0, -2),
+          child: Text(l10n.pwHeadlineTrail,
+              textAlign: TextAlign.center, style: l2),
         ),
-        const SizedBox(height: 9),
-        Text(
-          l10n.pwSubheadline,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            height: 1.4,
-            shadows: [Shadow(color: Color(0x80000000), blurRadius: 8)],
+        Transform.translate(
+          offset: const Offset(0, -6),
+          child: Text(l10n.pwHeadlineAccent,
+              textAlign: TextAlign.center, style: l3),
+        ),
+        const SizedBox(height: 10),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 300),
+          child: Text(
+            l10n.pwSubheadline,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFFE9DDC7),
+              fontSize: 14.5,
+              fontWeight: FontWeight.w500,
+              height: 1.32,
+              shadows: [Shadow(color: Color(0x99000000), blurRadius: 8)],
+            ),
           ),
         ),
       ],
@@ -1894,25 +1968,43 @@ class _FeaturesRowV2 extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final items = <(IconData, String)>[
-      (Icons.auto_awesome, l10n.pwFeatUnlimited),
+      (Icons.meeting_room_outlined, l10n.pwFeatUnlimited),
       (Icons.high_quality_outlined, l10n.pwFeatHd),
       (Icons.chair_outlined, l10n.pwFeatAllStyles),
       (Icons.verified_outlined, l10n.pwFeatNoWatermark),
     ];
-    // Thin dividers between items give a premium, less-crowded rhythm.
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        for (var i = 0; i < items.length; i++) ...[
-          if (i > 0)
-            Container(
-              width: 1,
-              height: 34,
-              color: Colors.white.withValues(alpha: 0.06),
-            ),
-          Expanded(child: _FeaturePill(icon: items[i].$1, label: items[i].$2)),
+    // Premium glass capsule holding the 4 benefits, with thin gold dividers.
+    return Container(
+      height: 84,
+      margin: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D0B08).withValues(alpha: 0.66),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _goldBright.withValues(alpha: 0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.30),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
         ],
-      ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0)
+              Container(
+                width: 1,
+                height: 42,
+                color: _goldBright.withValues(alpha: 0.12),
+              ),
+            Expanded(
+                child: _FeaturePill(icon: items[i].$1, label: items[i].$2)),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1925,20 +2017,23 @@ class _FeaturePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Quieter, more editorial — smaller + softer gold, more breathing.
-          Icon(icon, color: _gold.withValues(alpha: 0.88), size: 18),
-          const SizedBox(height: 12),
+          Icon(icon, color: _goldBright, size: 20),
+          const SizedBox(height: 7),
           Text(
             label,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: _textMuted.withValues(alpha: 0.92),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFFEADFCB),
               fontSize: 11.5,
-              height: 1.45,
-              fontWeight: FontWeight.w400,
+              height: 1.15,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -1974,26 +2069,26 @@ class _PricingV2 extends StatelessWidget {
         children: [
           Expanded(
             child: _PlanCardV2(
-              badge: context.l10n.pwBestValue,
+              badge: context.l10n.pwPlanBadgeAnnual,
               name: context.l10n.pwAnnual,
               price: annualPrice,
               period: context.l10n.pwPerYear,
-              savings: context.l10n.pwSavingsShort,
+              included: context.l10n.pwAnnualSpaces,
+              description: context.l10n.pwAnnualSpacesSub,
               selected: annualSelected,
-              enabled: annualPackage != null,
               onTap: onSelectAnnual,
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: _PlanCardV2(
-              badge: context.l10n.pwPopular,
+              badge: context.l10n.pwPlanBadgeWeekly,
               name: context.l10n.pwWeekly,
               price: weeklyPrice,
               period: context.l10n.pwPerWeek,
-              savings: null,
+              included: context.l10n.pwWeeklySpaces,
+              description: context.l10n.pwWeeklySpacesSub,
               selected: !annualSelected,
-              enabled: weeklyPackage != null,
               onTap: onSelectWeekly,
             ),
           ),
@@ -2012,9 +2107,9 @@ class _PlanCardV2 extends StatelessWidget {
   final String name;
   final String price;
   final String period;
-  final String? savings;
+  final String included;
+  final String description;
   final bool selected;
-  final bool enabled;
   final VoidCallback onTap;
 
   const _PlanCardV2({
@@ -2022,105 +2117,159 @@ class _PlanCardV2 extends StatelessWidget {
     required this.name,
     required this.price,
     required this.period,
-    required this.savings,
+    required this.included,
+    required this.description,
     required this.selected,
-    required this.enabled,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Always full opacity — selection is harmless UI; the real gate is the CTA.
+    // Dark glass card. Selected = gold border + strong gold glow + a warm
+    // top-right sheen + a GOLD price; unselected stays subtle. Selection is pure
+    // UI → always tappable, never gated on store offerings.
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          padding: const EdgeInsets.fromLTRB(12, 16, 12, 18),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
               colors: selected
-                  ? const [Color(0xFF241B12), Color(0xFF181109)]
-                  : const [Color(0xFF1A140D), Color(0xFF120D08)],
+                  ? const [Color(0xFF1E170F), Color(0xFF0D0A07)]
+                  : const [Color(0xFF15120E), Color(0xFF0B0907)],
             ),
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: selected ? _gold : _borderSubtle,
-              width: selected ? 1.6 : 1.0,
+              color:
+                  selected ? _goldBright : _goldBright.withValues(alpha: 0.16),
+              width: selected ? 1.5 : 1.0,
             ),
             boxShadow: selected
                 ? [
                     BoxShadow(
-                      color: _gold.withValues(alpha: 0.14),
-                      blurRadius: 20,
-                      offset: const Offset(0, 4),
+                      color: _goldBright.withValues(alpha: 0.22),
+                      blurRadius: 22,
+                      spreadRadius: 1,
+                      offset: const Offset(0, 9),
+                    ),
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.38),
+                      blurRadius: 18,
+                      offset: const Offset(0, 12),
                     ),
                   ]
-                : null,
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.30),
+                      blurRadius: 14,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
           ),
+          // Warm gold sheen in the top-right corner (selected only).
+          foregroundDecoration: selected
+              ? BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  gradient: RadialGradient(
+                    center: const Alignment(0.95, -0.95),
+                    radius: 0.75,
+                    colors: [
+                      _goldLight.withValues(alpha: 0.16),
+                      _goldLight.withValues(alpha: 0.0),
+                    ],
+                  ),
+                )
+              : null,
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _RadioDot(selected: selected),
-              const SizedBox(height: 12),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                decoration: BoxDecoration(
-                  color: _gold.withValues(alpha: selected ? 0.18 : 0.10),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: _gold.withValues(alpha: selected ? 0.5 : 0.28)),
-                ),
-                child: Text(
-                  badge,
-                  style: TextStyle(
-                    color: _gold.withValues(alpha: selected ? 1.0 : 0.8),
-                    fontSize: 8.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5,
+              Row(
+                children: [
+                  _PlanBadgeV2(label: badge, selected: selected),
+                  const Spacer(),
+                  Icon(
+                    selected
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    color: selected
+                        ? _goldBright
+                        : _champagne.withValues(alpha: 0.45),
+                    size: 26,
                   ),
-                ),
+                ],
               ),
-              const SizedBox(height: 11),
+              const SizedBox(height: 16),
               Text(
                 name,
                 style: const TextStyle(
-                  color: _textPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.2,
+                  color: _champagne,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
                 ),
               ),
-              const SizedBox(height: 6),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  price,
-                  style: const TextStyle(
-                    color: _textPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    height: 1.0,
+              const SizedBox(height: 10),
+              Text.rich(
+                TextSpan(children: [
+                  TextSpan(
+                    text: price,
+                    style: TextStyle(
+                      color: selected ? _goldBright : _champagne,
+                      fontSize: 30,
+                      fontWeight: FontWeight.w800,
+                      height: 1.0,
+                      letterSpacing: -0.6,
+                    ),
                   ),
+                  TextSpan(
+                    text: '\n$period',
+                    style: const TextStyle(
+                      color: _planMuted,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      height: 1.5,
+                    ),
+                  ),
+                ]),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 14),
+              Divider(
+                color: _goldBright.withValues(alpha: selected ? 0.24 : 0.14),
+                height: 1,
+              ),
+              const SizedBox(height: 14),
+              // Spaces language — what the plan lets you design. No "credits"
+              // / "generations" / "Save 65%".
+              Text(
+                included,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                style: TextStyle(
+                  color: selected ? _goldBright : _champagne,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  height: 1.12,
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(period,
-                  style: const TextStyle(color: _textMuted, fontSize: 11.5)),
               const SizedBox(height: 8),
-              // Reserve the savings line in BOTH cards so they stay aligned.
               Text(
-                savings ?? '',
+                description,
+                textAlign: TextAlign.center,
+                maxLines: 2,
                 style: const TextStyle(
-                  color: _gold,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
+                  color: _planMuted,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  height: 1.18,
                 ),
               ),
             ],
@@ -2131,25 +2280,32 @@ class _PlanCardV2 extends StatelessWidget {
   }
 }
 
-/// Filled-check radio indicator for the selectable plan cards.
-class _RadioDot extends StatelessWidget {
+/// Pill badge for the plan cards — gold on a translucent gold fill, brighter
+/// when its card is selected.
+class _PlanBadgeV2 extends StatelessWidget {
+  final String label;
   final bool selected;
-  const _RadioDot({required this.selected});
+  const _PlanBadgeV2({required this.label, required this.selected});
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      width: 22,
-      height: 22,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: selected ? _gold : Colors.transparent,
-        border: Border.all(color: selected ? _gold : _textDim, width: 2),
+        color: _goldBright.withValues(alpha: selected ? 0.16 : 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+            color: _goldBright.withValues(alpha: selected ? 0.55 : 0.30)),
       ),
-      child: selected
-          ? const Icon(Icons.check, size: 14, color: Colors.black)
-          : null,
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          color: _goldBright.withValues(alpha: selected ? 1.0 : 0.82),
+          fontSize: 9.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.6,
+        ),
+      ),
     );
   }
 }
