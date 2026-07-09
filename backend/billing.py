@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Optional
 
@@ -76,11 +77,12 @@ def _decide(new_status: str) -> Optional[tuple[str, int, str]]:
 async def _ledger_insert(
     supa, *, user_id: str, entry_type: str, available_delta: int,
     idempotency_key: str, reference_type: Optional[str] = None,
-    reference_id: Optional[str] = None,
+    reference_id: Optional[str] = None, pass_id: Optional[str] = None,
 ) -> bool:
     """INSERT append-only, idempotent par idempotency_key (ON CONFLICT DO NOTHING).
     Renvoie True si NOUVELLE ligne, False si déjà présente (dup) ou erreur. Ne
-    fait jamais d'UPDATE (le trigger append-only l'interdirait)."""
+    fait jamais d'UPDATE (le trigger append-only l'interdirait). `pass_id` (RC-PR3a)
+    scope l'entrée au bucket d'un pass (comme le GRANT) → décompte par pass."""
     row = {
         "user_id": user_id,
         "entry_type": entry_type,
@@ -91,6 +93,8 @@ async def _ledger_insert(
         row["reference_type"] = reference_type
     if reference_id is not None:
         row["reference_id"] = reference_id
+    if pass_id is not None:
+        row["pass_id"] = pass_id
     try:
         res = await asyncio.to_thread(
             lambda: supa.table("ledger_entries")
@@ -119,6 +123,28 @@ async def _intent_user_id(supa, intent_id: str) -> Optional[str]:
         return None
 
 
+async def _active_pass_id(supa, user_id: str) -> Optional[str]:
+    """RC-PR3a — id du pass ACTIF du user, ou None. MÊMES critères que
+    `billing_reproject_wallet` (status=ACTIVE, now ∈ [starts_at, ends_at],
+    ends_at le plus lointain) → le débit est scoppé au MÊME bucket que la
+    projection somme. None (admin/promo/premium-sans-pass, ou erreur) = pas de
+    débit (best-effort : jamais bloquant)."""
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        res = await asyncio.to_thread(
+            lambda: supa.table("passes")
+            .select("id")
+            .eq("user_id", user_id).eq("status", "ACTIVE")
+            .lte("starts_at", now_iso).gt("ends_at", now_iso)
+            .order("ends_at", desc=True).limit(1).execute()
+        )
+        rows = getattr(res, "data", None) or []
+        return rows[0].get("id") if rows else None
+    except Exception as exc:  # noqa: BLE001 — best-effort : pas de débit plutôt qu'un crash
+        log.warning("[BILLING] active_pass lookup failed user=%s err=%s", user_id[:8], exc)
+        return None
+
+
 async def _reproject_wallet(*, user_id: str, supa=None) -> None:
     """Reprojette le wallet via le RPC PASS-AWARE `billing_reproject_wallet`
     (RC-PR2b) — SOURCE DE VÉRITÉ UNIQUE de la projection, partagée avec le RPC
@@ -137,16 +163,18 @@ async def _reproject_wallet(*, user_id: str, supa=None) -> None:
 
 
 async def _emit(supa, *, user_id: str, entry_type: str, delta: int, key: str,
-                intent_id: Optional[str]) -> None:
-    """Écrit une entrée ledger (idempotente) puis reprojette le wallet si nouvelle."""
+                intent_id: Optional[str], pass_id: Optional[str] = None) -> None:
+    """Écrit une entrée ledger (idempotente) puis reprojette le wallet si nouvelle.
+    `pass_id` (RC-PR3a) scope la conso au bucket d'un pass mesuré."""
     new = await _ledger_insert(
         supa, user_id=user_id, entry_type=entry_type, available_delta=delta,
         idempotency_key=key,
         reference_type="GENERATION_INTENT" if intent_id else None,
-        reference_id=intent_id,
+        reference_id=intent_id, pass_id=pass_id,
     )
     if new:
-        log.info("[BILLING] %s(%+d) key=%s user=%s", entry_type, delta, key, user_id[:8])
+        log.info("[BILLING] %s(%+d) key=%s user=%s pass=%s", entry_type, delta, key,
+                 user_id[:8], (pass_id[:8] if pass_id else "-"))
         await _reproject_wallet(user_id=user_id, supa=supa)
 
 
@@ -224,19 +252,20 @@ async def apply_billing_for_intent_transition(
 ) -> None:
     """Projette l'effet ledger d'une transition d'Intent (RUNNING/terminal).
     Point d'entrée UNIQUE appelé par les émetteurs. Idempotent, best-effort,
-
-    Billing PR2b (D-e) — `is_free=False` (entitled admin/premium/promo) → **AUCUNE
-    écriture** (ni TRIAL, ni HOLD/COMMIT/RELEASE) : le ledger reste propre pour
-    les tiers non facturables (ils bypass le gate wallet). Défaut True → un
-    appelant non mis à jour facture (jamais un skip silencieux).
-    Suite du docstring d'origine :
     ne lève jamais, AUCUN gate. Projection directe (voir _decide) — pas de
     compensation ni de lecture du passé.
+
+    Deux régimes de consommation :
+      • FREE tier (`is_free=True`) : TRIAL à la 1re gen + HOLD/COMMIT/RELEASE dans
+        le bucket free (pass_id=None). Inchangé.
+      • ENTITLED (`is_free=False`) — RC-PR3a : si l'user a un PASS ACTIF (mesuré),
+        on débite le bucket de CE pass (HOLD/COMMIT/RELEASE scoppés au pass_id →
+        net −1 par gen réussie, 0 sur échec). Sinon (admin / promo / premium-
+        sans-pass = illimité) → AUCUNE écriture (comme avant). PAS de grant_trial.
+    L'enforcement (blocage à 0) N'EST PAS ici : `reserve_decision` reste bypass
+    pour les entitled (RC-PR3b = ticket séparé). On MESURE, on ne bloque pas.
     """
     supa = supa or _get_supa()
-    # D-e — entitled : aucune écriture ledger (bypass le gate wallet).
-    if not is_free:
-        return
     decision = _decide(new_status)
     if decision is None:
         return
@@ -245,14 +274,24 @@ async def apply_billing_for_intent_transition(
         if user_id is None:
             log.warning("[BILLING] no user for intent=%s status=%s — skip", intent_id, new_status)
             return
+    entry_type, delta, prefix = decision
+    key = f"{prefix}:{intent_id}"
 
-    # Règle « TRIAL à la 1re génération du user » — décidée ICI (pas dans le hook).
+    # RC-PR3a — entitled : débite le PASS ACTIF (mesuré) ; admin/promo/premium-
+    # sans-pass (pas de pass actif) → illimité, aucune écriture.
+    if not is_free:
+        pass_id = await _active_pass_id(supa, user_id)
+        if pass_id is None:
+            return
+        await _emit(supa, user_id=user_id, entry_type=entry_type, delta=delta,
+                    key=key, intent_id=intent_id, pass_id=pass_id)
+        return
+
+    # ── FREE tier (inchangé) : TRIAL à la 1re gen du user + HOLD/COMMIT/RELEASE ──
     if new_status == "RUNNING":
         await grant_trial(user_id=user_id, supa=supa)
-
-    entry_type, delta, prefix = decision
     await _emit(supa, user_id=user_id, entry_type=entry_type, delta=delta,
-                key=f"{prefix}:{intent_id}", intent_id=intent_id)
+                key=key, intent_id=intent_id)
 
 
 # ── RC-PR2 — ACQUISITION (achat/renouvellement → Payment/Order/Pass/GRANT) ────
