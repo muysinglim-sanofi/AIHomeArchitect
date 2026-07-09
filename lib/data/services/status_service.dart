@@ -35,6 +35,18 @@ class MeStatus {
   final String effectiveAccessState;
   final bool canGenerate;
 
+  // ── RC-PR2b — wallet/pass snapshot (AFFICHAGE seul ; enforcement = RC-PR3) ──
+  /// Crédits du pass actif (weekly/annual). 0 si pas de pass / bucket free vide.
+  final int availableCredits;
+  final String? activePassId;
+
+  /// Expiration du pass actif (ISO-8601), ou null.
+  final String? passExpiresAt;
+  final bool hasActivePass;
+
+  /// D'où vient la capacité affichée : 'admin' | 'pass' | 'promo' | 'premium' | 'free'.
+  final String accessSource;
+
   const MeStatus({
     required this.isPremium,
     required this.isAdmin,
@@ -47,6 +59,11 @@ class MeStatus {
     this.activePromoCampaign,
     this.effectiveAccessState = 'free',
     this.canGenerate = true,
+    this.availableCredits = 0,
+    this.activePassId,
+    this.passExpiresAt,
+    this.hasActivePass = false,
+    this.accessSource = 'free',
   });
 
   int get remaining =>
@@ -73,6 +90,11 @@ class MeStatus {
             (j['effective_access_state'] as String?) ?? 'free',
         canGenerate:
             j['can_generate'] == null ? true : j['can_generate'] == true,
+        availableCredits: (j['available_credits'] as num?)?.toInt() ?? 0,
+        activePassId: j['active_pass_id'] as String?,
+        passExpiresAt: j['pass_expires_at'] as String?,
+        hasActivePass: j['has_active_pass'] == true,
+        accessSource: (j['access_source'] as String?) ?? 'free',
       );
 
   /// Exact mirror of [fromJson] — lets meStatusProvider cache the last
@@ -90,6 +112,11 @@ class MeStatus {
         'active_promo_campaign': activePromoCampaign,
         'effective_access_state': effectiveAccessState,
         'can_generate': canGenerate,
+        'available_credits': availableCredits,
+        'active_pass_id': activePassId,
+        'pass_expires_at': passExpiresAt,
+        'has_active_pass': hasActivePass,
+        'access_source': accessSource,
       };
 }
 

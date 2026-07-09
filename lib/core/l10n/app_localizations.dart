@@ -336,6 +336,8 @@ class AppLocalizations {
   String get notifReadyBody => _get('notifReadyBody');
   String get notifFailedTitle => _get('notifFailedTitle');
   String get notifFailedBody => _get('notifFailedBody');
+  // BUG3 — action tappable de la notif in-app "ready" (→ ouvre la session).
+  String get notifViewAction => _get('notifViewAction');
 
   // ── Premium / quota status card ───────────────────────────────────────────
   String get stFreePlan => _get('stFreePlan');
@@ -344,6 +346,11 @@ class AppLocalizations {
   String get stUnlimited => _get('stUnlimited');
   String freeGenerationsLeft(int n) =>
       '$n ${n == 1 ? _get('stGenerationSingular') : _get('stGenerationPlural')}';
+  // BUG4 (RC-PR2b) — pass mesuré (weekly/annual) : crédits/générations restants.
+  String stPassCreditsRemaining(int n) =>
+      _get('stPassCreditsRemaining').replaceAll('{n}', '$n');
+  String stPassValidUntil(String date) =>
+      _get('stPassValidUntil').replaceAll('{date}', date);
 
   // ── Chat reupload / design-direction sheet ────────────────────────────────
   String get chatPleaseUpload => _get('chatPleaseUpload');

@@ -102,6 +102,7 @@ const Map<String, String> frTranslations = {
   'notifReadyBody': "Touchez pour voir votre nouveau design.",
   'notifFailedTitle': "Échec de la génération",
   'notifFailedBody': "Touchez pour ouvrir la session et voir ce qui s'est passé.",
+  'notifViewAction': "Voir",
   'generateButton': "Générer",
   'generatingInChat': "Génération de votre transformation...",
 
@@ -300,6 +301,8 @@ const Map<String, String> frTranslations = {
   'stUnlimited': "Générations illimitées · toutes les pièces et ambiances",
   'stGenerationSingular': "génération gratuite restante",
   'stGenerationPlural': "générations gratuites restantes",
+  'stPassCreditsRemaining': "{n} générations restantes",
+  'stPassValidUntil': "Valable jusqu'au {date}",
 
   // Chat reupload / design-direction sheet
   'chatPleaseUpload': "Veuillez d'abord importer une photo source.",

@@ -90,9 +90,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   // qu'après avoir observé RUNNING pour cette gen (adopt reste protégé par l'égalité
   // preview==after ; clearSpinner est bénin).
   final Set<String> _seenRunning = {};
-  // Snackbar : true pendant la dérivation de lancement → on pose le badge "Ready"
-  // sans empiler de toasts (ceux-ci sont réservés aux complétions live du poll).
-  bool _derivingInitial = false;
 
   @override
   void initState() {
@@ -210,7 +207,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final sessions = ref.read(sessionProvider);
     if (sessions.isEmpty) return; // pas encore chargées → relancé via ref.listen
     _derivedOnce = true;          // one-shot (pas de re-dérivation à chaque rebuild)
-    _derivingInitial = true;      // #7 : badge "Ready" sans empiler de snackbars
     final recent = [...sessions]
       ..sort((a, b) => b.lastUpdatedAt.compareTo(a.lastUpdatedAt));
     // Deux populations à sonder au lancement (les flags RAM sont perdus) :
@@ -224,85 +220,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     final cutoff = DateTime.now().subtract(const Duration(minutes: 10));
     final svc = GenerationService();
     var probed = 0;
-    try {
-      for (final p in recent) {
-        if (probed >= 6) break;
-        final recentlyActive = p.lastUpdatedAt.isAfter(cutoff);
-        final previewLess = (p.afterImageUrl ?? '').isEmpty;
-        if (!recentlyActive && !previewLess) continue;
-        probed++;
-        try {
-          final probe = await svc.getLatestIntent(p.id);
-          if (!mounted) return;
-          final decision =
-              decideHomeAdoption(probe: probe, currentPreview: p.afterImageUrl);
-          _applyHomeAdoption(p.id, decision, inFlightContext: false);
-        } catch (_) {
-          // best-effort
-        }
+    for (final p in recent) {
+      if (probed >= 6) break;
+      final recentlyActive = p.lastUpdatedAt.isAfter(cutoff);
+      final previewLess = (p.afterImageUrl ?? '').isEmpty;
+      if (!recentlyActive && !previewLess) continue;
+      probed++;
+      try {
+        final probe = await svc.getLatestIntent(p.id);
+        if (!mounted) return;
+        final decision =
+            decideHomeAdoption(probe: probe, currentPreview: p.afterImageUrl);
+        _applyHomeAdoption(p.id, decision, inFlightContext: false);
+      } catch (_) {
+        // best-effort
       }
-    } finally {
-      _derivingInitial = false; // fin de la fenêtre "pas de snackbar"
     }
   }
 
-  /// Wave 5.6c — toast/snackbar shown when a generation completes (or fails)
-  /// while the user is on the home screen. Calm, brief, dismissible.
-  void _showCompletionSnackBar(BuildContext context, {required bool isError}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          isError
-              ? context.l10n.homeDesignFailed
-              : context.l10n.homeDesignReady,
-        ),
-        backgroundColor:
-            isError ? AppColors.error : AppColors.textPrimary,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
-        duration: const Duration(seconds: 4),
-      ),
-    );
-  }
+  // BUG 2+3 (2026-07-09) — la snackbar "ready" est passée GLOBALE et tappable
+  // (core/widgets/ready_notification_host.dart). Sur Home on ne montre PLUS de
+  // popup : le badge de la carte session est le signal en place (BUG-2 Home).
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
 
-    // Wave 5.6c — surface a snackbar transition when a generation completes
-    // while the user is on the home screen. The badge on the session card
-    // is the persistent visual; the snackbar is the immediate audible/
-    // visible "your design is ready" beat.
-    ref.listen<Map<String, GenerationLifecycle>>(
-      pendingGenerationsProvider,
-      (previous, next) {
-        if (!mounted) return;
-        // M-B / #7 : ne toaster QUE si l'accueil est la route visible (pas quand
-        // l'utilisateur est dans le chat, derrière la route poussée) ET pas pendant
-        // la dérivation de lancement (le badge sur la carte suffit ; évite les
-        // toasts empilés / une snackbar sur un écran non regardé). Le badge, lui,
-        // se met à jour dans tous les cas.
-        final onHome = ModalRoute.of(context)?.isCurrent ?? false;
-        if (!onHome || _derivingInitial) return;
-        for (final entry in next.entries) {
-          final prevState = previous?[entry.key];
-          final newState = entry.value;
-          if (prevState == newState) continue;
-          // Only fire for transitions INTO readyUnseen / errorUnseen
-          // (i.e. completion). Don't fire on initial markInFlight.
-          if (newState == GenerationLifecycle.readyUnseen &&
-              prevState != GenerationLifecycle.readyUnseen) {
-            _showCompletionSnackBar(context, isError: false);
-          } else if (newState == GenerationLifecycle.errorUnseen &&
-              prevState != GenerationLifecycle.errorUnseen) {
-            _showCompletionSnackBar(context, isError: true);
-          }
-        }
-      },
-    );
+    // BUG 2+3 — la notification "ready" est désormais GLOBALE (route-agnostique
+    // + tappable) via ReadyNotificationHost (monté dans MaterialApp.builder).
+    // Sur Home : PAS de snackbar (le badge de la carte suffit) → BUG-2 Home.
 
     // Fix "adopt completed generations" — _load() est async : au post-frame la
     // liste de sessions peut être vide (→ la dérivation de lancement early-return).

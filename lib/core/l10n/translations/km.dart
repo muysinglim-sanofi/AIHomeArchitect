@@ -98,6 +98,7 @@ const Map<String, String> kmTranslations = {
   'notifReadyBody': 'ប៉ះ​ដើម្បី​មើល​ការ​រចនា​ថ្មី​របស់​អ្នក។',
   'notifFailedTitle': 'ការ​បង្កើត​បាន​បរាជ័យ',
   'notifFailedBody': 'ប៉ះ​ដើម្បី​បើក​សម័យ ហើយ​មើល​ថា​មាន​អ្វី​កើត​ឡើង។',
+  'notifViewAction': 'មើល',
   'generateButton': 'បង្កើត',
   'generatingInChat': 'កំពុង​បង្កើត​ការ​បំប្លែង​របស់​អ្នក...',
 
@@ -288,6 +289,8 @@ const Map<String, String> kmTranslations = {
   'stUnlimited': 'ការ​បង្កើត​គ្មាន​កំណត់ · គ្រប់​បន្ទប់ និង​បរិយាកាស',
   'stGenerationSingular': 'ការ​បង្កើត​ឥត​គិត​ថ្លៃ​នៅ​សល់',
   'stGenerationPlural': 'ការ​បង្កើត​ឥត​គិត​ថ្លៃ​នៅ​សល់',
+  'stPassCreditsRemaining': '{n} ការ​បង្កើត​នៅ​សល់',
+  'stPassValidUntil': 'មាន​សុពលភាព​ដល់ {date}',
 
   // Chat reupload / design-direction sheet — KHMER V1
   'chatPleaseUpload': 'សូម​ផ្ទុក​រូបថត​ដើម​ជា​មុន​សិន។',

@@ -1073,6 +1073,18 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
     if (mounted) ref.read(meStatusProvider.notifier).refresh();
   }
 
+  /// BUG4 — "Valid until {date}" localisé pour un pass actif, ou null si absent/illisible.
+  String? _formatPassExpiry(BuildContext context, String? iso) {
+    if (iso == null || iso.isEmpty) return null;
+    try {
+      final DateTime dt = DateTime.parse(iso).toLocal();
+      final String date = MaterialLocalizations.of(context).formatShortDate(dt);
+      return context.l10n.stPassValidUntil(date);
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final MeStatus? status = ref.watch(meStatusProvider);
@@ -1094,7 +1106,16 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
     if (status.isAdmin) {
       title = l10n.stAdminFullAccess;
       subtitle = l10n.stUnlimited;
+    } else if (status.hasActivePass) {
+      // RC-PR2b — pass MESURÉ (weekly/annual) : afficher les CRÉDITS restants,
+      // jamais "unlimited". Expiry ajoutée si disponible.
+      title = l10n.stPremiumActive;
+      final String credits =
+          l10n.stPassCreditsRemaining(status.availableCredits);
+      final String? until = _formatPassExpiry(context, status.passExpiresAt);
+      subtitle = until == null ? credits : '$credits · $until';
     } else if (premium) {
+      // Premium SANS pass mesuré (admin-granted / legacy) → réellement illimité.
       title = l10n.stPremiumActive;
       subtitle = l10n.stUnlimited;
     } else if (promo && status.promoUnlimitedActive) {
@@ -1108,13 +1129,17 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
       subtitle = l10n.freeGenerationsLeft(status.remaining);
     }
 
-    // Free users tap the card to open the paywall (upgrade) — quota trigger
-    // when exhausted, generic otherwise. Entitled users (premium/promo) have
-    // nothing to upsell.
-    final VoidCallback? onTap = entitled
+    // BUG4 — un pass épuisé (0 crédit) redevient tappable vers le paywall (top-up).
+    final bool passExhausted =
+        status.hasActivePass && status.availableCredits <= 0;
+
+    // Free users (et pass épuisé) tap the card to open the paywall (upgrade) —
+    // quota trigger when exhausted, generic otherwise. Entitled users WITH
+    // capacity have nothing to upsell.
+    final VoidCallback? onTap = (entitled && !passExhausted)
         ? null
         : () => _openPaywall(
-              status.remaining <= 0
+              (passExhausted || status.remaining <= 0)
                   ? PaywallTrigger.quota
                   : PaywallTrigger.locked,
             );
@@ -1168,7 +1193,7 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
               ],
             ),
           ),
-          if (entitled)
+          if (entitled && !passExhausted)
             const Icon(Icons.verified, color: AppColors.accent, size: 20)
           else
             const Icon(Icons.chevron_right,

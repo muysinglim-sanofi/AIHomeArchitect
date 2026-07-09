@@ -97,6 +97,7 @@ const Map<String, String> enTranslations = {
   'notifReadyBody': 'Tap to view your new design.',
   'notifFailedTitle': 'Generation failed',
   'notifFailedBody': 'Tap to open the session and see what happened.',
+  'notifViewAction': 'View',
   'generateButton': 'Generate',
   'generatingInChat': 'Generating your transformation...',
 
@@ -291,6 +292,8 @@ const Map<String, String> enTranslations = {
   'stUnlimited': 'Unlimited generations · every room & atmosphere',
   'stGenerationSingular': 'free generation left',
   'stGenerationPlural': 'free generations left',
+  'stPassCreditsRemaining': '{n} generations remaining',
+  'stPassValidUntil': 'Valid until {date}',
 
   // Chat reupload / design-direction sheet
   'chatPleaseUpload': 'Please upload a source photo first.',

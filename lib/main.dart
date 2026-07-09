@@ -12,6 +12,7 @@ import 'core/providers/locale_provider.dart';
 import 'core/providers/me_status_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/services/local_notification_service.dart';
+import 'core/widgets/ready_notification_host.dart';
 import 'core/services/push_service.dart';
 import 'core/theme/app_theme.dart';
 import 'data/services/revenuecat_service.dart';
@@ -112,6 +113,10 @@ class App extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      // BUG 2+3 — notification in-app "ready" globale/tappable/session-aware,
+      // montée au-dessus de toutes les routes (écoute route-agnostique).
+      builder: (context, child) =>
+          ReadyNotificationHost(child: child ?? const SizedBox.shrink()),
     );
   }
 }
