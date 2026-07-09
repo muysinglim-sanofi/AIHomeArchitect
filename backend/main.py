@@ -1392,6 +1392,37 @@ async def get_me_access(
     }
 
 
+async def _read_wallet_snapshot(user_id: str) -> dict:
+    """BUG4 (RC-PR2b) — snapshot READ-ONLY du wallet pour l'affichage profil.
+    Le wallet est une projection (peut ne pas exister → {} → 0 crédit, pas de
+    pass). Best-effort : une erreur DB ne casse jamais /me/status."""
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("wallets")
+            .select("available_credits, active_pass_id, pass_expires_at")
+            .eq("user_id", user_id).limit(1).execute()
+        )
+        rows = getattr(res, "data", None) or []
+        return rows[0] if rows else {}
+    except Exception as exc:  # noqa: BLE001 — l'affichage ne bloque jamais
+        log.warning("[me/status] wallet snapshot failed user=%s err=%s", user_id[:8], exc)
+        return {}
+
+
+def _pass_still_active(expires_iso: Optional[str]) -> bool:
+    """True si pass_expires_at est dans le futur (le wallet peut être stale : un
+    premium bypasse le débit → sa projection n'est pas rafraîchie en continu)."""
+    if not expires_iso:
+        return False
+    try:
+        exp = datetime.fromisoformat(str(expires_iso).replace("Z", "+00:00"))
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        return exp > datetime.now(timezone.utc)
+    except (TypeError, ValueError):
+        return False
+
+
 @app.get("/me/status")
 async def get_me_status(
     current_user: CurrentUser = Depends(get_current_user),
@@ -1403,7 +1434,9 @@ async def get_me_status(
     it to grant itself anything.
 
     Returns: is_premium, is_admin, role, quota_used, quota_limit,
-    remaining_free_generations (null when premium/admin = unlimited).
+    remaining_free_generations (null when premium/admin = unlimited), promo fields,
+    and (RC-PR2b, additif) the wallet/pass snapshot: available_credits,
+    active_pass_id, pass_expires_at, has_active_pass, access_source.
     """
     # Sprint 1B — one resolution covers subscription + promo + free quota.
     d = await resolve_generation_access(current_user.user_id)
@@ -1415,6 +1448,26 @@ async def get_me_status(
     # legacy — DÉCOUPLÉ du ledger). On recompose localement l'épuisement.
     _exhausted = (not unlimited) and d.free_remaining <= 0
     _can_generate = unlimited or d.free_remaining > 0
+
+    # ── BUG4 (RC-PR2b) — wallet/pass pour l'affichage profil (READ-ONLY, additif,
+    # AUCUN impact enforcement RC-PR3). Le pass acheté = crédits mesurés, pas
+    # "unlimited". access_source dit d'où vient la capacité affichée.
+    _wallet = await _read_wallet_snapshot(current_user.user_id)
+    _available_credits = int(_wallet.get("available_credits") or 0)
+    _active_pass_id = _wallet.get("active_pass_id")
+    _pass_expires_at = _wallet.get("pass_expires_at")
+    _has_active_pass = bool(_active_pass_id) and _pass_still_active(_pass_expires_at)
+    if is_admin:
+        _access_source = "admin"
+    elif _has_active_pass:
+        _access_source = "pass"          # weekly/annual mesuré en crédits
+    elif d.promo_unlimited_active or d.promo_generations_remaining > 0:
+        _access_source = "promo"
+    elif is_premium:
+        _access_source = "premium"       # premium SANS pass actif (admin-granted/legacy) → illimité
+    else:
+        _access_source = "free"
+
     return {
         # ── existing Sprint 1 fields (unchanged shape) ──
         "is_premium": is_premium,
@@ -1429,6 +1482,12 @@ async def get_me_status(
         "active_promo_campaign": d.active_promo_campaign,
         "effective_access_state": "blocked" if _exhausted else d.tier,  # admin|premium|promo_*|free|blocked
         "can_generate": _can_generate,
+        # ── RC-PR2b — wallet/pass snapshot (additif, affichage seul) ──
+        "available_credits": _available_credits,
+        "active_pass_id": _active_pass_id,
+        "pass_expires_at": _pass_expires_at,
+        "has_active_pass": _has_active_pass,
+        "access_source": _access_source,
     }
 
 
@@ -5008,6 +5067,7 @@ async def refine_endpoint(
     client_request_id: str = Form(""),     # PR0 — id partagé avec PerfC2P (correlation obs)
     operation_id: str = Form(""),          # Phase 1 — 1 soumission utilisateur = 1 operation_id (idempotence)
     retry_of_intent_id: str = Form(""),    # Phase 1 — Retry après FAILED (INFORMATIF : trace, jamais réouverture)
+    ui_locale: str = Form("en"),           # BUG1 — langue du push "vision ready" (en|fr|km) ; défaut en
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """Contrat unique (D-b) : advisory (YELLOW/RED, 0 gen) | completed (image immédiate,
@@ -5116,6 +5176,26 @@ async def refine_endpoint(
     # RUNNING (lost-claim) → statut RÉCUPÉRABLE, aucune génération, pas d'extras 'completed'.
     if resp.get("status") != "completed":
         return resp
+
+    # BUG1 (P0) — Phase B push "vision ready" pour le REFINE. MIROIR de /generate
+    # (main.py:4849) : le refine ne le faisait PAS → aucune notif iOS quand l'app
+    # est backgroundée/tuée (le local notif ne peut pas s'afficher, isolate gelé).
+    # Fire-and-forget, additif, jamais bloquant, no-op si PUSH_ENABLED/FCM absent.
+    # Uniquement sur 'completed' (une vraie image) — jamais sur 'running'.
+    _rf_title, _rf_body = {
+        "fr": ("Votre vision est prête", "Touchez pour voir votre nouveau design."),
+        "km": ("ចក្ខុវិស័យ​របស់​អ្នក​រួចរាល់​ហើយ", "ប៉ះ​ដើម្បី​មើល​ការ​រចនា​ថ្មី​របស់​អ្នក។"),
+    }.get(ui_locale, ("Your vision is ready", "Tap to view your new design."))
+    _rf_push = asyncio.create_task(send_push(
+        supa=supa,
+        user_id=current_user.user_id,
+        title=_rf_title,
+        body=_rf_body,
+        session_id=session_id or "",
+    ))
+    _push_bg_tasks.add(_rf_push)
+    _rf_push.add_done_callback(_push_bg_tasks.discard)
+
     # 'completed' → merge des extras endpoint (identité héritée + kill-switch + before).
     return {
         **resp,
