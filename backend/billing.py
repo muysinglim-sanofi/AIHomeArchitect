@@ -120,45 +120,20 @@ async def _intent_user_id(supa, intent_id: str) -> Optional[str]:
 
 
 async def _reproject_wallet(*, user_id: str, supa=None) -> None:
-    """Recalcule le wallet DEPUIS le ledger (projection) et l'upsert. Jamais un
-    `wallet += delta` aveugle → toujours cohérent avec la vérité (le ledger).
+    """Reprojette le wallet via le RPC PASS-AWARE `billing_reproject_wallet`
+    (RC-PR2b) — SOURCE DE VÉRITÉ UNIQUE de la projection, partagée avec le RPC
+    d'achat. Règle : si pass actif → solde du bucket du pass (pass_id) uniquement ;
+    sinon → bucket free/trial (pass_id IS NULL) planchérisé à 0. Le calcul vit en
+    SQL (pas de somme globale Python qui mélangeait free pré-achat et pass acheté).
 
-    TODO (Billing PR2/PR3, une fois l'observation validée) : PROJECTION
-    INCRÉMENTALE. Ce recompute lit TOUT le ledger de l'user à chaque événement —
-    acceptable en PR1 (volumes faibles, observation), mais O(ledger) par écriture
-    ne passe pas à l'échelle (100k → 5M lignes). Remplacer par une mise à jour
-    incrémentale (available += delta) + re-check périodique. Le ledger reste la
-    source de vérité ; le wallet n'a pas besoin d'un recompute intégral à chaque HOLD.
-    """
+    Best-effort : un échec ne casse JAMAIS /generate (chemin conso fail-open)."""
     supa = supa or _get_supa()
     try:
-        res = await asyncio.to_thread(
-            lambda: supa.table("ledger_entries")
-            .select("entry_type, available_delta, id").eq("user_id", user_id).execute()
-        )
-        rows = getattr(res, "data", None) or []
-    except Exception as exc:
-        log.warning("[BILLING] wallet reproject fetch failed user=%s err=%s", user_id, exc)
-        return
-    available = sum(int(r.get("available_delta") or 0) for r in rows)
-    holds = sum(1 for r in rows if r.get("entry_type") == "HOLD")
-    closed = sum(1 for r in rows if r.get("entry_type") in ("RELEASE", "COMMIT"))
-    held = holds - closed  # §4.6 : #HOLD − #RELEASE − #COMMIT
-    version = max((int(r.get("id") or 0) for r in rows), default=0)
-    try:
         await asyncio.to_thread(
-            lambda: supa.table("wallets")
-            .upsert({
-                "user_id": user_id,
-                "available_credits": available,
-                "held_credits": held,
-                "ledger_version": version,
-                "updated_at": "now()",
-            }, on_conflict="user_id")
-            .execute()
+            lambda: supa.rpc("billing_reproject_wallet", {"p_user_id": user_id}).execute()
         )
     except Exception as exc:
-        log.warning("[BILLING] wallet upsert failed user=%s err=%s", user_id, exc)
+        log.warning("[BILLING] wallet reproject (rpc) failed user=%s err=%s", user_id, exc)
 
 
 async def _emit(supa, *, user_id: str, entry_type: str, delta: int, key: str,
