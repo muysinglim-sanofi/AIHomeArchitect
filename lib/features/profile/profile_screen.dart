@@ -1090,48 +1090,51 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
     final MeStatus? status = ref.watch(meStatusProvider);
     if (status == null) return const SizedBox.shrink();
 
-    final bool premium = status.isPremium;
-    // Sprint 1B — promo is shown ONLY when not premium (premium/admin priority).
-    final bool promo = status.hasActivePromo;
-    final bool entitled = premium || promo;  // has access → nothing to upsell
+    // Wave 4.9.x — key the status card on the backend's single access_source
+    // discriminator (admin > pass > promo > premium > free) so the profile never
+    // drifts from /me/status, and each source reads distinctly: store pass
+    // (metered) != promo/coupon (VIP) != admin/legacy premium != free.
+    final String src = status.accessSource; // admin|pass|promo|premium|free
+    final bool entitled = src != 'free'; // has access → nothing to upsell
     final Color accent =
         entitled ? AppColors.accent : AppColors.textSecondary;
     final l10n = context.l10n;
-    final IconData icon = premium
-        ? Icons.workspace_premium
-        : (promo ? Icons.redeem : Icons.bolt_outlined);
+    final IconData icon = (src == 'promo')
+        ? Icons.redeem
+        : (src == 'free' ? Icons.bolt_outlined : Icons.workspace_premium);
 
     final String title;
     final String subtitle;
-    if (status.isAdmin) {
+    if (src == 'admin') {
       title = l10n.stAdminFullAccess;
       subtitle = l10n.stUnlimited;
-    } else if (status.hasActivePass) {
-      // RC-PR2b — pass MESURÉ (weekly/annual) : afficher les CRÉDITS restants,
-      // jamais "unlimited". Expiry ajoutée si disponible.
+    } else if (src == 'pass') {
+      // Store pass (Apple/Google) — MEASURED credits, never "unlimited".
       title = l10n.stPremiumActive;
       final String credits =
           l10n.stPassCreditsRemaining(status.availableCredits);
       final String? until = _formatPassExpiry(context, status.passExpiresAt);
       subtitle = until == null ? credits : '$credits · $until';
-    } else if (premium) {
-      // Premium SANS pass mesuré (admin-granted / legacy) → réellement illimité.
-      title = l10n.stPremiumActive;
-      subtitle = l10n.stUnlimited;
-    } else if (promo && status.promoUnlimitedActive) {
+    } else if (src == 'promo' && status.promoUnlimitedActive) {
+      // Coupon / VIP — unlimited.
       title = l10n.promoAccessUnlimited;
       subtitle = status.activePromoCampaign ?? l10n.stUnlimited;
-    } else if (promo) {
+    } else if (src == 'promo') {
+      // Coupon — limited generations.
       title = l10n.promoAccessLabel;
       subtitle = l10n.promoAccessLimited(status.promoGenerationsRemaining);
+    } else if (src == 'premium') {
+      // Premium role without a metered pass (admin-granted / legacy) → unlimited.
+      title = l10n.stPremiumActive;
+      subtitle = l10n.stUnlimited;
     } else {
+      // 'free'
       title = l10n.stFreePlan;
       subtitle = l10n.freeGenerationsLeft(status.remaining);
     }
 
-    // BUG4 — un pass épuisé (0 crédit) redevient tappable vers le paywall (top-up).
-    final bool passExhausted =
-        status.hasActivePass && status.availableCredits <= 0;
+    // A store pass with 0 credits becomes tappable again (top-up via paywall).
+    final bool passExhausted = src == 'pass' && status.availableCredits <= 0;
 
     // Free users (et pass épuisé) tap the card to open the paywall (upgrade) —
     // quota trigger when exhausted, generic otherwise. Entitled users WITH
