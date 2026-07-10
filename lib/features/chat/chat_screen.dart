@@ -1877,6 +1877,28 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     debugPrint('[V1-GUARD] trigger=$trigger iteration=$genIteration '
         'source_hash=$srcHash decision=accepted reason=new_generation');
 
+    // ── P0 bloc (b) G — PREFLIGHT billing pour un refine/switch (in-session) ────
+    // V1 (iteration==1) est déjà gaté à l'upload (F). Ici on gate les générations
+    // in-session (refine/switch/regenerate) AVANT loading/pending/POST : cache
+    // meStatus (rafraîchi après chaque succès) + backstop 402/503. Deny → paywall
+    // immédiat, AUCUN loading, AUCUN pending, AUCUN POST /refine (donc 0 parser/advisor).
+    if (genIteration > 1) {
+      final pf = ref.read(meStatusProvider);
+      if (pf != null && !pf.canGenerate) {
+        debugPrint('[BILLING-PREFLIGHT] trigger=$trigger iteration=$genIteration '
+            'canGenerate=false reason=${pf.gateReason} → paywall (no loading/pending/POST)');
+        if (mounted) {
+          await showModalBottomSheet<bool>(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) => PaywallSheet(trigger: PaywallTrigger.quota),
+          );
+        }
+        return;
+      }
+    }
+
     // ── PR2b Slice 2 (R2) — never POST 'new' ──────────────────────────────────
     // /generate MUST target a real session id (PR2a backend R2 → 400 on 'new').
     // If the session is still being created (a manual generate fired during the

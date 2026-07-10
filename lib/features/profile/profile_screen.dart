@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../data/models/project_model.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/constants/build_info.dart';
@@ -18,6 +19,14 @@ import '../../data/services/auth_service.dart';
 import '../auth/sign_in_screen.dart';
 import '../admin/admin_promo_screen.dart';
 
+/// P0 bloc (b) H — compte les redesigns RÉUSSIS : une session ne porte un
+/// `afterImageUrl` (row `latest_preview`) qu'APRÈS une génération réussie, donc une
+/// tentative bloquée/paywall (session vide) ou en cours est exclue. Remplace l'ancien
+/// `sessionProvider.length` qui comptait toutes les sessions (bug "Redesigns=4").
+@visibleForTesting
+int countSuccessfulRedesigns(List<ProjectModel> sessions) =>
+    sessions.where((p) => (p.afterImageUrl ?? '').isNotEmpty).length;
+
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -25,7 +34,8 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final currentLocale = ref.watch(localeProvider);
-    final sessionCount = ref.watch(sessionProvider).length;
+    // P0 bloc (b) H — "Redesigns" = générations RÉUSSIES uniquement (cf. countSuccessfulRedesigns).
+    final redesignCount = countSuccessfulRedesigns(ref.watch(sessionProvider));
     final meStatus = ref.watch(meStatusProvider); // Sprint 1B — admin entry gate
 
     void show(Widget sheet) => showModalBottomSheet(
@@ -68,7 +78,7 @@ class ProfileScreen extends ConsumerWidget {
                   AppSpacing.pagePadding,
                   AppSpacing.lg,
                 ),
-                child: _StatsRow(projectCount: sessionCount),
+                child: _StatsRow(projectCount: redesignCount),
               ),
             ),
             SliverToBoxAdapter(
@@ -1249,16 +1259,13 @@ class _StatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    // Wave 5.17d.1 — the legacy 3-card stats row (Transformations /
-    // Sessions / Shared) referenced the now-retired credit-pack model
-    // ("5 sessions" was the default pack balance). With Premium replacing
-    // credit packs, we keep only the two real stats : redesigns count
-    // (projects) + shared count. No fake "credits" number.
+    // P0 bloc (b) H — carte "Shared=2" RETIRÉE (valeur codée en dur, aucune source →
+    // risque App Review 2.3.1 "placeholder/inaccurate"). On ne garde que le compteur
+    // RÉEL de redesigns réussis. Le solde de spaces/crédits est affiché par la carte
+    // de statut (access_source), qui lit meStatus (source unique backend).
     return Row(
       children: [
         _StatCard(value: '$projectCount', label: l10n.projectsCount),
-        const SizedBox(width: AppSpacing.sm),
-        _StatCard(value: '2', label: l10n.sharedCount),
       ],
     );
   }

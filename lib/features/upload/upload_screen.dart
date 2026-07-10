@@ -303,7 +303,26 @@ class _UploadScreenState extends ConsumerState<UploadScreen>
     return context.l10n.uplHintPickAtmosphere;
   }
 
-  void _start() {
+  Future<void> _start() async {
+    // ── P0 bloc (b) F — PREFLIGHT billing AVANT toute création de session/loading ──
+    // On rafraîchit la vérité backend (source unique = /me/status.can_generate, aligné
+    // sur reserve_decision + try_hold). Deny → paywall immédiat : AUCUNE session, AUCUN
+    // generation_intent, AUCUN pending, AUCUN loading, AUCUN compteur Redesigns. Le
+    // refresh réchauffe aussi le cache meStatus pour le preflight refine (G). Fail-open
+    // si /me/status injoignable (le gate backend + HOLD atomique restent le filet).
+    await ref.read(meStatusProvider.notifier).refresh();
+    if (!mounted) return;
+    final st = ref.read(meStatusProvider);
+    if (st != null && !st.canGenerate) {
+      await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => PaywallSheet(trigger: PaywallTrigger.quota),
+      );
+      return;
+    }
+
     final params = <String, String>{};
     if (_aiDecideRoom) {
       params['aiDecide'] = '1';
