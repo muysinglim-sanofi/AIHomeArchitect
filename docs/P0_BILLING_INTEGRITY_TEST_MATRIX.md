@@ -175,6 +175,17 @@ Statuts : ⬜ à faire · 🟩 PASS · 🟥 FAIL · ⏭️ bloc ultérieur.
 - `flutter analyze` (bloc b).
 - **Aucun** changement moteur image/prompt/DNA/fidelity (v1_image_impact = NONE).
 
+## ✅ POST-APPLY — BACKEND VERT (2026-07-10, SQL appliqué + Render d860948)
+Les 2 migrations appliquées (additive projection + atomic hold), backend déployé. Validations réelles :
+- **E2E DB P0 billing integrity : 6/6 🟩** — dont **A6 `wallet.available_credits == gate.total` (=32)** (additive projection active).
+- **E2E concurrence réelle (advisory-lock) : 4/4 🟩** — **pass=20/80 concurrents → EXACTEMENT 20 granted, solde 0** · free=3/20 · idempotence même-intent · pass-first. La faille HIGH est FERMÉE contre la vraie DB.
+- **Audit prod mike lim (`1ba1c0f9`) : `wallet=3, gate=3` 🟩** — crédits fantômes (93) éliminés en prod.
+- **0 coût OpenAI sur deny** 🟩 (le 402/deny est levé AVANT vision/OpenAI par construction).
+
+→ **Backend P0 (bloc a + P0a-bis) VALIDÉ.** Prochain : bloc (b) frontend (F→H).
+
+---
+
 ## Résultats — Bloc (a) backend (run 2026-07-10)
 
 ### Suites automatiques
