@@ -1,147 +1,77 @@
-"""RC-PR3b (2026-07-10) — enforcement du pass mesuré : le rôle premium n'est PLUS
-l'autorité de génération illimitée.
-
-Pur (FakeSupa, 0 DB/0 réseau). Vérifie la décision Python de `reserve_decision` :
-  • tier=premium + pass actif, solde ≥ 1 → allow (gén. métrée)
-  • tier=premium + pass actif, solde 0   → deny pass_exhausted (aucune gen à 0)
-  • tier=premium SANS pass actif         → deny no_active_pass (jamais unlimited silencieux)
-  • tier=admin / promo_unlimited / promo_limited → allow (bypass illimité/promo)
-  • is_free=True (free) → chemin free INCHANGÉ (bucket free + TRIAL, RC-PR2b)
-
-La séparation réelle bucket pass (pass_id) vs free (pass_id NULL) est portée par le
-filtre .eq("pass_id") → E2E DB. Ici on teste la logique de décision.
+"""RC-PR3b regression (MIS À JOUR P0 2026-07-10) — reserve_decision pass-first ADDITIF.
+Le rôle premium n'est PAS l'autorité de génération ; total = pass + free (planché) ;
+jamais unlimited silencieux ; pass expiré = 0 fantôme. FilterSupa pass_id-aware.
 """
 import os, sys, asyncio, logging
-sys.path.insert(0, os.path.dirname(__file__))
-logging.disable(logging.CRITICAL)
-
+sys.path.insert(0, os.path.dirname(__file__)); logging.disable(logging.CRITICAL)
 import billing
+from _billing_fakes import FilterSupa
 
-PASS = "\033[92mPASS\033[0m"; FAIL = "\033[91mFAIL\033[0m"
-res = []
-def check(label, cond, detail=""):
-    res.append(bool(cond))
-    print(f"  {PASS if cond else FAIL}  {label}{('  ['+str(detail)+']') if detail and not cond else ''}")
+PASS = "\033[92mPASS\033[0m"; FAIL = "\033[91mFAIL\033[0m"; res = []
+def check(l, c, d=""):
+    res.append(bool(c)); print(f"  {PASS if c else FAIL}  {l}{('  ['+str(d)+']') if d and not c else ''}")
+def run(c): return asyncio.run(c)
 
+FUT = "2099-01-01T00:00:00+00:00"; PS = "2020-01-01T00:00:00+00:00"; PE = "2020-01-02T00:00:00+00:00"
+def ap(pid="pA"): return {"id": pid, "user_id": "u1", "status": "ACTIVE", "starts_at": PS, "ends_at": FUT}
+def ep(pid="e1"): return {"id": pid, "user_id": "u1", "status": "EXPIRED", "starts_at": PS, "ends_at": PE}
+def L(d, p=None, et="HOLD", key=None):
+    r = {"user_id": "u1", "available_delta": d, "entry_type": et, "pass_id": p}
+    if key: r["idempotency_key"] = key
+    return r
+def TR(): return L(3, None, "TRIAL", key="trial:u1")
+def dec(fs, is_free, tier): return run(billing.reserve_decision(user_id="u1", is_free=is_free, tier=tier, supa=fs))
 
-class _Res:
-    def __init__(self, data): self.data = data
+print("\n=== RC-PR3b (P0) · reserve_decision — enforcement pass mesuré ===")
 
+fs = FilterSupa(tables={"passes": [ap()], "ledger_entries": [L(30, "pA", "GRANT"), L(-1, "pA"), TR(), L(-3, None)]})
+d = dec(fs, False, "premium")
+check("1 premium pass 29 (free 0) → allow total=29", d.allow and d.total_credits == 29 and d.pass_credits == 29, d)
 
-class _Query:
-    def __init__(self, fake, table): self._f = fake; self._t = table
-    def select(self, *a, **k): return self
-    def eq(self, *a, **k): return self
-    def lte(self, *a, **k): return self
-    def gt(self, *a, **k): return self
-    def order(self, *a, **k): return self
-    def limit(self, *a, **k): return self
-    def execute(self):
-        if self._t == "passes":
-            self._f.passes_queries += 1
-            return _Res(self._f.pass_rows)
-        if self._t == "ledger_entries":
-            self._f.ledger_queries += 1
-            return _Res(self._f.ledger_rows)
-        return _Res([])
+fs = FilterSupa(tables={"passes": [ap()], "ledger_entries": [L(30, "pA", "GRANT"), L(-30, "pA"), TR(), L(-3, None)]})
+d = dec(fs, False, "premium")
+check("2 premium pass 0 + free 0 → DENY pass_exhausted", (not d.allow) and d.reason == "pass_exhausted", d)
 
+fs = FilterSupa(tables={"ledger_entries": [TR(), L(-3, None)]})
+d = dec(fs, False, "premium")
+check("3 premium SANS pass SANS free → DENY no_active_pass (jamais unlimited)", (not d.allow) and d.reason == "no_active_pass", d)
 
-class FakeSupa:
-    def __init__(self, pass_rows=None, ledger_rows=None):
-        self.pass_rows = pass_rows or []
-        self.ledger_rows = ledger_rows or []
-        self.passes_queries = 0
-        self.ledger_queries = 0
-    def table(self, name): return _Query(self, name)
+fs = FilterSupa(tables={"passes": [ap()], "ledger_entries": [L(0, "pA")]})
+d = dec(fs, False, "admin")
+check("4 admin → bypass, 0 lookup pass/ledger", d.allow and d.bypass and fs.passes_queries == 0 and fs.ledger_queries == 0)
 
+check("5 promo_unlimited → bypass", (lambda x: x.allow and x.bypass)(dec(FilterSupa(), False, "promo_unlimited")))
+check("6 promo_limited → bypass", (lambda x: x.allow and x.bypass)(dec(FilterSupa(), False, "promo_limited")))
 
-def run(coro): return asyncio.run(coro)
+fs = FilterSupa(tables={"ledger_entries": [TR(), L(-1, None)]})
+d = dec(fs, True, "free"); check("7 free 2 → allow total=2", d.allow and d.total_credits == 2)
 
-def decide(fs, *, is_free, tier):
-    return run(billing.reserve_decision(
-        user_id="u1", is_free=is_free, tier=tier, supa=fs))
+fs = FilterSupa(tables={"ledger_entries": [TR(), L(-3, None)]})
+d = dec(fs, True, "free"); check("8 free 0 → DENY insufficient_credits", (not d.allow) and d.reason == "insufficient_credits")
 
+d = dec(FilterSupa(), True, "free"); check("9 free neuf → total=3 (trial projeté)", d.allow and d.total_credits == 3)
 
-print("\n=== RC-PR3b · reserve_decision (enforcement pass mesuré) ===")
+fs = FilterSupa(tables={"passes": [ep()], "ledger_entries": [L(60, "e1", "GRANT"), TR()]})
+d = dec(fs, True, "free"); check("10 pass EXPIRÉ +60 + free 3 → total=3 (0 fantôme)", d.total_credits == 3)
 
-# 1. premium + pass actif, solde ≥ 1 → allow (métré)
-fs = FakeSupa(pass_rows=[{"id": "pass-A"}], ledger_rows=[{"available_delta": 30},
-                                                         {"available_delta": -1}])
-d = decide(fs, is_free=False, tier="premium")
-check("1 premium + pass actif solde=29 → allow (wallet_available=29)",
-      d.allow and d.reason == "" and d.wallet_available == 29, (d,))
+# 11 pass-first indépendant du rôle : pass actif + tier=free (webhook rôle manqué) → allow
+fs = FilterSupa(tables={"passes": [ap()], "ledger_entries": [L(30, "pA", "GRANT"), TR(), L(-3, None)]})
+d = dec(fs, True, "free")
+check("11 pass actif SANS rôle (tier=free) → allow via pass (pass-first)", d.allow and d.pass_credits == 30 and d.has_active_pass)
 
-# 2. premium + pass actif, solde 0 → deny pass_exhausted (aucune gen à 0)
-fs = FakeSupa(pass_rows=[{"id": "pass-A"}], ledger_rows=[{"available_delta": 30},
-                                                         {"available_delta": -30}])
-d = decide(fs, is_free=False, tier="premium")
-check("2 premium + pass actif solde=0 → DENY pass_exhausted",
-      (not d.allow) and d.reason == "pass_exhausted" and d.wallet_available == 0, (d,))
-
-# 2b. solde négatif (désync historique) → toujours deny (jamais illimité)
-fs = FakeSupa(pass_rows=[{"id": "pass-A"}], ledger_rows=[{"available_delta": -2}])
-d = decide(fs, is_free=False, tier="premium")
-check("2b premium + pass solde<0 → DENY pass_exhausted", (not d.allow) and d.reason == "pass_exhausted")
-
-# 3. premium SANS pass actif → deny no_active_pass (incohérent, jamais unlimited silencieux)
-fs = FakeSupa(pass_rows=[])
-d = decide(fs, is_free=False, tier="premium")
-check("3 premium SANS pass → DENY no_active_pass (jamais unlimited silencieux)",
-      (not d.allow) and d.reason == "no_active_pass", (d,))
-
-# 4. admin → allow bypass (illimité réel), aucune lecture pass/ledger
-fs = FakeSupa(pass_rows=[{"id": "pass-A"}], ledger_rows=[{"available_delta": 0}])
-d = decide(fs, is_free=False, tier="admin")
-check("4 admin → allow bypass, aucun lookup pass/ledger",
-      d.allow and d.reason == "bypass" and fs.passes_queries == 0 and fs.ledger_queries == 0, (d,))
-
-# 5. promo_unlimited → allow bypass
-fs = FakeSupa()
-d = decide(fs, is_free=False, tier="promo_unlimited")
-check("5 promo_unlimited → allow bypass", d.allow and d.reason == "bypass" and fs.passes_queries == 0)
-
-# 6. promo_limited → allow bypass (borné par le resolver, pas par le pass)
-fs = FakeSupa()
-d = decide(fs, is_free=False, tier="promo_limited")
-check("6 promo_limited → allow bypass", d.allow and d.reason == "bypass" and fs.passes_queries == 0)
-
-# 7. free avec crédits → allow (chemin free RC-PR2b inchangé)
-fs = FakeSupa(ledger_rows=[{"entry_type": "TRIAL", "available_delta": 3},
-                           {"entry_type": "HOLD", "available_delta": -1}])
-d = decide(fs, is_free=True, tier="free")
-check("7 free available=2 (trial accordé) → allow", d.allow and d.effective == 2, (d,))
-
-# 8. free épuisé (trial accordé, tout consommé) → deny insufficient_credits
-fs = FakeSupa(ledger_rows=[{"entry_type": "TRIAL", "available_delta": 3},
-                           {"entry_type": "HOLD", "available_delta": -3}])
-d = decide(fs, is_free=True, tier="free")
-check("8 free available=0 trial accordé → DENY insufficient_credits",
-      (not d.allow) and d.reason == "insufficient_credits", (d,))
-
-# 9. free neuf (pas encore de TRIAL) → +3 pending → allow
-fs = FakeSupa(ledger_rows=[])
-d = decide(fs, is_free=True, tier="free")
-check("9 free neuf (trial pending +3) → allow effective=3", d.allow and d.effective == 3, (d,))
-
-# 10. free ne fait PAS de lookup pass (chemin free ne lit pas passes)
-fs = FakeSupa(pass_rows=[{"id": "pass-A"}], ledger_rows=[])
-d = decide(fs, is_free=True, tier="free")
-check("10 free → aucun lookup passes", fs.passes_queries == 0, fs.passes_queries)
-
-# 11. fail-open lecture pass bucket → allow (fiabilité > double rare)
-class _BoomLedger(FakeSupa):
+# 12 fail-open : lecture free KO → allow
+class _Boom(FilterSupa):
     def table(self, name):
         if name == "ledger_entries":
-            class _Boom:
-                def select(self,*a,**k): return self
-                def eq(self,*a,**k): return self
-                def execute(self): raise RuntimeError("db down")
-            return _Boom()
+            class _B:
+                def select(s, *a, **k): return s
+                def eq(s, *a, **k): return s
+                def is_(s, *a, **k): return s
+                def execute(s): raise RuntimeError("db down")
+            return _B()
         return super().table(name)
-fs = _BoomLedger(pass_rows=[{"id": "pass-A"}])
-d = decide(fs, is_free=False, tier="premium")
-check("11 premium + pass, lecture bucket KO → FAIL-OPEN allow", d.allow, (d,))
+d = dec(_Boom(), True, "free"); check("12 lecture free KO → FAIL-OPEN allow", d.allow)
 
 total = len(res); passed = sum(res)
-print(f"\n{'='*64}\n  TOTAL {total}  PASSED {passed}  FAILED {total-passed}\n{'='*64}")
+print(f"\n{'='*64}\n  RC-PR3b (P0) — TOTAL {total}  PASSED {passed}  FAILED {total-passed}\n{'='*64}")
 sys.exit(0 if passed == total else 1)

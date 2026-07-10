@@ -1463,9 +1463,25 @@ async def get_me_status(
         user_id=current_user.user_id, is_free=d.consumes_free_quota, tier=d.tier)
     _can_generate = _gate.allow
     _gate_reason = _gate.reason
+    # P0 (2026-07-10) — autorité pass = le gate (lecture live), pas le snapshot wallet.
+    _has_active_pass = _gate.has_active_pass
 
     # Seuls admin + promo_unlimited sont VRAIMENT illimités (le rôle premium ne l'est plus).
     unlimited = is_admin or d.promo_unlimited_active
+
+    # ── P0 (2026-07-10) — SOURCE UNIQUE : buckets additifs exposés DEPUIS le gate
+    #    (même calcul que le wallet). total = free + pass (+ promo, borné, séparé en V1).
+    if unlimited:
+        _free_credits = _pass_credits = _promo_credits = _total_credits = None
+    elif d.tier == "promo_limited":
+        _free_credits, _pass_credits = 0, 0
+        _promo_credits = d.promo_generations_remaining
+        _total_credits = d.promo_generations_remaining
+    else:
+        _free_credits = _gate.free_credits
+        _pass_credits = _gate.pass_credits
+        _promo_credits = 0
+        _total_credits = _gate.total_credits
 
     # access_source = la VÉRITÉ de génération (même autorité que le gate) :
     #   admin > pass (mesuré) > promo > restore_required (rôle premium SANS pass) > free.
@@ -1482,15 +1498,18 @@ async def get_me_status(
     else:
         _access_source = "free"
 
+    # remaining_free_generations = bucket free du LEDGER (source unique), plus usage_log.
+    _rfg = None if unlimited else (_free_credits if _free_credits is not None else 0)
+
     return {
         # `is_premium` = FEATURES premium (all rooms/atmospheres/HD/no-watermark),
         # PAS "génération illimitée". La capacité de génération = can_generate.
         "is_premium": is_premium,
         "is_admin": is_admin,
         "role": "admin" if is_admin else ("premium" if is_premium else "free"),
-        "quota_used": max(0, FREE_TIER_LIMIT - d.free_remaining),
+        "quota_used": None if unlimited else max(0, FREE_TIER_LIMIT - (_free_credits or 0)),
         "quota_limit": FREE_TIER_LIMIT,
-        "remaining_free_generations": None if unlimited else d.free_remaining,
+        "remaining_free_generations": _rfg,
         # ── Sprint 1B — promo fields ──
         "promo_generations_remaining": d.promo_generations_remaining,
         "promo_unlimited_active": d.promo_unlimited_active,
@@ -1498,7 +1517,12 @@ async def get_me_status(
         "effective_access_state": d.tier if _can_generate else "blocked",
         "can_generate": _can_generate,
         "gate_reason": _gate_reason,     # "" | bypass | pass_exhausted | no_active_pass | insufficient_credits
-        # ── wallet/pass snapshot ──
+        # ── P0 buckets (source unique, additifs) ──
+        "free_credits": _free_credits,
+        "pass_credits": _pass_credits,
+        "promo_credits": _promo_credits,
+        "total_credits": _total_credits,   # None = illimité (admin/promo_unlimited)
+        # ── wallet/pass snapshot (legacy, = total_credits pour un user post-trial) ──
         "available_credits": _available_credits,
         "active_pass_id": _active_pass_id,
         "pass_expires_at": _pass_expires_at,
@@ -1677,11 +1701,27 @@ async def purchases_sync(
         rec.get("store_tx_present"), rec.get("expires_present"),
         rec.get("state"), rec.get("reason") or "-", rec.get("grant_status") or "-",
     )
+    # P0 (2026-07-10) — entitlement RC ACTIF (state pass|restore_required) → le RÔLE
+    # premium (FEATURES) doit exister/être rafraîchi : miroir du dual-write webhook
+    # (reinstall / device-change / RC transfer / webhook manqué / App Review). JAMAIS
+    # unlimited : la génération reste MÉTRÉE par le pass (reserve_decision).
+    if rec.get("state") in ("pass", "restore_required"):
+        try:
+            from revenuecat_webhook import _upsert_premium  # noqa: PLC0415 — lazy (évite circular import)
+            await _upsert_premium(supa=supa, user_id=uid,
+                                  expires_at_iso=rec.get("expires_at"),
+                                  event_type="PURCHASES_SYNC", event_id="sync")
+            log.info("[purchases/sync] premium role upserted (features) user=%s state=%s", uid, rec.get("state"))
+        except Exception as exc:  # noqa: BLE001 — best-effort : le pass reste l'autorité de génération
+            log.warning("[purchases/sync] premium role upsert failed user=%s err=%s", uid, exc)
+
     if rec.get("state") == "pass":
         return {"synced": True, "is_premium": True, "has_measurable_pass": True,
                 "expires_at": rec.get("expires_at"), "grant_status": rec.get("grant_status")}
     if rec.get("state") == "restore_required":
-        return {"synced": False, "is_premium": False, "has_measurable_pass": False,
+        # is_premium=True = FEATURES (entitlement RC actif) ; has_measurable_pass=False
+        # = pas encore de pass mesuré → l'app affiche « restore required », JAMAIS unlimited.
+        return {"synced": False, "is_premium": True, "has_measurable_pass": False,
                 "state": "restore_required", "expires_at": rec.get("expires_at"),
                 "reason": rec.get("reason")}
     return {"synced": False, "is_premium": False, "reason": "no_active_entitlement"}
@@ -2876,19 +2916,51 @@ async def generate(
     # Billing reserve (déplacé depuis observe_intent_start) : TRIAL(+3 1re gen) +
     # HOLD(-1). PURE RELAY, best-effort, idempotent, AUCUN gate ; ne casse jamais
     # /generate (règle Billing PR1). Seul le GAGNANT réserve → pas de double HOLD.
-    try:
-        import billing  # noqa: PLC0415 — lazy, évite les surprises d'ordre d'import
-        # Billing PR2b (voie a) — HOLD du GAGNANT, APRÈS le claim. Le gate wallet
-        # (reserve_decision, plus haut) a déjà autorisé ; ici on POSE la réservation.
-        # is_free=consumes_free_quota → D-e : entitled n'écrit RIEN (ni TRIAL ni HOLD).
-        await billing.apply_billing_for_intent_transition(
-            intent_id=_intent.id, new_status="RUNNING",
-            user_id=current_user.user_id,
-            is_free=_decision.consumes_free_quota, supa=supa,
+    # ── P0a-bis (2026-07-10) — RÉSERVATION ATOMIQUE (gate+HOLD) = AUTORITÉ de génération ──
+    # Le gagnant du claim tente un HOLD ATOMIQUE (billing_try_hold : advisory-lock par
+    # user + HOLD conditionnel solde≥1, 1 transaction). reserve_decision (plus haut) était
+    # INDICATIF (fast-fail + /me/status) ; ICI est le VRAI droit : OpenAI ne part QUE si
+    # granted=true. Ferme la course concurrence (N /generate concurrents à intents distincts
+    # ne peuvent plus sur-consommer le bucket). Idempotent (hold:<intent> → reclaim/replay
+    # ne re-débitent pas). FAIL-OPEN dans le wrapper (un hoquet DB ne bloque jamais).
+    import billing  # noqa: PLC0415 — lazy
+    _hold = await billing.try_hold(
+        user_id=current_user.user_id, intent_id=_intent.id, tier=_decision.tier, supa=supa)
+    if not _hold.get("granted"):
+        _hreason = _hold.get("reason") or "insufficient_credits"
+        # L'intent est RUNNING (claim gagné) mais AUCUN crédit réservé → on le TERMINALISE
+        # (pas de RUNNING fantôme) et on refuse AVANT OpenAI → aucun coût, aucune image.
+        try:
+            await observe_intent_end(
+                _intent.id, "FAILED",
+                error={"error_code": "ATOMIC_DENY", "reason": _hreason}, supa=supa)
+        except Exception:  # noqa: BLE001 — best-effort
+            pass
+        if _idem_key is not None:
+            _idem_inflight.discard(_idem_key)
+        if _hreason == "atomic_hold_missing":
+            # RPC billing_try_hold absente (fenêtre deploy AVANT apply-SQL) : ce N'EST PAS
+            # un paywall → 503 transitoire (retryable), pas de fausse "quota exhausted".
+            log.error("[BILLING-ATOMIC] deny intent=%s reason=atomic_hold_missing → 503 (SQL à appliquer)",
+                      _intent.id)
+            raise HTTPException(
+                status_code=503,
+                detail={"error_code": "BILLING_UNAVAILABLE",
+                        "user_message": "We're finishing an update. Please try again in a moment.",
+                        "retryable": True, "request_id": request_id})
+        log.info("[BILLING-ATOMIC] deny intent=%s reason=%s → 402 avant OpenAI (0 coût)", _intent.id, _hreason)
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error_code": "QUOTA_EXHAUSTED",
+                "user_message": (
+                    "Your free architectural explorations are complete. "
+                    "Unlock unlimited redesigns and continue working with your AI Architect."),
+                "quota_used": FREE_TIER_LIMIT, "quota_limit": FREE_TIER_LIMIT,
+                "wallet_available": _hold.get("total_after") or 0,
+                "reason": _hreason, "paywall": "pass", "retryable": False, "request_id": request_id,
+            },
         )
-    except Exception as bexc:  # noqa: BLE001
-        log.warning("[BILLING] reserve hook failed (swallowed) intent=%s err=%s: %s",
-                    _intent.id, type(bexc).__name__, bexc)
 
     # ── Wave 5.17b — Reserve quota slot BEFORE the OpenAI call ──────────────
     # INSERTs a 'in_progress' usage_log row. Counts immediately against the
