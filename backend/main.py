@@ -1668,7 +1668,19 @@ async def purchases_sync(
             event_id="purchases_sync",
         )
         log.info("[purchases/sync] premium reconciled user=%s expires=%s", uid, expires)
-        return {"synced": True, "is_premium": True, "expires_at": expires}
+        # RC-PR3b — le sync grant le RÔLE (features) mais ne crée PAS de pass mesuré
+        # (pas de transaction_id fiable du cycle ici → pas de GRANT arbitraire). La
+        # capacité de génération vient du PASS ACTIF ; le pass mesuré est créé par le
+        # webhook INITIAL_PURCHASE/RENEWAL (ou un Restore). On loggue clairement l'état.
+        import billing  # noqa: PLC0415 — lazy
+        _pass = await billing._active_pass_id(supa, uid)
+        if _pass is None:
+            log.warning(
+                "[purchases/sync] RC-PR3b active subscription but NO measurable pass "
+                "user=%s expires=%s → génération bornée (features only via role) jusqu'à "
+                "réconciliation du pass (webhook/restore)", uid, expires)
+        return {"synced": True, "is_premium": True, "expires_at": expires,
+                "has_measurable_pass": _pass is not None}
 
     return {"synced": False, "is_premium": False, "reason": "no_active_entitlement"}
 
@@ -2650,6 +2662,7 @@ async def generate(
     import billing  # noqa: PLC0415 — lazy, évite les surprises d'ordre d'import
     _gate = await billing.reserve_decision(
         user_id=current_user.user_id, is_free=_decision.consumes_free_quota,
+        tier=_decision.tier,   # RC-PR3b — premium = features only ; gén. métrée par le pass
     )
     if not _gate.allow:
         raise HTTPException(
@@ -5149,6 +5162,22 @@ async def refine_endpoint(
         changes=[_refine_change_to_dict(c) for c in prepared.ordered_changes],
         estimated_success=prepared.estimated_success)
     execute_fn = _refine_adapter.build_execute_fn(openai, prepared.prompt)
+
+    # RC-PR3b — gate refine sur la MÊME source que /generate (bucket wallet/pass) :
+    # un pass à 0 ne peut pas refine non plus. Débit refine reste OFF (Phase 1).
+    import billing  # noqa: PLC0415 — lazy (parité /generate)
+    _ref_access = await resolve_generation_access(current_user.user_id)
+    _ref_gate = await billing.reserve_decision(
+        user_id=current_user.user_id, is_free=_ref_access.consumes_free_quota,
+        tier=_ref_access.tier)
+    if not _ref_gate.allow:
+        log.info("[BILLING-GATE] refine denied user=%s reason=%s available=%d",
+                 current_user.user_id[:8], _ref_gate.reason, _ref_gate.wallet_available)
+        raise GenerationError(
+            error_code="QUOTA_EXHAUSTED",
+            user_message=("You've used all the spaces in your plan. Unlock more to "
+                          "keep refining with your AI Architect."),
+            retryable=False, status_code=402, session_id=(session_id or ""))
 
     try:
         resp = await _run_generation(

@@ -145,6 +145,26 @@ async def _active_pass_id(supa, user_id: str) -> Optional[str]:
         return None
 
 
+async def _pass_bucket_available(supa, user_id: str, pass_id: str) -> int:
+    """RC-PR3b — solde `available` du bucket d'UN pass : Σ available_delta des
+    ledger_entries de CE pass_id. MÊME calcul que `billing_reproject_wallet` pour
+    le bucket pass → l'enforcement lit exactement ce que le profil affiche
+    (wallet.available_credits). FAIL-OPEN : sur erreur DB, renvoie 1 (autorise) —
+    un payant n'est jamais bloqué par un hoquet de lecture."""
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("ledger_entries")
+            .select("available_delta")
+            .eq("user_id", user_id).eq("pass_id", pass_id).execute()
+        )
+        rows = getattr(res, "data", None) or []
+        return sum(int(r.get("available_delta") or 0) for r in rows)
+    except Exception as exc:  # noqa: BLE001 — FAIL-OPEN : fiabilité > double rare
+        log.warning("[BILLING-GATE] pass bucket read failed user=%s pass=%s err=%s → fail-open allow",
+                    user_id[:8], pass_id[:8], exc)
+        return 1
+
+
 async def _reproject_wallet(*, user_id: str, supa=None) -> None:
     """Reprojette le wallet via le RPC PASS-AWARE `billing_reproject_wallet`
     (RC-PR2b) — SOURCE DE VÉRITÉ UNIQUE de la projection, partagée avec le RPC
@@ -204,21 +224,44 @@ class ReserveDecision:
 
 
 async def reserve_decision(
-    *, user_id: str, is_free: bool, supa=None,
+    *, user_id: str, is_free: bool, tier: str = "free", supa=None,
 ) -> ReserveDecision:
-    """Billing PR2b (voie a) — GATE wallet (§2.3), **LECTURE SEULE**. Décide si
-    l'user peut lancer une génération. Appelé dans /generate AVANT le claim :
-    aucune écriture (le HOLD est posé APRÈS le claim-won) → respecte « aucune
-    réservation avant ownership ».
-      • entitled (is_free=False) → allow (bypass R8), AUCUNE lecture.
-      • free → effective = available + (TRIAL si pas encore accordé) ; allow = effective ≥ 1.
-    FAIL-OPEN sur erreur de lecture (fiabilité > double rare, cf. philosophie du
-    claim) : un hoquet DB ne bloque jamais un user ; observable via reason=fail_open.
+    """GATE wallet, **LECTURE SEULE**. Décide si l'user peut lancer une génération.
+    Appelé dans /generate (et /refine) AVANT le claim : aucune écriture (le HOLD est
+    posé APRÈS le claim-won) → « aucune réservation avant ownership ».
+
+    RC-PR3b — le rôle premium n'est PLUS l'autorité de génération illimitée :
+      • free (is_free=True) → bucket free + TRIAL ; allow = effective ≥ 1. (RC-PR2b, inchangé)
+      • admin / promo_unlimited / promo_limited → bypass (illimité réel, ou promo métré
+        par le resolver qui a déjà garanti remaining > 0).
+      • premium (rôle abonnement) → MÉTRÉ par le PASS ACTIF : allow = solde bucket pass ≥ 1,
+        sinon deny (pass_exhausted). Aucune gen ne démarre à 0.
+      • premium SANS pass actif (ni admin/promo) → état INCOHÉRENT : log.error + deny
+        (no_active_pass) — JAMAIS unlimited silencieux (cf. docs/RC_PR3B_ENFORCEMENT.md).
+    FAIL-OPEN sur erreur de lecture (fiabilité > double rare) : un hoquet DB ne bloque
+    jamais ; observable via reason=fail_open / pass bucket fail-open.
     """
     supa = supa or _get_supa()
     if not is_free:
-        # admin / premium / promo → bypass (R8 + tiers entitled) : pas de gate wallet.
-        return ReserveDecision(allow=True, wallet_available=0, effective=0, reason="bypass")
+        # RC-PR3b — seuls admin & promo_unlimited sont illimités ; promo_limited est
+        # déjà borné par le resolver (tier retombe à free quand épuisé).
+        if tier in ("admin", "promo_unlimited", "promo_limited"):
+            return ReserveDecision(allow=True, wallet_available=0, effective=0, reason="bypass")
+        # tier == "premium" (rôle abonnement) → la génération vient du PASS ACTIF.
+        pass_id = await _active_pass_id(supa, user_id)
+        if pass_id is None:
+            # Rôle premium mais aucun pass mesurable, et pas admin/promo → incohérent.
+            log.error(
+                "[BILLING-GATE] RC-PR3b entitled premium WITHOUT active pass (incohérent) "
+                "user=%s tier=%s → DENY (jamais unlimited silencieux)", user_id[:8], tier)
+            return ReserveDecision(allow=False, wallet_available=0, effective=0, reason="no_active_pass")
+        available = await _pass_bucket_available(supa, user_id, pass_id)
+        allow = available >= 1
+        log.info("[BILLING-GATE] RC-PR3b pass gate user=%s pass=%s available=%d decision=%s",
+                 user_id[:8], pass_id[:8], available, "allow" if allow else "deny")
+        return ReserveDecision(
+            allow=allow, wallet_available=available, effective=available,
+            reason="" if allow else "pass_exhausted")
     try:
         res = await asyncio.to_thread(
             lambda: supa.table("ledger_entries")
