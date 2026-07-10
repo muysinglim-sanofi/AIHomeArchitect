@@ -1625,14 +1625,14 @@ async def claim_stats(request: Request):
 async def purchases_sync(
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Sprint 1 — fallback reconciliation when the RevenueCat webhook is delayed
-    or missed.
-
-    Reads the subscriber's entitlement directly from the RevenueCat REST API
-    (server secret key) and, if 'premium' is active, UPSERTs the user_roles row
-    via the SAME helper the webhook uses. Flow is RC → backend → user_roles;
-    the client never asserts premium. Idempotent (upsert on (user_id, role)).
+    """P0 (2026-07-10) — RÉCONCILIE un PASS MESURÉ depuis le subscriber RevenueCat
+    (restore / sync / reinstall / device-change / RC transfer / webhook manqué / App
+    Review). Lit le subscriber via l'API REST RC et, si premium actif + store_transaction_id
+    fiable + produit mappé → reconstruit un pass IDEMPOTENT via grant_purchase (JAMAIS
+    un rôle-seul, JAMAIS unlimited). Sinon → restore_required. Le client n'assure jamais
+    le premium lui-même.
     """
+    log.info("[purchases/sync] ENTER user=%s", current_user.user_id)
     secret = os.environ.get("REVENUECAT_SECRET_API_KEY", "")
     if not secret:
         # Not configured yet (operational step). Don't pretend it worked.
