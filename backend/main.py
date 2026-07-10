@@ -52,7 +52,7 @@ from intent_reconciliation import reconcile_once, RECONCILE_INTERVAL_SECONDS
 # Wave 5.17d — Free-tier scope (room + atmosphere allowlist for non-premium)
 from free_tier import check_restrictions
 # Wave 5.17d — RevenueCat webhook receiver (POST /webhooks/revenuecat)
-from revenuecat_webhook import router as revenuecat_router, _upsert_premium
+from revenuecat_webhook import router as revenuecat_router
 from rate_limit import check_ip_rate_limit
 # Sprint 1 — server-side free-tier watermark (applied to bytes before upload)
 from watermark import apply_watermark
@@ -1441,35 +1441,50 @@ async def get_me_status(
     # Sprint 1B — one resolution covers subscription + promo + free quota.
     d = await resolve_generation_access(current_user.user_id)
     is_admin = d.tier == "admin"
-    is_premium = d.tier in ("admin", "premium")            # subscription/admin ONLY (promo ≠ premium)
-    unlimited = is_premium or d.promo_unlimited_active      # remaining_free is null only when truly unlimited
-    # Billing PR2b (voie a) — le resolver ne renvoie plus tier="blocked"/can_generate=False
-    # (pure identité). L'AFFICHAGE du quota reste sur free_remaining (usage_log,
-    # legacy — DÉCOUPLÉ du ledger). On recompose localement l'épuisement.
-    _exhausted = (not unlimited) and d.free_remaining <= 0
-    _can_generate = unlimited or d.free_remaining > 0
+    # P0 (2026-07-10) — `is_premium` = droit aux FEATURES premium (admin ou rôle
+    # premium). Ne signifie PLUS "génération illimitée" (RC-PR3b : seuls admin +
+    # promo_unlimited sont illimités ; un rôle premium seul ne débloque PAS la génération).
+    is_premium = d.tier in ("admin", "premium")
+    _has_premium_role = d.tier == "premium"
 
-    # ── BUG4 (RC-PR2b) — wallet/pass pour l'affichage profil (READ-ONLY, additif,
-    # AUCUN impact enforcement RC-PR3). Le pass acheté = crédits mesurés, pas
-    # "unlimited". access_source dit d'où vient la capacité affichée.
+    # ── Wallet/pass snapshot (READ-ONLY) ──
     _wallet = await _read_wallet_snapshot(current_user.user_id)
     _available_credits = int(_wallet.get("available_credits") or 0)
     _active_pass_id = _wallet.get("active_pass_id")
     _pass_expires_at = _wallet.get("pass_expires_at")
     _has_active_pass = bool(_active_pass_id) and _pass_still_active(_pass_expires_at)
+
+    # ── P0 (2026-07-10) — SOURCE DE VÉRITÉ UNIQUE : /me/status lit EXACTEMENT le même
+    # gate que /generate (billing.reserve_decision). Fin de la divergence "Premium
+    # active dans le profil + génération bloquée par paywall". can_generate = la
+    # décision réelle ; gate_reason = pourquoi (no_active_pass, pass_exhausted, …).
+    import billing  # noqa: PLC0415
+    _gate = await billing.reserve_decision(
+        user_id=current_user.user_id, is_free=d.consumes_free_quota, tier=d.tier)
+    _can_generate = _gate.allow
+    _gate_reason = _gate.reason
+
+    # Seuls admin + promo_unlimited sont VRAIMENT illimités (le rôle premium ne l'est plus).
+    unlimited = is_admin or d.promo_unlimited_active
+
+    # access_source = la VÉRITÉ de génération (même autorité que le gate) :
+    #   admin > pass (mesuré) > promo > restore_required (rôle premium SANS pass) > free.
     if is_admin:
         _access_source = "admin"
     elif _has_active_pass:
         _access_source = "pass"          # weekly/annual mesuré en crédits
     elif d.promo_unlimited_active or d.promo_generations_remaining > 0:
         _access_source = "promo"
-    elif is_premium:
-        _access_source = "premium"       # premium SANS pass actif (admin-granted/legacy) → illimité
+    elif _has_premium_role:
+        # Rôle premium (abo actif signalé par RC) mais AUCUN pass mesuré → INCOHÉRENT :
+        # l'user doit restaurer/synchroniser son achat. JAMAIS "Premium active".
+        _access_source = "restore_required"
     else:
         _access_source = "free"
 
     return {
-        # ── existing Sprint 1 fields (unchanged shape) ──
+        # `is_premium` = FEATURES premium (all rooms/atmospheres/HD/no-watermark),
+        # PAS "génération illimitée". La capacité de génération = can_generate.
         "is_premium": is_premium,
         "is_admin": is_admin,
         "role": "admin" if is_admin else ("premium" if is_premium else "free"),
@@ -1480,9 +1495,10 @@ async def get_me_status(
         "promo_generations_remaining": d.promo_generations_remaining,
         "promo_unlimited_active": d.promo_unlimited_active,
         "active_promo_campaign": d.active_promo_campaign,
-        "effective_access_state": "blocked" if _exhausted else d.tier,  # admin|premium|promo_*|free|blocked
+        "effective_access_state": d.tier if _can_generate else "blocked",
         "can_generate": _can_generate,
-        # ── RC-PR2b — wallet/pass snapshot (additif, affichage seul) ──
+        "gate_reason": _gate_reason,     # "" | bypass | pass_exhausted | no_active_pass | insufficient_credits
+        # ── wallet/pass snapshot ──
         "available_credits": _available_credits,
         "active_pass_id": _active_pass_id,
         "pass_expires_at": _pass_expires_at,
@@ -1660,27 +1676,25 @@ async def purchases_sync(
                 active = False
 
     if active:
-        await _upsert_premium(
-            supa=supa,
-            user_id=uid,
-            expires_at_iso=expires,
-            event_type="MANUAL_SYNC",
-            event_id="purchases_sync",
-        )
-        log.info("[purchases/sync] premium reconciled user=%s expires=%s", uid, expires)
-        # RC-PR3b — le sync grant le RÔLE (features) mais ne crée PAS de pass mesuré
-        # (pas de transaction_id fiable du cycle ici → pas de GRANT arbitraire). La
-        # capacité de génération vient du PASS ACTIF ; le pass mesuré est créé par le
-        # webhook INITIAL_PURCHASE/RENEWAL (ou un Restore). On loggue clairement l'état.
+        # P0 (2026-07-10) — le sync NE crée PLUS de rôle premium seul (c'était la source
+        # de l'état incohérent "Premium active dans le profil + génération bloquée").
+        # Le rôle + le pass mesuré viennent du WEBHOOK INITIAL_PURCHASE/RENEWAL (seul
+        # endroit avec un transaction_id fiable du cycle). Ici on RÉCONCILIE seulement :
+        #   • pass mesuré présent → OK (is_premium features).
+        #   • aucun pass → restore_required : AUCUN rôle écrit → l'user reste free/restore,
+        #     JAMAIS premium illimité ni premium bloqué contradictoire.
         import billing  # noqa: PLC0415 — lazy
         _pass = await billing._active_pass_id(supa, uid)
-        if _pass is None:
-            log.warning(
-                "[purchases/sync] RC-PR3b active subscription but NO measurable pass "
-                "user=%s expires=%s → génération bornée (features only via role) jusqu'à "
-                "réconciliation du pass (webhook/restore)", uid, expires)
-        return {"synced": True, "is_premium": True, "expires_at": expires,
-                "has_measurable_pass": _pass is not None}
+        if _pass is not None:
+            log.info("[purchases/sync] measurable pass present user=%s expires=%s", uid, expires)
+            return {"synced": True, "is_premium": True, "has_measurable_pass": True,
+                    "expires_at": expires}
+        log.warning(
+            "[purchases/sync] active subscription but NO measurable pass user=%s expires=%s "
+            "→ restore_required (aucun rôle-seul écrit ; pass créé par le webhook/renewal)",
+            uid, expires)
+        return {"synced": False, "is_premium": False, "has_measurable_pass": False,
+                "state": "restore_required", "expires_at": expires}
 
     return {"synced": False, "is_premium": False, "reason": "no_active_entitlement"}
 
