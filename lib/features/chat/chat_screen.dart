@@ -30,6 +30,7 @@ import '../../core/l10n/app_localizations.dart';
 import '../../core/models/atmosphere_style.dart';
 import '../../core/providers/locale_provider.dart';
 import '../../core/providers/me_status_provider.dart';
+import '../../data/services/status_service.dart';
 import '../../core/providers/pending_generations_provider.dart';
 import '../../core/providers/active_session_provider.dart';
 import '../../core/providers/premium_provider.dart';
@@ -1356,6 +1357,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           final pending = await _pendingStore?.load(_project.id);
           if (!mounted) return;
           if (pending != null) {
+            // P0 (2026-07-10) — ne PAS ré-afficher "génération en cours" (bulle +
+            // polling) pour un pending que le billing refuserait (no_active_pass /
+            // pass_exhausted / quota). Sinon l'user voit une génération qui "tourne"
+            // en revenant dans la session, alors qu'elle a été bloquée par le paywall.
+            // On purge le pending et on n'affiche RIEN (pas de loading, pas de sweep).
+            final gateStatus = await StatusService().fetchStatus();
+            if (!mounted) return;
+            if (gateStatus != null && !gateStatus.canGenerate) {
+              debugPrint('[Recovery] session=${_project.id} — pending mais billing '
+                  'refuse (${gateStatus.gateReason}) → purge (pas de loading/replay)');
+              await _pendingStore?.clear(_project.id);
+              return;
+            }
             // PR0 robustness — rehydrate the in-flight request_id from the DURABLE
             // pending record. The volatile _inFlightRequestId was lost when the
             // previous ChatScreen was disposed on navigation; the pending record
