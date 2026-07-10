@@ -1662,40 +1662,28 @@ async def purchases_sync(
         return {"synced": False, "is_premium": False, "reason": f"rc_status_{resp.status_code}"}
 
     data = resp.json()
-    ent = (((data.get("subscriber") or {}).get("entitlements") or {}).get("premium")) or {}
-    expires = ent.get("expires_date")  # ISO-8601, or None for lifetime
-    active = False
-    if ent:
-        if expires is None:
-            active = True
-        else:
-            try:
-                exp_dt = datetime.fromisoformat(expires.replace("Z", "+00:00"))
-                active = exp_dt > datetime.now(timezone.utc)
-            except Exception:
-                active = False
-
-    if active:
-        # P0 (2026-07-10) — le sync NE crée PLUS de rôle premium seul (c'était la source
-        # de l'état incohérent "Premium active dans le profil + génération bloquée").
-        # Le rôle + le pass mesuré viennent du WEBHOOK INITIAL_PURCHASE/RENEWAL (seul
-        # endroit avec un transaction_id fiable du cycle). Ici on RÉCONCILIE seulement :
-        #   • pass mesuré présent → OK (is_premium features).
-        #   • aucun pass → restore_required : AUCUN rôle écrit → l'user reste free/restore,
-        #     JAMAIS premium illimité ni premium bloqué contradictoire.
-        import billing  # noqa: PLC0415 — lazy
-        _pass = await billing._active_pass_id(supa, uid)
-        if _pass is not None:
-            log.info("[purchases/sync] measurable pass present user=%s expires=%s", uid, expires)
-            return {"synced": True, "is_premium": True, "has_measurable_pass": True,
-                    "expires_at": expires}
-        log.warning(
-            "[purchases/sync] active subscription but NO measurable pass user=%s expires=%s "
-            "→ restore_required (aucun rôle-seul écrit ; pass créé par le webhook/renewal)",
-            uid, expires)
+    # P0 (2026-07-10) — RÉCONCILIATION restore/sync → pass MESURÉ (reinstall, device-
+    # change, RC transfer, webhook manqué, App Review restore). Même chemin idempotent
+    # que le webhook (grant_purchase) ; JAMAIS unlimited, JAMAIS rôle-seul. La logique
+    # (parse subscriber + guards + grant idempotent) vit dans billing (testable FakeSupa).
+    import billing  # noqa: PLC0415 — lazy
+    rec = await billing.reconcile_pass_from_subscriber(
+        user_id=uid, subscriber=(data.get("subscriber") or {}), supa=supa)
+    # Log prod structuré (sans payload complet ni secret).
+    log.info(
+        "[purchases/sync] rc_sync entitlement_active=%s user=%s product_id=%r "
+        "store_transaction_id_present=%s expires_date_present=%s state=%s reason=%s grant=%s",
+        rec.get("state") != "free", uid, rec.get("product_id"),
+        rec.get("store_tx_present"), rec.get("expires_present"),
+        rec.get("state"), rec.get("reason") or "-", rec.get("grant_status") or "-",
+    )
+    if rec.get("state") == "pass":
+        return {"synced": True, "is_premium": True, "has_measurable_pass": True,
+                "expires_at": rec.get("expires_at"), "grant_status": rec.get("grant_status")}
+    if rec.get("state") == "restore_required":
         return {"synced": False, "is_premium": False, "has_measurable_pass": False,
-                "state": "restore_required", "expires_at": expires}
-
+                "state": "restore_required", "expires_at": rec.get("expires_at"),
+                "reason": rec.get("reason")}
     return {"synced": False, "is_premium": False, "reason": "no_active_entitlement"}
 
 

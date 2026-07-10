@@ -448,3 +448,83 @@ async def grant_purchase(
         user_id[:8], provider_transaction_id, result.status, result.credited, result.credits,
     )
     return result
+
+
+def _iso_in_future(iso) -> bool:
+    """True si l'ISO-8601 est dans le futur (best-effort)."""
+    try:
+        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")) > datetime.now(timezone.utc)
+    except (TypeError, ValueError):
+        return False
+
+
+async def reconcile_pass_from_subscriber(*, user_id: str, subscriber: dict, supa=None) -> dict:
+    """P0 (2026-07-10) — reconstruit un PASS MESURÉ depuis le subscriber RevenueCat
+    (restore / reinstall / device-change / RC transfer / webhook manqué / App Review
+    restore). RÉEMPRUNTE le chemin idempotent du webhook (grant_purchase) — ce N'EST
+    PAS un pansement : c'est le comportement attendu quand Apple/RC ont un abo actif
+    mais que la DB n'a pas (encore) Order/Payment/Pass/GRANT.
+
+    Règles STRICTES :
+      • entitlement premium ACTIF requis (sinon 'free') ;
+      • product_id mappé (weekly/annual) requis (ProductNotMapped → restore_required) ;
+      • store_transaction_id du CYCLE courant requis (JAMAIS original_transaction_id) ;
+      • expires_date requis ;
+      • data insuffisante → AUCUN pass créé → restore_required + log clair ;
+      • JAMAIS unlimited, JAMAIS rôle-seul.
+    Idempotent : même appel N fois = 1 seul Order/Payment/Pass/GRANT (grant_purchase
+    ON CONFLICT). Même cycle que le webhook (même store_transaction_id) → aucun double.
+
+    Renvoie {state:'pass'|'restore_required'|'free', has_measurable_pass, reason,
+             grant_status, product_id, store_tx_present, expires_present, expires_at}.
+    """
+    supa = supa or _get_supa()
+    ent = (((subscriber or {}).get("entitlements") or {}).get("premium")) or {}
+    expires = ent.get("expires_date")  # None = lifetime = actif
+    active = bool(ent) and (expires is None or _iso_in_future(expires))
+    if not active:
+        return {"state": "free", "has_measurable_pass": False,
+                "reason": "no_active_entitlement", "product_id": None,
+                "store_tx_present": False, "expires_present": bool(expires),
+                "expires_at": expires}
+
+    product_id = ent.get("product_identifier") or ""
+    subs = (subscriber or {}).get("subscriptions") or {}
+    sub = (subs.get(product_id) or {}) if product_id else {}
+    store_tx = sub.get("store_transaction_id") or ""
+    base = {"product_id": product_id or None, "store_tx_present": bool(store_tx),
+            "expires_present": bool(expires), "expires_at": expires, "grant_status": None}
+
+    # Data RC insuffisante → PAS de pass arbitraire → restore_required.
+    if not product_id or not store_tx or not expires:
+        log.warning("[reconcile] insufficient RC data user=%s product_id=%r store_tx=%s "
+                    "expires=%s → restore_required", user_id[:8], product_id or None,
+                    bool(store_tx), bool(expires))
+        return {**base, "state": "restore_required", "has_measurable_pass": False,
+                "reason": "insufficient_rc_data"}
+
+    # Grant idempotent — store_transaction_id (cycle courant), JAMAIS original.
+    try:
+        result = await grant_purchase(
+            user_id=user_id, provider="revenuecat",
+            provider_transaction_id=store_tx, store_product_id=product_id,
+            amount=None, currency=None, ends_at_iso=expires,
+            raw_payload={"source": "purchases_sync", "product_id": product_id,
+                         "store_transaction_id": store_tx, "expires_date": expires},
+            supa=supa,
+        )
+    except ProductNotMapped:
+        log.warning("[reconcile] product NOT mapped user=%s product_id=%s → restore_required",
+                    user_id[:8], product_id)
+        return {**base, "state": "restore_required", "has_measurable_pass": False,
+                "reason": "product_not_mapped"}
+    except Exception as exc:  # noqa: BLE001 — sync = best-effort (≠ voie webhook stricte)
+        log.error("[reconcile] grant failed user=%s tx=%s err=%s: %s",
+                  user_id[:8], store_tx, type(exc).__name__, exc)
+        return {**base, "state": "restore_required", "has_measurable_pass": False,
+                "reason": "grant_error"}
+
+    log.info("[reconcile] pass reconciled user=%s product_id=%s status=%s credited=%s",
+             user_id[:8], product_id, result.status, result.credited)
+    return {**base, "state": "pass", "has_measurable_pass": True,
+            "reason": None, "grant_status": result.status}
