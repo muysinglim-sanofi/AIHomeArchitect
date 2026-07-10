@@ -97,6 +97,13 @@ Statuts : ⬜ à faire · 🟩 PASS · 🟥 FAIL · ⏭️ bloc ultérieur.
 | E6 | admin → unlimited réel | admin | `reserve_decision` | `bypass` allow, 0 lookup | FakeSupa | ⬜ |
 | E7 | promo désactivé → aucun accès promo | promo `active=false` | resolver | tier=free (pas de bypass) | FakeSupa | ⬜ |
 
+## ✅ Bloc (b) frontend — IMPLÉMENTÉ (2026-07-10, submodule wave4-design-spine)
+Le backend expose déjà `can_generate` / `gate_reason` / `access_source` (bloc a). Frontend :
+- **F — Generate preflight** : `upload_screen._start()` rafraîchit `meStatus` et, si `!canGenerate`, ouvre le paywall et **return AVANT** `pushReplacement` → aucune session, aucun intent, aucun loading. Fail-open si `/me/status` injoignable (backend gate + HOLD atomique = filet).
+- **G — Refine preflight** : `chat_screen._generate()` (genIteration > 1 = refine/switch, V1 gaté par F) lit le cache `meStatus` et, si `!canGenerate`, ouvre le paywall et **return AVANT** loading/pending/POST → 0 parser/advisor. Backstop 402/503 conservé (`chat_screen` ~2633).
+- **H — Profile** : `Redesigns` = `countSuccessfulRedesigns(sessions)` (sessions avec `afterImageUrl` = image finale, plus `sessionProvider.length`) → une tentative bloquée n'incrémente plus. **Carte `Shared='2'` codée en dur RETIRÉE** (App Review 2.3.1). Le solde de spaces reste affiché par la carte de statut (`access_source`, lit `meStatus`).
+- **Tests** : `flutter analyze` **No issues found** (profile/upload/chat) · unit `test/profile/redesign_count_test.dart` **3/3** (dont « 4e bloquée → reste 3 »). F/G/UX → **device (TestFlight)** : F1-F10, G1-G10, H2/H3 (nature intégration). Aucun changement image/prompt/DNA/fidelity.
+
 ## F. Generate UX / preflight  *(bloc b — frontend)*
 
 | # | Scénario | Action | Attendu | Test | Statut |
