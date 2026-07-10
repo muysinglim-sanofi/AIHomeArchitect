@@ -167,6 +167,14 @@ class _PaywallSheetState extends State<PaywallSheet> {
         setState(() => _busy = false);
         return;
       }
+      if (errorCode == PurchasesErrorCode.productAlreadyPurchasedError) {
+        // P0 (2026-07-10) — Apple « You're currently subscribed » → NE PAS juste
+        // afficher premium : restaurer + synchroniser le pass mesuré côté backend.
+        // _onRestorePressed re-déclenche RC restore → webhook → pass ; le refetch
+        // /me/status (à la fermeture du paywall) montre la vérité (spaces ou restore).
+        await _onRestorePressed();
+        return;
+      }
       setState(() {
         _busy = false;
         _errorMessage = e.message ?? l10n.pwErrFailed;

@@ -310,6 +310,9 @@ const Map<String, String> frTranslations = {
   'stGenerationPlural': "espaces gratuits restants",
   'stPassCreditsRemaining': "{n} espaces restants",
   'stPassValidUntil': "Valable jusqu'au {date}",
+  'stRestoreRequired': "Restaurer l'achat",
+  'stRestoreRequiredSub': "Restaurez votre abonnement pour continuer",
+  'stRestoring': "Restauration de votre achat…",
 
   // Chat reupload / design-direction sheet
   'chatPleaseUpload': "Veuillez d'abord importer une photo source.",

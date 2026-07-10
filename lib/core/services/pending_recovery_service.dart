@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../../data/models/pending_generation.dart';
 import '../../data/services/generation_service.dart';
+import '../../data/services/status_service.dart';
 import 'pending_generation_store.dart';
 
 /// The action to take for one pending generation, given its backend probe.
@@ -148,8 +149,30 @@ class PendingRecoveryService with WidgetsBindingObserver {
         await store.clear(p.sessionId);
         return;
       case RecoveryAction.relaunch:
+        // P0 (2026-07-10) — ne JAMAIS re-POST une génération que le billing refuserait
+        // (no_active_pass / pass_exhausted / quota). Sinon l'user voit une "génération
+        // qui se relance toute seule" en revenant dans la session. On vérifie la
+        // capacité réelle AVANT de re-POST ; refus → DROP le pending, aucun re-POST.
+        if (!await _canGenerate()) {
+          debugPrint('[Recovery] ${p.sessionId} billing refuse la génération '
+              '→ DROP (aucun re-POST, pas de replay)');
+          await store.clear(p.sessionId);
+          return;
+        }
         await _relaunch(p, store, gen);
         return;
+    }
+  }
+
+  /// P0 — capacité de génération réelle côté backend (même autorité que le gate),
+  /// pour ne pas re-POST un pending que /generate refuserait (billing). FAIL-OPEN :
+  /// sur erreur /me/status, on laisse _relaunch décider (il clear sur le 402 structuré).
+  Future<bool> _canGenerate() async {
+    try {
+      final st = await StatusService().fetchStatus();
+      return st?.canGenerate ?? true;
+    } catch (_) {
+      return true;
     }
   }
 

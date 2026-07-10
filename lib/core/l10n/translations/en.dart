@@ -301,6 +301,9 @@ const Map<String, String> enTranslations = {
   'stGenerationPlural': 'free spaces left',
   'stPassCreditsRemaining': '{n} spaces remaining',
   'stPassValidUntil': 'Valid until {date}',
+  'stRestoreRequired': 'Restore purchase',
+  'stRestoreRequiredSub': 'Restore your subscription to continue',
+  'stRestoring': 'Restoring your purchase…',
 
   // Chat reupload / design-direction sheet
   'chatPleaseUpload': 'Please upload a source photo first.',

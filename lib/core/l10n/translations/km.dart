@@ -298,6 +298,9 @@ const Map<String, String> kmTranslations = {
   'stGenerationPlural': 'កន្លែង​ឥត​គិត​ថ្លៃ​នៅ​សល់',
   'stPassCreditsRemaining': '{n} កន្លែង​នៅ​សល់',
   'stPassValidUntil': 'មាន​សុពលភាព​ដល់ {date}',
+  'stRestoreRequired': 'ស្ដារ​ការ​ទិញ',
+  'stRestoreRequiredSub': 'ស្ដារ​ការ​ជាវ​របស់​អ្នក​ដើម្បី​បន្ត',
+  'stRestoring': 'កំពុង​ស្ដារ​ការ​ទិញ…',
 
   // Chat reupload / design-direction sheet — KHMER V1
   'chatPleaseUpload': 'សូម​ផ្ទុក​រូបថត​ដើម​ជា​មុន​សិន។',

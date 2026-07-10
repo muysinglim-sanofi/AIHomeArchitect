@@ -357,6 +357,9 @@ class AppLocalizations {
       _get('stPassCreditsRemaining').replaceAll('{n}', '$n');
   String stPassValidUntil(String date) =>
       _get('stPassValidUntil').replaceAll('{date}', date);
+  String get stRestoreRequired => _get('stRestoreRequired');
+  String get stRestoreRequiredSub => _get('stRestoreRequiredSub');
+  String get stRestoring => _get('stRestoring');
 
   // ── Chat reupload / design-direction sheet ────────────────────────────────
   String get chatPleaseUpload => _get('chatPleaseUpload');

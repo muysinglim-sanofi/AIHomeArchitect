@@ -9,8 +9,10 @@ import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/locale_provider.dart';
 import '../../core/providers/me_status_provider.dart';
 import '../../core/providers/session_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/services/status_service.dart';
 import '../../data/services/profile_service.dart';
+import '../../data/services/revenuecat_service.dart';
 import '../paywall/paywall_sheet.dart';
 import '../../data/services/auth_service.dart';
 import '../auth/sign_in_screen.dart';
@@ -1073,6 +1075,28 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
     if (mounted) ref.read(meStatusProvider.notifier).refresh();
   }
 
+  /// P0 (2026-07-10) — restore_required : l'abo Apple est signalé actif mais AUCUN
+  /// pass mesuré côté backend. On restaure + synchronise + re-fetch pour réconcilier
+  /// le pass. La carte reflète ensuite la vérité backend (spaces remaining si un pass
+  /// est restauré, ou reste "Restore required" sinon = message clair).
+  Future<void> _restorePurchase() async {
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(SnackBar(
+      content: Text(l10n.stRestoring),
+      duration: const Duration(seconds: 2),
+    ));
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    try {
+      if (userId != null) {
+        await RevenuecatService.instance.ensureConfigured(userId: userId);
+      }
+      await RevenuecatService.instance.restorePurchases();
+      await StatusService().syncPurchases();
+    } catch (_) {/* best-effort — le refetch reflète la vérité backend */}
+    if (mounted) ref.read(meStatusProvider.notifier).refresh();
+  }
+
   /// BUG4 — "Valid until {date}" localisé pour un pass actif, ou null si absent/illisible.
   String? _formatPassExpiry(BuildContext context, String? iso) {
     if (iso == null || iso.isEmpty) return null;
@@ -1090,18 +1114,22 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
     final MeStatus? status = ref.watch(meStatusProvider);
     if (status == null) return const SizedBox.shrink();
 
-    // Wave 4.9.x — key the status card on the backend's single access_source
-    // discriminator (admin > pass > promo > premium > free) so the profile never
-    // drifts from /me/status, and each source reads distinctly: store pass
-    // (metered) != promo/coupon (VIP) != admin/legacy premium != free.
-    final String src = status.accessSource; // admin|pass|promo|premium|free
-    final bool entitled = src != 'free'; // has access → nothing to upsell
-    final Color accent =
-        entitled ? AppColors.accent : AppColors.textSecondary;
+    // P0 (2026-07-10) — key the card on the backend's single access_source
+    // discriminator, ALIGNED with reserve_decision (admin > pass > promo >
+    // restore_required > free). 'restore_required' = premium role (RC active sub)
+    // but NO measured pass → NEVER "Premium active"; offer a restore action.
+    final String src = status.accessSource;
+    final bool needsRestore = src == 'restore_required';
+    final bool entitled = src == 'admin' || src == 'pass' || src == 'promo';
+    final Color accent = (entitled || needsRestore)
+        ? AppColors.accent
+        : AppColors.textSecondary;
     final l10n = context.l10n;
-    final IconData icon = (src == 'promo')
-        ? Icons.redeem
-        : (src == 'free' ? Icons.bolt_outlined : Icons.workspace_premium);
+    final IconData icon = needsRestore
+        ? Icons.restore
+        : (src == 'promo'
+            ? Icons.redeem
+            : (src == 'free' ? Icons.bolt_outlined : Icons.workspace_premium));
 
     final String title;
     final String subtitle;
@@ -1123,10 +1151,11 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
       // Coupon — limited generations.
       title = l10n.promoAccessLabel;
       subtitle = l10n.promoAccessLimited(status.promoGenerationsRemaining);
-    } else if (src == 'premium') {
-      // Premium role without a metered pass (admin-granted / legacy) → unlimited.
-      title = l10n.stPremiumActive;
-      subtitle = l10n.stUnlimited;
+    } else if (needsRestore) {
+      // Abo Apple actif signalé mais AUCUN pass mesuré côté backend → restaurer
+      // l'achat (jamais "Premium active" trompeur).
+      title = l10n.stRestoreRequired;
+      subtitle = l10n.stRestoreRequiredSub;
     } else {
       // 'free'
       title = l10n.stFreePlan;
@@ -1136,16 +1165,20 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
     // A store pass with 0 credits becomes tappable again (top-up via paywall).
     final bool passExhausted = src == 'pass' && status.availableCredits <= 0;
 
-    // Free users (et pass épuisé) tap the card to open the paywall (upgrade) —
-    // quota trigger when exhausted, generic otherwise. Entitled users WITH
-    // capacity have nothing to upsell.
-    final VoidCallback? onTap = (entitled && !passExhausted)
-        ? null
-        : () => _openPaywall(
-              (passExhausted || status.remaining <= 0)
-                  ? PaywallTrigger.quota
-                  : PaywallTrigger.locked,
-            );
+    // Tap : restore_required → restaurer/synchroniser l'achat ; free / pass épuisé
+    // → paywall ; entitled avec capacité → rien à upseller.
+    final VoidCallback? onTap;
+    if (needsRestore) {
+      onTap = _restorePurchase;
+    } else if (entitled && !passExhausted) {
+      onTap = null;
+    } else {
+      onTap = () => _openPaywall(
+            (passExhausted || status.remaining <= 0)
+                ? PaywallTrigger.quota
+                : PaywallTrigger.locked,
+          );
+    }
 
     return Material(
       color: Colors.transparent,

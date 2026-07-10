@@ -44,8 +44,15 @@ class MeStatus {
   final String? passExpiresAt;
   final bool hasActivePass;
 
-  /// D'où vient la capacité affichée : 'admin' | 'pass' | 'promo' | 'premium' | 'free'.
+  /// Source de vérité de la CAPACITÉ de génération (même autorité que le backend
+  /// reserve_decision) : 'admin' | 'pass' | 'promo' | 'restore_required' | 'free'.
+  /// 'restore_required' = rôle premium (abo actif RC) SANS pass mesuré → l'user doit
+  /// restaurer/synchroniser son achat ; JAMAIS "Premium active".
   final String accessSource;
+
+  /// Raison du gate quand la génération est bloquée : '' | bypass | pass_exhausted
+  /// | no_active_pass | insufficient_credits.
+  final String gateReason;
 
   const MeStatus({
     required this.isPremium,
@@ -64,7 +71,12 @@ class MeStatus {
     this.passExpiresAt,
     this.hasActivePass = false,
     this.accessSource = 'free',
+    this.gateReason = '',
   });
+
+  /// True quand l'app a un rôle premium (abo actif) mais AUCUN pass mesuré côté
+  /// backend → il faut restaurer/synchroniser l'achat pour obtenir le pass.
+  bool get needsRestore => accessSource == 'restore_required';
 
   int get remaining =>
       remainingFreeGenerations ??
@@ -95,6 +107,7 @@ class MeStatus {
         passExpiresAt: j['pass_expires_at'] as String?,
         hasActivePass: j['has_active_pass'] == true,
         accessSource: (j['access_source'] as String?) ?? 'free',
+        gateReason: (j['gate_reason'] as String?) ?? '',
       );
 
   /// Exact mirror of [fromJson] — lets meStatusProvider cache the last
@@ -117,6 +130,7 @@ class MeStatus {
         'pass_expires_at': passExpiresAt,
         'has_active_pass': hasActivePass,
         'access_source': accessSource,
+        'gate_reason': gateReason,
       };
 }
 
