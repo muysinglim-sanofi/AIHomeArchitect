@@ -47,6 +47,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/feature_flags.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../data/services/revenuecat_service.dart';
+import '../../data/services/status_service.dart';
 import '../promo/promo_redeem_sheet.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/reveal_hero.dart';
@@ -143,10 +144,20 @@ class _PaywallSheetState extends State<PaywallSheet> {
       _busy = true;
       _errorMessage = null;
     });
+    debugPrint('[paywall] paywall_purchase_started pkg=${pkg.identifier}');
     try {
       final activated = await RevenuecatService.instance.purchasePackage(pkg);
       if (!mounted) return;
       if (activated) {
+        // P0 (2026-07-10) — réconcilier le PASS MESURÉ côté backend, que ce soit un
+        // achat frais OU un "already subscribed" (RC purchasePackage RÉUSSIT quand
+        // l'entitlement est déjà actif, sans throw). /purchases/sync recrée le pass
+        // idempotent depuis RevenueCat ; le refetch /me/status (fermeture) montre la
+        // vérité (X spaces / restore_required). Sans ça, le sync n'était jamais appelé.
+        debugPrint('[paywall] purchase_activated → purchases_sync_started');
+        await StatusService().syncPurchases();
+        debugPrint('[paywall] purchases_sync_result (post-activated)');
+        if (!mounted) return;
         Navigator.of(context).pop(true);
       } else {
         setState(() {
@@ -168,10 +179,9 @@ class _PaywallSheetState extends State<PaywallSheet> {
         return;
       }
       if (errorCode == PurchasesErrorCode.productAlreadyPurchasedError) {
-        // P0 (2026-07-10) — Apple « You're currently subscribed » → NE PAS juste
-        // afficher premium : restaurer + synchroniser le pass mesuré côté backend.
-        // _onRestorePressed re-déclenche RC restore → webhook → pass ; le refetch
-        // /me/status (à la fermeture du paywall) montre la vérité (spaces ou restore).
+        // P0 (2026-07-10) — Apple « You're currently subscribed » (cas où RC THROW) →
+        // restaurer + synchroniser le pass mesuré backend (jamais juste "premium").
+        debugPrint('[paywall] already_subscribed_detected → restore+sync');
         await _onRestorePressed();
         return;
       }
@@ -194,8 +204,16 @@ class _PaywallSheetState extends State<PaywallSheet> {
       _busy = true;
       _errorMessage = null;
     });
+    debugPrint('[paywall] restore_purchases_started');
     try {
       final restored = await RevenuecatService.instance.restorePurchases();
+      if (!mounted) return;
+      // P0 (2026-07-10) — TOUJOURS réconcilier le pass mesuré backend après restore
+      // (RC transfer / already subscribed / reinstall), même si restored=false :
+      // l'entitlement peut être actif sans "restauration" au sens RC.
+      debugPrint('[paywall] restore done ($restored) → purchases_sync_started');
+      await StatusService().syncPurchases();
+      debugPrint('[paywall] purchases_sync_result (post-restore)');
       if (!mounted) return;
       if (restored) {
         Navigator.of(context).pop(true);
