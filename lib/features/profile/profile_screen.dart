@@ -1100,15 +1100,26 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
       duration: const Duration(seconds: 2),
     ));
     final userId = Supabase.instance.client.auth.currentUser?.id;
-    // BUG 3 — le restore doit TOUJOURS produire un résultat VISIBLE et HONNÊTE.
-    // Autorité = le backend /purchases/sync (reconstruit le pass mesuré), pas le bool RC.
+    debugPrint('[RESTORE][START] supabase_user_id=$userId rc_app_user_id=$userId '
+        'rc_configured=${RevenuecatService.instance.isConfigured}');
+    // BUG 3 — le restore doit TOUJOURS produire un résultat VISIBLE et HONNÊTE, MÊME si le
+    // SDK RC pend ou si l'écran est démonté. Autorité = le backend /purchases/sync (reconstruit
+    // le pass mesuré), pas le bool RC.
     RestoreOutcome outcome = RestoreOutcome.failed;
     try {
       if (userId != null) {
         await RevenuecatService.instance.ensureConfigured(userId: userId);
       }
-      await RevenuecatService.instance.restorePurchases();
-      final sync = await StatusService().syncPurchases();
+      // Hardening : restorePurchases() n'a AUCUN timeout SDK → un hang bloquerait sync +
+      // refresh + snackbar terminal (« Restoring… » sans fin, symptôme device). Le timeout
+      // convertit le hang en TimeoutException → catch → outcome=failed → terminal GARANTI.
+      await RevenuecatService.instance
+          .restorePurchases()
+          .timeout(const Duration(seconds: 15));
+      final sync = await StatusService().syncPurchases().timeout(
+            const Duration(seconds: 12),
+            onTimeout: () => const <String, dynamic>{},
+          );
       outcome = restoreOutcomeFromSync(sync);
       debugPrint('[PURCHASE-SYNC] restore(profile) outcome=$outcome');
     } catch (e) {
@@ -1116,17 +1127,25 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
       debugPrint('[PURCHASE-SYNC] restore(profile) failed: $e');
     }
     if (mounted) await ref.read(meStatusProvider.notifier).refresh();
-    if (!mounted) return;
     final String msg = switch (outcome) {
       RestoreOutcome.restored => l10n.stRestoreDone,
       RestoreOutcome.activeNoSpaces => l10n.stRestoreActiveNoSpaces,
       RestoreOutcome.noneFound => l10n.stRestoreNoneFound,
       RestoreOutcome.failed => l10n.stRestoreFailed,
     };
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-      content: Text(msg),
-      duration: const Duration(seconds: 3),
-    ));
+    // Terminal GARANTI : remplacer « Restoring… » quoi qu'il arrive, via le messenger CAPTURÉ
+    // (racine app, avant tout await) — pas via context re-résolu qui exige mounted. Best-effort
+    // si l'app est passée en fond (messenger défunt → avalé, cas tracé par [RESTORE][OUTCOME]).
+    try {
+      messenger?.showSnackBar(SnackBar(
+        content: Text(msg),
+        duration: const Duration(seconds: 3),
+      ));
+    } catch (_) {/* messenger défunt — cas tracé ci-dessous */}
+    debugPrint('[RESTORE][OUTCOME] outcome=$outcome snackbar_shown=${messenger != null} '
+        'mounted=$mounted '
+        'final_access_source=${mounted ? ref.read(meStatusProvider)?.accessSource : null} '
+        'final_total_spaces=${mounted ? ref.read(meStatusProvider)?.availableCredits : null}');
   }
 
   /// BUG4 — "Valid until {date}" localisé pour un pass actif, ou null si absent/illisible.

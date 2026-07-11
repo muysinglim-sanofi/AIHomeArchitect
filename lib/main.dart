@@ -35,6 +35,14 @@ Future<void> main() async {
   // jour perdrait son user_id au 1er boot). Fail-safe : no-op en cas d'erreur.
   await KeychainLocalStorage.migrateLegacySessionIfNeeded(supabaseUrl);
 
+  // [IDENTITY][KEYCHAIN_BEFORE_SUPABASE] — la session Keychain est-elle présente AVANT que
+  // Supabase la restaure ? Au reinstall iOS, has_session=true prouve la survie du Keychain ;
+  // false = le Keychain n'a PAS survécu (contredit l'hypothèse Approche 2 → BUG 4 non résolu).
+  final kcSession = await KeychainLocalStorage().accessToken();
+  debugPrint('[IDENTITY][KEYCHAIN_BEFORE_SUPABASE] '
+      'has_session=${kcSession != null && kcSession.isNotEmpty} '
+      'session_length=${kcSession?.length ?? 0}');
+
   // KEPT before runApp in BOTH modes: Supabase.instance must exist when App /
   // providers (meStatusProvider, etc.) build, and it's local/fast (~<200ms).
   // BUG 4 — la session est persistée dans le Keychain (survit au reinstall iOS) → user_id
@@ -46,6 +54,14 @@ Future<void> main() async {
     authOptions: FlutterAuthClientOptions(localStorage: KeychainLocalStorage()),
   );
   bootLog(bootSw, 'Supabase.initialize');
+
+  // [IDENTITY][SUPABASE_AFTER_INIT] — identité résolue par setInitialSession (restore Keychain).
+  // Un NOUVEAU user_id + is_anonymous=true au reinstall (alors que le Keychain avait une session)
+  // = refresh_token rejeté non-retryable → session détruite → BUG 4 se matérialise.
+  final sbAuth = Supabase.instance.client.auth;
+  debugPrint('[IDENTITY][SUPABASE_AFTER_INIT] '
+      'current_session=${sbAuth.currentSession != null} '
+      'user_id=${sbAuth.currentUser?.id} is_anonymous=${sbAuth.currentUser?.isAnonymous}');
 
   if (!FeatureFlags.fastBoot) {
     // ── LEGACY pre-runApp chain (rollback path; today's behaviour, minus the

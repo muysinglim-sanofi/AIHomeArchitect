@@ -206,16 +206,24 @@ class _PaywallSheetState extends State<PaywallSheet> {
     });
     debugPrint('[paywall] restore_purchases_started');
     try {
-      await RevenuecatService.instance.restorePurchases();
+      // Hardening : restorePurchases() n'a AUCUN timeout SDK → un hang laisserait le spinner
+      // infini. Le timeout tombe dans catch → pwErrFailed, et le finally retire _busy.
+      await RevenuecatService.instance
+          .restorePurchases()
+          .timeout(const Duration(seconds: 15));
       if (!mounted) return;
       // BUG 3 — l'AUTORITÉ est le backend /purchases/sync (reconstruit le pass mesuré),
       // pas le bool RC. On décide un résultat HONNÊTE et distinct depuis l'état réel :
       //   restored (pass mesuré) → fermer, spaces dispo ;
       //   activeNoSpaces (abo actif, renouvellement) → message clair, PAS de boucle paywall ;
       //   noneFound → « aucun achat » ; failed → réessayer.
-      final sync = await StatusService().syncPurchases();
+      final sync = await StatusService().syncPurchases().timeout(
+            const Duration(seconds: 12),
+            onTimeout: () => const <String, dynamic>{},
+          );
       final RestoreOutcome outcome = restoreOutcomeFromSync(sync);
       debugPrint('[PURCHASE-SYNC] restore(paywall) outcome=$outcome');
+      debugPrint('[RESTORE][OUTCOME] surface=paywall outcome=$outcome mounted=$mounted');
       if (!mounted) return;
       switch (outcome) {
         case RestoreOutcome.restored:
@@ -248,6 +256,9 @@ class _PaywallSheetState extends State<PaywallSheet> {
         _busy = false;
         _errorMessage = l10n.pwErrFailed;
       });
+    } finally {
+      // Filet : le spinner ne reste JAMAIS bloqué (hang→timeout→catch, ou early-return).
+      if (mounted && _busy) setState(() => _busy = false);
     }
   }
 

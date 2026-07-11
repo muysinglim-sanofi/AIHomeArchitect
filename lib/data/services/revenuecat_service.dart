@@ -154,6 +154,13 @@ class RevenuecatService {
     debugPrint(
       '[RevenuecatService] configured — user=$userId platform=${Platform.operatingSystem}',
     );
+    // [IDENTITY][RC_AFTER_CONFIG] — l'appUserID RC DOIT == user_id Supabase (D6). Un mismatch
+    // expliquerait un restore_required chronique (l'achat suit un autre id que le user courant).
+    try {
+      final appUserId = await Purchases.appUserID;
+      debugPrint('[IDENTITY][RC_AFTER_CONFIG] app_user_id=$appUserId '
+          'expected_user_id=$userId match=${appUserId == userId} configured=$_configured');
+    } catch (_) {/* best-effort */}
   }
 
   /// FAST_BOOT — idempotent + awaitable configure. The boot path calls this
@@ -221,6 +228,14 @@ class RevenuecatService {
     }
     final info = await Purchases.restorePurchases();
     final active = info.entitlements.active[kPremiumEntitlement];
+    // [RESTORE][RC_RESULT] — le CustomerInfo n'existe QUE ici (les call-sites jettent la
+    // valeur). Trace ce que RC voit réellement : entitlement, produit, uid d'origine
+    // (détecte un achat sous un ANCIEN user_id = RC transfer), expiration, abos actifs.
+    debugPrint('[RESTORE][RC_RESULT] entitlement_active=${active != null} '
+        'product_id=${active?.productIdentifier} '
+        'original_app_user_id=${info.originalAppUserId} '
+        'latest_expiration=${active?.expirationDate ?? info.latestExpirationDate} '
+        'active_subscriptions=${info.activeSubscriptions}');
     return active != null;
   }
 
