@@ -1423,6 +1423,57 @@ def _pass_still_active(expires_iso: "str | None") -> bool:
         return False
 
 
+async def _read_latest_pass_ends_at(user_id: str) -> "str | None":
+    """BUG 3 (2026-07-11) — READ-ONLY : ends_at du DERNIER pass connu de l'user,
+    N'IMPORTE QUEL statut/fenêtre. Non-null = un abonnement MESURÉ a déjà existé.
+
+    La projection `billing_reproject_wallet` met `active_pass_id = NULL` dès que la
+    fenêtre du pass est lapsée (renouvellement pas encore projeté) → le snapshot wallet
+    ne distingue pas « abo actif dont la fenêtre a lapsé » de « rôle sans AUCUN pass ».
+    Cette lecture indexée tranche : pass ayant existé → renouvellement en attente
+    (0 spaces · renews, JAMAIS restore) ; aucun pass → vrai restore_required.
+    Best-effort : une erreur DB ne casse jamais /me/status."""
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("passes")
+            .select("ends_at")
+            .eq("user_id", user_id)
+            .order("ends_at", desc=True)
+            .limit(1).execute()
+        )
+        rows = getattr(res, "data", None) or []
+        return rows[0].get("ends_at") if rows else None
+    except Exception as exc:  # noqa: BLE001 — l'affichage ne bloque jamais
+        log.warning("[me/status] latest-pass read failed user=%s err=%s", user_id[:8], exc)
+        return None
+
+
+def _classify_access_source(
+    *, is_admin: bool, has_active_pass: bool, promo_active: bool,
+    has_premium_role: bool, ever_had_pass: bool,
+) -> str:
+    """BUG 3 (2026-07-11) — VÉRITÉ de génération, PURE (testable sans DB).
+    Priorité : admin > pass (mesuré) > promo > pass-renewing > restore_required > free.
+
+    Nuance clé : un rôle premium (entitlement RC actif) SANS pass actif se scinde en
+    deux cas radicalement différents pour l'UX :
+      • un pass a DÉJÀ existé (`ever_had_pass`) → la fenêtre a lapsé = renouvellement
+        en attente → 'pass' (0 spaces · renews). Un restore ne créerait RIEN de plus.
+      • aucun pass mesuré → 'restore_required' (restore/sync réel utile).
+    """
+    if is_admin:
+        return "admin"
+    if has_active_pass:
+        return "pass"
+    if promo_active:
+        return "promo"
+    if has_premium_role and ever_had_pass:
+        return "pass"          # abo actif, fenêtre lapsée → 0 spaces · renews
+    if has_premium_role:
+        return "restore_required"
+    return "free"
+
+
 @app.get("/me/status")
 async def get_me_status(
     current_user: CurrentUser = Depends(get_current_user),
@@ -1483,20 +1534,28 @@ async def get_me_status(
         _promo_credits = 0
         _total_credits = _gate.total_credits
 
-    # access_source = la VÉRITÉ de génération (même autorité que le gate) :
-    #   admin > pass (mesuré) > promo > restore_required (rôle premium SANS pass) > free.
-    if is_admin:
-        _access_source = "admin"
-    elif _has_active_pass:
-        _access_source = "pass"          # weekly/annual mesuré en crédits
-    elif d.promo_unlimited_active or d.promo_generations_remaining > 0:
-        _access_source = "promo"
-    elif _has_premium_role:
-        # Rôle premium (abo actif signalé par RC) mais AUCUN pass mesuré → INCOHÉRENT :
-        # l'user doit restaurer/synchroniser son achat. JAMAIS "Premium active".
-        _access_source = "restore_required"
-    else:
-        _access_source = "free"
+    # BUG 3 (2026-07-11) — un rôle premium SANS pass actif : distinguer « abo actif dont
+    # la fenêtre de pass a lapsé » (renouvellement pas encore projeté → 0 spaces · renews,
+    # JAMAIS restore) du vrai « rôle sans aucun pass mesuré » (restore/sync réel). Une
+    # seule lecture indexée de `passes`, UNIQUEMENT dans ce cas ambigu (coût nul sinon).
+    _promo_active = d.promo_unlimited_active or d.promo_generations_remaining > 0
+    _pass_renews_at = _pass_expires_at if _has_active_pass else None
+    _ever_had_pass = False
+    if _has_premium_role and not is_admin and not _has_active_pass and not _promo_active:
+        _latest_ends = await _read_latest_pass_ends_at(current_user.user_id)
+        _ever_had_pass = _latest_ends is not None
+        if _ever_had_pass:
+            _pass_renews_at = _latest_ends  # ancre d'affichage « renews {date} »
+
+    # access_source = la VÉRITÉ de génération (même autorité que le gate), PURE/testable.
+    _access_source = _classify_access_source(
+        is_admin=is_admin, has_active_pass=_has_active_pass, promo_active=_promo_active,
+        has_premium_role=_has_premium_role, ever_had_pass=_ever_had_pass,
+    )
+    if _has_premium_role and not is_admin and not _has_active_pass and not _promo_active:
+        log.info("[me/status] premium role, no active pass → access_source=%s "
+                 "ever_had_pass=%s renews_at=%s user=%s", _access_source,
+                 _ever_had_pass, _pass_renews_at, current_user.user_id[:8])
 
     # remaining_free_generations = bucket free du LEDGER (source unique), plus usage_log.
     _rfg = None if unlimited else (_free_credits if _free_credits is not None else 0)
@@ -1531,6 +1590,9 @@ async def get_me_status(
         "available_credits": _available_credits,
         "active_pass_id": _active_pass_id,
         "pass_expires_at": _pass_expires_at,
+        # BUG 3 (2026-07-11) — ancre d'affichage « renews {date} » : expiry du pass actif,
+        # ou (fenêtre lapsée) ends_at du dernier pass connu. null pour free/promo/admin.
+        "pass_renews_at": _pass_renews_at,
         "has_active_pass": _has_active_pass,
         "access_source": _access_source,
         # P0 bloc (b) — compteur "Redesigns" (générations réussies, source unique backend).
