@@ -1720,6 +1720,29 @@ async def claim_stats(request: Request):
     return {"counters": dict(CLAIM_COUNTERS), "total": sum(CLAIM_COUNTERS.values())}
 
 
+@app.post("/debug/client-event")
+async def post_client_debug_event(
+    payload: dict = Body(...),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """TEMPORAIRE (debug device BUG 3/4) — remonte des ÉVÉNEMENTS frontend NON SENSIBLES vers
+    les logs Render (l'utilisateur n'a pas de Mac pour Console.app). Gaté par l'env
+    CLIENT_DEBUG_ENABLED=1 (no-op sinon) + AUTH requise. AUCUN secret n'est loggé : le frontend
+    n'envoie que des booléens/ids/états (jamais access/refresh token, receipt Apple, clé RC,
+    session brute). Cap défensif sur la taille. À RETIRER une fois BUG 3/4 fermés."""
+    if os.environ.get("CLIENT_DEBUG_ENABLED", "0") != "1":
+        return {"ok": False, "disabled": True}
+    event = str(payload.get("event", "?"))[:64]
+    try:
+        import json as _json  # noqa: PLC0415
+        blob = _json.dumps(payload.get("data"), ensure_ascii=False, default=str)[:1400]
+    except Exception:  # noqa: BLE001
+        blob = str(payload.get("data"))[:1400]
+    log.info("[CLIENT-DEBUG] event=%s user=%s ts=%s data=%s",
+             event, current_user.user_id, payload.get("timestamp"), blob)
+    return {"ok": True}
+
+
 @app.post("/purchases/sync")
 async def purchases_sync(
     current_user: CurrentUser = Depends(get_current_user),
