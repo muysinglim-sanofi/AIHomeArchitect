@@ -313,6 +313,12 @@ const Map<String, String> frTranslations = {
   'stRestoreRequired': "Restaurer l'achat",
   'stRestoreRequiredSub': "Restaurez votre abonnement pour continuer",
   'stRestoring': "Restauration de votre achat…",
+  'stPassNoSpaces': '0 espace restant',
+  'stPassRenews': 'Renouvellement le {date}',
+  'stRestoreDone': 'Achat restauré',
+  'stRestoreActiveNoSpaces': 'Abonnement actif — les espaces se rechargent au renouvellement',
+  'stRestoreNoneFound': 'Aucun abonnement actif trouvé sur ce compte',
+  'stRestoreFailed': 'Restauration impossible. Veuillez réessayer.',
 
   // Chat reupload / design-direction sheet
   'chatPleaseUpload': "Veuillez d'abord importer une photo source.",

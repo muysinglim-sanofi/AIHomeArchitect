@@ -304,6 +304,12 @@ const Map<String, String> enTranslations = {
   'stRestoreRequired': 'Restore purchase',
   'stRestoreRequiredSub': 'Restore your subscription to continue',
   'stRestoring': 'Restoring your purchase…',
+  'stPassNoSpaces': '0 spaces left',
+  'stPassRenews': 'Renews {date}',
+  'stRestoreDone': 'Purchase restored',
+  'stRestoreActiveNoSpaces': 'Subscription active — spaces refresh at renewal',
+  'stRestoreNoneFound': 'No active subscription found on this account',
+  'stRestoreFailed': 'Couldn\'t restore. Please try again.',
 
   // Chat reupload / design-direction sheet
   'chatPleaseUpload': 'Please upload a source photo first.',

@@ -360,6 +360,16 @@ class AppLocalizations {
   String get stRestoreRequired => _get('stRestoreRequired');
   String get stRestoreRequiredSub => _get('stRestoreRequiredSub');
   String get stRestoring => _get('stRestoring');
+  // BUG 3 — abo actif dont la fenêtre de pass a lapsé/épuisé : « 0 spaces · renews {date} »,
+  // JAMAIS un restore/achat trompeur.
+  String get stPassNoSpaces => _get('stPassNoSpaces');
+  String stPassRenews(String date) =>
+      _get('stPassRenews').replaceAll('{date}', date);
+  // BUG 3 — résultat HONNÊTE du restore (4 états mutuellement exclusifs).
+  String get stRestoreDone => _get('stRestoreDone');
+  String get stRestoreActiveNoSpaces => _get('stRestoreActiveNoSpaces');
+  String get stRestoreNoneFound => _get('stRestoreNoneFound');
+  String get stRestoreFailed => _get('stRestoreFailed');
 
   // ── Chat reupload / design-direction sheet ────────────────────────────────
   String get chatPleaseUpload => _get('chatPleaseUpload');

@@ -42,6 +42,12 @@ class MeStatus {
 
   /// Expiration du pass actif (ISO-8601), ou null.
   final String? passExpiresAt;
+
+  /// BUG 3 — ancre d'affichage « renews {date} » : expiry du pass actif, ou (fenêtre
+  /// lapsée, renouvellement en attente) ends_at du dernier pass connu. null pour
+  /// free/promo/admin. Sert à afficher « 0 spaces · renews {date} » sans jamais
+  /// proposer un restore/achat trompeur à un abonné dont la fenêtre s'est renouvelée.
+  final String? passRenewsAt;
   final bool hasActivePass;
 
   /// Source de vérité de la CAPACITÉ de génération (même autorité que le backend
@@ -73,6 +79,7 @@ class MeStatus {
     this.availableCredits = 0,
     this.activePassId,
     this.passExpiresAt,
+    this.passRenewsAt,
     this.hasActivePass = false,
     this.accessSource = 'free',
     this.gateReason = '',
@@ -110,6 +117,7 @@ class MeStatus {
         availableCredits: (j['available_credits'] as num?)?.toInt() ?? 0,
         activePassId: j['active_pass_id'] as String?,
         passExpiresAt: j['pass_expires_at'] as String?,
+        passRenewsAt: j['pass_renews_at'] as String?,
         hasActivePass: j['has_active_pass'] == true,
         accessSource: (j['access_source'] as String?) ?? 'free',
         gateReason: (j['gate_reason'] as String?) ?? '',
@@ -135,6 +143,7 @@ class MeStatus {
         'available_credits': availableCredits,
         'active_pass_id': activePassId,
         'pass_expires_at': passExpiresAt,
+        'pass_renews_at': passRenewsAt,
         'has_active_pass': hasActivePass,
         'access_source': accessSource,
         'gate_reason': gateReason,
@@ -177,18 +186,53 @@ class StatusService {
     }
   }
 
-  /// POST /purchases/sync — reconcile backend entitlement from RevenueCat when
-  /// the webhook is delayed/missed. Returns true iff the backend now sees
-  /// premium. Never throws (safe to fire-and-forget).
-  Future<bool> syncPurchases() async {
+  /// POST /purchases/sync — reconcile backend entitlement from RevenueCat when the
+  /// webhook is delayed/missed. BUG 3 : renvoie la MAP COMPLÈTE du backend (plus un
+  /// bool réducteur) pour que le Restore affiche un résultat HONNÊTE et distinct :
+  ///   {synced, is_premium, has_measurable_pass, state, expires_at, grant_status, reason}
+  /// Never throws (safe to fire-and-forget) → renvoie {} en cas d'erreur.
+  Future<Map<String, dynamic>> syncPurchases() async {
     try {
       final r = await _dio.post('/purchases/sync');
       final data = r.data;
-      if (data is Map<String, dynamic>) return data['is_premium'] == true;
-      return false;
+      if (data is Map<String, dynamic>) {
+        debugPrint('[PURCHASE-SYNC] synced=${data['synced']} '
+            'is_premium=${data['is_premium']} '
+            'has_measurable_pass=${data['has_measurable_pass']} '
+            'state=${data['state']} reason=${data['reason']} '
+            'grant_status=${data['grant_status']} expires_at=${data['expires_at']}');
+        return data;
+      }
+      return const <String, dynamic>{};
     } catch (e) {
-      debugPrint('[StatusService] syncPurchases failed: $e');
-      return false;
+      debugPrint('[PURCHASE-SYNC] failed: $e');
+      return const <String, dynamic>{};
     }
   }
+}
+
+/// BUG 3 — résultat NORMALISÉ d'un restore/sync, pour un message honnête et unique
+/// côté UI (profil + paywall). Dérivé de la map /purchases/sync.
+enum RestoreOutcome {
+  /// Pass MESURÉ reconstruit (spaces disponibles) — restore réussi.
+  restored,
+
+  /// Abonnement actif signalé par RC mais aucun pass mesurable pour l'instant
+  /// (renouvellement / data store insuffisante) → « actif, se recharge au renouvellement ».
+  activeNoSpaces,
+
+  /// Aucun abonnement/achat actif trouvé sur ce compte store.
+  noneFound,
+
+  /// Erreur réseau/store — réessayer.
+  failed,
+}
+
+RestoreOutcome restoreOutcomeFromSync(Map<String, dynamic> m) {
+  if (m.isEmpty) return RestoreOutcome.failed;
+  final bool isPremium = m['is_premium'] == true;
+  final bool measurable = m['has_measurable_pass'] == true;
+  if (isPremium && measurable) return RestoreOutcome.restored;
+  if (isPremium && !measurable) return RestoreOutcome.activeNoSpaces;
+  return RestoreOutcome.noneFound;
 }

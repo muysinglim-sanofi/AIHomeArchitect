@@ -1100,14 +1100,33 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
       duration: const Duration(seconds: 2),
     ));
     final userId = Supabase.instance.client.auth.currentUser?.id;
+    // BUG 3 — le restore doit TOUJOURS produire un résultat VISIBLE et HONNÊTE.
+    // Autorité = le backend /purchases/sync (reconstruit le pass mesuré), pas le bool RC.
+    RestoreOutcome outcome = RestoreOutcome.failed;
     try {
       if (userId != null) {
         await RevenuecatService.instance.ensureConfigured(userId: userId);
       }
       await RevenuecatService.instance.restorePurchases();
-      await StatusService().syncPurchases();
-    } catch (_) {/* best-effort — le refetch reflète la vérité backend */}
-    if (mounted) ref.read(meStatusProvider.notifier).refresh();
+      final sync = await StatusService().syncPurchases();
+      outcome = restoreOutcomeFromSync(sync);
+      debugPrint('[PURCHASE-SYNC] restore(profile) outcome=$outcome');
+    } catch (e) {
+      outcome = RestoreOutcome.failed;
+      debugPrint('[PURCHASE-SYNC] restore(profile) failed: $e');
+    }
+    if (mounted) await ref.read(meStatusProvider.notifier).refresh();
+    if (!mounted) return;
+    final String msg = switch (outcome) {
+      RestoreOutcome.restored => l10n.stRestoreDone,
+      RestoreOutcome.activeNoSpaces => l10n.stRestoreActiveNoSpaces,
+      RestoreOutcome.noneFound => l10n.stRestoreNoneFound,
+      RestoreOutcome.failed => l10n.stRestoreFailed,
+    };
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+      content: Text(msg),
+      duration: const Duration(seconds: 3),
+    ));
   }
 
   /// BUG4 — "Valid until {date}" localisé pour un pass actif, ou null si absent/illisible.
@@ -1117,6 +1136,18 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
       final DateTime dt = DateTime.parse(iso).toLocal();
       final String date = MaterialLocalizations.of(context).formatShortDate(dt);
       return context.l10n.stPassValidUntil(date);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// BUG 3 — "Renews {date}" localisé (abo actif à 0 space), ou null si absent/illisible.
+  String? _formatPassRenews(BuildContext context, String? iso) {
+    if (iso == null || iso.isEmpty) return null;
+    try {
+      final DateTime dt = DateTime.parse(iso).toLocal();
+      final String date = MaterialLocalizations.of(context).formatShortDate(dt);
+      return context.l10n.stPassRenews(date);
     } catch (_) {
       return null;
     }
@@ -1152,10 +1183,19 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
     } else if (src == 'pass') {
       // Store pass (Apple/Google) — MEASURED credits, never "unlimited".
       title = l10n.stPremiumActive;
-      final String credits =
-          l10n.stPassCreditsRemaining(status.availableCredits);
-      final String? until = _formatPassExpiry(context, status.passExpiresAt);
-      subtitle = until == null ? credits : '$credits · $until';
+      if (status.availableCredits <= 0) {
+        // BUG 3 — abo actif mais fenêtre épuisée/lapsée → « 0 spaces · renews {date} ».
+        // JAMAIS un restore/re-achat trompeur : l'user paie déjà, il attend le renouvellement.
+        final String? renews = _formatPassRenews(context, status.passRenewsAt);
+        subtitle = renews == null
+            ? l10n.stPassNoSpaces
+            : '${l10n.stPassNoSpaces} · $renews';
+      } else {
+        final String credits =
+            l10n.stPassCreditsRemaining(status.availableCredits);
+        final String? until = _formatPassExpiry(context, status.passExpiresAt);
+        subtitle = until == null ? credits : '$credits · $until';
+      }
     } else if (src == 'promo' && status.promoUnlimitedActive) {
       // Coupon / VIP — unlimited.
       title = l10n.promoAccessUnlimited;
@@ -1175,21 +1215,18 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
       subtitle = l10n.freeGenerationsLeft(status.remaining);
     }
 
-    // A store pass with 0 credits becomes tappable again (top-up via paywall).
-    final bool passExhausted = src == 'pass' && status.availableCredits <= 0;
-
-    // Tap : restore_required → restaurer/synchroniser l'achat ; free / pass épuisé
-    // → paywall ; entitled avec capacité → rien à upseller.
+    // BUG 3 — Tap : restore_required → restaurer/synchroniser l'achat ; entitled
+    // (admin/pass/promo) → JAMAIS de paywall, MÊME à 0 space (l'user paie déjà ; le
+    // subtitle dit « renews {date} » — le renvoyer au paywall = re-achat trompeur) ;
+    // free → paywall.
     final VoidCallback? onTap;
     if (needsRestore) {
       onTap = _restorePurchase;
-    } else if (entitled && !passExhausted) {
+    } else if (entitled) {
       onTap = null;
     } else {
       onTap = () => _openPaywall(
-            (passExhausted || status.remaining <= 0)
-                ? PaywallTrigger.quota
-                : PaywallTrigger.locked,
+            status.remaining <= 0 ? PaywallTrigger.quota : PaywallTrigger.locked,
           );
     }
 
@@ -1242,7 +1279,7 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
               ],
             ),
           ),
-          if (entitled && !passExhausted)
+          if (entitled)
             const Icon(Icons.verified, color: AppColors.accent, size: 20)
           else
             const Icon(Icons.chevron_right,

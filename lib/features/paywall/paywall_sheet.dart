@@ -206,22 +206,35 @@ class _PaywallSheetState extends State<PaywallSheet> {
     });
     debugPrint('[paywall] restore_purchases_started');
     try {
-      final restored = await RevenuecatService.instance.restorePurchases();
+      await RevenuecatService.instance.restorePurchases();
       if (!mounted) return;
-      // P0 (2026-07-10) — TOUJOURS réconcilier le pass mesuré backend après restore
-      // (RC transfer / already subscribed / reinstall), même si restored=false :
-      // l'entitlement peut être actif sans "restauration" au sens RC.
-      debugPrint('[paywall] restore done ($restored) → purchases_sync_started');
-      await StatusService().syncPurchases();
-      debugPrint('[paywall] purchases_sync_result (post-restore)');
+      // BUG 3 — l'AUTORITÉ est le backend /purchases/sync (reconstruit le pass mesuré),
+      // pas le bool RC. On décide un résultat HONNÊTE et distinct depuis l'état réel :
+      //   restored (pass mesuré) → fermer, spaces dispo ;
+      //   activeNoSpaces (abo actif, renouvellement) → message clair, PAS de boucle paywall ;
+      //   noneFound → « aucun achat » ; failed → réessayer.
+      final sync = await StatusService().syncPurchases();
+      final RestoreOutcome outcome = restoreOutcomeFromSync(sync);
+      debugPrint('[PURCHASE-SYNC] restore(paywall) outcome=$outcome');
       if (!mounted) return;
-      if (restored) {
-        Navigator.of(context).pop(true);
-      } else {
-        setState(() {
-          _busy = false;
-          _errorMessage = l10n.pwErrNoRestore;
-        });
+      switch (outcome) {
+        case RestoreOutcome.restored:
+          Navigator.of(context).pop(true);
+        case RestoreOutcome.activeNoSpaces:
+          setState(() {
+            _busy = false;
+            _errorMessage = l10n.stRestoreActiveNoSpaces;
+          });
+        case RestoreOutcome.noneFound:
+          setState(() {
+            _busy = false;
+            _errorMessage = l10n.pwErrNoRestore;
+          });
+        case RestoreOutcome.failed:
+          setState(() {
+            _busy = false;
+            _errorMessage = l10n.stRestoreFailed;
+          });
       }
     } on RevenuecatNotConfiguredException {
       if (!mounted) return;

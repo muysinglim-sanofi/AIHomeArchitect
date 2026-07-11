@@ -301,6 +301,12 @@ const Map<String, String> kmTranslations = {
   'stRestoreRequired': 'ស្ដារ​ការ​ទិញ',
   'stRestoreRequiredSub': 'ស្ដារ​ការ​ជាវ​របស់​អ្នក​ដើម្បី​បន្ត',
   'stRestoring': 'កំពុង​ស្ដារ​ការ​ទិញ…',
+  'stPassNoSpaces': 'នៅសល់ 0 កន្លែង',
+  'stPassRenews': 'បន្ត​ថ្មី​នៅ {date}',
+  'stRestoreDone': 'បាន​ស្ដារ​ការ​ទិញ',
+  'stRestoreActiveNoSpaces': 'ការ​ជាវ​សកម្ម — កន្លែង​នឹង​បំពេញ​ឡើងវិញ​ពេល​បន្ត',
+  'stRestoreNoneFound': 'រក​មិន​ឃើញ​ការ​ជាវ​សកម្ម​នៅ​លើ​គណនី​នេះ',
+  'stRestoreFailed': 'មិន​អាច​ស្ដារ​បាន​ទេ។ សូម​ព្យាយាម​ម្ដង​ទៀត។',
 
   // Chat reupload / design-direction sheet — KHMER V1
   'chatPleaseUpload': 'សូម​ផ្ទុក​រូបថត​ដើម​ជា​មុន​សិន។',
