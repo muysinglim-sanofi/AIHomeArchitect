@@ -4521,10 +4521,13 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
   }
 
   void _apply() {
-    // chat consumes (roomType, style, aiDecide, surprise) then the sheet pops.
+    // BUG 2 (P0 bloc b) — POP le sheet AVANT de déléguer la génération. Le preflight
+    // (deny en cache, ex. reupload à 0 crédit) pousse la PaywallSheet de façon SYNCHRONE ;
+    // si le pop suivait, il dépilerait le paywall (route topmost) au lieu du sheet →
+    // silence total. Pop d'abord = le paywall arrive au sommet d'une pile propre et reste.
+    Navigator.of(context).pop();
     widget.onDirectionChanged(
         _selectedRoomType, _selectedStyle, _aiDecide, _signatureSelected);
-    Navigator.of(context).pop();
   }
 
   // #8b — Ayden Decide free unlock (mirror of upload screen + aydenDecideFree).

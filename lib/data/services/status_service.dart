@@ -54,6 +54,10 @@ class MeStatus {
   /// | no_active_pass | insufficient_credits.
   final String gateReason;
 
+  /// P0 bloc (b) — nombre de générations RÉUSSIES (V1 + refine + switch + reupload), source
+  /// du compteur "Redesigns" du profil. Backend = COUNT generation_intents SUCCEEDED (exact).
+  final int generationsSucceeded;
+
   const MeStatus({
     required this.isPremium,
     required this.isAdmin,
@@ -72,6 +76,7 @@ class MeStatus {
     this.hasActivePass = false,
     this.accessSource = 'free',
     this.gateReason = '',
+    this.generationsSucceeded = 0,
   });
 
   /// True quand l'app a un rôle premium (abo actif) mais AUCUN pass mesuré côté
@@ -108,6 +113,8 @@ class MeStatus {
         hasActivePass: j['has_active_pass'] == true,
         accessSource: (j['access_source'] as String?) ?? 'free',
         gateReason: (j['gate_reason'] as String?) ?? '',
+        generationsSucceeded:
+            (j['generations_succeeded'] as num?)?.toInt() ?? 0,
       );
 
   /// Exact mirror of [fromJson] — lets meStatusProvider cache the last
@@ -131,6 +138,7 @@ class MeStatus {
         'has_active_pass': hasActivePass,
         'access_source': accessSource,
         'gate_reason': gateReason,
+        'generations_succeeded': generationsSucceeded,
       };
 }
 

@@ -34,9 +34,12 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final currentLocale = ref.watch(localeProvider);
-    // P0 bloc (b) H — "Redesigns" = générations RÉUSSIES uniquement (cf. countSuccessfulRedesigns).
-    final redesignCount = countSuccessfulRedesigns(ref.watch(sessionProvider));
     final meStatus = ref.watch(meStatusProvider); // Sprint 1B — admin entry gate
+    // P0 bloc (b) — "Redesigns" = générations RÉUSSIES (backend generations_succeeded : exact,
+    // V1+refine+switch+reupload). Fallback sur le comptage de sessions au cold-start (meStatus
+    // null) pour éviter un flash "0". countSuccessfulRedesigns reste (fallback + testé).
+    final redesignCount = meStatus?.generationsSucceeded ??
+        countSuccessfulRedesigns(ref.watch(sessionProvider));
 
     void show(Widget sheet) => showModalBottomSheet(
           context: context,
