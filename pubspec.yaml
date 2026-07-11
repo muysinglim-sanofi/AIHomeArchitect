@@ -46,6 +46,11 @@ dependencies:
   supabase_flutter: ^2.8.4
   shared_preferences: ^2.3.5
 
+  # BUG 4 (device-key, Approche 2) — persiste la session Supabase (anonyme) dans le
+  # Keychain iOS, qui SURVIT à la désinstallation/réinstallation (≠ SharedPreferences,
+  # wipé au reinstall). → user_id stable au reinstall = free/pass/RC-appUserID conservés.
+  flutter_secure_storage: ^9.2.4
+
   # Wave 5.17a — Identity Foundation. Apple Sign-In (mandated by App Store
   # Guideline 5.1.1(v) when offering third-party login) + Google Sign-In.
   # Both feed into Supabase Auth's anonymous-user-upgrade flow via

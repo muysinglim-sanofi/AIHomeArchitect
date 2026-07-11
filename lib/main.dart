@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'core/auth/keychain_local_storage.dart';
 import 'core/boot/app_boot.dart';
 import 'core/feature_flags.dart';
 import 'core/l10n/app_localizations.dart';
@@ -29,9 +30,21 @@ Future<void> main() async {
   final supabaseKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
   debugPrint('[DB] SUPABASE_URL loaded: ${supabaseUrl.isNotEmpty}');
 
+  // BUG 4 (device-key, Approche 2) — CONDITION 1 : migrer l'ancienne session
+  // SharedPreferences → Keychain AVANT initialize (sinon un user existant qui met à
+  // jour perdrait son user_id au 1er boot). Fail-safe : no-op en cas d'erreur.
+  await KeychainLocalStorage.migrateLegacySessionIfNeeded(supabaseUrl);
+
   // KEPT before runApp in BOTH modes: Supabase.instance must exist when App /
   // providers (meStatusProvider, etc.) build, and it's local/fast (~<200ms).
-  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseKey);
+  // BUG 4 — la session est persistée dans le Keychain (survit au reinstall iOS) → user_id
+  // stable → free/pass/RC-appUserID conservés. CONDITION 2 : la session est restaurée ICI,
+  // AVANT toute config RevenueCat (faite plus tard dans app_boot/splash).
+  await Supabase.initialize(
+    url: supabaseUrl,
+    anonKey: supabaseKey,
+    authOptions: FlutterAuthClientOptions(localStorage: KeychainLocalStorage()),
+  );
   bootLog(bootSw, 'Supabase.initialize');
 
   if (!FeatureFlags.fastBoot) {
