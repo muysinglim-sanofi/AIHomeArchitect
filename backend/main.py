@@ -1560,6 +1560,12 @@ async def get_me_status(
     # remaining_free_generations = bucket free du LEDGER (source unique), plus usage_log.
     _rfg = None if unlimited else (_free_credits if _free_credits is not None else 0)
 
+    # [IDENTITY][STATUS] — corrèle l'identité serveur avec les logs frontend [IDENTITY][*] :
+    # au reinstall, un free_remaining ré-ouvert à 3 pour un NOUVEAU user_id = ré-attribution du
+    # trial (BUG 4). Preuve directe côté backend, keyée sur le user_id courant.
+    log.info("[IDENTITY][STATUS] user=%s free_remaining=%s total_spaces=%s access_source=%s",
+             current_user.user_id, _rfg, _total_credits, _access_source)
+
     # P0 bloc (b) — "Redesigns" = générations RÉUSSIES (V1 + refine + switch + reupload) via
     # generation_intents SUCCEEDED (exact ; le comptage de SESSIONS sous-comptait les refines).
     from intent_observer import count_succeeded_intents  # noqa: PLC0415 — lazy
