@@ -1501,6 +1501,11 @@ async def get_me_status(
     # remaining_free_generations = bucket free du LEDGER (source unique), plus usage_log.
     _rfg = None if unlimited else (_free_credits if _free_credits is not None else 0)
 
+    # P0 bloc (b) — "Redesigns" = générations RÉUSSIES (V1 + refine + switch + reupload) via
+    # generation_intents SUCCEEDED (exact ; le comptage de SESSIONS sous-comptait les refines).
+    from intent_observer import count_succeeded_intents  # noqa: PLC0415 — lazy
+    _gens_succeeded = await count_succeeded_intents(current_user.user_id)
+
     return {
         # `is_premium` = FEATURES premium (all rooms/atmospheres/HD/no-watermark),
         # PAS "génération illimitée". La capacité de génération = can_generate.
@@ -1528,6 +1533,8 @@ async def get_me_status(
         "pass_expires_at": _pass_expires_at,
         "has_active_pass": _has_active_pass,
         "access_source": _access_source,
+        # P0 bloc (b) — compteur "Redesigns" (générations réussies, source unique backend).
+        "generations_succeeded": _gens_succeeded,
     }
 
 

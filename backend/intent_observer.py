@@ -599,6 +599,24 @@ async def observe_intent_end(
     return _ok
 
 
+async def count_succeeded_intents(user_id: str, *, supa=None) -> int:
+    """P0 bloc (b) — nombre de générations RÉUSSIES du user (V1 + refine + switch + reupload) :
+    COUNT(generation_intents WHERE user_id AND status='SUCCEEDED'). intent_id = PK déterministe
+    → 1 par génération logique, insensible aux retries/replays (le winner-path n'est pas ré-exécuté ;
+    un re-UPDATE frappe la MÊME ligne PK). Source de "Redesigns" (le comptage de SESSIONS sous-comptait
+    les refines : N refines dans 1 session = 1 seule session avec image). Best-effort LECTURE SEULE, fail-open → 0."""
+    supa = supa or _get_supa()
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("generation_intents")
+            .select("intent_id", count="exact")
+            .eq("user_id", user_id).eq("status", "SUCCEEDED").execute())
+        return getattr(res, "count", None) or 0
+    except Exception as exc:  # noqa: BLE001 — best-effort, ne casse jamais /me/status
+        log.warning("[INTENT-OBS] count_succeeded failed user=%s err=%s", user_id[:8], exc)
+        return 0
+
+
 async def get_intent_result_ref(intent_id: str, *, supa=None) -> Optional[dict]:
     """Lit le result_ref durable d'un intent (source de vérité du get-or-create refine).
     None si absent/erreur. Best-effort, LECTURE SEULE."""
