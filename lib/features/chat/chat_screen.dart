@@ -2450,7 +2450,30 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // #21 — superseded (a resume reconciliation already adopted the DB result,
       // or the user restarted): drop this completion so it can't append a
       // duplicate vision over the already-rebuilt timeline.
-      if (mySeq != _genSeq) return;
+      if (mySeq != _genSeq) {
+        // BUG 5 (P0) — CAPTURER la lignée AVANT de dropper (même geste que le bloc
+        // !mounted 2415-2429, fix 396b60c). Le reconcile a adopté l'image depuis la DB,
+        // mais la DB ne stocke NI le ledger `versions` NI room_type/structural_identity.
+        // Sans cette capture, le prochain SWITCH part avec versions='' + room=(none) →
+        // ledger_size=0 → le backend retombe en INCREMENTAL sur la source V1 (Warm Modern)
+        // au lieu d'appliquer la nouvelle atmosphère. On PORTE des champs déjà renvoyés
+        // par /generate (aucun payload/composer/DNA touché ; v1_image_impact=NONE). Pas de
+        // setState : la vision est déjà rendue par le reconcile → aucun rebuild/flicker.
+        final supVersions = result['versions'] as String?;
+        final supRoom = (result['room_type'] as String?)?.trim() ?? '';
+        if (supVersions != null && supVersions.isNotEmpty) {
+          _versions = supVersions;
+        }
+        _structuralIdentity = adoptStructuralIdentity(
+            _structuralIdentity,
+            result['structural_identity'] as String?,
+            result['structural_capture_disabled'] == true);
+        if (supRoom.isNotEmpty && _currentRoomType.trim().isEmpty) {
+          _currentRoomType = RoomTypeImages.enLabelForId(supRoom) ?? supRoom;
+        }
+        _persistSession();
+        return;
+      }
       // Wave 5.6c — user is still on the chat screen at completion; clear
       // any pending state for this session (result will render inline).
       pendingNotifier.clear(sessionIdForLifecycle);
