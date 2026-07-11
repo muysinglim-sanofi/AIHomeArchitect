@@ -96,6 +96,40 @@ g = run(billing.try_hold(user_id="u1", intent_id="z2", tier="premium", supa=_Mis
 check("9 RPC absente (PGRST202) → FAIL-CLOSED granted=false reason=atomic_hold_missing",
       (not g["granted"]) and g["reason"] == "atomic_hold_missing", g)
 
+print("\n=== BUG 1 · refine métré (try_hold + COMMIT/RELEASE terminal) ===")
+
+import os as _os
+_os.environ.pop("AYDEN_REFINE_BILLING", None)
+import refine.billing_hook as _bh
+check("10 refine_billing_enabled() défaut ON (env absent)", _bh.refine_billing_enabled())
+
+def _bucket(fs, pid="pA"):
+    return sum(int(r.get("available_delta") or 0)
+               for r in fs.tables.get("ledger_entries", []) if r.get("pass_id") == pid)
+
+# 11 refine SUCCESS : try_hold(pass) + apply_billing(SUCCEEDED) → HOLD(-1)+COMMIT(0) = net -1
+fs = FilterSupa(tables={"passes": [ap()], "ledger_entries": [G(30, "pA")]})
+run(billing.try_hold(user_id="u1", intent_id="ref1", tier="premium", supa=fs))
+run(billing.apply_billing_for_intent_transition(
+    intent_id="ref1", new_status="SUCCEEDED", user_id="u1", is_free=False, supa=fs))
+check("11 refine SUCCESS → pass débité net -1 (30→29) via COMMIT qui retrouve le HOLD",
+      _bucket(fs) == 29, _bucket(fs))
+
+# 12 refine FAIL : try_hold(pass) + apply_billing(FAILED) → HOLD(-1)+RELEASE(+1) = net 0 (refund)
+fs = FilterSupa(tables={"passes": [ap()], "ledger_entries": [G(30, "pA")]})
+run(billing.try_hold(user_id="u1", intent_id="ref2", tier="premium", supa=fs))
+run(billing.apply_billing_for_intent_transition(
+    intent_id="ref2", new_status="FAILED", user_id="u1", is_free=False, supa=fs))
+check("12 refine FAIL → RELEASE, solde inchangé (30) [refund]", _bucket(fs) == 30, _bucket(fs))
+
+# 13 refine deny (pass épuisé) : try_hold granted=false (aucun HOLD, l'endpoint lèvera 402)
+fs = FilterSupa(tables={"passes": [ap()], "ledger_entries": [G(30, "pA"), {"user_id": "u1",
+    "entry_type": "HOLD", "available_delta": -30, "pass_id": "pA", "idempotency_key": "seed"}]})
+g = run(billing.try_hold(user_id="u1", intent_id="ref3", tier="premium", supa=fs))
+check("13 refine deny (pass 0) → granted=false pass_exhausted, aucun HOLD posé",
+      (not g["granted"]) and g["reason"] == "pass_exhausted"
+      and not any(r.get("idempotency_key") == "hold:ref3" for r in fs.tables["ledger_entries"]), g)
+
 total = len(res); passed = sum(res)
 print(f"\n{'='*64}\n  P0a-bis try_hold — TOTAL {total}  PASSED {passed}  FAILED {total-passed}\n{'='*64}")
 sys.exit(0 if passed == total else 1)

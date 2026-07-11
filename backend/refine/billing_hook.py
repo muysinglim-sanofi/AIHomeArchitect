@@ -16,8 +16,13 @@ import os
 
 
 def refine_billing_enabled() -> bool:
-    """Défaut OFF. Passera à ON quand le Billing Engine sera branché sur le refine."""
-    return os.environ.get("AYDEN_REFINE_BILLING", "0").strip().lower() in ("1", "true", "yes", "on")
+    """Défaut ON (P0 2026-07-11). Le refine est désormais MÉTRÉ via billing.try_hold dans
+    l'endpoint /refine (parité /generate) : 1 image = 1 space, pass-first, idempotent ; le
+    COMMIT/RELEASE terminal vient de l'orchestrateur (observe_intent_end → apply_billing qui
+    retrouve le bucket via _intent_hold_bucket). Ce flag reste un KILL-SWITCH FONCTIONNEL :
+    AYDEN_REFINE_BILLING=0 restaure l'ancien comportement (refine gratuit) sans redéploiement.
+    Les stubs reserve()/commit() ci-dessous sont SUPERSEDED (débit = try_hold, pas ces stubs)."""
+    return os.environ.get("AYDEN_REFINE_BILLING", "1").strip().lower() in ("1", "true", "yes", "on")
 
 
 async def reserve(user_id: str, refine_intent_id: str, *, supa=None) -> bool:

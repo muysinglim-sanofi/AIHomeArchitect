@@ -5253,6 +5253,34 @@ async def refine_endpoint(
                           "keep refining with your AI Architect."),
             retryable=False, status_code=402, session_id=(session_id or ""))
 
+    # ── P0 (2026-07-11) — DÉBIT ATOMIQUE du refine (parité /generate) ──────────
+    # reserve_decision ci-dessus est INDICATIF ; ICI on POSE le HOLD atomique
+    # (billing.try_hold : advisory-lock user + HOLD conditionnel solde≥1, pass-first puis
+    # free, idempotent hold:<intent>). Le COMMIT/RELEASE terminal est DÉJÀ câblé
+    # (observe_intent_end dans l'orchestrateur → apply_billing retrouve le bucket via
+    # _intent_hold_bucket, SANS tier) → 1 refine produisant une image = 1 space débité,
+    # remboursé (RELEASE) si échec. Aucun claim n'est posé ICI (il vit dans l'orchestrateur)
+    # → sur deny, RIEN à terminaliser : on lève juste 402/503 AVANT tout coût OpenAI image.
+    if _billing_enabled:
+        _rhold = await billing.try_hold(
+            user_id=current_user.user_id, intent_id=intent_id, tier=_ref_access.tier, supa=supa)
+        if not _rhold.get("granted"):
+            _rreason = _rhold.get("reason") or "insufficient_credits"
+            if _rreason == "atomic_hold_missing":
+                # RPC billing_try_hold absente (fenêtre deploy avant apply-SQL) → 503
+                # transitoire (retryable), PAS un faux "quota exhausted".
+                raise GenerationError(
+                    error_code="BILLING_UNAVAILABLE",
+                    user_message="We're finishing an update. Please try again in a moment.",
+                    retryable=True, status_code=503, session_id=(session_id or ""))
+            log.info("[BILLING-ATOMIC] refine deny user=%s intent=%s reason=%s → 402 avant OpenAI (0 coût image)",
+                     current_user.user_id[:8], intent_id, _rreason)
+            raise GenerationError(
+                error_code="QUOTA_EXHAUSTED",
+                user_message=("You've used all the spaces in your plan. Unlock more to "
+                              "keep refining with your AI Architect."),
+                retryable=False, status_code=402, session_id=(session_id or ""))
+
     try:
         resp = await _run_generation(
             kind="refine", user_id=current_user.user_id, session_id=session_id,
