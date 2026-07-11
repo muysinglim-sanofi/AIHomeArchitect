@@ -1022,6 +1022,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       }
     });
     _persistSession(); // Wave 4.10g — survive atmosphere swap
+    debugPrint('[P0-LINEAGE][SWITCH_BEFORE] target_atmosphere=$style '
+        '_currentRoomType=$_currentRoomType visionRoom=${vision.roomType} '
+        'target.room=${target.room} _versions_len=${_versions.length} '
+        '_iterationCount=$_iterationCount');
     _generate(overridePrompt: 'Redesign this space in the $style style.', trigger: 'switch');
   }
 
@@ -1536,6 +1540,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // that pre-date the persistence layer.
       _persistSession();
       _scrollToBottom();
+      // BUG 5 — au (ré)ouverture / resume d'une session dont la V1 est déjà terminée,
+      // _loadMessages a reconstruit depuis `messages` (aucun room/ledger). On restaure la
+      // lignée depuis result_ref pour que le switch garde la room. Pas sur les ticks 'poll'
+      // (le bloc d'adoption reconcile s'en charge déjà, une seule fois).
+      if (trigger != 'poll' && lastGeneratedUrl != null && lastGeneratedUrl.isNotEmpty) {
+        debugPrint('[P0-LINEAGE][V1_ADOPTED] path=session_load trigger=$trigger '
+            '_currentRoomType=$_currentRoomType _versions_len=${_versions.length}');
+        await _restoreLineageFromResultRef(_project.id);
+      }
     } catch (e, st) {
       debugPrint('[DB] _loadMessages() ERROR: $e');
       debugPrint('[DB] _loadMessages() STACK: $st');
@@ -2308,6 +2321,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         // 8b-4b — ancre de CETTE vision incomplète (id de version renvoyé par le ledger).
         _lastRefineVersionId = (result['version_id'] as String?) ?? '';
       } else {
+        debugPrint('[P0-LINEAGE][SWITCH_PAYLOAD] trigger=$trigger roomType=$_currentRoomType '
+            'roomTypeId=$roomTypeIdVal sourceVersionId=$sourceVersionIdVal '
+            'sourceMode=$sourceModeVal versions_len=${_versions.length} atmosphereId=$atmosphereIdVal');
         result = await GenerationService().generate(
           sessionId: _project.id,
           prompt: prompt,
@@ -2775,6 +2791,42 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   /// `_isGenerating` check. The old check was dead-on-arrival: the transport
   /// path leaves `_isGenerating == true`, so the first tick bailed immediately
   /// and the poll never ran — a direct cause of the stuck spinner.
+  /// BUG 5 — restaure la lignée (room_type + versions + structural_identity) depuis le
+  /// `result_ref` de l'intent (que le backend persiste sur generation_intents, main.py:4944).
+  /// NÉCESSAIRE quand la V1 est adoptée HORS du success-handler HTTP (reconcile-poll ou
+  /// re-open de session) : `_loadMessages` reconstruit depuis `messages`, qui ne stocke NI
+  /// room NI ledger. Sans ça, le prochain switch part avec room=(none) + ledger vide → le
+  /// backend re-rend la source (bug prouvé : V1 backend='living_room', switch envoie (none)).
+  /// N'écrase JAMAIS un room/ledger déjà présent (garde isEmpty). Best-effort.
+  Future<void> _restoreLineageFromResultRef(String sessionId) async {
+    if (_currentRoomType.trim().isNotEmpty && _versions.isNotEmpty) return; // déjà complet
+    try {
+      final latest = await GenerationService().getLatestIntent(sessionId);
+      if (!mounted || _project.id != sessionId) return;
+      final rr = latest?['result_ref'];
+      if (rr is! Map) {
+        debugPrint('[P0-LINEAGE][RESTORE] no result_ref session=$sessionId → NOT restored');
+        return;
+      }
+      final rrVersions = rr['versions'] as String?;
+      final rrRoom = (rr['room_type'] as String?)?.trim() ?? '';
+      if (rrVersions != null && rrVersions.isNotEmpty && _versions.isEmpty) {
+        _versions = rrVersions;
+      }
+      _structuralIdentity = adoptStructuralIdentity(_structuralIdentity,
+          rr['structural_identity'] as String?, rr['structural_capture_disabled'] == true);
+      if (rrRoom.isNotEmpty && _currentRoomType.trim().isEmpty) {
+        _currentRoomType = RoomTypeImages.enLabelForId(rrRoom) ?? rrRoom;
+      }
+      _persistSession();
+      debugPrint('[P0-LINEAGE][RESTORE] from result_ref session=$sessionId room=$rrRoom '
+          'versions_len=${rrVersions?.length ?? 0} → _currentRoomType=$_currentRoomType '
+          '_versions_len=${_versions.length}');
+    } catch (e) {
+      debugPrint('[P0-LINEAGE][RESTORE] failed session=$sessionId: $e');
+    }
+  }
+
   void _startReconciliationPolling({required String sessionId}) {
     if (_reconcileTimer != null) return; // already polling — never stack
     const pollInterval = Duration(seconds: 5);
@@ -2861,6 +2913,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           PerfC2P.instance.markResponse(reconReqId, serverAppMs: null);
         }
         _inFlightRequestId = null;
+        // BUG 5 — le reconcile a rendu l'image depuis `messages` (aucun room/ledger). On
+        // restaure la lignée depuis result_ref pour que le prochain switch garde la room.
+        debugPrint('[P0-LINEAGE][V1_ADOPTED] path=reconcile _currentRoomType=$_currentRoomType '
+            '_versions_len=${_versions.length} _iterationCount=$_iterationCount');
+        await _restoreLineageFromResultRef(sessionId);
         return;
       }
 
