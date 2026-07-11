@@ -310,12 +310,15 @@ class _UploadScreenState extends ConsumerState<UploadScreen>
   Future<void> _start() async {
     // ── P0 bloc (b) F + BUG 2/3 — feedback immédiat + preflight CENTRALISÉ ─────
     // Spinner instantané (le bouton n'a plus l'air "mort", BUG 2), puis vérité backend
-    // bornée via ensureCanGenerateOrShowPaywall (cache-first : deny connu = paywall SANS
-    // réseau ; fresh:true = refresh /me/status borné 3s, fail-open). Deny → AUCUNE session,
-    // AUCUN loading (la navigation est APRÈS toutes les returns). Ré-entrance protégée.
+    // via ensureCanGenerateOrShowPaywall (cache-first : deny connu = paywall SANS réseau).
+    // PERF (latence tap→loading) : fresh:false = cache-only, PAS de GET /me/status bloquant
+    // avant la navigation. Le deny (spaces=0) est déjà en cache via le refresh post-génération ;
+    // le filet reste le HOLD atomique backend (try_hold) + le 402 qui ferme le loading et ouvre
+    // le paywall. Deny → AUCUNE session, AUCUN loading (navigation APRÈS toutes les returns).
+    // Ré-entrance protégée par _checkingBilling (verrou existant, inchangé).
     if (_checkingBilling) return;
     setState(() => _checkingBilling = true);
-    final ok = await ensureCanGenerateOrShowPaywall(ref, context, fresh: true);
+    final ok = await ensureCanGenerateOrShowPaywall(ref, context, fresh: false);
     if (!mounted) return;
     setState(() => _checkingBilling = false);
     if (!ok) return;
