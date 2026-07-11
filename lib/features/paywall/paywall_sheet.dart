@@ -44,7 +44,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/debug/client_debug_log.dart';
 import '../../core/feature_flags.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../data/services/revenuecat_service.dart';
@@ -225,11 +224,6 @@ class _PaywallSheetState extends State<PaywallSheet> {
       final RestoreOutcome outcome = restoreOutcomeFromSync(sync);
       debugPrint('[PURCHASE-SYNC] restore(paywall) outcome=$outcome');
       debugPrint('[RESTORE][OUTCOME] surface=paywall outcome=$outcome mounted=$mounted');
-      ClientDebugLog.send('RESTORE_OUTCOME', {
-        'surface': 'paywall',
-        'outcome': outcome.name,
-        'mounted': mounted,
-      });
       if (!mounted) return;
       switch (outcome) {
         case RestoreOutcome.restored:

@@ -43,7 +43,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
-import '../../core/debug/client_debug_log.dart';
 import '../../core/feature_flags.dart';
 
 /// Premium entitlement identifier. Must match the entitlement defined
@@ -161,12 +160,6 @@ class RevenuecatService {
       final appUserId = await Purchases.appUserID;
       debugPrint('[IDENTITY][RC_AFTER_CONFIG] app_user_id=$appUserId '
           'expected_user_id=$userId match=${appUserId == userId} configured=$_configured');
-      ClientDebugLog.send('IDENTITY_RC_AFTER_CONFIG', {
-        'app_user_id': appUserId,
-        'expected_user_id': userId,
-        'match': appUserId == userId,
-        'configured': _configured,
-      });
     } catch (_) {/* best-effort */}
   }
 
@@ -243,13 +236,6 @@ class RevenuecatService {
         'original_app_user_id=${info.originalAppUserId} '
         'latest_expiration=${active?.expirationDate ?? info.latestExpirationDate} '
         'active_subscriptions=${info.activeSubscriptions}');
-    ClientDebugLog.send('RESTORE_RC_RESULT', {
-      'entitlement_active': active != null,
-      'product_id': active?.productIdentifier,
-      'original_app_user_id': info.originalAppUserId,
-      'latest_expiration': active?.expirationDate ?? info.latestExpirationDate,
-      'active_subscriptions': info.activeSubscriptions,
-    });
     return active != null;
   }
 
