@@ -158,4 +158,10 @@ class FeatureFlags {
   /// behaviour) + the fixed 2.4s splash timer. Instant revert if a startup
   /// regression appears on TestFlight.
   static const bool fastBoot = true;
+
+  /// TEMPORAIRE (debug device BUG 3/4) — remonte les événements [RESTORE]/[IDENTITY] au
+  /// backend (/debug/client-event) pour lecture dans Render (l'utilisateur n'a pas de Mac,
+  /// donc pas de Console.app). Fire-and-forget, non sensible, gaté aussi côté serveur par
+  /// CLIENT_DEBUG_ENABLED. Passer à false (ou retirer) une fois BUG 3/4 fermés.
+  static const bool clientDebugLog = true;
 }

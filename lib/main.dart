@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/auth/keychain_local_storage.dart';
 import 'core/boot/app_boot.dart';
+import 'core/debug/client_debug_log.dart';
 import 'core/feature_flags.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
@@ -39,9 +42,18 @@ Future<void> main() async {
   // Supabase la restaure ? Au reinstall iOS, has_session=true prouve la survie du Keychain ;
   // false = le Keychain n'a PAS survécu (contredit l'hypothèse Approche 2 → BUG 4 non résolu).
   final kcSession = await KeychainLocalStorage().accessToken();
+  String? kcDecodedSub;
+  try {
+    if (kcSession != null && kcSession.isNotEmpty) {
+      final m = jsonDecode(kcSession);
+      if (m is Map && m['user'] is Map) {
+        kcDecodedSub = (m['user'] as Map)['id'] as String?;
+      }
+    }
+  } catch (_) {/* décodage best-effort */}
   debugPrint('[IDENTITY][KEYCHAIN_BEFORE_SUPABASE] '
       'has_session=${kcSession != null && kcSession.isNotEmpty} '
-      'session_length=${kcSession?.length ?? 0}');
+      'session_length=${kcSession?.length ?? 0} decoded_sub=$kcDecodedSub');
 
   // KEPT before runApp in BOTH modes: Supabase.instance must exist when App /
   // providers (meStatusProvider, etc.) build, and it's local/fast (~<200ms).
@@ -62,6 +74,19 @@ Future<void> main() async {
   debugPrint('[IDENTITY][SUPABASE_AFTER_INIT] '
       'current_session=${sbAuth.currentSession != null} '
       'user_id=${sbAuth.currentUser?.id} is_anonymous=${sbAuth.currentUser?.isAnonymous}');
+  // Remontée Render (l'utilisateur n'a pas de Mac) — la session est maintenant disponible,
+  // donc le JWT est attaché aux 2 événements identity. session_user_id_decoded ≠ user_id
+  // (après reinstall) = refresh rejeté → nouvel anon (cas B).
+  ClientDebugLog.send('IDENTITY_KEYCHAIN_BEFORE', {
+    'has_session': kcSession != null && kcSession.isNotEmpty,
+    'session_length': kcSession?.length ?? 0,
+    'session_user_id_decoded': kcDecodedSub,
+  });
+  ClientDebugLog.send('IDENTITY_SUPABASE_AFTER_INIT', {
+    'current_session': sbAuth.currentSession != null,
+    'user_id': sbAuth.currentUser?.id,
+    'is_anonymous': sbAuth.currentUser?.isAnonymous,
+  });
 
   if (!FeatureFlags.fastBoot) {
     // ── LEGACY pre-runApp chain (rollback path; today's behaviour, minus the

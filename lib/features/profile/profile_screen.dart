@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../data/models/project_model.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/debug/client_debug_log.dart';
 import '../../core/constants/build_info.dart';
 import '../../core/feature_flags.dart';
 import '../../core/l10n/app_localizations.dart';
@@ -1102,6 +1103,11 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     debugPrint('[RESTORE][START] supabase_user_id=$userId rc_app_user_id=$userId '
         'rc_configured=${RevenuecatService.instance.isConfigured}');
+    ClientDebugLog.send('RESTORE_START', {
+      'supabase_user_id': userId,
+      'rc_app_user_id': userId,
+      'rc_configured': RevenuecatService.instance.isConfigured,
+    });
     // BUG 3 — le restore doit TOUJOURS produire un résultat VISIBLE et HONNÊTE, MÊME si le
     // SDK RC pend ou si l'écran est démonté. Autorité = le backend /purchases/sync (reconstruit
     // le pass mesuré), pas le bool RC.
@@ -1146,6 +1152,16 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
         'mounted=$mounted '
         'final_access_source=${mounted ? ref.read(meStatusProvider)?.accessSource : null} '
         'final_total_spaces=${mounted ? ref.read(meStatusProvider)?.availableCredits : null}');
+    ClientDebugLog.send('RESTORE_OUTCOME', {
+      'surface': 'profile',
+      'outcome': outcome.name,
+      'snackbar_shown': messenger != null,
+      'mounted': mounted,
+      'final_access_source':
+          mounted ? ref.read(meStatusProvider)?.accessSource : null,
+      'final_total_spaces':
+          mounted ? ref.read(meStatusProvider)?.availableCredits : null,
+    });
   }
 
   /// BUG4 — "Valid until {date}" localisé pour un pass actif, ou null si absent/illisible.

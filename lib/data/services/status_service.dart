@@ -16,6 +16,8 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/debug/client_debug_log.dart';
+
 class MeStatus {
   final bool isPremium;
   final bool isAdmin;
@@ -195,6 +197,9 @@ class StatusService {
     debugPrint('[RESTORE][SYNC_REQUEST] '
         'user_id=${Supabase.instance.client.auth.currentUser?.id} '
         '(no body: tx_id/product_id/expires_at NOT sent — backend re-reads RC REST)');
+    ClientDebugLog.send('RESTORE_SYNC_REQUEST', {
+      'user_id': Supabase.instance.client.auth.currentUser?.id,
+    });
     try {
       final r = await _dio.post('/purchases/sync');
       final data = r.data;
@@ -204,6 +209,16 @@ class StatusService {
             'has_measurable_pass=${data['has_measurable_pass']} '
             'state=${data['state']} reason=${data['reason']} '
             'grant_status=${data['grant_status']} expires_at=${data['expires_at']}');
+        ClientDebugLog.send('PURCHASE_SYNC_RESPONSE', {
+          'http_status': r.statusCode,
+          'synced': data['synced'],
+          'is_premium': data['is_premium'],
+          'has_measurable_pass': data['has_measurable_pass'],
+          'state': data['state'],
+          'reason': data['reason'],
+          'grant_status': data['grant_status'],
+          'expires_at': data['expires_at'],
+        });
         return data;
       }
       return const <String, dynamic>{};
