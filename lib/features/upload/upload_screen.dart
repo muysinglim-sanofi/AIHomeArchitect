@@ -14,6 +14,7 @@ import '../../core/models/atmosphere_style.dart';
 import '../../core/providers/premium_provider.dart';
 import '../../core/providers/access_provider.dart';
 import '../../core/providers/me_status_provider.dart';
+import '../../core/billing/generation_preflight.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/image_picker_sheet.dart';
 import '../../shared/widgets/app_button.dart';
@@ -65,6 +66,9 @@ class _UploadScreenState extends ConsumerState<UploadScreen>
   // Me ⇄ explicit atmosphere likewise. Carried as flags, never fake strings.
   bool _aiDecideRoom = false;
   bool _surpriseStyle = false;
+  // P0 bloc (b) BUG 2 — feedback immédiat au tap Generate (spinner + bouton désactivé)
+  // pendant la vérification billing, pour que le bouton ne semble jamais "mort".
+  bool _checkingBilling = false;
   // Wave 5.16 — `_selectedMode` field removed. FTUE always launches in
   // preserve mode (backend default). The chat Design Direction sheet still
   // exposes the toggle for refinement-time creative flips.
@@ -304,24 +308,17 @@ class _UploadScreenState extends ConsumerState<UploadScreen>
   }
 
   Future<void> _start() async {
-    // ── P0 bloc (b) F — PREFLIGHT billing AVANT toute création de session/loading ──
-    // On rafraîchit la vérité backend (source unique = /me/status.can_generate, aligné
-    // sur reserve_decision + try_hold). Deny → paywall immédiat : AUCUNE session, AUCUN
-    // generation_intent, AUCUN pending, AUCUN loading, AUCUN compteur Redesigns. Le
-    // refresh réchauffe aussi le cache meStatus pour le preflight refine (G). Fail-open
-    // si /me/status injoignable (le gate backend + HOLD atomique restent le filet).
-    await ref.read(meStatusProvider.notifier).refresh();
+    // ── P0 bloc (b) F + BUG 2/3 — feedback immédiat + preflight CENTRALISÉ ─────
+    // Spinner instantané (le bouton n'a plus l'air "mort", BUG 2), puis vérité backend
+    // bornée via ensureCanGenerateOrShowPaywall (cache-first : deny connu = paywall SANS
+    // réseau ; fresh:true = refresh /me/status borné 3s, fail-open). Deny → AUCUNE session,
+    // AUCUN loading (la navigation est APRÈS toutes les returns). Ré-entrance protégée.
+    if (_checkingBilling) return;
+    setState(() => _checkingBilling = true);
+    final ok = await ensureCanGenerateOrShowPaywall(ref, context, fresh: true);
     if (!mounted) return;
-    final st = ref.read(meStatusProvider);
-    if (st != null && !st.canGenerate) {
-      await showModalBottomSheet<bool>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (_) => PaywallSheet(trigger: PaywallTrigger.quota),
-      );
-      return;
-    }
+    setState(() => _checkingBilling = false);
+    if (!ok) return;
 
     final params = <String, String>{};
     if (_aiDecideRoom) {
@@ -386,7 +383,8 @@ class _UploadScreenState extends ConsumerState<UploadScreen>
                 StickyActionBar(
                   primary: AppButton(
                     label: '${context.l10n.uplGenerateDesign} ✨',
-                    onPressed: _canProceed ? _start : null,
+                    loading: _checkingBilling,
+                    onPressed: (_canProceed && !_checkingBilling) ? _start : null,
                   ),
                   secondary: Text(
                     _canProceed

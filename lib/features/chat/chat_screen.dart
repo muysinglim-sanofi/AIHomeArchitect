@@ -45,6 +45,7 @@ import 'generate_response.dart';
 import '../../data/services/generation_service.dart';
 import '../../data/services/supabase_service.dart';
 import '../paywall/paywall_sheet.dart';
+import '../../core/billing/generation_preflight.dart';
 import '../../data/models/message_model.dart';
 import '../../data/models/project_model.dart';
 import '../../data/models/session_state.dart';
@@ -1877,26 +1878,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     debugPrint('[V1-GUARD] trigger=$trigger iteration=$genIteration '
         'source_hash=$srcHash decision=accepted reason=new_generation');
 
-    // ── P0 bloc (b) G — PREFLIGHT billing pour un refine/switch (in-session) ────
-    // V1 (iteration==1) est déjà gaté à l'upload (F). Ici on gate les générations
-    // in-session (refine/switch/regenerate) AVANT loading/pending/POST : cache
-    // meStatus (rafraîchi après chaque succès) + backstop 402/503. Deny → paywall
-    // immédiat, AUCUN loading, AUCUN pending, AUCUN POST /refine (donc 0 parser/advisor).
-    if (genIteration > 1) {
-      final pf = ref.read(meStatusProvider);
-      if (pf != null && !pf.canGenerate) {
-        debugPrint('[BILLING-PREFLIGHT] trigger=$trigger iteration=$genIteration '
-            'canGenerate=false reason=${pf.gateReason} → paywall (no loading/pending/POST)');
-        if (mounted) {
-          await showModalBottomSheet<bool>(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (_) => PaywallSheet(trigger: PaywallTrigger.quota),
-          );
-        }
-        return;
-      }
+    // ── P0 bloc (b) G + BUG 3 — PREFLIGHT centralisé : refine/switch ET REUPLOAD ──
+    // Un reupload est un FIRST_VISION (genIteration==1) mais _sourceReplaced=true → il DOIT
+    // être gaté (BUG 3 : sinon paywall raté + silence). refine/switch (genIteration>1) = cache
+    // seul (instantané, 0 latence) ; reupload = fresh:true (nouvelle V1 → refresh la vérité
+    // backend). Deny → paywall AVANT R2 / _applyReplacedSource / loading / POST (emplacement
+    // conservé). Backstop 402/503 conservé plus bas. V1 auto reste gaté par F (upload).
+    final bool isReupload = _sourceReplaced;
+    if (genIteration > 1 || isReupload) {
+      debugPrint('[BILLING-PREFLIGHT] trigger=$trigger iteration=$genIteration '
+          'reupload=$isReupload → preflight (fresh=$isReupload)');
+      final ok = await ensureCanGenerateOrShowPaywall(ref, context, fresh: isReupload);
+      if (!mounted) return;
+      if (!ok) return;
     }
 
     // ── PR2b Slice 2 (R2) — never POST 'new' ──────────────────────────────────
