@@ -82,8 +82,10 @@ async def main():
             check("strategy = combined_edit", p.strategy.kind == STRATEGY_COMBINED_EDIT)
             npc = len(p.ordered_changes)
             if npc >= 2:
-                check("prompt multi = 'Apply ALL' + 'Locked elements'",
-                      "Apply ALL of these changes" in p.combined_prompt and "Preserve ONLY the architectural" in p.combined_prompt)
+                # FIX 2026-07-12 : la clause de préservation est désormais choisie par action
+                # (contrats ciblés). Invariant commun à TOUS les contrats = le suffixe "SAME room".
+                check("prompt multi = 'Apply ALL' + contrat de préservation",
+                      "Apply ALL of these changes" in p.combined_prompt and "Keep it the SAME room" in p.combined_prompt)
             check("chaque changement normalisé (non vide)", all(c.normalized for c in p.ordered_changes))
             # 5) pas de message advisory quand tout est GREEN
             check("aucun message advisory (GREEN)", build_advisory_message(advice) is None)

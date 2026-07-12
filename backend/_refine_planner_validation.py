@@ -56,7 +56,9 @@ def main():
     check("close window → 'solid wall matching'", "solid wall matching" in plan(pipe("close the back window")).combined_prompt)
     pf = plan(pipe("add flowers"))
     check("non-structure → PAS de mandat structurel", "take PRIORITY over preservation" not in pf.combined_prompt)
-    check("non-structure → clause mobilier libre présente", "furniture is not fixed" in pf.combined_prompt.lower())
+    # FIX 2026-07-12 : add-seul verrouille désormais le mobilier (ADD-ONLY), il n'est PLUS libre.
+    check("add seul → ADD-ONLY (mobilier NON libre)",
+          "ADD-ONLY CONTRACT" in pf.combined_prompt and "furniture is NOT fixed" not in pf.combined_prompt)
 
     print("\n=== PRÉDICTION 'predicted_partial' ===")
     p_adds = plan(pipe("add flowers, add books, add a rug"))

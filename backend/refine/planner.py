@@ -36,19 +36,87 @@ STRATEGY_FULL_REDESIGN = "full_redesign"        # réservé (futur)
 STRATEGY_ATMOSPHERE_SWITCH = "atmosphere_switch"  # réservé (futur)
 STRATEGY_SEQUENTIAL_FORCED = "sequential_forced"  # réservé (futur)
 
-# PHILOSOPHIE REFINE (user 2026-07-05) : préserver UNIQUEMENT l'identité ARCHITECTURALE ;
-# le mobilier n'est JAMAIS verrouillé par défaut — il est librement déplaçable / réorganisable
-# / supprimable / remplaçable. Un « déplacer le canapé à l'autre bout » n'est PAS une entorse à
-# la préservation : c'est exactement ce que Refine doit permettre. (L'ancienne clause verrouillait
-# « every other piece of furniture » → elle étranglait tout MOVE majeur.)
+# PHILOSOPHIE REFINE (user 2026-07-12) — DISTINGUER *identité* et *position* du mobilier.
+# Régression observée : un refine « add flowers » redessinait le canapé. La cause = l'ancienne
+# clause `_PRESERVE` autorisait le modèle à « freely move, rotate, remove, replace and reorganize
+# the furniture — including the OTHER pieces ». Elle avait été introduite pour un vrai besoin (un
+# MOVE peut exiger de recentrer table/fauteuil/tapis) mais confondait « réorganiser les positions »
+# avec « remplacer / redessiner les meubles ». Règle correcte : **préserver l'IDENTITÉ de tous les
+# meubles ; n'autoriser que les DÉPLACEMENTS nécessaires ; ne redessiner que ce qui est demandé.**
+# Le contrat de préservation est désormais choisi DYNAMIQUEMENT selon l'action (voir
+# `preservation_contract`). Chaque contrat reste ciblé PAR OBJET (jamais un hardcode par mot).
+# PÉRIMÈTRE DE CE PATCH : ADD / MOVE / MODIFY / REMOVE / REPLACE uniquement. Le mauvais classement
+# de « Redesign the entire layout » (parser → `structure`) et un contrat GLOBAL_REFLOW dédié sont
+# un BUG SÉPARÉ (ticket à part) → hors scope ici ; la branche `structure` reste INCHANGÉE.
+
+# Suffixe partagé — cohérence de la pièce (identique dans tous les contrats).
+_SAME_ROOM = (" Keep it the SAME room: same architecture, same overall style and same lighting mood.")
+
+# Interdiction SCOPÉE — préfixe partagé : tout ce qui n'est PAS explicitement listé reste verrouillé,
+# MAIS les actions co-demandées de la checklist (plans mixtes) ne sont jamais contredites.
+_EXCEPT = " Apart from the change(s) explicitly listed above, do NOT "
+
+# `_PRESERVE` — base HISTORIQUE (mobilier libre). CONSERVÉE UNIQUEMENT pour la branche `structure`
+# (validée 6/6 sur les benchs muraux — non re-benchée ici, donc inchangée à dessein).
 _PRESERVE = (
     "Preserve ONLY the architectural identity of the room — the walls, windows, doors, "
     "openings, ceiling and overall structure and volume — unless a change above explicitly "
     "alters it. The furniture is NOT fixed: its layout, positions and the functional "
     "arrangement are fully editable. Freely move, rotate, remove, replace and reorganize the "
     "furniture and decor — including the OTHER pieces — as needed to realize the changes above "
-    "coherently and realistically. Keep it the SAME room: same architecture, same overall style "
-    "and same lighting mood."
+    "coherently and realistically." + _SAME_ROOM
+)
+
+# ── Contrats de préservation par action (ciblés PAR OBJET) ───────────────────────────────────
+# Chaque interdiction est SCOPÉE (`_EXCEPT`) → sur un plan mixte, l'autre action demandée reste
+# permise (elle figure dans la checklist), mais aucun meuble NON demandé n'est touché.
+# ADD : ajoute seulement ce qui est demandé — rien d'autre ne bouge (ni position ni identité).
+ADD_ONLY_CONTRACT = (
+    "ADD-ONLY CONTRACT. Add ONLY the object(s) or decoration explicitly requested above. "
+    "Preserve every existing furniture item, object, architectural element, material, colour, "
+    "position, design, proportion and count EXACTLY as they are." + _EXCEPT +
+    "reorganize, redesign, move, replace, recolour, resize, add or remove anything." + _SAME_ROOM
+)
+
+# MODIFY ciblé : même objet, seule la propriété demandée change ; le reste verrouillé.
+TARGETED_MODIFY_CONTRACT = (
+    "TARGETED MODIFY CONTRACT. For each explicitly targeted object, apply ONLY the requested change, "
+    "altering only the specified property (e.g. colour, material or finish); that object stays the "
+    "SAME object — same model, shape, proportions and position — only the requested property changes. "
+    "Preserve the exact identity, design, position and count of every OTHER furniture item, object "
+    "and architectural element." + _EXCEPT +
+    "move, replace, restyle, resize, add or remove anything." + _SAME_ROOM
+)
+
+# MOVE ciblé + REFLOW LOCAL : le MÊME objet déplacé ; voisins repositionnables SI nécessaire,
+# jamais redessinés. (Reprend le contrat recommandé par l'user.)
+MOVE_WITH_LOCAL_REFLOW_CONTRACT = (
+    "PRESERVATION AND LOCAL REFLOW CONTRACT. Preserve the exact identity, design, shape, colour, "
+    "material, proportions, style and count of every existing furniture item. Apply the requested "
+    "change(s) to the explicitly targeted object(s). For a MOVE, move the SAME original object — do "
+    "NOT generate a different version of it. When a requested change requires space, you MAY "
+    "reposition or slightly rotate NEARBY furniture only as necessary to create a coherent, "
+    "physically realistic layout; repositioning nearby objects does NOT authorize redesigning them." +
+    _EXCEPT + "replace, remove, add, recolour, restyle, resize or materially alter any furniture "
+    "or architectural element." + _SAME_ROOM
+)
+
+# REMOVE ciblé : seul l'objet ciblé disparaît ; voisins recentrables mais jamais remplacés.
+TARGETED_REMOVE_CONTRACT = (
+    "TARGETED REMOVE CONTRACT. Remove ONLY the explicitly targeted object(s), leaving the freed "
+    "floor/wall area coherent and empty. Preserve the exact identity, design, colour, material, "
+    "proportions and count of every OTHER furniture item and architectural element; you MAY recentre "
+    "or slightly reposition nearby objects only if the freed space would otherwise look unnatural." +
+    _EXCEPT + "replace, redesign, recolour, resize, add or remove any item." + _SAME_ROOM
+)
+
+# REPLACE ciblé : seul l'objet ciblé est remplacé, même position ; le reste verrouillé.
+TARGETED_REPLACE_CONTRACT = (
+    "TARGETED REPLACE CONTRACT. Replace ONLY the explicitly targeted object(s) with the requested "
+    "one(s), in the same position; you MAY adjust the new object's size, height and lighting as "
+    "needed for realism. Preserve the exact identity, design, colour, material, proportions, "
+    "position and count of every OTHER furniture item and architectural element." + _EXCEPT +
+    "move, replace, restyle, recolour, resize, add or remove anything." + _SAME_ROOM
 )
 
 
@@ -106,13 +174,41 @@ _STRUCT_MANDATE = (
 )
 
 
+def preservation_contract(changes: list[Change]) -> str:
+    """SÉLECTEUR PUR (Phase 2) — choisit le contrat de préservation selon le PLAN, ciblé PAR
+    OBJET. Ordre = précédence (le plus permissif-en-POSITION gagne quand plusieurs types
+    coexistent, sans jamais autoriser le remplacement/redesign d'un meuble NON ciblé) :
+
+      1. structure présente   → _STRUCT_MANDATE + _PRESERVE  (INCHANGÉ — validé 6/6, hors scope)
+      2. ADD seul             → ADD_ONLY_CONTRACT
+      3. MOVE présent         → MOVE_WITH_LOCAL_REFLOW_CONTRACT
+      4. REMOVE présent       → TARGETED_REMOVE_CONTRACT
+      5. REPLACE présent      → TARGETED_REPLACE_CONTRACT
+      6. sinon (MODIFY ciblé) → TARGETED_MODIFY_CONTRACT
+
+    Plans MIXTES : la précédence choisit le contrat dont la liberté de POSITION couvre le plan ;
+    chaque interdiction étant scopée (`_EXCEPT`), les autres actions demandées restent permises.
+    N'est JAMAIS « ADD=verrouillé / le reste=tout libre » : chaque branche verrouille l'IDENTITÉ
+    du mobilier non ciblé et n'autorise le reflow de POSITION que là où l'action l'exige."""
+    if not changes:
+        return ADD_ONLY_CONTRACT           # sûr : rien à faire → tout verrouillé (garde-fou)
+    types = [c.type for c in changes]
+    if "structure" in types:
+        return _STRUCT_MANDATE + _PRESERVE  # branche structure validée séparément — inchangée
+    if all(t == "add" for t in types):
+        return ADD_ONLY_CONTRACT
+    if "move" in types:
+        return MOVE_WITH_LOCAL_REFLOW_CONTRACT
+    if "remove" in types:
+        return TARGETED_REMOVE_CONTRACT
+    if "replace" in types:
+        return TARGETED_REPLACE_CONTRACT
+    return TARGETED_MODIFY_CONTRACT
+
+
+# Compat : `build_combined_prompt` appelle toujours `_preserve_clause` (point d'intégration inchangé).
 def _preserve_clause(changes: list[Change]) -> str:
-    """Clause de préservation DYNAMIQUE : architecture seule + mobilier libre, et si un
-    changement `structure` est présent, on préfixe le mandat structurel (priorité + exclusion
-    de l'élément ciblé). Aucune règle basée sur des formulations particulières."""
-    if any(c.type == "structure" for c in changes):
-        return _STRUCT_MANDATE + _PRESERVE
-    return _PRESERVE
+    return preservation_contract(changes)
 
 
 def build_combined_prompt(changes: list[Change]) -> str:
