@@ -64,6 +64,15 @@ class MeStatus {
   /// du compteur "Redesigns" du profil. Backend = COUNT generation_intents SUCCEEDED (exact).
   final int generationsSucceeded;
 
+  /// Premium Center (Lot 1) — plan d'abonnement actif, INFORMATIF (distinguer Weekly/Annual
+  /// dans le Premium Center). 'weekly' | 'annual' | 'none'. N'entre dans AUCUNE décision de
+  /// gate/génération. Défaut 'none' si l'ancien backend ne fournit pas le champ.
+  final String planType;
+
+  /// Premium Center (Lot 1) — product_id store du pass actif (ex 'com.aydenstudio.app.weekly'),
+  /// diagnostic/mapping. null si absent. INFORMATIF.
+  final String? activeProductId;
+
   const MeStatus({
     required this.isPremium,
     required this.isAdmin,
@@ -84,11 +93,17 @@ class MeStatus {
     this.accessSource = 'free',
     this.gateReason = '',
     this.generationsSucceeded = 0,
+    this.planType = 'none',
+    this.activeProductId,
   });
 
   /// True quand l'app a un rôle premium (abo actif) mais AUCUN pass mesuré côté
   /// backend → il faut restaurer/synchroniser l'achat pour obtenir le pass.
   bool get needsRestore => accessSource == 'restore_required';
+
+  /// Premium Center (Lot 1) — plan actif dérivé du backend (INFORMATIF).
+  bool get isWeekly => planType == 'weekly';
+  bool get isAnnual => planType == 'annual';
 
   int get remaining =>
       remainingFreeGenerations ??
@@ -123,6 +138,8 @@ class MeStatus {
         gateReason: (j['gate_reason'] as String?) ?? '',
         generationsSucceeded:
             (j['generations_succeeded'] as num?)?.toInt() ?? 0,
+        planType: (j['plan_type'] as String?) ?? 'none',
+        activeProductId: j['active_product_id'] as String?,
       );
 
   /// Exact mirror of [fromJson] — lets meStatusProvider cache the last
@@ -148,6 +165,8 @@ class MeStatus {
         'access_source': accessSource,
         'gate_reason': gateReason,
         'generations_succeeded': generationsSucceeded,
+        'plan_type': planType,
+        'active_product_id': activeProductId,
       };
 }
 
