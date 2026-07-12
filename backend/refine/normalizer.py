@@ -89,10 +89,38 @@ def _struct_object(change: Change, raw: str) -> str:
     return o
 
 
-def _normalize_structure(change: Change, raw: str, low: str) -> str:
-    """Mandat architectural EXPLICITE, bâti par CLASSE DE VERBE + object (générique).
-    Une structure explicitement demandée est prioritaire : on n'atténue jamais."""
+# Qualificatifs d'ORIENTATION (adjectif) → se placent AVANT le nom : « the right wall ».
+_STRUCT_ORIENT = re.compile(
+    r"(?i)^(right|left|rear|back|front|upper|lower|top|bottom|middle|central|far|near)$")
+# Qualificatifs RELATIONNELS / spatiaux → se placent APRÈS le nom : « the wall between X and Y ».
+_STRUCT_REL_LEAD = re.compile(
+    r"(?i)^(on|in|at|between|next|beside|near|by|opposite|behind|above|below|under|facing|"
+    r"toward|towards|adjacent|separating|dividing|to\s+the)\b")
+
+
+def _struct_target(change: Change, raw: str) -> str:
+    """Élément architectural ciblé AVEC son qualificatif `detail` — JAMAIS jeté (fix 2026-07-12).
+    Générique, sans mot codé en dur : orientation (right/left/rear/front…) en adjectif AVANT le nom ;
+    relation spatiale (between…, next to…, opposite…) APRÈS le nom ; tout autre qualificatif annexé
+    par sécurité. C'est ce qui fait survivre « right » jusqu'au prompt (sinon le côté est perdu →
+    gpt-image choisit un mur au hasard)."""
     obj = _struct_object(change, raw)
+    det = _clean(change.detail)
+    if not det or det.lower() in obj.lower():   # rien à ajouter / déjà présent (idempotent)
+        return obj
+    if _STRUCT_ORIENT.match(det):               # adjectif d'orientation → après l'article
+        return re.sub(r"(?i)^(the|a|an|this|that|these|those)\b",
+                      lambda m: f"{m.group(1)} {det}", obj, count=1)
+    if _STRUCT_REL_LEAD.match(det):             # relation spatiale → après le nom
+        return f"{obj} {det}"
+    return f"{obj} {det}"                        # défaut SÛR : ne jamais perdre le qualificatif
+
+
+def _normalize_structure(change: Change, raw: str, low: str) -> str:
+    """Mandat architectural EXPLICITE, bâti par CLASSE DE VERBE + object+detail (générique).
+    Une structure explicitement demandée est prioritaire : on n'atténue jamais, et on ne jette
+    JAMAIS le qualificatif spatial `detail` (right/left/between…) — cf. `_struct_target`."""
+    obj = _struct_target(change, raw)
     # « open the kitchen » (sans mur nommé) → mandat d'ouverture concret
     if re.search(r"\bopen\s+(?:up\s+)?the\s+kitchen\b", low) and "wall" not in low:
         return _period(f"{_cap(raw)} by removing the dividing wall as a REAL architectural change, "
