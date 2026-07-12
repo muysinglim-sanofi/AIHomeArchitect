@@ -305,6 +305,8 @@ const Map<String, String> enTranslations = {
   'stRestoreRequiredSub': 'Restore your subscription to continue',
   'stRestoring': 'Restoring your purchase…',
   'stPassNoSpaces': '0 Spaces left',
+  'pcPassNoSpaces': 'No Spaces remaining',
+  'pcPassActiveNoSpacesNoDate': 'Your plan is active, but no Spaces remain.',
   'stPassRenews': 'Renews {date}',
   'stRestoreDone': 'Purchase restored',
   'stRestoreActiveNoSpaces': 'Subscription active — spaces refresh at renewal',

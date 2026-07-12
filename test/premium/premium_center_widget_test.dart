@@ -15,6 +15,7 @@ import 'package:ai_home_architect/core/providers/me_status_provider.dart';
 import 'package:ai_home_architect/data/services/revenuecat_service.dart' show PurchaseAttempt;
 import 'package:ai_home_architect/data/services/status_service.dart';
 import 'package:ai_home_architect/features/premium/premium_center_sheet.dart';
+import 'package:ai_home_architect/features/paywall/paywall_sheet.dart';
 import 'package:ai_home_architect/shared/widgets/app_button.dart';
 
 MeStatus _weekly() => MeStatus(
@@ -34,6 +35,25 @@ MeStatus _annual299() => MeStatus(
       isPremium: true, isAdmin: false, role: 'x', quotaUsed: 0, quotaLimit: 3,
       remainingFreeGenerations: 0, accessSource: 'pass', planType: 'annual',
       availableCredits: 299, activeProductId: kAnnualProductId,
+    );
+
+// RC-PR3b — états ÉPUISÉS (0 Space) pour la surface « plan épuisé » du Premium Center.
+MeStatus _weekly0() => MeStatus(
+      isPremium: true, isAdmin: false, role: 'x', quotaUsed: 0, quotaLimit: 3,
+      remainingFreeGenerations: 0, accessSource: 'pass', planType: 'weekly',
+      availableCredits: 0, activeProductId: 'com.aydenstudio.app.weekly',
+      passRenewsAt: '2026-07-20T00:00:00Z',
+    );
+MeStatus _annual0() => MeStatus(
+      isPremium: true, isAdmin: false, role: 'x', quotaUsed: 0, quotaLimit: 3,
+      remainingFreeGenerations: 0, accessSource: 'pass', planType: 'annual',
+      availableCredits: 0, activeProductId: kAnnualProductId,
+      passRenewsAt: '2027-07-20T00:00:00Z',
+    );
+MeStatus _weekly0NoDate() => MeStatus(
+      isPremium: true, isAdmin: false, role: 'x', quotaUsed: 0, quotaLimit: 3,
+      remainingFreeGenerations: 0, accessSource: 'pass', planType: 'weekly',
+      availableCredits: 0, activeProductId: 'com.aydenstudio.app.weekly',
     );
 
 class _FakeDeps {
@@ -233,5 +253,53 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Refresh plan'), findsNothing); // 300 → carte deferred disparaît
     expect(_card, findsNothing); // Annual confirmé
+  });
+
+  // ── RC-PR3b — surface « plan épuisé » (0 Space) ────────────────────────────
+  testWidgets('Weekly à 0 Space → « No Spaces remaining » + Upgrade + Restore (jamais le paywall)',
+      (tester) async {
+    await _pump(tester, MeStatusNotifier.forTest(_weekly0()), _weekly0(),
+        _FakeDeps(annualAvailable: true).build());
+    expect(find.textContaining('No Spaces remaining'), findsOneWidget); // état épuisé explicite
+    expect(_card, findsOneWidget); // Upgrade to Annual toujours proposé au Weekly épuisé
+    expect(find.text('Restore Purchase'), findsOneWidget);
+    expect(find.byType(PaywallSheet), findsNothing); // JAMAIS le paywall d'abonnement
+  });
+
+  testWidgets('Annual à 0 Space → « No Spaces remaining » + Restore, PAS d\'Upgrade', (tester) async {
+    await _pump(tester, MeStatusNotifier.forTest(_annual0()), _annual0(),
+        _FakeDeps(annualAvailable: true).build());
+    expect(find.textContaining('No Spaces remaining'), findsOneWidget);
+    expect(_card, findsNothing); // Annual : aucune proposition d'upgrade
+    expect(find.text('Restore Purchase'), findsOneWidget);
+  });
+
+  testWidgets('Pass à 0 SANS date → copie fallback autonome', (tester) async {
+    await _pump(tester, MeStatusNotifier.forTest(_weekly0NoDate()), _weekly0NoDate(),
+        _FakeDeps(annualAvailable: true).build());
+    expect(find.text('Your plan is active, but no Spaces remain.'), findsOneWidget);
+  });
+
+  // ── RC-PR3b — GARDE l10n : stPassNoSpaces (partagée avec le Profil, figée au Lot 2) NE DOIT
+  // PAS bouger. Le Premium Center utilise une clé DÉDIÉE pcPassNoSpaces, distincte. ────────────
+  group('RC-PR3b — l10n : stPassNoSpaces inchangée + pcPassNoSpaces distincte', () {
+    test('stPassNoSpaces conserve exactement les valeurs Lot 2 en EN/FR/KM', () {
+      expect(AppLocalizations(const Locale('en')).stPassNoSpaces, '0 Spaces left');
+      expect(AppLocalizations(const Locale('fr')).stPassNoSpaces, '0 Spaces restants');
+      expect(AppLocalizations(const Locale('km')).stPassNoSpaces, 'នៅសល់ 0 Spaces');
+    });
+
+    test('pcPassNoSpaces (clé dédiée Premium Center) porte la nouvelle copie en EN/FR/KM', () {
+      expect(AppLocalizations(const Locale('en')).pcPassNoSpaces, 'No Spaces remaining');
+      expect(AppLocalizations(const Locale('fr')).pcPassNoSpaces, 'Aucun Space restant');
+      expect(AppLocalizations(const Locale('km')).pcPassNoSpaces, 'គ្មាន Spaces នៅ​សល់');
+    });
+
+    test('les deux clés sont bien DISTINCTES dans chaque langue', () {
+      for (final code in const ['en', 'fr', 'km']) {
+        final l = AppLocalizations(Locale(code));
+        expect(l.pcPassNoSpaces, isNot(l.stPassNoSpaces), reason: 'langue=$code');
+      }
+    });
   });
 }

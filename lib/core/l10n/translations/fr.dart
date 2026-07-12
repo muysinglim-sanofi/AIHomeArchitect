@@ -314,6 +314,8 @@ const Map<String, String> frTranslations = {
   'stRestoreRequiredSub': "Restaurez votre abonnement pour continuer",
   'stRestoring': "Restauration de votre achat…",
   'stPassNoSpaces': '0 Spaces restants',
+  'pcPassNoSpaces': 'Aucun Space restant',
+  'pcPassActiveNoSpacesNoDate': 'Votre formule est active, mais il ne reste aucun Space.',
   'stPassRenews': 'Renouvellement le {date}',
   'stRestoreDone': 'Achat restauré',
   'stRestoreActiveNoSpaces': 'Abonnement actif — les espaces se rechargent au renouvellement',

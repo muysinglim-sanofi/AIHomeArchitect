@@ -564,10 +564,13 @@ class _PremiumCenterSheetState extends ConsumerState<PremiumCenterSheet> {
 
   String _passSubtitle(BuildContext context, MeStatus s) {
     final l10n = context.l10n;
-    final String spaces = s.availableCredits <= 0
-        ? l10n.stPassNoSpaces
-        : l10n.stPassCreditsRemaining(s.availableCredits);
+    final bool noSpaces = s.availableCredits <= 0;
     final String? renews = _formatDate(context, s.passRenewsAt ?? s.passExpiresAt);
+    // Épuisé SANS date connue → message autonome (jamais un « No Spaces remaining » orphelin).
+    if (noSpaces && renews == null) return l10n.pcPassActiveNoSpacesNoDate;
+    final String spaces = noSpaces
+        ? l10n.pcPassNoSpaces // clé DÉDIÉE Premium Center (pas stPassNoSpaces, partagée/Profil)
+        : l10n.stPassCreditsRemaining(s.availableCredits);
     return renews == null ? spaces : '$spaces · ${l10n.stPassRenews(renews)}';
   }
 }

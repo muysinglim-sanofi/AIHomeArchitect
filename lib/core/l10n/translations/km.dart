@@ -302,6 +302,8 @@ const Map<String, String> kmTranslations = {
   'stRestoreRequiredSub': 'ស្ដារ​ការ​ជាវ​របស់​អ្នក​ដើម្បី​បន្ត',
   'stRestoring': 'កំពុង​ស្ដារ​ការ​ទិញ…',
   'stPassNoSpaces': 'នៅសល់ 0 Spaces',
+  'pcPassNoSpaces': 'គ្មាន Spaces នៅ​សល់',
+  'pcPassActiveNoSpacesNoDate': 'គម្រោង​របស់​អ្នក​សកម្ម ប៉ុន្តែ​គ្មាន Spaces នៅ​សល់​ទេ។',
   'stPassRenews': 'បន្ត​ថ្មី​នៅ {date}',
   'stRestoreDone': 'បាន​ស្ដារ​ការ​ទិញ',
   'stRestoreActiveNoSpaces': 'ការ​ជាវ​សកម្ម — កន្លែង​នឹង​បំពេញ​ឡើងវិញ​ពេល​បន្ត',

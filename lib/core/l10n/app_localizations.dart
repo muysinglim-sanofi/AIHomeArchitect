@@ -365,6 +365,11 @@ class AppLocalizations {
   String get stPassNoSpaces => _get('stPassNoSpaces');
   String stPassRenews(String date) =>
       _get('stPassRenews').replaceAll('{date}', date);
+  // RC-PR3b — clé DÉDIÉE au Premium Center épuisé (ne PAS réutiliser stPassNoSpaces, partagée
+  // avec le Profil et figée au Lot 2).
+  String get pcPassNoSpaces => _get('pcPassNoSpaces');
+  // RC-PR3b — pass actif à 0 Space SANS date de renouvellement connue (fallback autonome).
+  String get pcPassActiveNoSpacesNoDate => _get('pcPassActiveNoSpacesNoDate');
   // BUG 3 — résultat HONNÊTE du restore (4 états mutuellement exclusifs).
   String get stRestoreDone => _get('stRestoreDone');
   String get stRestoreActiveNoSpaces => _get('stRestoreActiveNoSpaces');
