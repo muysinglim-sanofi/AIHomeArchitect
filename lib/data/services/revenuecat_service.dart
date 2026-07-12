@@ -239,6 +239,21 @@ class RevenuecatService {
     return active != null;
   }
 
+  /// Premium Center (Lot 1) — URL de gestion de l'abonnement fournie par le store
+  /// (App Store / Google Play) via RevenueCat. `null` si non configuré, en erreur, ou
+  /// AUCUN abonnement store actif (ex : promo, sandbox) → l'appelant masque le bouton
+  /// « Manage Subscription » proprement. N'entre dans AUCUNE décision de billing.
+  Future<String?> managementUrl() async {
+    if (!_configured) return null;
+    try {
+      final info = await Purchases.getCustomerInfo();
+      return info.managementURL;
+    } catch (e) {
+      debugPrint('[RevenuecatService] managementUrl failed (non-fatal): $e');
+      return null;
+    }
+  }
+
   /// Re-bind RC to a new App User ID. Called after sign-in flows that
   /// change the Supabase UUID. Sign-in is hidden in V1
   /// (FeatureFlags.signInEnabled=false) so this is dormant.

@@ -17,6 +17,7 @@ import '../../data/models/message_model.dart';
 import '../../data/models/project_model.dart';
 import '../../data/services/generation_service.dart';
 import '../../features/paywall/paywall_sheet.dart';
+import '../../features/premium/premium_center_sheet.dart';
 import '../../shared/widgets/app_button.dart';
 import '../../shared/widgets/app_dots.dart';
 import '../../shared/widgets/app_pill.dart';
@@ -350,11 +351,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               ),
               const SizedBox(width: AppSpacing.sm),
               if (isPremium)
-                const _PremiumActiveBadge()
+                // Premium Center (Lot 1) — le badge devient TAPPABLE : consulter/gérer
+                // l'abonnement (avant, badge inerte → abonné enfermé).
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => showPremiumCenter(context, ref),
+                  child: const _PremiumActiveBadge(),
+                )
               else
                 AppPill(
                   text: 'Premium',
-                  onTap: () => _openHomePaywall(context),
+                  onTap: () => _openHomePaywall(context), // free → parcours d'achat inchangé
                 ),
             ],
           ),

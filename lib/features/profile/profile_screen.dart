@@ -15,6 +15,7 @@ import '../../data/services/status_service.dart';
 import '../../data/services/profile_service.dart';
 import '../../data/services/revenuecat_service.dart';
 import '../paywall/paywall_sheet.dart';
+import '../premium/premium_center_sheet.dart';
 import '../../data/services/auth_service.dart';
 import '../auth/sign_in_screen.dart';
 import '../admin/admin_promo_screen.dart';
@@ -1235,14 +1236,14 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
     }
 
     // BUG 3 — Tap : restore_required → restaurer/synchroniser l'achat ; entitled
-    // (admin/pass/promo) → JAMAIS de paywall, MÊME à 0 space (l'user paie déjà ; le
-    // subtitle dit « renews {date} » — le renvoyer au paywall = re-achat trompeur) ;
-    // free → paywall.
+    // (admin/pass/promo) → JAMAIS de paywall d'achat trompeur. Premium Center (Lot 1) :
+    // au lieu de onTap=null (carte inerte = abonné enfermé), on ouvre le Premium Center
+    // partagé (consulter le plan / gérer l'abonnement). free → paywall d'achat.
     final VoidCallback? onTap;
     if (needsRestore) {
       onTap = _restorePurchase;
     } else if (entitled) {
-      onTap = null;
+      onTap = () => showPremiumCenter(context, ref);
     } else {
       onTap = () => _openPaywall(
             status.remaining <= 0 ? PaywallTrigger.quota : PaywallTrigger.locked,

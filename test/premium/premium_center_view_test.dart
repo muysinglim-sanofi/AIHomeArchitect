@@ -57,6 +57,17 @@ void main() {
       expect(v.showRestore, isTrue);
     });
 
+    test('showManage éligible UNIQUEMENT pour un abonnement store (pass)', () {
+      expect(premiumCenterViewFor(_s('pass', planType: 'weekly')).showManage, isTrue);
+      expect(premiumCenterViewFor(_s('pass', planType: 'annual')).showManage, isTrue);
+      expect(premiumCenterViewFor(_s('pass', planType: 'none')).showManage, isTrue);
+      // promo / admin / restore / free → pas d'abonnement store → pas de Manage.
+      expect(premiumCenterViewFor(_s('promo')).showManage, isFalse);
+      expect(premiumCenterViewFor(_s('admin')).showManage, isFalse);
+      expect(premiumCenterViewFor(_s('restore_required')).showManage, isFalse);
+      expect(premiumCenterViewFor(_s('free')).showManage, isFalse);
+    });
+
     test('AUCUN état ne montre Upgrade en Lot 1 (showUpgrade toujours false)', () {
       for (final src in ['free', 'pass', 'promo', 'admin', 'restore_required']) {
         for (final plan in ['none', 'weekly', 'annual']) {

@@ -12,6 +12,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
@@ -30,11 +31,16 @@ class PremiumCenterView {
   final PremiumCenterMode mode;
   final bool showRestore;
 
+  /// « Manage Subscription » ÉLIGIBLE (abonnement store). Le bouton réel n'est rendu QUE si
+  /// RevenueCat renvoie une managementURL non-null (masqué proprement sinon).
+  final bool showManage;
+
   /// Lot 1 : TOUJOURS false. Le bouton « Upgrade to Annual » est ajouté en Lot 2,
   /// uniquement après confirmation du subscription group App Store Connect.
   final bool showUpgrade;
 
-  const PremiumCenterView(this.mode, {this.showRestore = false, this.showUpgrade = false});
+  const PremiumCenterView(this.mode,
+      {this.showRestore = false, this.showManage = false, this.showUpgrade = false});
 }
 
 /// Sélection d'état PURE — c'est le cœur testé du Lot 1.
@@ -46,7 +52,7 @@ PremiumCenterView premiumCenterViewFor(MeStatus s) {
           : s.isAnnual
               ? PremiumCenterMode.annual
               : PremiumCenterMode.premiumGeneric;
-      return PremiumCenterView(mode, showRestore: true);
+      return PremiumCenterView(mode, showRestore: true, showManage: true);
     case 'promo':
       return const PremiumCenterView(PremiumCenterMode.promo);
     case 'admin':
@@ -94,6 +100,27 @@ class PremiumCenterSheet extends ConsumerStatefulWidget {
 }
 
 class _PremiumCenterSheetState extends ConsumerState<PremiumCenterSheet> {
+  String? _mgmtUrl; // managementURL RevenueCat (null = pas de bouton Manage)
+
+  @override
+  void initState() {
+    super.initState();
+    // Charge la managementURL uniquement pour un abonnement store éligible.
+    if (premiumCenterViewFor(widget.status).showManage) {
+      RevenuecatService.instance.managementUrl().then((url) {
+        if (mounted) setState(() => _mgmtUrl = url);
+      });
+    }
+  }
+
+  Future<void> _openManage() async {
+    final url = _mgmtUrl;
+    if (url == null || url.isEmpty) return;
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (_) {/* best-effort : ne bloque jamais */}
+  }
+
   String? _formatDate(BuildContext context, String? iso) {
     if (iso == null || iso.isEmpty) return null;
     try {
@@ -209,7 +236,16 @@ class _PremiumCenterSheetState extends ConsumerState<PremiumCenterSheet> {
             ],
             const SizedBox(height: AppSpacing.lg),
             // NOTE Lot 1 : PAS de « Upgrade to Annual » (Lot 2, après subscription group ASC).
-            // NOTE Commit 3 : « Manage Subscription » (managementURL) s'insère ici.
+            // Manage Subscription — rendu UNIQUEMENT si RevenueCat fournit une managementURL
+            // (masqué proprement sinon : promo, sandbox, non configuré).
+            if (view.showManage && _mgmtUrl != null && _mgmtUrl!.isNotEmpty) ...[
+              AppButton(
+                label: l10n.pcManageSubscription,
+                variant: AppButtonVariant.primary,
+                onPressed: _openManage,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+            ],
             if (view.showRestore)
               AppButton(
                 label: l10n.pwRestore,

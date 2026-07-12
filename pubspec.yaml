@@ -51,6 +51,10 @@ dependencies:
   # wipé au reinstall). → user_id stable au reinstall = free/pass/RC-appUserID conservés.
   flutter_secure_storage: ^9.2.4
 
+  # Premium Center (Lot 1) — ouvrir la page de gestion d'abonnement du store (RevenueCat
+  # managementURL). Dépendance DIRECTE (était transitive) → rebuild natif requis.
+  url_launcher: ^6.3.1
+
   # Wave 5.17a — Identity Foundation. Apple Sign-In (mandated by App Store
   # Guideline 5.1.1(v) when offering third-party login) + Google Sign-In.
   # Both feed into Supabase Auth's anonymous-user-upgrade flow via
