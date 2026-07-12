@@ -313,6 +313,21 @@ const Map<String, String> kmTranslations = {
   'pcPromotionActive': 'ការ​ផ្សព្វផ្សាយ​សកម្ម',
   'pcPremiumAccess': 'ការ​ចូល​ប្រើ Premium',
   'pcManageSubscription': 'គ្រប់គ្រង​ការ​ជាវ',
+  'pcUpgradeTitle': 'ដំឡើង​គម្រោង​របស់​អ្នក',
+  'pcUpgradeSpaces': '300 Spaces',
+  'pcUpgradeBestValue': 'តម្លៃ​ល្អ​បំផុត',
+  'pcUpgradeCta': 'ដំឡើង​ទៅ​ប្រចាំឆ្នាំ',
+  'pcUpgradeConfirmTitle': 'ដំឡើង​ទៅ​ប្រចាំឆ្នាំ?',
+  'pcUpgradeConfirmBody':
+      'គម្រោង​ប្រចាំឆ្នាំ​របស់​អ្នក​នឹង​ចាប់​ផ្ដើម​ភ្លាមៗ​ជាមួយ 300 Spaces។ Spaces ប្រចាំសប្ដាហ៍​ដែល​នៅ​សល់​នឹង​ត្រូវ​បាន​ជំនួស។ Apple នឹង​អនុវត្ត​ការ​សង​ប្រាក់​តាម​សមាមាត្រ​ដែល​មាន​សិទ្ធិ។',
+  'pcUpgradeConfirmYes': 'ដំឡើង​ទៅ​ប្រចាំឆ្នាំ',
+  'pcUpgradeConfirmNo': 'មិន​ឥឡូវ​ទេ',
+  'pcUpgradeActivating': 'កំពុង​ធ្វើ​ឲ្យ​គម្រោង​ប្រចាំឆ្នាំ​សកម្ម…',
+  'pcUpgradeDone': 'ឥឡូវ​អ្នក​កំពុង​ប្រើ Premium ប្រចាំឆ្នាំ។',
+  'pcUpgradeFailed': 'មិន​អាច​បញ្ចប់​ការ​ដំឡើង​បាន​ទេ។ សូម​ព្យាយាម​ម្ដង​ទៀត។',
+  'pcUpgradeDeferred':
+      'ការ​ទិញ​របស់​អ្នក​បាន​ជោគជ័យ។ យើង​កំពុង​ធ្វើ​បច្ចុប្បន្នភាព​គម្រោង​របស់​អ្នក។',
+  'pcUpgradeRefreshPlan': 'ធ្វើ​បច្ចុប្បន្នភាព​គម្រោង',
 
   // Chat reupload / design-direction sheet — KHMER V1
   'chatPleaseUpload': 'សូម​ផ្ទុក​រូបថត​ដើម​ជា​មុន​សិន។',

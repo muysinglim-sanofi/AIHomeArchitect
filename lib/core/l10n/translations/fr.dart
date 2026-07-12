@@ -325,6 +325,22 @@ const Map<String, String> frTranslations = {
   'pcPromotionActive': 'Promotion active',
   'pcPremiumAccess': 'Accès Premium',
   'pcManageSubscription': 'Gérer l\'abonnement',
+  'pcUpgradeTitle': 'Améliorez votre formule',
+  'pcUpgradeSpaces': '300 Spaces',
+  'pcUpgradeBestValue': 'Meilleure offre',
+  'pcUpgradeCta': 'Passer à l\'annuel',
+  'pcUpgradeConfirmTitle': 'Passer à l\'annuel ?',
+  'pcUpgradeConfirmBody':
+      'Votre formule annuelle démarrera immédiatement avec 300 Spaces. Vos Spaces hebdomadaires restants seront remplacés. Apple appliquera tout remboursement au prorata éligible.',
+  'pcUpgradeConfirmYes': 'Passer à l\'annuel',
+  'pcUpgradeConfirmNo': 'Pas maintenant',
+  'pcUpgradeActivating': 'Activation de votre formule annuelle…',
+  'pcUpgradeDone': 'Vous êtes maintenant en Premium annuel.',
+  'pcUpgradeFailed':
+      'Impossible de finaliser le changement. Veuillez réessayer.',
+  'pcUpgradeDeferred':
+      'Votre achat a réussi. Nous mettons encore votre formule à jour.',
+  'pcUpgradeRefreshPlan': 'Actualiser la formule',
 
   // Chat reupload / design-direction sheet
   'chatPleaseUpload': "Veuillez d'abord importer une photo source.",

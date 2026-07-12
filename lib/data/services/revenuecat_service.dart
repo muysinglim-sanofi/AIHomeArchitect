@@ -40,6 +40,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
@@ -60,6 +61,24 @@ class RevenuecatNotConfiguredException implements Exception {
   @override
   String toString() => 'RevenueCat SDK is not configured on this device.';
 }
+
+/// Résultat CLASSIFIÉ d'une tentative d'achat (Lot 2 — upgrade Weekly → Annual).
+///  • activated : le PRODUIT EXACT visé est actif après l'achat.
+///  • cancelled : UNIQUEMENT `PurchasesErrorCode.purchaseCancelledError`.
+///  • failed    : retour normal SANS le produit visé, ou toute autre erreur.
+enum PurchaseAttempt { activated, cancelled, failed }
+
+/// Preuve PURE (testable sans SDK) que le produit EXACT est actif après un achat.
+/// ⚠️ Ne PAS se contenter de « entitlement premium actif » : un abonné Weekly possède
+/// DÉJÀ `premium` avant l'upgrade → seul le product-id exact démontre l'achat de l'Annual.
+/// Vrai ssi `expectedProductId` figure dans les abonnements actifs OU est le produit porteur
+/// de l'entitlement premium.
+bool annualPurchaseActivated({
+  required List<String> activeSubscriptions,
+  String? premiumProductId,
+  required String expectedProductId,
+}) =>
+    activeSubscriptions.contains(expectedProductId) || premiumProductId == expectedProductId;
 
 class RevenuecatService {
   RevenuecatService._();
@@ -192,6 +211,64 @@ class RevenuecatService {
     } catch (e) {
       debugPrint('[RevenuecatService] getOfferings failed: $e');
       return null;
+    }
+  }
+
+  /// Lot 2 — résout le package **Annual** de l'offering courant (MÊME source que le
+  /// paywall : `findByType(PackageType.annual)` sur `current.availablePackages`, cf.
+  /// `paywall_sheet.dart`). Renvoie `null` si le SDK n'est pas configuré, si les
+  /// offerings sont indisponibles, ou si aucun package Annual n'existe → l'appelant
+  /// (Premium Center) MASQUE proprement le CTA « Upgrade to Annual ». N'achète rien.
+  Future<Package?> annualPackage() async {
+    final offerings = await loadOfferings();
+    final pkgs = offerings?.current?.availablePackages ?? const <Package>[];
+    for (final p in pkgs) {
+      if (p.packageType == PackageType.annual) return p;
+    }
+    // Log explicite (sans donnée sensible) : le CTA Upgrade sera masqué proprement.
+    debugPrint(
+      '[RevenuecatService] annual package unavailable in current offering '
+      '(offering=${offerings?.current?.identifier ?? 'none'}, '
+      'packages=${pkgs.length}) — Upgrade CTA hidden',
+    );
+    return null;
+  }
+
+  /// Lot 2 — achat de l'UPGRADE Annual, CLASSIFIÉ par le PRODUIT EXACT visé (`annualPkg`).
+  /// N'AFFECTE PAS le parcours d'achat Weekly ([purchasePackage] reste inchangé).
+  ///
+  /// ⚠️ On ne conclut JAMAIS « activated » sur « premium actif » : un abonné Weekly a déjà
+  /// l'entitlement `premium`. On exige que `annualPkg.storeProduct.identifier` soit RÉELLEMENT
+  /// actif après l'achat (`activeSubscriptions` ou produit porteur de `premium`). Un booléen
+  /// `false` n'est PLUS traité comme une annulation silencieuse :
+  ///   • `purchaseCancelledError`        → cancelled
+  ///   • produit Annual exact confirmé   → activated
+  ///   • retour normal SANS l'Annual     → failed
+  ///   • toute autre exception           → failed
+  Future<PurchaseAttempt> purchaseAnnual(Package annualPkg) async {
+    if (!_configured) return PurchaseAttempt.failed;
+    final String expectedId = annualPkg.storeProduct.identifier;
+    try {
+      final CustomerInfo info = await Purchases.purchasePackage(annualPkg);
+      final ok = annualPurchaseActivated(
+        activeSubscriptions: info.activeSubscriptions,
+        premiumProductId: info.entitlements.active[kPremiumEntitlement]?.productIdentifier,
+        expectedProductId: expectedId,
+      );
+      if (!ok) {
+        debugPrint('[RevenuecatService] purchaseAnnual: premium may be active but exact '
+            'product not confirmed (expected=$expectedId) — treated as failed');
+      }
+      return ok ? PurchaseAttempt.activated : PurchaseAttempt.failed;
+    } on PlatformException catch (e) {
+      final code = PurchasesErrorHelper.getErrorCode(e);
+      return code == PurchasesErrorCode.purchaseCancelledError
+          ? PurchaseAttempt.cancelled
+          : PurchaseAttempt.failed;
+    } on RevenuecatNotConfiguredException {
+      return PurchaseAttempt.failed;
+    } catch (_) {
+      return PurchaseAttempt.failed;
     }
   }
 

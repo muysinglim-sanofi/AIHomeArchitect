@@ -316,6 +316,21 @@ const Map<String, String> enTranslations = {
   'pcPromotionActive': 'Promotion active',
   'pcPremiumAccess': 'Premium Access',
   'pcManageSubscription': 'Manage Subscription',
+  'pcUpgradeTitle': 'Upgrade your plan',
+  'pcUpgradeSpaces': '300 Spaces',
+  'pcUpgradeBestValue': 'Best value',
+  'pcUpgradeCta': 'Upgrade to Annual',
+  'pcUpgradeConfirmTitle': 'Upgrade to Annual?',
+  'pcUpgradeConfirmBody':
+      'Your Annual plan will start immediately with 300 Spaces. Your remaining Weekly Spaces will be replaced. Apple will apply any eligible prorated refund.',
+  'pcUpgradeConfirmYes': 'Upgrade to Annual',
+  'pcUpgradeConfirmNo': 'Not now',
+  'pcUpgradeActivating': 'Activating your Annual plan…',
+  'pcUpgradeDone': "You're now on Annual Premium.",
+  'pcUpgradeFailed': "We couldn't complete the upgrade. Please try again.",
+  'pcUpgradeDeferred':
+      "Your purchase was successful. We're still updating your plan.",
+  'pcUpgradeRefreshPlan': 'Refresh plan',
 
   // Chat reupload / design-direction sheet
   'chatPleaseUpload': 'Please upload a source photo first.',

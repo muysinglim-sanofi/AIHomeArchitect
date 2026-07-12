@@ -377,6 +377,20 @@ class AppLocalizations {
   String get pcPromotionActive => _get('pcPromotionActive');
   String get pcPremiumAccess => _get('pcPremiumAccess');
   String get pcManageSubscription => _get('pcManageSubscription');
+  // Lot 2 — Upgrade Weekly → Annual
+  String get pcUpgradeTitle => _get('pcUpgradeTitle');
+  String get pcUpgradeSpaces => _get('pcUpgradeSpaces');
+  String get pcUpgradeBestValue => _get('pcUpgradeBestValue');
+  String get pcUpgradeCta => _get('pcUpgradeCta');
+  String get pcUpgradeConfirmTitle => _get('pcUpgradeConfirmTitle');
+  String get pcUpgradeConfirmBody => _get('pcUpgradeConfirmBody');
+  String get pcUpgradeConfirmYes => _get('pcUpgradeConfirmYes');
+  String get pcUpgradeConfirmNo => _get('pcUpgradeConfirmNo');
+  String get pcUpgradeActivating => _get('pcUpgradeActivating');
+  String get pcUpgradeDone => _get('pcUpgradeDone');
+  String get pcUpgradeFailed => _get('pcUpgradeFailed');
+  String get pcUpgradeDeferred => _get('pcUpgradeDeferred');
+  String get pcUpgradeRefreshPlan => _get('pcUpgradeRefreshPlan');
 
   // ── Chat reupload / design-direction sheet ────────────────────────────────
   String get chatPleaseUpload => _get('chatPleaseUpload');

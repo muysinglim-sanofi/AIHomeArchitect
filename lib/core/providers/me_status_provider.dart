@@ -13,6 +13,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -33,6 +34,12 @@ class MeStatusNotifier extends StateNotifier<MeStatus?> {
         RevenuecatService.instance.premiumStream.listen(_onPremiumSignal);
   }
 
+  /// Test-only — construit un notifier SANS bootstrap ni souscriptions (aucun accès
+  /// Supabase/RevenueCat). Permet les widget-tests du Premium Center. Additif : le
+  /// constructeur de production reste inchangé.
+  @visibleForTesting
+  MeStatusNotifier.forTest(super.initial);
+
   // Persisted last-confirmed ENTITLED status (premium || hasActivePromo). Mirror
   // of accessProvider's admin cache: it only ever holds an entitled snapshot, so
   // seeding it can only GRANT, never lock; an explicit free/blocked answer (or
@@ -40,9 +47,12 @@ class MeStatusNotifier extends StateNotifier<MeStatus?> {
   // over-optimistic UI can never bypass an actual gate.
   static const String _kCacheKey = 'me_status_entitled';
 
-  final StatusService _svc = StatusService();
-  late final StreamSubscription _authSub;
-  late final StreamSubscription _premiumSub;
+  // Lazy : construit à la 1ʳᵉ utilisation seulement (le constructeur `.forTest` ne l'utilise
+  // jamais → pas d'accès dotenv/réseau en widget-test).
+  late final StatusService _svc = StatusService();
+  // Nullables : le constructeur `.forTest` ne souscrit pas (dispose reste null-safe).
+  StreamSubscription? _authSub;
+  StreamSubscription? _premiumSub;
   // Last-wins guard (same rationale as accessProvider): a transient failed
   // refresh on resume must never overwrite a good status out of order.
   int _seq = 0;
@@ -124,10 +134,14 @@ class MeStatusNotifier extends StateNotifier<MeStatus?> {
     } catch (_) {}
   }
 
+  /// Test-only — pilote l'état comme le ferait un refresh backend (widget-tests).
+  @visibleForTesting
+  void debugSetStatus(MeStatus? s) => state = s;
+
   @override
   void dispose() {
-    _authSub.cancel();
-    _premiumSub.cancel();
+    _authSub?.cancel();
+    _premiumSub?.cancel();
     super.dispose();
   }
 }

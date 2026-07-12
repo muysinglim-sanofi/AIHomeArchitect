@@ -68,13 +68,16 @@ void main() {
       expect(premiumCenterViewFor(_s('free')).showManage, isFalse);
     });
 
-    test('AUCUN état ne montre Upgrade en Lot 1 (showUpgrade toujours false)', () {
-      for (final src in ['free', 'pass', 'promo', 'admin', 'restore_required']) {
-        for (final plan in ['none', 'weekly', 'annual']) {
-          expect(premiumCenterViewFor(_s(src, planType: plan)).showUpgrade, isFalse,
-              reason: 'Upgrade est Lot 2 (après subscription group ASC)');
-        }
-      }
+    test('Lot 2 — showUpgrade UNIQUEMENT pour un pass weekly', () {
+      // Le SEUL état qui propose l'upgrade Annual.
+      expect(premiumCenterViewFor(_s('pass', planType: 'weekly')).showUpgrade, isTrue);
+      // Tout le reste → PAS d'upgrade (annual/premium générique/free/promo/admin/restore).
+      expect(premiumCenterViewFor(_s('pass', planType: 'annual')).showUpgrade, isFalse);
+      expect(premiumCenterViewFor(_s('pass', planType: 'none')).showUpgrade, isFalse);
+      expect(premiumCenterViewFor(_s('free')).showUpgrade, isFalse);
+      expect(premiumCenterViewFor(_s('promo')).showUpgrade, isFalse);
+      expect(premiumCenterViewFor(_s('admin')).showUpgrade, isFalse);
+      expect(premiumCenterViewFor(_s('restore_required')).showUpgrade, isFalse);
     });
   });
 }
