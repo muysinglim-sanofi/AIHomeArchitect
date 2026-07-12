@@ -1448,6 +1448,39 @@ async def _read_latest_pass_ends_at(user_id: str) -> "str | None":
         return None
 
 
+def _sku_to_plan_type(sku: "str | None") -> str:
+    """Premium Center (Lot 1) — mappe le sku produit → plan_type d'affichage. PURE/testable.
+    INFORMATIF seulement : ne participe NI au gate NI au débit NI à la projection."""
+    if sku == "weekly_pass":
+        return "weekly"
+    if sku == "annual_pass":
+        return "annual"
+    return "none"
+
+
+async def _read_active_pass_product(user_id: str) -> "tuple[str, str | None]":
+    """Premium Center (Lot 1) — READ-ONLY, ADDITIF : (plan_type, active_product_id) du pass
+    le plus récent de l'user (embed products via la FK passes.product_id). Purement
+    INFORMATIF pour l'UX (distinguer Weekly d'Annual) — n'entre NI dans reserve_decision,
+    NI dans try_hold, NI dans la projection wallet. Best-effort : erreur → ('none', None)."""
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("passes")
+            .select("ends_at, products(sku, apple_product_id)")
+            .eq("user_id", user_id)
+            .order("ends_at", desc=True)
+            .limit(1).execute()
+        )
+        rows = getattr(res, "data", None) or []
+        if not rows:
+            return ("none", None)
+        prod = rows[0].get("products") or {}
+        return (_sku_to_plan_type(prod.get("sku")), prod.get("apple_product_id"))
+    except Exception as exc:  # noqa: BLE001 — l'affichage ne bloque jamais
+        log.warning("[me/status] pass-product read failed user=%s err=%s", user_id[:8], exc)
+        return ("none", None)
+
+
 def _classify_access_source(
     *, is_admin: bool, has_active_pass: bool, promo_active: bool,
     has_premium_role: bool, ever_had_pass: bool,
@@ -1557,6 +1590,13 @@ async def get_me_status(
                  "ever_had_pass=%s renews_at=%s user=%s", _access_source,
                  _ever_had_pass, _pass_renews_at, current_user.user_id[:8])
 
+    # Premium Center (Lot 1) — plan_type/active_product_id INFORMATIFS : distinguer Weekly
+    # d'Annual côté UX. Lecture UNIQUEMENT pour un abonné (access_source=='pass') → coût nul
+    # pour free/promo/admin. N'entre dans AUCUNE décision de gate/débit/projection.
+    _plan_type, _active_product_id = "none", None
+    if _access_source == "pass":
+        _plan_type, _active_product_id = await _read_active_pass_product(current_user.user_id)
+
     # remaining_free_generations = bucket free du LEDGER (source unique), plus usage_log.
     _rfg = None if unlimited else (_free_credits if _free_credits is not None else 0)
 
@@ -1601,6 +1641,10 @@ async def get_me_status(
         "pass_renews_at": _pass_renews_at,
         "has_active_pass": _has_active_pass,
         "access_source": _access_source,
+        # Premium Center (Lot 1) — INFORMATIFS (UX distinguer Weekly/Annual), hors gate/débit.
+        "plan_type": _plan_type,                 # "weekly" | "annual" | "none"
+        "active_product_id": _active_product_id,  # ex "com.aydenstudio.app.weekly" | None
+
         # P0 bloc (b) — compteur "Redesigns" (générations réussies, source unique backend).
         "generations_succeeded": _gens_succeeded,
     }
