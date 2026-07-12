@@ -319,6 +319,12 @@ const Map<String, String> frTranslations = {
   'stRestoreActiveNoSpaces': 'Abonnement actif — les espaces se rechargent au renouvellement',
   'stRestoreNoneFound': 'Aucun abonnement actif trouvé sur ce compte',
   'stRestoreFailed': 'Restauration impossible. Veuillez réessayer.',
+  'pcCurrentPlan': 'Formule actuelle',
+  'pcWeeklyPremium': 'Premium hebdomadaire',
+  'pcAnnualPremium': 'Premium annuel',
+  'pcPromotionActive': 'Promotion active',
+  'pcPremiumAccess': 'Accès Premium',
+  'pcManageSubscription': 'Gérer l\'abonnement',
 
   // Chat reupload / design-direction sheet
   'chatPleaseUpload': "Veuillez d'abord importer une photo source.",

@@ -307,6 +307,12 @@ const Map<String, String> kmTranslations = {
   'stRestoreActiveNoSpaces': 'ការ​ជាវ​សកម្ម — កន្លែង​នឹង​បំពេញ​ឡើងវិញ​ពេល​បន្ត',
   'stRestoreNoneFound': 'រក​មិន​ឃើញ​ការ​ជាវ​សកម្ម​នៅ​លើ​គណនី​នេះ',
   'stRestoreFailed': 'មិន​អាច​ស្ដារ​បាន​ទេ។ សូម​ព្យាយាម​ម្ដង​ទៀត។',
+  'pcCurrentPlan': 'គម្រោង​បច្ចុប្បន្ន',
+  'pcWeeklyPremium': 'Premium ប្រចាំសប្ដាហ៍',
+  'pcAnnualPremium': 'Premium ប្រចាំឆ្នាំ',
+  'pcPromotionActive': 'ការ​ផ្សព្វផ្សាយ​សកម្ម',
+  'pcPremiumAccess': 'ការ​ចូល​ប្រើ Premium',
+  'pcManageSubscription': 'គ្រប់គ្រង​ការ​ជាវ',
 
   // Chat reupload / design-direction sheet — KHMER V1
   'chatPleaseUpload': 'សូម​ផ្ទុក​រូបថត​ដើម​ជា​មុន​សិន។',

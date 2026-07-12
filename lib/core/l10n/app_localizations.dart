@@ -370,6 +370,13 @@ class AppLocalizations {
   String get stRestoreActiveNoSpaces => _get('stRestoreActiveNoSpaces');
   String get stRestoreNoneFound => _get('stRestoreNoneFound');
   String get stRestoreFailed => _get('stRestoreFailed');
+  // Premium Center (Lot 1)
+  String get pcCurrentPlan => _get('pcCurrentPlan');
+  String get pcWeeklyPremium => _get('pcWeeklyPremium');
+  String get pcAnnualPremium => _get('pcAnnualPremium');
+  String get pcPromotionActive => _get('pcPromotionActive');
+  String get pcPremiumAccess => _get('pcPremiumAccess');
+  String get pcManageSubscription => _get('pcManageSubscription');
 
   // ── Chat reupload / design-direction sheet ────────────────────────────────
   String get chatPleaseUpload => _get('chatPleaseUpload');

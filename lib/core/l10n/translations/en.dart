@@ -310,6 +310,12 @@ const Map<String, String> enTranslations = {
   'stRestoreActiveNoSpaces': 'Subscription active — spaces refresh at renewal',
   'stRestoreNoneFound': 'No active subscription found on this account',
   'stRestoreFailed': 'Couldn\'t restore. Please try again.',
+  'pcCurrentPlan': 'Current Plan',
+  'pcWeeklyPremium': 'Weekly Premium',
+  'pcAnnualPremium': 'Annual Premium',
+  'pcPromotionActive': 'Promotion active',
+  'pcPremiumAccess': 'Premium Access',
+  'pcManageSubscription': 'Manage Subscription',
 
   // Chat reupload / design-direction sheet
   'chatPleaseUpload': 'Please upload a source photo first.',
