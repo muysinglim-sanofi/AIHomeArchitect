@@ -180,6 +180,10 @@ class AuthService {
             nonce: rawNonce,
           );
           final newUid = currentUser?.id;
+          if (newUid == null || newUid == previousUid) {
+            throw StateError('Merge-path invariant violated: expected a '
+                'different existing account (got $newUid for anon $previousUid).');
+          }
           debugPrint('[AuthService][MERGE_REQUIRED] provider=apple '
               'from_anon=$previousUid to=$newUid');
           return SignInResult(
@@ -297,6 +301,10 @@ class AuthService {
             accessToken: accessToken,
           );
           final newUid = currentUser?.id;
+          if (newUid == null || newUid == previousUid) {
+            throw StateError('Merge-path invariant violated: expected a '
+                'different existing account (got $newUid for anon $previousUid).');
+          }
           debugPrint('[AuthService][MERGE_REQUIRED] provider=google '
               'from_anon=$previousUid to=$newUid');
           return SignInResult(

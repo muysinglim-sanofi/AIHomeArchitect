@@ -96,8 +96,8 @@ workflows:
   #     builds omit it → signInEnabled stays false + tree-shaken) ;
   #   • GOOGLE_WEB_CLIENT_ID is injected from the Codemagic env group — NEVER
   #     hard-coded here ;
-  #   • internal TestFlight only (submit_to_testflight, NO beta_groups → no
-  #     external testers assigned).
+  #   • internal TestFlight only (testFlightInternalTestingOnly=true, NO
+  #     submit_to_testflight, NO beta_groups → no external testers assigned).
   # ───────────────────────────────────────────────────────────────────────────
   ios-testflight-qa:
     name: AYDEN — iOS TestFlight (QA Sign-In)
