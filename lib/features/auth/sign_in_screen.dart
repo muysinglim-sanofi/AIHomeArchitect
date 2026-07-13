@@ -17,6 +17,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
+import '../../core/feature_flags.dart';
 import '../../data/services/auth_service.dart';
 import '../../shared/widgets/app_button.dart';
 
@@ -138,22 +139,29 @@ class _SignInScreenState extends State<SignInScreen> {
               // iOS, Google first on Android) but BOTH are shown — App
               // Store Guideline §5.1.1(v) requires Apple to be present
               // when any third-party login is offered.
+              // Google is provider-gated (Unified Identity): QA-1 is Apple-only
+              // so the Google button is HIDDEN and `signInWithGoogle` (which is
+              // the only place a GoogleSignIn() is constructed) is never reached.
               if (appleFirst) ...[
                 _AppleButton(
                   loading: _isAppleLoading,
                   onPressed: _handleApple,
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                _GoogleButton(
-                  loading: _isGoogleLoading,
-                  onPressed: _handleGoogle,
-                ),
+                if (FeatureFlags.googleSignInEnabled) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _GoogleButton(
+                    loading: _isGoogleLoading,
+                    onPressed: _handleGoogle,
+                  ),
+                ],
               ] else ...[
-                _GoogleButton(
-                  loading: _isGoogleLoading,
-                  onPressed: _handleGoogle,
-                ),
-                const SizedBox(height: AppSpacing.sm),
+                if (FeatureFlags.googleSignInEnabled) ...[
+                  _GoogleButton(
+                    loading: _isGoogleLoading,
+                    onPressed: _handleGoogle,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                ],
                 _AppleButton(
                   loading: _isAppleLoading,
                   onPressed: _handleApple,

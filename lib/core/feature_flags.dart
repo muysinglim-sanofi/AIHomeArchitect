@@ -32,6 +32,16 @@ class FeatureFlags {
   /// peut PAS activer le sign-in sans le define explicite.
   static const bool signInEnabled = bool.fromEnvironment('AYDEN_QA_SIGNIN');
 
+  /// QA-1b — Google Sign-In provider gate (Unified Identity). QA-1 is Apple-only
+  /// because Google is not yet configured on iOS (no iOS OAuth client + no
+  /// reversed-client-id URL scheme in Info.plist). When false (default + QA-1),
+  /// the Google button is HIDDEN and the Google SDK is never initialised (no
+  /// GoogleSignIn() is constructed). QA-1b flips it via
+  /// `--dart-define=AYDEN_QA_GOOGLE_SIGNIN=true` once the iOS client + URL scheme
+  /// + GOOGLE_WEB_CLIENT_ID are in place.
+  static const bool googleSignInEnabled =
+      bool.fromEnvironment('AYDEN_QA_GOOGLE_SIGNIN');
+
   /// RevenueCat graceful-degradation guard.
   ///
   /// When false (default) : a missing or misconfigured RevenueCat

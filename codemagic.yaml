@@ -81,12 +81,14 @@ workflows:
         #   - Internal Testers
 
   # ───────────────────────────────────────────────────────────────────────────
-  # QA-ONLY — Unified Identity Sign-In observation build (QA-1).
-  # Purpose: expose Apple/Google Sign-In on a throwaway QA branch to validate the
-  # LINK path for a NEW OAuth identity (anonymous UUID preserved via
+  # QA-ONLY — Unified Identity Sign-In observation build (QA-1, APPLE-ONLY).
+  # Purpose: expose APPLE Sign-In on a throwaway QA branch to validate the LINK
+  # path for a NEW Apple identity (anonymous UUID preserved via
   # linkIdentityWithIdToken) and observe the MERGE_REQUIRED path for an EXISTING
-  # OAuth account. It does NOT wire Purchases.logIn (RC re-bind) — that is QA-2.
-  # It NEVER touches the production `ios-testflight` workflow above.
+  # Apple account. Google is provider-gated OFF here (AYDEN_QA_GOOGLE_SIGNIN=false)
+  # → button hidden, no Google SDK init; it returns in QA-1b. It does NOT wire
+  # Purchases.logIn (RC re-bind) — that is QA-2. It NEVER touches the production
+  # `ios-testflight` workflow above.
   #
   # Safety:
   #   • scoped to the qa/identity-signin branch only (branch_patterns) ;
@@ -94,8 +96,8 @@ workflows:
   #     Apple / Google / Supabase prerequisites are confirmed ;
   #   • Sign-In is enabled ONLY via --dart-define=AYDEN_QA_SIGNIN=true (prod
   #     builds omit it → signInEnabled stays false + tree-shaken) ;
-  #   • GOOGLE_WEB_CLIENT_ID is injected from the Codemagic env group — NEVER
-  #     hard-coded here ;
+  #   • QA-1 is Apple-only → Google is not initialised and GOOGLE_WEB_CLIENT_ID is
+  #     NOT required (added in QA-1b, injected from the env group, never hard-coded) ;
   #   • internal TestFlight only (testFlightInternalTestingOnly=true, NO
   #     submit_to_testflight, NO beta_groups → no external testers assigned).
   # ───────────────────────────────────────────────────────────────────────────
@@ -116,14 +118,14 @@ workflows:
       app_store_connect: AYDEN App Store      # SAME integration as prod (unchanged)
     environment:
       groups:
-        - ayden_env                            # 5 .env vars + GOOGLE_WEB_CLIENT_ID (Secure, add in Codemagic UI)
+        - ayden_env                            # 5 .env vars (GOOGLE_WEB_CLIENT_ID only needed in QA-1b)
       flutter: stable
       xcode: latest
       cocoapods: default
       vars:
         BUNDLE_ID: "com.aydenstudio.app"
     scripts:
-      - name: Preflight — branch guard + required env/files (fail fast)
+      - name: Preflight — branch guard + Apple config + build number (fail fast)
         script: |
           set -euo pipefail
           # Enforce the branch at RUNTIME: a manual start from any other branch aborts.
@@ -131,9 +133,9 @@ workflows:
             echo "ERROR: ios-testflight-qa is restricted to qa/identity-signin (got '${CM_BRANCH:-}')."
             exit 1
           fi
-          # Google native sign-in needs the WEB client id + the plist (+ URL scheme).
-          : "${GOOGLE_WEB_CLIENT_ID:?GOOGLE_WEB_CLIENT_ID is missing — add it Secure in the ayden_env group}"
-          test -f ios/Runner/GoogleService-Info.plist
+          # QA-1 is APPLE-ONLY → NO Google preflight (no GOOGLE_WEB_CLIENT_ID, no
+          # GoogleService-Info.plist required). QA-1b re-adds those checks together
+          # with the iOS OAuth client + Info.plist reversed-client-id URL scheme.
           # Apple: the Sign in with Apple entitlement must be present in the Flutter
           # project (does NOT confirm the Apple portal, but catches a misconfigured project).
           test -f ios/Runner/Runner.entitlements
@@ -148,7 +150,7 @@ workflows:
             echo "ERROR: build number ($PROJECT_BUILD_NUMBER) must be greater than App Store build 47."
             exit 1
           fi
-          echo "✓ preflight OK (branch=$CM_BRANCH, Google+Apple config present, build=$PROJECT_BUILD_NUMBER > 47)"
+          echo "✓ preflight OK (branch=$CM_BRANCH, Apple config present, build=$PROJECT_BUILD_NUMBER > 47)"
       - name: Inject frontend .env (from Codemagic vars — gitignored, written here)
         script: |
           {
@@ -175,7 +177,7 @@ workflows:
             --custom-export-options='{"testFlightInternalTestingOnly": true}'
       - name: Install CocoaPods
         script: find . -name "Podfile" -execdir pod install \;
-      - name: Flutter build IPA (QA — Sign-In exposed)
+      - name: Flutter build IPA (QA-1 — Apple-only Sign-In)
         script: |
           # Build number = PROJECT_BUILD_NUMBER (global project counter), NOT
           # BUILD_NUMBER (per-workflow counter → would restart at 1 for this new
@@ -183,13 +185,14 @@ workflows:
           # builds). The echo lets us confirm it is higher than the latest ASC build.
           echo "CM workflow build (BUILD_NUMBER):        ${BUILD_NUMBER:-<unset>}"
           echo "CM project build  (PROJECT_BUILD_NUMBER): ${PROJECT_BUILD_NUMBER:-<unset>}"
-          # QA-scoped dart-defines: expose Sign-In + inject the Google WEB client id
-          # (from the Codemagic env group; never committed). NO Purchases.logIn is
-          # wired in the app for QA-1 — RC re-bind is QA-2.
+          # QA-1 dart-defines: expose Sign-In, APPLE ONLY. AYDEN_QA_GOOGLE_SIGNIN=false
+          # hides the Google button and prevents any Google SDK init. QA-1b flips it
+          # to true and adds --dart-define=GOOGLE_WEB_CLIENT_ID once Google iOS is
+          # configured. NO Purchases.logIn is wired in the app for QA-1 — RC = QA-2.
           flutter build ipa --release \
             --build-number="$PROJECT_BUILD_NUMBER" \
             --dart-define=AYDEN_QA_SIGNIN=true \
-            --dart-define=GOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" \
+            --dart-define=AYDEN_QA_GOOGLE_SIGNIN=false \
             --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
