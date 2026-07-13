@@ -5,13 +5,15 @@
 /// (no friction) and Generation #2+ as sign-in-required. This service is the
 /// single source of truth for that transition.
 ///
-/// **Anonymous upgrade contract (Decision 4 — project preservation)**
-/// When the user is anonymous AND signs in with Apple/Google, we use
-/// `supabase.auth.linkIdentity()` rather than `signInWithOAuth()`. The
-/// linkIdentity call preserves the existing user UUID — so the session,
-/// messages, and generated images remain attached to the same identity
-/// throughout the upgrade. Without this, the OAuth flow would create a
-/// NEW user UUID and the anonymous project would be orphaned.
+/// **Anonymous upgrade contract (project preservation)**
+/// When the user is anonymous AND signs in with Apple/Google, we call
+/// `supabase.auth.linkIdentityWithIdToken()` (NOT `signInWithIdToken()`) —
+/// the native ID-token LINK that attaches the OAuth identity to the CURRENT
+/// anonymous user, preserving its UUID (so session/messages/images stay
+/// attached). Requires "Enable Manual Linking" in the Supabase dashboard.
+/// If the OAuth identity ALREADY belongs to another account, the LINK fails;
+/// we then sign into that existing account (B) and return `mergeRequired`
+/// with `previousAnonUid` = A, for the (future) atomic merge flow.
 ///
 /// Sign-out behaviour is intentionally STANDARD : it clears the Supabase
 /// session. Wave 5.17a does not implement a device-lock-on-signout defense
@@ -39,15 +41,24 @@ class SignInResult {
   final SignInOutcome outcome;
   final String? userId;
   final String? errorMessage;
-  /// True iff the sign-in upgraded an existing anonymous user (Decision 4).
-  /// False if the user was already signed in or if a new identity was created.
+  /// True iff the anonymous UUID was PRESERVED via linkIdentityWithIdToken
+  /// (LINK path succeeded). False otherwise.
   final bool wasAnonymousUpgrade;
+  /// True iff the anonymous user could NOT be linked because the OAuth identity
+  /// already belongs to a DIFFERENT account (B) → we signed into B and the
+  /// anonymous activity (A) must be MERGED into B by the (future) merge flow.
+  final bool mergeRequired;
+  /// The anonymous UUID (A) captured BEFORE sign-in — set only when
+  /// [mergeRequired], so the merge-ticket flow can reference it. Never a token.
+  final String? previousAnonUid;
 
   const SignInResult({
     required this.outcome,
     this.userId,
     this.errorMessage,
     this.wasAnonymousUpgrade = false,
+    this.mergeRequired = false,
+    this.previousAnonUid,
   });
 }
 
@@ -113,42 +124,82 @@ class AuthService {
       final wasAnon = isAnonymous;
       final previousUid = currentUser?.id;
 
-      // Decision 4 — when anonymous, link the OAuth identity to preserve
-      // the existing user UUID + their project. When signed-in or no
-      // session, signInWithIdToken handles fresh sign-in.
       if (wasAnon) {
-        // linkIdentity expects OAuthProvider on `auth.signInWithIdToken`
-        // semantics — we use signInWithIdToken which Supabase auto-upgrades
-        // anonymous identities when the same auth.users row is updated.
-        // The supabase_flutter SDK's linkIdentity OAuth flow uses the
-        // server-side OAuth callback ; for native ID-token flow we rely on
-        // signInWithIdToken + the dashboard's "link anonymous to OAuth"
-        // setting (Prerequisite A).
-        await _supabase.auth.signInWithIdToken(
-          provider: OAuthProvider.apple,
-          idToken: idToken,
-          nonce: rawNonce,
-        );
-      } else {
-        await _supabase.auth.signInWithIdToken(
-          provider: OAuthProvider.apple,
-          idToken: idToken,
-          nonce: rawNonce,
-        );
+        // Unified Identity — convert the anonymous user by LINKING the Apple
+        // identity to the CURRENT (anonymous) user via linkIdentityWithIdToken
+        // (requires "Enable Manual Linking" in Supabase). Success → UUID PRESERVED
+        // (enforced by the invariants below). ONLY the error code
+        // 'identity_already_exists' means the Apple identity already belongs to
+        // another account → then, and ONLY then, we sign into that account (B) and
+        // flag MERGE_REQUIRED. Any OTHER AuthException (manual_linking_disabled,
+        // provider_disabled, bad_jwt, timeout…) is a real failure → rethrow; never
+        // a silent fallback that would misclassify a config error as a merge and
+        // orphan the anonymous project A.
+        //
+        // QA-1 observation only. `previousAnonUid` is NOT sufficient authorization
+        // for a merge. Production requires a server-issued one-time merge ticket
+        // created WHILE the anonymous session A is still active (after
+        // signInWithIdToken(B), A's JWT is no longer the current session).
+        try {
+          await _supabase.auth.linkIdentityWithIdToken(
+            provider: OAuthProvider.apple,
+            idToken: idToken,
+            nonce: rawNonce,
+          );
+          // Refresh so the next backend JWT reflects the PERMANENT status (Ayden
+          // keys on the `is_anonymous` claim — never continue on the old anon JWT).
+          await _supabase.auth.refreshSession();
+          final linkedUser = currentUser;
+          final newUid = linkedUser?.id;
+          if (newUid == null || newUid != previousUid) {
+            throw StateError('Identity link invariant violated: anonymous UUID '
+                'changed ($previousUid → $newUid).');
+          }
+          if (linkedUser?.isAnonymous == true) {
+            throw StateError('Identity linked but user still anonymous after '
+                'session refresh.');
+          }
+          debugPrint('[AuthService][LINK] provider=apple preserved uid=$newUid');
+          return SignInResult(
+            outcome: SignInOutcome.success,
+            userId: newUid,
+            wasAnonymousUpgrade: true,
+          );
+        } on AuthException catch (e) {
+          if (e.code != 'identity_already_exists') {
+            debugPrint('[AuthService][LINK_FAILED] provider=apple code=${e.code}');
+            rethrow; // real failure (config/credential) → NOT a merge
+          }
+          // Apple identity already attached to another account B → sign into B.
+          // QA-1: LOG MERGE_REQUIRED only; NO data of A is moved (no merge backend).
+          debugPrint('[AuthService][LINK] provider=apple identity_already_exists '
+              '→ signing into existing account (MERGE path)');
+          await _supabase.auth.signInWithIdToken(
+            provider: OAuthProvider.apple,
+            idToken: idToken,
+            nonce: rawNonce,
+          );
+          final newUid = currentUser?.id;
+          debugPrint('[AuthService][MERGE_REQUIRED] provider=apple '
+              'from_anon=$previousUid to=$newUid');
+          return SignInResult(
+            outcome: SignInOutcome.success,
+            userId: newUid,
+            mergeRequired: true,
+            previousAnonUid: previousUid,
+          );
+        }
       }
 
+      // Already signed-in or no session → plain sign-in (no anon UUID to keep).
+      await _supabase.auth.signInWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: idToken,
+        nonce: rawNonce,
+      );
       final newUid = currentUser?.id;
-      final upgraded = wasAnon && newUid == previousUid;
-      debugPrint(
-        '[AuthService] Apple sign-in success — '
-        'prev_uid=$previousUid  new_uid=$newUid  upgraded=$upgraded',
-      );
-
-      return SignInResult(
-        outcome: SignInOutcome.success,
-        userId: newUid,
-        wasAnonymousUpgrade: upgraded,
-      );
+      debugPrint('[AuthService] Apple sign-in (non-anon) — new_uid=$newUid');
+      return SignInResult(outcome: SignInOutcome.success, userId: newUid);
     } on SignInWithAppleAuthorizationException catch (e) {
       if (e.code == AuthorizationErrorCode.canceled) {
         return const SignInResult(outcome: SignInOutcome.cancelled);
@@ -202,24 +253,69 @@ class AuthService {
       final wasAnon = isAnonymous;
       final previousUid = currentUser?.id;
 
+      if (wasAnon) {
+        // Google LINK — linkIdentityWithIdToken needs the idToken AND the
+        // accessToken. Success → UUID preserved (invariants enforced below).
+        // ONLY 'identity_already_exists' → sign into the existing account (B) and
+        // flag MERGE_REQUIRED. Any other AuthException → rethrow (never a silent
+        // fallback). QA-1 observation only: `previousAnonUid` is NOT merge
+        // authorization; production needs a server-issued merge ticket created
+        // while the anonymous session A is still active.
+        try {
+          await _supabase.auth.linkIdentityWithIdToken(
+            provider: OAuthProvider.google,
+            idToken: idToken,
+            accessToken: accessToken,
+          );
+          await _supabase.auth.refreshSession();
+          final linkedUser = currentUser;
+          final newUid = linkedUser?.id;
+          if (newUid == null || newUid != previousUid) {
+            throw StateError('Identity link invariant violated: anonymous UUID '
+                'changed ($previousUid → $newUid).');
+          }
+          if (linkedUser?.isAnonymous == true) {
+            throw StateError('Identity linked but user still anonymous after '
+                'session refresh.');
+          }
+          debugPrint('[AuthService][LINK] provider=google preserved uid=$newUid');
+          return SignInResult(
+            outcome: SignInOutcome.success,
+            userId: newUid,
+            wasAnonymousUpgrade: true,
+          );
+        } on AuthException catch (e) {
+          if (e.code != 'identity_already_exists') {
+            debugPrint('[AuthService][LINK_FAILED] provider=google code=${e.code}');
+            rethrow; // real failure (config/credential) → NOT a merge
+          }
+          debugPrint('[AuthService][LINK] provider=google identity_already_exists '
+              '→ signing into existing account (MERGE path)');
+          await _supabase.auth.signInWithIdToken(
+            provider: OAuthProvider.google,
+            idToken: idToken,
+            accessToken: accessToken,
+          );
+          final newUid = currentUser?.id;
+          debugPrint('[AuthService][MERGE_REQUIRED] provider=google '
+              'from_anon=$previousUid to=$newUid');
+          return SignInResult(
+            outcome: SignInOutcome.success,
+            userId: newUid,
+            mergeRequired: true,
+            previousAnonUid: previousUid,
+          );
+        }
+      }
+
       await _supabase.auth.signInWithIdToken(
         provider: OAuthProvider.google,
         idToken: idToken,
         accessToken: accessToken,
       );
-
       final newUid = currentUser?.id;
-      final upgraded = wasAnon && newUid == previousUid;
-      debugPrint(
-        '[AuthService] Google sign-in success — '
-        'prev_uid=$previousUid  new_uid=$newUid  upgraded=$upgraded',
-      );
-
-      return SignInResult(
-        outcome: SignInOutcome.success,
-        userId: newUid,
-        wasAnonymousUpgrade: upgraded,
-      );
+      debugPrint('[AuthService] Google sign-in (non-anon) — new_uid=$newUid');
+      return SignInResult(outcome: SignInOutcome.success, userId: newUid);
     } catch (e) {
       debugPrint('[AuthService] Google sign-in unexpected error: $e');
       return SignInResult(
