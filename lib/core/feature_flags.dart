@@ -23,7 +23,14 @@ class FeatureFlags {
   /// AuthService.signInWithApple / signInWithGoogle, and the backend
   /// JWKS verification all remain functional — they are only hidden
   /// from the UI.
-  static const bool signInEnabled = false;
+  ///
+  /// QA (Unified Identity, 2026-07-13) — piloté par un dart-define pour un build
+  /// QA INTERNE de test Apple/Google, SANS jamais activer le sign-in en prod :
+  ///   • build prod normal (aucun define)        → `false` (const → dead-code éliminé) ;
+  ///   • build QA `--dart-define=AYDEN_QA_SIGNIN=true` → `true` (sign-in exposé).
+  /// Défaut = false : même mergée par erreur sur la ligne prod, cette branche NE
+  /// peut PAS activer le sign-in sans le define explicite.
+  static const bool signInEnabled = bool.fromEnvironment('AYDEN_QA_SIGNIN');
 
   /// RevenueCat graceful-degradation guard.
   ///
