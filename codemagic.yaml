@@ -79,3 +79,125 @@ workflows:
         submit_to_testflight: true
         # beta_groups:                # uncomment + set your TestFlight group to auto-assign testers
         #   - Internal Testers
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # QA-ONLY — Unified Identity Sign-In observation build (QA-1).
+  # Purpose: expose Apple/Google Sign-In on a throwaway QA branch to validate the
+  # LINK path for a NEW OAuth identity (anonymous UUID preserved via
+  # linkIdentityWithIdToken) and observe the MERGE_REQUIRED path for an EXISTING
+  # OAuth account. It does NOT wire Purchases.logIn (RC re-bind) — that is QA-2.
+  # It NEVER touches the production `ios-testflight` workflow above.
+  #
+  # Safety:
+  #   • scoped to the qa/identity-signin branch only (branch_patterns) ;
+  #   • NO `events:` → never auto-builds ; started MANUALLY, only after the
+  #     Apple / Google / Supabase prerequisites are confirmed ;
+  #   • Sign-In is enabled ONLY via --dart-define=AYDEN_QA_SIGNIN=true (prod
+  #     builds omit it → signInEnabled stays false + tree-shaken) ;
+  #   • GOOGLE_WEB_CLIENT_ID is injected from the Codemagic env group — NEVER
+  #     hard-coded here ;
+  #   • internal TestFlight only (submit_to_testflight, NO beta_groups → no
+  #     external testers assigned).
+  # ───────────────────────────────────────────────────────────────────────────
+  ios-testflight-qa:
+    name: AYDEN — iOS TestFlight (QA Sign-In)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    triggering:
+      branch_patterns:
+        - pattern: qa/identity-signin
+          include: true
+          source: true
+      # No `events:` on purpose → this workflow NEVER auto-triggers on push; it is
+      # started manually. NOTE: branch_patterns only filters AUTO triggers — the
+      # runtime CM_BRANCH guard below is what actually forbids a manual start from
+      # the wrong branch.
+    integrations:
+      app_store_connect: AYDEN App Store      # SAME integration as prod (unchanged)
+    environment:
+      groups:
+        - ayden_env                            # 5 .env vars + GOOGLE_WEB_CLIENT_ID (Secure, add in Codemagic UI)
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      vars:
+        BUNDLE_ID: "com.aydenstudio.app"
+    scripts:
+      - name: Preflight — branch guard + required env/files (fail fast)
+        script: |
+          set -euo pipefail
+          # Enforce the branch at RUNTIME: a manual start from any other branch aborts.
+          if [ "${CM_BRANCH:-}" != "qa/identity-signin" ]; then
+            echo "ERROR: ios-testflight-qa is restricted to qa/identity-signin (got '${CM_BRANCH:-}')."
+            exit 1
+          fi
+          # Google native sign-in needs the WEB client id + the plist (+ URL scheme).
+          : "${GOOGLE_WEB_CLIENT_ID:?GOOGLE_WEB_CLIENT_ID is missing — add it Secure in the ayden_env group}"
+          test -f ios/Runner/GoogleService-Info.plist
+          # Apple: the Sign in with Apple entitlement must be present in the Flutter
+          # project (does NOT confirm the Apple portal, but catches a misconfigured project).
+          test -f ios/Runner/Runner.entitlements
+          grep -q "com.apple.developer.applesignin" ios/Runner/Runner.entitlements || {
+            echo "ERROR: Sign in with Apple entitlement missing in ios/Runner/Runner.entitlements."
+            exit 1
+          }
+          # Build number MUST exceed the latest App Store Connect build (currently 47).
+          # QA-1 temporary guard — remove/generalise after QA-1.
+          : "${PROJECT_BUILD_NUMBER:?PROJECT_BUILD_NUMBER is missing}"
+          if [ "$PROJECT_BUILD_NUMBER" -le 47 ]; then
+            echo "ERROR: build number ($PROJECT_BUILD_NUMBER) must be greater than App Store build 47."
+            exit 1
+          fi
+          echo "✓ preflight OK (branch=$CM_BRANCH, Google+Apple config present, build=$PROJECT_BUILD_NUMBER > 47)"
+      - name: Inject frontend .env (from Codemagic vars — gitignored, written here)
+        script: |
+          {
+            echo "API_BASE_URL=$API_BASE_URL"
+            echo "SUPABASE_URL=$SUPABASE_URL"
+            echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+            echo "REVENUECAT_PUBLIC_API_KEY_IOS=$REVENUECAT_PUBLIC_API_KEY_IOS"
+            echo "REVENUECAT_PUBLIC_API_KEY_ANDROID=$REVENUECAT_PUBLIC_API_KEY_ANDROID"
+          } > "$CM_BUILD_DIR/.env"
+          echo "✓ .env written (API_BASE_URL=$API_BASE_URL)"
+      - name: Flutter pub get
+        script: flutter pub get
+      - name: Set up iOS code signing (Internal Testing Only export)
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
+            --create
+          keychain add-certificates
+          # testFlightInternalTestingOnly → the exported IPA targets INTERNAL
+          # testers only, with NO external Beta App Review submission.
+          xcode-project use-profiles \
+            --custom-export-options='{"testFlightInternalTestingOnly": true}'
+      - name: Install CocoaPods
+        script: find . -name "Podfile" -execdir pod install \;
+      - name: Flutter build IPA (QA — Sign-In exposed)
+        script: |
+          # Build number = PROJECT_BUILD_NUMBER (global project counter), NOT
+          # BUILD_NUMBER (per-workflow counter → would restart at 1 for this new
+          # workflow and collide with / be lower than existing App Store Connect
+          # builds). The echo lets us confirm it is higher than the latest ASC build.
+          echo "CM workflow build (BUILD_NUMBER):        ${BUILD_NUMBER:-<unset>}"
+          echo "CM project build  (PROJECT_BUILD_NUMBER): ${PROJECT_BUILD_NUMBER:-<unset>}"
+          # QA-scoped dart-defines: expose Sign-In + inject the Google WEB client id
+          # (from the Codemagic env group; never committed). NO Purchases.logIn is
+          # wired in the app for QA-1 — RC re-bind is QA-2.
+          flutter build ipa --release \
+            --build-number="$PROJECT_BUILD_NUMBER" \
+            --dart-define=AYDEN_QA_SIGNIN=true \
+            --dart-define=GOOGLE_WEB_CLIENT_ID="$GOOGLE_WEB_CLIENT_ID" \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        # NO `submit_to_testflight` → NO Beta App Review submission (that submission
+        # is what previously caused "post-processing failed"). The IPA still uploads
+        # to App Store Connect and, via testFlightInternalTestingOnly above, is
+        # available to INTERNAL testers only. NO beta_groups (no external testers).
