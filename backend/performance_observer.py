@@ -147,7 +147,8 @@ class PipelineTimer:
     def log_summary(self, logger, total_elapsed_s: float, payload_bytes: int,
                     prompt_chars: int, est_cost_usd: float,
                     model: str = "", quality: str = "", iteration: int = 0,
-                    generation_type: str = "", preflight_ms: float = 0.0) -> None:
+                    generation_type: str = "", preflight_ms: float = 0.0,
+                    preflight_breakdown: str = "") -> None:
         """Emit a single [PERF SUMMARY] line with all stage timings.
 
         2026-06-18 — added the pre-image stages (history_norm, normalize, the 4
@@ -168,7 +169,7 @@ class PipelineTimer:
         _total_ms = total_elapsed_s * 1000
         _openai_ms = self.total_openai_ms()
         logger.info(
-            "[PERF SUMMARY] request_id=%s  total_ms=%.0f  backend_ms=%.0f  preflight_ms=%.0f"
+            "[PERF SUMMARY] request_id=%s  total_ms=%.0f  backend_ms=%.0f  preflight_ms=%.0f%s"
             "  model=%s  quality=%s  iteration=%d  gen_type=%s"
             "  fetch_ms=%.0f  history_ms=%.0f  normalize_ms=%.0f"
             "  cls_room_ms=%.0f  cls_intent_ms=%.0f  cls_transform_ms=%.0f  cls_editmode_ms=%.0f"
@@ -180,6 +181,9 @@ class PipelineTimer:
             _total_ms,
             _total_ms - _openai_ms,
             preflight_ms,
+            # CORRECTIF PERF fast-path (2026-07-14) — décomposition du pré-vol repliée DANS
+            # ce résumé unique (aucun log.info supplémentaire par génération ; aucun user_id).
+            (("  " + preflight_breakdown) if preflight_breakdown else ""),
             model or "unknown",
             quality or "unknown",
             iteration,

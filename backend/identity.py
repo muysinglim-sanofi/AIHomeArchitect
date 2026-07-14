@@ -31,6 +31,7 @@ import hashlib
 import logging
 import os
 import secrets
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -105,6 +106,98 @@ def require_active_identity(
     indépendante des feature flags de fusion."""
     _assert_active_identity(current_user.user_id)
     return current_user
+
+
+# ── Fast-path routes image (/generate, /refine) — garde SANS RTT séquentiel ──
+# CORRECTIF PERF (2026-07-14). Règle produit : Unified Identity ne doit ajouter
+# AUCUN aller-retour Supabase séquentiel au clic Generate. La dépendance
+# `require_active_identity` fait 1 SELECT `account_state` AVANT le handler (RTT
+# séquentiel). Sur les routes image UNIQUEMENT, on la remplace par `get_current_user`
+# (JWT seul, 0 DB) et on FUSIONNE la lecture `merged_closed` dans le `asyncio.gather`
+# déjà existant du resolver d'accès (roles/promo/usage) → la 4ᵉ lecture partage le
+# MÊME temps mural (0 RTT séquentiel ajouté). L'enforcement 403/503 reste STRICTEMENT
+# identique à `_assert_active_identity` et se fait dans le handler, APRÈS le gather et
+# AVANT toute écriture (claim/HOLD/reserve) et tout appel OpenAI. Aucun cache, aucune
+# traversée `merged_into` (pas de A→B ici) : on refuse un compte fermé, on ne devine
+# jamais. Les 12 autres routes gardent `require_active_identity` inchangé.
+
+@dataclass(frozen=True)
+class IdentityRead:
+    """Résultat NON-levant de la lecture `account_state.merged_closed` (fast-path).
+    `read_ok=False` → l'appelant DOIT renvoyer 503 (fail-CLOSED). `merged_closed=True`
+    → 403. C'est le porteur de données que `resolve_generation_access` place dans son
+    gather ; il ne lève jamais (l'enforcement, lui, lève)."""
+    read_ok: bool
+    merged_closed: bool
+
+
+async def fetch_identity_active(user_id: str, *, supa=None) -> IdentityRead:
+    """Lecture ASYNC non-levante de `account_state.merged_closed`, via `asyncio.to_thread`
+    (jamais un appel supabase sync nu dans l'event-loop). Conçue pour être ajoutée au
+    `asyncio.gather` du resolver → 0 RTT séquentiel. NE lève JAMAIS : toute erreur →
+    `read_ok=False` (l'appelant enforce le 503 fail-closed, PAS de fail-open — un compte
+    fusionné ne doit jamais passer sur un hoquet). Ne logge aucune donnée sensible."""
+    supa = supa or _get_supa()
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("account_state")
+            .select("merged_closed")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(res, "data", None) or []
+        merged = bool(rows and rows[0].get("merged_closed") is True)
+        return IdentityRead(read_ok=True, merged_closed=merged)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[identity guard] fast-path account_state read failed user=%s err=%s",
+                    user_id[:8], type(exc).__name__)
+        return IdentityRead(read_ok=False, merged_closed=False)
+
+
+def enforce_identity_read(read: IdentityRead, user_id: str) -> None:
+    """Enforcement CŒUR de la garde `merged_closed` à partir d'un `IdentityRead` brut.
+    Sémantique STRICTEMENT identique à `_assert_active_identity` :
+      • `read_ok=False` → 503 identity_check_unavailable (fail-CLOSED) ;
+      • `merged_closed=True` → 403 identity_merged ;
+      • sinon → passe.
+    Utilisé par /refine (identité foldée EN PARALLÈLE de l'ownership, pas dans le
+    resolver — pour ne pas ajouter de RTT aux chemins advisory/empty)."""
+    if not read.read_ok:
+        log.warning("[identity guard] fast-path lecture indisponible → 503 user=%s", user_id[:8])
+        raise HTTPException(
+            status_code=503,
+            detail={"error_code": "identity_check_unavailable",
+                    "user_message": "Identity check temporarily unavailable."},
+        )
+    if read.merged_closed:
+        log.info("[identity guard] blocked merged_closed user=%s", user_id[:8])
+        raise HTTPException(
+            status_code=403,
+            detail={"error_code": "identity_merged",
+                    "user_message": "This account has been merged. Please sign in again."},
+        )
+
+
+def enforce_identity_from_decision(decision, user_id: str) -> None:
+    """Enforcement de la garde `merged_closed` à partir de l'`AccessDecision` retournée
+    par `resolve_generation_access(include_identity=True)` (utilisé par /generate, où
+    l'identité est foldée dans le gather du resolver). Vérifie `identity_checked` (un
+    chemin image ne doit JAMAIS s'exécuter sans garde — sinon 503 fail-closed) puis
+    délègue à `enforce_identity_read` (sémantique identique à `_assert_active_identity`)."""
+    if not getattr(decision, "identity_checked", False):
+        log.error("[identity guard] enforce sans identity_checked user=%s (bug d'appel) → 503",
+                  user_id[:8])
+        raise HTTPException(
+            status_code=503,
+            detail={"error_code": "identity_check_unavailable",
+                    "user_message": "Identity check temporarily unavailable."},
+        )
+    enforce_identity_read(
+        IdentityRead(read_ok=decision.identity_read_ok,
+                     merged_closed=decision.identity_merged_closed),
+        user_id,
+    )
 
 
 # ── Corps STRICT + gate ordonné (flag → JWT → garde) des endpoints de fusion ──

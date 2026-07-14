@@ -116,14 +116,35 @@ class AccessDecision:
     promo_generations_remaining: int
     active_promo_campaign: Optional[str]
     free_remaining: int
+    # ── CORRECTIF PERF fast-path (2026-07-14) — garde identité foldée dans le gather ──
+    # Renseignés UNIQUEMENT quand l'appelant passe include_identity=True (routes image
+    # /generate, /refine). Défauts sûrs : les appelants non-image (/me/status, chat…)
+    # ne les demandent pas → identity_checked=False, et ces routes gardent la dépendance
+    # require_active_identity. read_ok True par défaut (jamais fail-open sur une route qui
+    # ne fait pas la lecture). L'enforcement 403/503 est fait par
+    # identity.enforce_identity_from_decision, PAS ici (cette fonction ne fait que LIRE).
+    identity_checked: bool = False
+    identity_read_ok: bool = True
+    identity_merged_closed: bool = False
 
 
-async def resolve_generation_access(user_id: str, *, supa=None) -> AccessDecision:
+async def resolve_generation_access(
+    user_id: str, *, supa=None, include_identity: bool = False,
+) -> AccessDecision:
     """Resolve the user's effective generation access ONCE, in priority order.
 
     admin/premium > promo_unlimited > promo_limited > free(watermark) > blocked.
     Only the 'free' tier consumes the usage_log quota + gets a watermark + is
-    scope-restricted. promo/premium are clean, unlimited-room, off-ledger."""
+    scope-restricted. promo/premium are clean, unlimited-room, off-ledger.
+
+    CORRECTIF PERF fast-path (2026-07-14) — include_identity : quand True (routes image
+    /generate, /refine), on ajoute une 4ᵉ lecture (account_state.merged_closed) DANS LE
+    MÊME asyncio.gather que roles/promo/usage → 0 RTT séquentiel ajouté. Cette fonction
+    ne fait que LIRE : elle renseigne identity_checked/identity_read_ok/identity_merged_
+    closed sur l'AccessDecision. L'enforcement 403/503 est fait par l'appelant via
+    identity.enforce_identity_from_decision (AVANT toute écriture / OpenAI). La lecture
+    identité est fail-CLOSED (jamais coercée en "actif"), à la différence des lectures
+    roles/promo/usage qui restent fail-open."""
     supa = supa or _get_supa()
     # ── Variante B (2026-07-02) — les 3 lectures Supabase RÉELLEMENT indépendantes
     # (rôles / promo / count usage_log) en PARALLÈLE au lieu de 4 appels séquentiels.
@@ -147,12 +168,22 @@ async def resolve_generation_access(user_id: str, *, supa=None) -> AccessDecisio
             (log.warning if _dt >= 2000 else log.info)(
                 "[ACCESS-TIMING] %s took=%.0fms user=%s", _name, _dt, user_id[:8])
 
-    _roles_res, _promo_res, _usage_res = await asyncio.gather(
+    # Base gather (roles/promo/usage) — INCHANGÉ. include_identity ajoute la lecture
+    # account_state.merged_closed comme 4e coroutine DU MÊME gather → elle partage le
+    # temps mural (0 RTT séquentiel). fetch_identity_active est importée en lazy pour
+    # casser le cycle promo↔identity (identity.py n'importe jamais promo).
+    _tasks = [
         _timed("fetch_roles_flags", fetch_roles_flags(user_id, supa=supa)),
         _timed("get_promo_access", get_promo_access(user_id, supa=supa)),
         _timed("count_active_usage", count_active_usage(user_id, supa=supa)),
-        return_exceptions=True,
-    )
+    ]
+    if include_identity:
+        from identity import fetch_identity_active  # noqa: PLC0415 — lazy (anti-cycle)
+        _tasks.append(_timed("fetch_identity_active", fetch_identity_active(user_id, supa=supa)))
+
+    _results = await asyncio.gather(*_tasks, return_exceptions=True)
+    _roles_res, _promo_res, _usage_res = _results[0], _results[1], _results[2]
+    _identity_res = _results[3] if include_identity else None
 
     if isinstance(_roles_res, tuple):
         full, is_admin = _roles_res            # (has_bypass, is_admin) — cf. fetch_roles_flags
@@ -166,6 +197,25 @@ async def resolve_generation_access(user_id: str, *, supa=None) -> AccessDecisio
         promo = {"unlimited_active": False, "limited_remaining": 0, "active_campaign": None}
     used = _usage_res if isinstance(_usage_res, int) and not isinstance(_usage_res, bool) else 0
 
+    # Identité (include_identity) — fail-CLOSED, DISTINCT des lectures fail-open ci-dessus :
+    # on ne coerce JAMAIS en "actif". Un IdentityRead(read_ok=False) OU une exception qui
+    # aurait échappé au helper → read_ok=False → l'appelant (enforce_identity_from_decision)
+    # renverra 503. Jamais fail-open (un compte fusionné ne doit pas passer sur un hoquet).
+    _id_checked = False
+    _id_read_ok = True
+    _id_merged = False
+    if include_identity:
+        from identity import IdentityRead  # noqa: PLC0415 — lazy (anti-cycle)
+        _id_checked = True
+        if isinstance(_identity_res, IdentityRead):
+            _id_read_ok = _identity_res.read_ok
+            _id_merged = _identity_res.merged_closed
+        else:
+            log.warning("[ACCESS] identity fetch raised — fail-CLOSED (503 côté appelant): %s",
+                        _identity_res)
+            _id_read_ok = False
+            _id_merged = False
+
     q = decide_quota(full, used)
     free_remaining = max(0, q.limit - q.used)
     log.info("[ACCESS-TIMING] resolve_total took=%.0fms user=%s",
@@ -176,6 +226,10 @@ async def resolve_generation_access(user_id: str, *, supa=None) -> AccessDecisio
         promo_generations_remaining=promo["limited_remaining"],
         active_promo_campaign=promo["active_campaign"],
         free_remaining=free_remaining,
+        # fast-path identité (défauts sûrs quand include_identity=False)
+        identity_checked=_id_checked,
+        identity_read_ok=_id_read_ok,
+        identity_merged_closed=_id_merged,
     )
 
     if full:

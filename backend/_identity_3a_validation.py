@@ -208,8 +208,18 @@ check("garde erreur DB → 503 fail-closed", ok, d)
 
 # 10. Couverture + garde indépendant du flag + logs propres + auth.py intact
 main_src = open(os.path.join(HERE, "main.py"), encoding="utf-8").read()
-check("14 routes basculées / 0 restante",
-      main_src.count("Depends(require_active_identity)") == 14 and main_src.count("Depends(get_current_user)") == 0)
+# CORRECTIF PERF fast-path (2026-07-14) — les 2 routes image (/generate, /refine) sont
+# passées de require_active_identity (dépendance = 1 SELECT account_state SÉQUENTIEL) à
+# get_current_user + garde merged_closed FOLDÉE dans le gather du resolver, puis
+# enforce_identity_from_decision (appelée 2×). Invariant de SÉCURITÉ INCHANGÉ : 14 routes
+# gardent l'identité (12 via dépendance + 2 via le fold), 0 route image non gardée.
+# cf. _fastpath_perf_validation.py (ordre enforce < write/OpenAI prouvé).
+check("12 via dépendance + 2 image via garde foldée = 14 gardées / 0 non gardée",
+      main_src.count("Depends(require_active_identity)") == 12
+      and main_src.count("Depends(get_current_user)") == 2
+      # /generate → enforce_identity_from_decision ; /refine → enforce_identity_read
+      and (main_src.count("enforce_identity_from_decision(")
+           + main_src.count("enforce_identity_read(")) == 2)
 guard_src = inspect.getsource(identity._assert_active_identity) + inspect.getsource(identity.require_active_identity)
 check("garde indépendant du flag", "IDENTITY_MERGE_ENDPOINTS_ENABLED" not in guard_src and "_merge_endpoints_enabled" not in guard_src)
 buf = io.StringIO(); h = logging.StreamHandler(buf)
