@@ -23,7 +23,8 @@ from supabase import create_client
 # Wave 5.17a — Identity foundation
 from auth import CurrentUser
 # Unified Identity V1 — Commit 3a : merge endpoints + active-identity guard
-from identity import identity_router, require_active_identity
+# Commit 3b : sweep de révocation Auth (même worker, isolé)
+from identity import identity_router, require_active_identity, sweep_pending_revocations
 # Wave 5.17b — Quota enforcement + IP rate limit
 # Wave 5.18 — Developer Validation Mode admin-flag endpoint
 from quota import (
@@ -1698,20 +1699,35 @@ async def get_intent_by_id_route(
 _reconcile_bg_tasks: set = set()
 
 
+async def _reconcile_cycle():
+    """Un cycle du worker : reconcile Intent/billing PUIS sweep de révocation Auth
+    (Commit 3b), chacun ISOLÉ dans son propre try/except — une branche ne bloque
+    JAMAIS l'autre. CancelledError se propage (arrêt propre du worker)."""
+    try:
+        await reconcile_once()
+    except Exception as exc:  # never let billing break the cycle
+        log.warning("[RECONCILE] worker cycle failed (continuing): %s", exc)
+    try:
+        await sweep_pending_revocations()   # no-op si IDENTITY_AUTH_REVOCATION_ENABLED=false
+    except Exception as exc:  # never let revocation break the cycle
+        log.warning("[REVOCATION] sweep cycle failed error=%s", type(exc).__name__)
+
+
 @app.on_event("startup")
 async def _start_reconciliation_worker():
     """Periodic Intent lifecycle reconciliation: repair orphans (image in DB but
     Intent still RUNNING) + timeout-fail stuck RUNNING. Best-effort, in-process;
-    idempotent across instances (transitions guarded by .eq(status,'RUNNING'))."""
+    idempotent across instances (transitions guarded by .eq(status,'RUNNING')).
+    Le même worker porte aussi le sweep de révocation (Commit 3b), isolé — aucun
+    second worker. Démarrage inconditionnel (déjà le cas) ⇒ tourne que billing ou
+    révocation soient actifs."""
     async def _loop():
         while True:
             try:
                 await asyncio.sleep(RECONCILE_INTERVAL_SECONDS)
-                await reconcile_once()
+                await _reconcile_cycle()
             except asyncio.CancelledError:
                 break
-            except Exception as exc:  # never let the worker die silently
-                log.warning("[RECONCILE] worker cycle failed (continuing): %s", exc)
 
     _t = asyncio.create_task(_loop())
     _reconcile_bg_tasks.add(_t)

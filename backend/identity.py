@@ -282,4 +282,139 @@ async def claim_merge(
                             detail={"error_code": "identity_merge_unavailable",
                                     "user_message": "Merge failed. Please try again."})
     log.info("[identity] claim user=%s status=%s", current_user.user_id[:8], rows[0].get("status"))
+    # Commit 3b — finalisation de révocation (fire-and-forget, best-effort ; no-op si flag OFF).
+    # Ne bloque ni ne fait échouer le claim ; la durabilité est assurée par le sweep.
+    if rows[0].get("status") == "revocation_pending":
+        schedule_revocation(rows[0].get("merge_id"))
     return _map_rpc_row(rows[0])
+
+
+# ══════════ COMMIT 3b — révocation Auth de A (défense en profondeur) ══════════
+# Sécurité IMMÉDIATE = le garde merged_closed→403 (3a). Ci-dessous = ban best-effort
+# de A (from_user_id de la LIGNE, jamais fourni par un appelant) + transition
+# revocation_pending→completed APRÈS confirmation. Gated IDENTITY_AUTH_REVOCATION_ENABLED
+# (défaut false). JAMAIS delete auth.users. Aucun JWT/secret/UUID complet/ban_duration loggé.
+
+BAN_DURATION = "876000h"  # ~100 ans ; "none" lèverait le ban (non utilisé)
+REVOCATION_BATCH_SIZE = 20  # borne ABSOLUE du sweep — aucun caller ne peut la dépasser
+_revocation_bg: set = set()
+
+
+def _auth_revocation_enabled() -> bool:
+    return os.environ.get("IDENTITY_AUTH_REVOCATION_ENABLED", "false").strip().lower() == "true"
+
+
+async def finalize_revocation(merge_id: str) -> str:
+    """Best-effort. A est dérivé EXCLUSIVEMENT de identity_merges. Retourne un code
+    d'issue (tests/log). No-op si flag OFF / ligne absente / statut ≠ revocation_pending
+    / A|B manquant / A==B. Tous les appels supabase-py via asyncio.to_thread."""
+    if not merge_id:
+        return "invalid_merge_id"       # garde : aucune lecture DB
+    if not _auth_revocation_enabled():
+        return "flag_off"
+    supa = _get_supa()
+    # 1. re-lecture : A/B/status viennent de la DB
+    try:
+        r = await asyncio.to_thread(lambda: supa.table("identity_merges")
+            .select("merge_id,from_user_id,to_user_id,status")
+            .eq("merge_id", merge_id).limit(1).execute())
+        rows = getattr(r, "data", None) or []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[REVOCATION] read failed merge=%s err=%s", str(merge_id)[:8], type(exc).__name__)
+        return "read_error"
+    if not rows:
+        return "row_absent"
+    a = rows[0].get("from_user_id"); b = rows[0].get("to_user_id"); st = rows[0].get("status")
+    if st != "revocation_pending" or not a or not b or a == b:
+        return "not_finalizable"
+    # 2. ban de A
+    try:
+        resp = await asyncio.to_thread(lambda: supa.auth.admin.update_user_by_id(a, {"ban_duration": BAN_DURATION}))
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[REVOCATION] ban failed merge=%s err=%s", str(merge_id)[:8], type(exc).__name__)
+        return "ban_error"
+    # 3. confirmation : user.id==A OBLIGATOIRE ; banned_until non nul (get_user_by_id si ambigu)
+    u = getattr(resp, "user", None)
+    if not (u and str(getattr(u, "id", None)) == str(a)):
+        log.warning("[REVOCATION] ban response id mismatch merge=%s", str(merge_id)[:8])
+        return "id_mismatch"
+    if getattr(u, "banned_until", None) is None:
+        try:
+            g = await asyncio.to_thread(lambda: supa.auth.admin.get_user_by_id(a))
+            gu = getattr(g, "user", None)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("[REVOCATION] confirm failed merge=%s err=%s", str(merge_id)[:8], type(exc).__name__)
+            return "confirm_error"
+        if not (gu and str(getattr(gu, "id", None)) == str(a) and getattr(gu, "banned_until", None) is not None):
+            log.warning("[REVOCATION] ban unconfirmed merge=%s", str(merge_id)[:8])
+            return "ban_unconfirmed"
+    # 4. CAS ciblé merge_id + from_user_id=A + status=revocation_pending → completed
+    now_iso = datetime.now(timezone.utc).isoformat()
+    try:
+        await asyncio.to_thread(lambda: supa.table("identity_merges")
+            .update({"status": "completed", "completed_at": now_iso})
+            .eq("merge_id", merge_id).eq("from_user_id", a).eq("status", "revocation_pending").execute())
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[REVOCATION] CAS update failed merge=%s err=%s", str(merge_id)[:8], type(exc).__name__)
+        return "cas_error"
+    # 5. confirmation CAS par lecture CIBLÉE (merge_id + from_user_id) — jamais une autre cible
+    try:
+        c = await asyncio.to_thread(lambda: supa.table("identity_merges")
+            .select("merge_id,from_user_id,status")
+            .eq("merge_id", merge_id).eq("from_user_id", a).limit(1).execute())
+        crows = getattr(c, "data", None) or []
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[REVOCATION] CAS confirm read failed merge=%s err=%s", str(merge_id)[:8], type(exc).__name__)
+        return "cas_confirm_error"
+    if crows and str(crows[0].get("from_user_id")) == str(a) and crows[0].get("status") == "completed":
+        log.info("[REVOCATION] completed merge=%s", str(merge_id)[:8])
+        return "completed"
+    return "cas_unconfirmed"
+
+
+def _revocation_done(task) -> None:
+    """Callback fire-and-forget : retire la ref forte, gère l'annulation, consomme
+    l'exception (jamais 'Task exception was never retrieved'). Aucun secret loggé."""
+    _revocation_bg.discard(task)
+    if task.cancelled():
+        return
+    try:
+        exc = task.exception()
+    except asyncio.CancelledError:
+        return
+    if exc is not None:
+        log.warning("[REVOCATION] background task failed error=%s", type(exc).__name__)
+
+
+def schedule_revocation(merge_id: str) -> None:
+    """Lance finalize_revocation en fire-and-forget après un claim revocation_pending :
+    ne bloque ni ne fait échouer le claim. No-op si merge_id vide ou flag OFF."""
+    if not merge_id or not _auth_revocation_enabled():
+        return
+    task = asyncio.create_task(finalize_revocation(merge_id))
+    _revocation_bg.add(task)
+    task.add_done_callback(_revocation_done)
+
+
+async def sweep_pending_revocations(limit: int = REVOCATION_BATCH_SIZE) -> int:
+    """Reprise durable : scan BORNÉ des revocation_pending → finalize_revocation.
+    No-op si flag OFF. UNIQUEMENT status=revocation_pending, order started_at asc,
+    séquentiel, distinct du billing. Batch borné à REVOCATION_BATCH_SIZE (20) —
+    aucun caller ne peut le dépasser. Ignore toute ligne sans merge_id. Retourne
+    le nombre traité."""
+    if not _auth_revocation_enabled():
+        return 0
+    n = min(max(int(limit), 1), REVOCATION_BATCH_SIZE)   # borne absolue 20
+    supa = _get_supa()
+    r = await asyncio.to_thread(lambda: supa.table("identity_merges")
+        .select("merge_id").eq("status", "revocation_pending")
+        .order("started_at", desc=False).limit(n).execute())
+    rows = getattr(r, "data", None) or []
+    processed = 0
+    for row in rows:
+        mid = row.get("merge_id")
+        if not mid:
+            continue
+        await finalize_revocation(mid)
+        processed += 1
+    return processed
