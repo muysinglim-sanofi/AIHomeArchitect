@@ -21,7 +21,9 @@ from openai import AsyncOpenAI, BadRequestError
 from supabase import create_client
 
 # Wave 5.17a — Identity foundation
-from auth import CurrentUser, get_current_user
+from auth import CurrentUser
+# Unified Identity V1 — Commit 3a : merge endpoints + active-identity guard
+from identity import identity_router, require_active_identity
 # Wave 5.17b — Quota enforcement + IP rate limit
 # Wave 5.18 — Developer Validation Mode admin-flag endpoint
 from quota import (
@@ -862,6 +864,10 @@ async def _server_timing_mw(request: Request, call_next):
 # POST /webhooks/revenuecat ; see revenuecat_webhook.py for the contract.
 app.include_router(revenuecat_router)
 
+# Unified Identity V1 — Commit 3a. Endpoints POST /identity/merge-ticket + /claim.
+# Dormant : gated by IDENTITY_MERGE_ENDPOINTS_ENABLED (default false).
+app.include_router(identity_router)
+
 # max_retries=0: disable SDK-level retries entirely.
 # The OpenAI Python SDK defaults to max_retries=2 (1 initial + 2 SDK retries = 3 SDK-level
 # attempts per call). With PROD max_attempts=3, that silently becomes 3 × 3 = 9 API calls
@@ -1382,7 +1388,7 @@ async def health():
 # fields they need.
 @app.get("/me/access")
 async def get_me_access(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Return {is_admin: bool} for the authenticated user."""
     _is_admin = await is_admin_role(current_user.user_id)
@@ -1509,7 +1515,7 @@ def _classify_access_source(
 
 @app.get("/me/status")
 async def get_me_status(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Sprint 1 — READ-ONLY premium + quota snapshot for the UI.
 
@@ -1653,7 +1659,7 @@ async def get_me_status(
 @app.get("/v1/intents/latest")
 async def get_latest_intent(
     session_id: str,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Generation Intent v1 — PR3 (READ-ONLY). État du dernier Intent d'une
     session, pour que le client se ré-attache à une génération en cours après
@@ -1673,7 +1679,7 @@ async def get_latest_intent(
 @app.get("/v1/intents/by-id/{intent_id}")
 async def get_intent_by_id_route(
     intent_id: str,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Generation Intent v1 — récupération UNIFIÉE par id (Phase 1). Chemin littéral
     'by-id/{id}' → JAMAIS de collision avec /v1/intents/latest. Owner check EXPLICITE
@@ -1766,7 +1772,7 @@ async def claim_stats(request: Request):
 
 @app.post("/purchases/sync")
 async def purchases_sync(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """P0 (2026-07-10) — RÉCONCILIE un PASS MESURÉ depuis le subscriber RevenueCat
     (restore / sync / reinstall / device-change / RC transfer / webhook manqué / App
@@ -1863,7 +1869,7 @@ async def _require_admin(current_user: CurrentUser) -> None:
 @app.post("/promo/redeem")
 async def promo_redeem_endpoint(
     payload: dict = Body(...),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Redeem a promo code for the authenticated user (atomic, via RPC)."""
     code = str(payload.get("code") or "").strip()
@@ -1901,7 +1907,7 @@ async def promo_redeem_endpoint(
 @app.post("/admin/promo-codes")
 async def admin_create_promo_code(
     payload: dict = Body(...),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     await _require_admin(current_user)
     type_ = str(payload.get("type") or "")
@@ -1945,7 +1951,7 @@ async def admin_create_promo_code(
 
 @app.get("/admin/promo-codes")
 async def admin_list_promo_codes(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     await _require_admin(current_user)
     return {"codes": await list_promo_codes()}
@@ -1955,7 +1961,7 @@ async def admin_list_promo_codes(
 async def admin_patch_promo_code(
     code_id: str,
     payload: dict = Body(...),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     await _require_admin(current_user)
     active = payload.get("active")
@@ -2073,7 +2079,7 @@ async def chat(
     current_image_url: str = Form(""),          # displayed render — vision-input hook (PR2), carried not opened
     displayed_version_id: str = Form(""),       # frontend _branchSourceVersionId / latest
     original_image_url: str = Form(""),         # V1 source upload
-    current_user: CurrentUser = Depends(get_current_user),  # Wave 5.17a
+    current_user: CurrentUser = Depends(require_active_identity),  # Wave 5.17a
 ):
     """
     Conversation-only endpoint — no image generation.
@@ -2659,7 +2665,7 @@ async def chat(
 async def register_device(
     token: str = Form(...),
     platform: str = Form(""),            # "ios" | "android"
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Phase B — register/refresh this device's FCM token for the user, so the
     backend can push "vision ready" when the app is backgrounded. Upsert on the
@@ -2711,7 +2717,7 @@ async def generate(
     versions: str = Form(""),             # Wave 4.7.3 — JSON ledger of prior versions (client round-trip)
     generation_mode: str = Form("preserve"),  # Wave 5.5.14b.1 — bimodal intent: "preserve" | "creative". Default matches today's behaviour. NOT YET ROUTED — read & logged only; composer wiring lands in Wave 5.5.14c.
     ui_locale: str = Form("en"),          # Phase 1 — authoritative reply/caption language (en|fr|km). Does NOT touch the generation prompt (English-internal).
-    current_user: CurrentUser = Depends(get_current_user),  # Wave 5.17a
+    current_user: CurrentUser = Depends(require_active_identity),  # Wave 5.17a
 ):
     # PR0 (2026-07-06) — TRUE handler-entry timestamp (before any pre-flight
     # gate). The PERF timer _req_start starts far below (after auth/ownership/
@@ -5274,7 +5280,7 @@ async def refine_endpoint(
     operation_id: str = Form(""),          # Phase 1 — 1 soumission utilisateur = 1 operation_id (idempotence)
     retry_of_intent_id: str = Form(""),    # Phase 1 — Retry après FAILED (INFORMATIF : trace, jamais réouverture)
     ui_locale: str = Form("en"),           # BUG1 — langue du push "vision ready" (en|fr|km) ; défaut en
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Contrat unique (D-b) : advisory (YELLOW/RED, 0 gen) | completed (image immédiate,
     verification=deferred) | running (lost-claim récupérable). Moteur 2 isolé ; le
@@ -5462,7 +5468,7 @@ async def refine_verify_endpoint(
     before_image_url: str = Form(...),     # original
     after_image_url: str = Form(...),      # résultat renvoyé par /refine
     changes: str = Form(...),              # JSON list des changements (echo de /refine)
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Verify STATELESS (2e appel §14) : verified|incomplete|unavailable + report + missing[].
     Gratuit (vision gpt-4o-mini, PAS une génération). Moteur 2 isolé."""
