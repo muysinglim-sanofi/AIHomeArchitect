@@ -2,21 +2,32 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- FT2-B SPIKE entitlements (branch spike/ft2b-apple-identity-link ONLY).
-	     Sign in with Apple is the ONLY capability the spike needs.
+	<!-- Wave 5.17a — Identity Foundation.
 
-	     The production app's Push (aps-environment=production) is intentionally
-	     REMOVED here so the spike's App ID (com.aydenstudio.app.ft2bspike) needs
-	     NO Push capability — the spike never registers for notifications. No App
-	     Groups / Keychain Access Groups / Associated Domains are declared either;
-	     flutter_secure_storage works without a custom Keychain Access Group.
+	     com.apple.developer.applesignin enables "Sign in with Apple"
+	     on this app. Required by App Store Review Guideline §5.1.1(v)
+	     when the app offers any third-party login (here: Google).
 
-	     com.apple.developer.applesignin must still be enabled on the App ID in
-	     the Apple Developer console and the App ID grouped under the primary
-	     com.aydenstudio.app App ID (FT2-B1 conclusion). -->
+	     This entitlement is paired with:
+	       - sign_in_with_apple package in pubspec.yaml
+	       - "Sign in with Apple" capability added to the App ID in
+	         the Apple Developer console (Prerequisite B)
+	       - The same App ID/bundle is selected in Xcode under
+	         Runner → Signing & Capabilities → +Capability → Sign in
+	         with Apple (Xcode writes this entitlement automatically
+	         when the developer adds the capability ; we ship it here
+	         so the project builds out of the box on first checkout).
+
+	     "Default" is the standard scope for individual app entitlements ;
+	     "Default with Sandbox" is only for app-extension contexts. -->
 	<key>com.apple.developer.applesignin</key>
 	<array>
 		<string>Default</string>
 	</array>
+	<!-- Phase B — APNs push. "production" matches the App Store / TestFlight
+	     distribution build Codemagic produces (IOS_APP_STORE profile). If a
+	     development-signed build is ever made, switch this to "development". -->
+	<key>aps-environment</key>
+	<string>production</string>
 </dict>
 </plist>

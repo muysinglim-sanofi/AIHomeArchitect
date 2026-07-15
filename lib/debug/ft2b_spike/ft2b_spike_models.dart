@@ -58,9 +58,11 @@ bool sessionPreserved({
     activeUserIdAfter != null &&
     anonIdBefore == activeUserIdAfter;
 
-/// The Apple `aud` the spike expects (its own bundle id). Used only to check
-/// that the credential was issued to the spike, never to gate the collision.
-const String kExpectedSpikeAud = 'com.aydenstudio.app.ft2bspike';
+/// The Apple `aud` the spike expects. FT2-B3: the spike REUSES the existing
+/// Ayden bundle id `com.aydenstudio.app` (no new App ID / no grouping), so the
+/// identity token's audience is the same as the production app. Used only to
+/// check that the credential was issued to this app, never to gate the collision.
+const String kExpectedSpikeAud = 'com.aydenstudio.app';
 
 /// The experiment is VALID only if both credentials carried a PRESENT Apple sub,
 /// the SAME sub across B and C, the correct aud on both, a DISTINCT collision

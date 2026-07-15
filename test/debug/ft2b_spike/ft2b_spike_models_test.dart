@@ -127,7 +127,7 @@ void main() {
         identitiesAfter: const [],
         appleSubPresent: true,
         appleSubSameBC: true,
-        appleAud: const ['com.aydenstudio.app.ft2bspike'],
+        appleAud: const ['com.aydenstudio.app'],
         appleAudMatchesExpected: true,
         appleAudSameBC: true,
       );
@@ -281,7 +281,7 @@ void main() {
       linkSucceeded: true,
       error: null,
       appleSubPresent: true,
-      appleAud: const ['com.aydenstudio.app.ft2bspike'],
+      appleAud: const ['com.aydenstudio.app'],
       appleAudMatchesExpected: audMatches,
     );
 
@@ -305,7 +305,7 @@ void main() {
           identitiesAfter: const [],
           appleSubPresent: true,
           appleSubSameBC: subSame,
-          appleAud: const ['com.aydenstudio.app.ft2bspike'],
+          appleAud: const ['com.aydenstudio.app'],
           appleAudMatchesExpected: true,
           appleAudSameBC: true,
         );

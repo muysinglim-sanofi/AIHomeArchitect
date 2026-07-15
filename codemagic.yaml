@@ -82,18 +82,21 @@ workflows:
 
   # ───────────────────────────────────────────────────────────────────────────
   # FT2-B Identity Spike — SEPARATE workflow (branch spike/ft2b-apple-identity-link).
-  # Builds the ISOLATED spike entrypoint (lib/main_ft2b_spike.dart) under the
-  # DISTINCT bundle id com.aydenstudio.app.ft2bspike, so it coexists with the
-  # normal Ayden app. It writes ONLY the 3 Supabase/API keys the spike needs
-  # (no RevenueCat / Firebase / Push). The ios-testflight workflow above is left
-  # BYTE-UNCHANGED. Run this workflow MANUALLY, only from the spike branch.
+  # Builds the ISOLATED spike entrypoint (lib/main_ft2b_spike.dart). FT2-B3: the
+  # spike REUSES the EXISTING Ayden bundle id com.aydenstudio.app (no new App ID,
+  # no App-ID grouping, no new App Store Connect record). Installing it therefore
+  # TEMPORARILY REPLACES the normal Ayden app on the device (same bundle id); the
+  # real app can be reinstalled afterwards. It writes ONLY the 3 Supabase/API keys
+  # the spike needs (no RevenueCat / Firebase / Push). The ios-testflight workflow
+  # above is left BYTE-UNCHANGED. Run this workflow MANUALLY, only from the spike
+  # branch.
   #
-  # Prerequisites (FT2-B1 — done in Apple / Supabase consoles, NOT here):
-  #   • explicit App ID com.aydenstudio.app.ft2bspike with Sign in with Apple,
-  #     GROUPED under the primary com.aydenstudio.app App ID;
-  #   • a matching App Store Connect app record;
-  #   • Supabase Apple provider Client IDs incl. com.aydenstudio.app.ft2bspike;
-  #   • Supabase Manual Linking enabled.
+  # Remote prerequisites (reuse existing Ayden resources — NOT created here):
+  #   • existing App ID com.aydenstudio.app with Sign in with Apple already ON;
+  #   • existing App Store Connect Ayden app record;
+  #   • Supabase Apple provider already accepts Client ID com.aydenstudio.app;
+  #   • Supabase Anonymous Sign-ins ON;
+  #   • Supabase Manual Linking ON  ← the ONLY new remote setting needed.
   # ───────────────────────────────────────────────────────────────────────────
   ios-ft2b-spike:
     name: AYDEN — FT2B Identity Spike
@@ -108,7 +111,7 @@ workflows:
       xcode: latest
       cocoapods: default
       vars:
-        BUNDLE_ID: "com.aydenstudio.app.ft2bspike"
+        BUNDLE_ID: "com.aydenstudio.app"       # FT2-B3: reuse the existing Ayden App ID
     scripts:
       - name: Inject spike .env (Supabase + API only — no RevenueCat/Push)
         script: |

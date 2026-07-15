@@ -305,6 +305,8 @@ class _Ft2bSpikeScreenState extends State<Ft2bSpikeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              _operationalNote(),
+              const SizedBox(height: 12),
               _stateCard(snap),
               const SizedBox(height: 12),
               Text('Phase: ${_phase.name}'),
@@ -332,6 +334,21 @@ class _Ft2bSpikeScreenState extends State<Ft2bSpikeScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _operationalNote() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      color: const Color(0xFFFFF3CD),
+      child: const Text(
+        'TEST BUILD — shares the SAME bundle id as Ayden (com.aydenstudio.app). '
+        'Installing this spike TEMPORARILY REPLACES the normal Ayden app on this '
+        'device; reinstall Ayden afterwards. This spike uses a SEPARATE session '
+        'key (sb_supabase_session_ft2b_spike) and never reads, changes, or '
+        'deletes the real Ayden session (sb_supabase_session).',
+        style: TextStyle(fontSize: 12),
       ),
     );
   }

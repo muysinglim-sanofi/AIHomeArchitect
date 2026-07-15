@@ -22,19 +22,19 @@ void main() {
       final t = _fakeJwt({
         'iss': 'https://appleid.apple.com',
         'sub': '001999.fakesubject.0001',
-        'aud': 'com.aydenstudio.app.ft2bspike',
+        'aud': 'com.aydenstudio.app',
       });
       final c = decodeAppleIdentityTokenClaims(t);
       expect(c, isNotNull);
       expect(c!.hasSub, isTrue);
       expect(c.sub, '001999.fakesubject.0001');
-      expect(c.aud, ['com.aydenstudio.app.ft2bspike']);
+      expect(c.aud, ['com.aydenstudio.app']);
       expect(c.iss, 'https://appleid.apple.com');
     });
 
     test('tolerates base64url without padding', () {
       // A payload whose base64 length is not a multiple of 4 (needs padding).
-      final t = _fakeJwt({'sub': 'x', 'aud': 'com.aydenstudio.app.ft2bspike'});
+      final t = _fakeJwt({'sub': 'x', 'aud': 'com.aydenstudio.app'});
       // sanity: our fake segments are already unpadded
       expect(t.contains('='), isFalse);
       final c = decodeAppleIdentityTokenClaims(t);
@@ -54,39 +54,39 @@ void main() {
     });
 
     test('sub missing → hasSub false, aud still parsed', () {
-      final t = _fakeJwt({'aud': 'com.aydenstudio.app.ft2bspike'});
+      final t = _fakeJwt({'aud': 'com.aydenstudio.app'});
       final c = decodeAppleIdentityTokenClaims(t);
       expect(c, isNotNull);
       expect(c!.hasSub, isFalse);
       expect(c.sub, isNull);
-      expect(c.audContains('com.aydenstudio.app.ft2bspike'), isTrue);
+      expect(c.audContains('com.aydenstudio.app'), isTrue);
     });
 
     test('aud as List → all string entries kept', () {
       final t = _fakeJwt({
         'sub': 's',
-        'aud': ['com.aydenstudio.app.ft2bspike', 'other.client'],
+        'aud': ['com.aydenstudio.app', 'other.client'],
       });
       final c = decodeAppleIdentityTokenClaims(t);
-      expect(c!.aud, ['com.aydenstudio.app.ft2bspike', 'other.client']);
-      expect(c.audContains('com.aydenstudio.app.ft2bspike'), isTrue);
+      expect(c!.aud, ['com.aydenstudio.app', 'other.client']);
+      expect(c.audContains('com.aydenstudio.app'), isTrue);
     });
 
-    test('aud incorrect → audContains false', () {
-      final t = _fakeJwt({'sub': 's', 'aud': 'com.aydenstudio.app'});
+    test('aud incorrect (wrong audience) → audContains false', () {
+      final t = _fakeJwt({'sub': 's', 'aud': 'com.example.wrong'});
       final c = decodeAppleIdentityTokenClaims(t);
-      expect(c!.audContains('com.aydenstudio.app.ft2bspike'), isFalse);
+      expect(c!.audContains('com.aydenstudio.app'), isFalse);
     });
 
     test('toString exposes neither sub nor aud values', () {
       final t = _fakeJwt({
         'sub': 'SECRETsubVALUE',
-        'aud': 'com.aydenstudio.app.ft2bspike',
+        'aud': 'com.aydenstudio.app',
       });
       final c = decodeAppleIdentityTokenClaims(t);
       final dump = c.toString();
       expect(dump.contains('SECRETsubVALUE'), isFalse);
-      expect(dump.contains('com.aydenstudio.app.ft2bspike'), isFalse);
+      expect(dump.contains('com.aydenstudio.app'), isFalse);
     });
   });
 }
