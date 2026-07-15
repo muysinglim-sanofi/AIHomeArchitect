@@ -25,6 +25,20 @@ class FeatureFlags {
   /// from the UI.
   static const bool signInEnabled = false;
 
+  /// FT2 (Free Trial) — post-first-generation account-creation auth gate.
+  ///
+  /// When true : after the anonymous user consumes their single free
+  /// generation, the next NEW-SPACE attempt asks them to create a real
+  /// account (which unlocks +2 via POST /identity/claim-signup-bonus).
+  /// When false (default) : behaviour is byte-identical to today — no gate,
+  /// the backend stays at 3 anonymous free generations then paywall.
+  ///
+  /// DORMANT : part of a 3-way coordinated switch (this flag + backend
+  /// FREE_TRIAL_SIGNUP_BONUS_ENABLED + migration 20260718_ft1b). FT2-A adds
+  /// only the dormant IdentityService client — NO production code reads this
+  /// flag yet (declaration + tests only).
+  static const bool freeTrialAuthGate = false;
+
   /// RevenueCat graceful-degradation guard.
   ///
   /// When false (default) : a missing or misconfigured RevenueCat
