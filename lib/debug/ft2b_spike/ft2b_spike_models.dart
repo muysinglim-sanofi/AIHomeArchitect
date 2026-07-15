@@ -58,6 +58,54 @@ bool sessionPreserved({
     activeUserIdAfter != null &&
     anonIdBefore == activeUserIdAfter;
 
+/// The Apple `aud` the spike expects (its own bundle id). Used only to check
+/// that the credential was issued to the spike, never to gate the collision.
+const String kExpectedSpikeAud = 'com.aydenstudio.app.ft2bspike';
+
+/// The experiment is VALID only if both credentials carried a PRESENT Apple sub,
+/// the SAME sub across B and C, the correct aud on both, a DISTINCT collision
+/// anon, and a real permanent Phase-B account. Deliberately independent of any
+/// Supabase error code/status — validity is about the INPUTS being right.
+bool experimentValid({
+  required bool subPresentB,
+  required bool subPresentC,
+  required bool subSameBC,
+  required bool audMatchesB,
+  required bool audMatchesC,
+  required bool anonDistinct,
+  required bool phaseBPermanent,
+}) =>
+    subPresentB &&
+    subPresentC &&
+    subSameBC &&
+    audMatchesB &&
+    audMatchesC &&
+    anonDistinct &&
+    phaseBPermanent;
+
+/// A collision is OBSERVED only when ALL of these hold: the SAME Apple sub was
+/// used, the Phase C link was actually ATTEMPTED (not blocked by the
+/// same-identity guard), it did NOT succeed, an exception was captured, the C
+/// session survived, AND the control sign-in resolved back to the Phase B
+/// account. This NEVER inspects the specific status/code (e.g. 422 /
+/// identity_already_exists) — those are observed and reported, never assumed as
+/// the pass condition. Requiring the control sign-in prevents declaring a
+/// collision from a link failure that had some other cause.
+bool collisionObserved({
+  required bool subSameBC,
+  required bool linkAttemptedC,
+  required bool linkSucceededC,
+  required bool hasExceptionC,
+  required bool sessionPreservedC,
+  required bool controlSignInMatchesB,
+}) =>
+    subSameBC &&
+    linkAttemptedC &&
+    !linkSucceededC &&
+    hasExceptionC &&
+    sessionPreservedC &&
+    controlSignInMatchesB;
+
 /// Sanitized capture of an auth failure. No raw token / nonce / JWT survives:
 /// [message] is passed through [sanitizeText] at construction.
 class SpikeAuthError {
@@ -99,6 +147,9 @@ class SpikeAuthError {
 }
 
 /// Phase B — link a NEW Apple identity to the anonymous user.
+///
+/// Apple claim fields carry ONLY safe metadata: whether a `sub` was present
+/// (never the sub itself) and the `aud` (= the app bundle id, not sensitive).
 class PhaseBResult {
   final String? anonymousIdBefore;
   final String? userIdAfter;
@@ -109,6 +160,11 @@ class PhaseBResult {
   final bool linkSucceeded;
   final SpikeAuthError? error;
 
+  // Apple identity-token claims (safe subset — NO raw sub).
+  final bool appleSubPresent;
+  final List<String> appleAud;
+  final bool appleAudMatchesExpected;
+
   const PhaseBResult({
     required this.anonymousIdBefore,
     required this.userIdAfter,
@@ -118,6 +174,9 @@ class PhaseBResult {
     required this.authEvent,
     required this.linkSucceeded,
     required this.error,
+    this.appleSubPresent = false,
+    this.appleAud = const [],
+    this.appleAudMatchesExpected = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -128,6 +187,9 @@ class PhaseBResult {
     'identities_after': identitiesAfter,
     'auth_event': authEvent,
     'link_succeeded': linkSucceeded,
+    'apple_sub_present': appleSubPresent,
+    'apple_aud': appleAud,
+    'apple_aud_matches_expected': appleAudMatchesExpected,
     'error': error?.toJson(),
   };
 
@@ -136,28 +198,56 @@ class PhaseBResult {
 }
 
 /// Phase C — link the SAME Apple identity from a DIFFERENT anon (collision).
+///
+/// `linkAttempted` is false when the same-identity guard (§7) refused to call
+/// Supabase because the sub was absent or differed from Phase B. `invalidReason`
+/// records why. The Apple `sub` itself is NEVER stored/reported — only the
+/// boolean comparison result [appleSubSameBC].
 class PhaseCResult {
   final String? collisionAnonIdBefore;
+  final bool linkAttempted;
   final bool linkSucceeded;
+  final String? invalidReason;
   final SpikeAuthError? error;
   final String? activeUserIdAfter;
   final bool activeSessionPreserved;
   final bool isAnonymousAfter;
   final List<String> identitiesAfter;
 
+  // Apple identity-token claims (safe subset — NO raw sub).
+  final bool appleSubPresent;
+  final bool appleSubSameBC;
+  final List<String> appleAud;
+  final bool appleAudMatchesExpected;
+  final bool appleAudSameBC;
+
   const PhaseCResult({
     required this.collisionAnonIdBefore,
+    required this.linkAttempted,
     required this.linkSucceeded,
+    required this.invalidReason,
     required this.error,
     required this.activeUserIdAfter,
     required this.activeSessionPreserved,
     required this.isAnonymousAfter,
     required this.identitiesAfter,
+    this.appleSubPresent = false,
+    this.appleSubSameBC = false,
+    this.appleAud = const [],
+    this.appleAudMatchesExpected = false,
+    this.appleAudSameBC = false,
   });
 
   Map<String, dynamic> toJson() => {
     'collision_anon_id_before': collisionAnonIdBefore,
+    'link_attempted': linkAttempted,
     'link_succeeded': linkSucceeded,
+    'invalid_reason': invalidReason,
+    'apple_sub_present': appleSubPresent,
+    'apple_sub_same_b_c': appleSubSameBC,
+    'apple_aud': appleAud,
+    'apple_aud_matches_expected': appleAudMatchesExpected,
+    'apple_aud_same_b_c': appleAudSameBC,
     'error': error?.toJson(),
     'active_user_id_after': activeUserIdAfter,
     'active_session_preserved': activeSessionPreserved,
@@ -224,6 +314,43 @@ class SpikeReport {
     'captured_at': capturedAtIso,
     'phase_b': phaseB?.toJson(),
     'phase_c': phaseC?.toJson(),
-    'verify': verify?.toJson(),
+    'verify': {if (verify != null) ...verify!.toJson(), ..._verdictBlock()},
   };
+
+  /// Computed verdicts (never trust a specific error code): experiment validity
+  /// (right inputs) and structural collision observation.
+  Map<String, dynamic> _verdictBlock() {
+    final b = phaseB;
+    final c = phaseC;
+    final valid =
+        b != null &&
+        c != null &&
+        experimentValid(
+          subPresentB: b.appleSubPresent,
+          subPresentC: c.appleSubPresent,
+          subSameBC: c.appleSubSameBC,
+          audMatchesB: b.appleAudMatchesExpected,
+          audMatchesC: c.appleAudMatchesExpected,
+          anonDistinct:
+              c.collisionAnonIdBefore != null &&
+              c.collisionAnonIdBefore != b.userIdAfter,
+          phaseBPermanent:
+              b.linkSucceeded && b.uuidPreserved && !b.isAnonymousAfter,
+        );
+    final collision =
+        c != null &&
+        collisionObserved(
+          subSameBC: c.appleSubSameBC,
+          linkAttemptedC: c.linkAttempted,
+          linkSucceededC: c.linkSucceeded,
+          hasExceptionC: c.error != null,
+          sessionPreservedC: c.activeSessionPreserved,
+          controlSignInMatchesB: verify?.matchesPhaseB ?? false,
+        );
+    return {
+      'signed_in_user_matches_phase_b': verify?.matchesPhaseB ?? false,
+      'experiment_valid': valid,
+      'collision_observed': collision,
+    };
+  }
 }

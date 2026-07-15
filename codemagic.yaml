@@ -79,3 +79,68 @@ workflows:
         submit_to_testflight: true
         # beta_groups:                # uncomment + set your TestFlight group to auto-assign testers
         #   - Internal Testers
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # FT2-B Identity Spike — SEPARATE workflow (branch spike/ft2b-apple-identity-link).
+  # Builds the ISOLATED spike entrypoint (lib/main_ft2b_spike.dart) under the
+  # DISTINCT bundle id com.aydenstudio.app.ft2bspike, so it coexists with the
+  # normal Ayden app. It writes ONLY the 3 Supabase/API keys the spike needs
+  # (no RevenueCat / Firebase / Push). The ios-testflight workflow above is left
+  # BYTE-UNCHANGED. Run this workflow MANUALLY, only from the spike branch.
+  #
+  # Prerequisites (FT2-B1 — done in Apple / Supabase consoles, NOT here):
+  #   • explicit App ID com.aydenstudio.app.ft2bspike with Sign in with Apple,
+  #     GROUPED under the primary com.aydenstudio.app App ID;
+  #   • a matching App Store Connect app record;
+  #   • Supabase Apple provider Client IDs incl. com.aydenstudio.app.ft2bspike;
+  #   • Supabase Manual Linking enabled.
+  # ───────────────────────────────────────────────────────────────────────────
+  ios-ft2b-spike:
+    name: AYDEN — FT2B Identity Spike
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    integrations:
+      app_store_connect: AYDEN App Store      # reuse the existing ASC integration
+    environment:
+      groups:
+        - ayden_env                            # reuse the group; only 3 keys are written below
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      vars:
+        BUNDLE_ID: "com.aydenstudio.app.ft2bspike"
+    scripts:
+      - name: Inject spike .env (Supabase + API only — no RevenueCat/Push)
+        script: |
+          {
+            echo "API_BASE_URL=$API_BASE_URL"
+            echo "SUPABASE_URL=$SUPABASE_URL"
+            echo "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY"
+          } > "$CM_BUILD_DIR/.env"
+          echo "✓ spike .env written (API_BASE_URL=$API_BASE_URL)"
+      - name: Flutter pub get
+        script: flutter pub get
+      - name: Set up iOS code signing (spike bundle id)
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --certificate-key=@env:CERTIFICATE_PRIVATE_KEY \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Install CocoaPods
+        script: find . -name "Podfile" -execdir pod install \;
+      - name: Flutter build IPA (spike entrypoint)
+        script: |
+          flutter build ipa --release \
+            -t lib/main_ft2b_spike.dart \
+            --build-number=$BUILD_NUMBER \
+            --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true          # internal testers only; no external beta_groups

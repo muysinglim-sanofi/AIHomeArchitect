@@ -6,9 +6,16 @@
 /// ISOLATED Supabase client (spike Keychain key), captures the real server
 /// verdict into the pure models, and NEVER logs a token/nonce/JWT.
 ///
-/// This file is integration-only (real Apple + Supabase); it is deliberately
-/// thin, and the trustworthy logic it relies on is the PURE code in
-/// ft2b_spike_models.dart / ft2b_spike_sanitizer.dart (which ARE unit-tested).
+/// SAME-ACCOUNT GUARD: the Apple `sub` is read LOCALLY from each identity token
+/// payload (Phase C fails BEFORE the identity is attached to the user, so it
+/// cannot be read from `currentUser.identities`). The raw sub is held IN MEMORY
+/// ONLY (never logged/persisted/reported). Phase C refuses to call Supabase
+/// unless its sub equals Phase B's — so an accidental different Apple ID can
+/// never be mistaken for a collision.
+///
+/// This file is integration-only (real Apple + Supabase); the trustworthy logic
+/// it relies on is the PURE code in ft2b_spike_models.dart / _sanitizer.dart /
+/// _jwt.dart (which ARE unit-tested).
 library;
 
 import 'dart:async';
@@ -20,6 +27,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'ft2b_spike_jwt.dart';
 import 'ft2b_spike_models.dart';
 import 'ft2b_spike_sanitizer.dart';
 
@@ -55,6 +63,10 @@ class Ft2bSpikeAuth {
   final SupabaseClient _client;
   StreamSubscription<AuthState>? _sub;
   String? _lastEvent;
+
+  // Phase B Apple claims — IN-MEMORY ONLY. NEVER logged/persisted/reported.
+  String? _appleSubB;
+  List<String>? _appleAudB;
 
   GoTrueClient get _auth => _client.auth;
 
@@ -116,37 +128,35 @@ class Ft2bSpikeAuth {
   }
 
   /// Phase B — link a NEW Apple identity. Success is only a HYPOTHESIS; the
-  /// method records whatever actually happens.
+  /// method records whatever actually happens. Captures the Apple sub/aud
+  /// locally (sub kept in memory only) for the Phase C same-account guard.
   Future<PhaseBResult> linkNewAppleIdentity() async {
     final anonBefore = _auth.currentUser?.id;
+    AppleTokenClaims? claims;
     try {
       final cred = await _getAppleCredential();
+      claims = decodeAppleIdentityTokenClaims(cred.idToken);
+      _appleSubB = claims?.sub; // in-memory only
+      _appleAudB = claims?.aud;
       _lastEvent = null;
       await _auth.linkIdentityWithIdToken(
         provider: OAuthProvider.apple,
         idToken: cred.idToken,
         nonce: cred.rawNonce, // Supabase gets the RAW nonce
       );
-      final after = _auth.currentUser;
-      return PhaseBResult(
-        anonymousIdBefore: anonBefore,
-        userIdAfter: after?.id,
-        uuidPreserved: uuidPreserved(anonBefore, after?.id),
-        isAnonymousAfter: after?.isAnonymous ?? false,
-        identitiesAfter: _providerNames(after),
-        authEvent: _lastEvent,
+      return _buildPhaseB(
+        after: _auth.currentUser,
+        anonBefore: anonBefore,
+        claims: claims,
         linkSucceeded: true,
         error: null,
       );
     } on AuthException catch (e) {
       _logStep('phase-b', e);
-      return PhaseBResult(
-        anonymousIdBefore: anonBefore,
-        userIdAfter: _auth.currentUser?.id,
-        uuidPreserved: false,
-        isAnonymousAfter: _auth.currentUser?.isAnonymous ?? false,
-        identitiesAfter: _providerNames(_auth.currentUser),
-        authEvent: _lastEvent,
+      return _buildPhaseB(
+        after: _auth.currentUser,
+        anonBefore: anonBefore,
+        claims: claims,
         linkSucceeded: false,
         error: SpikeAuthError.from(
           error: e,
@@ -157,18 +167,35 @@ class Ft2bSpikeAuth {
       );
     } catch (e) {
       _logStep('phase-b', e);
-      return PhaseBResult(
-        anonymousIdBefore: anonBefore,
-        userIdAfter: _auth.currentUser?.id,
-        uuidPreserved: false,
-        isAnonymousAfter: _auth.currentUser?.isAnonymous ?? false,
-        identitiesAfter: _providerNames(_auth.currentUser),
-        authEvent: _lastEvent,
+      return _buildPhaseB(
+        after: _auth.currentUser,
+        anonBefore: anonBefore,
+        claims: claims,
         linkSucceeded: false,
         error: SpikeAuthError.from(error: e, message: e.toString()),
       );
     }
   }
+
+  PhaseBResult _buildPhaseB({
+    required User? after,
+    required String? anonBefore,
+    required AppleTokenClaims? claims,
+    required bool linkSucceeded,
+    required SpikeAuthError? error,
+  }) => PhaseBResult(
+    anonymousIdBefore: anonBefore,
+    userIdAfter: after?.id,
+    uuidPreserved: linkSucceeded ? uuidPreserved(anonBefore, after?.id) : false,
+    isAnonymousAfter: after?.isAnonymous ?? false,
+    identitiesAfter: _providerNames(after),
+    authEvent: _lastEvent,
+    linkSucceeded: linkSucceeded,
+    error: error,
+    appleSubPresent: claims?.hasSub ?? false,
+    appleAud: claims?.aud ?? const [],
+    appleAudMatchesExpected: claims?.audContains(kExpectedSpikeAud) ?? false,
+  );
 
   /// Prepare Phase C: sign out (LOCAL only) and create a fresh anonymous user.
   /// Never deletes any Auth user or DB row. Returns the new anon UUID.
@@ -178,70 +205,141 @@ class Ft2bSpikeAuth {
     return _auth.currentUser?.id;
   }
 
-  /// Phase C — link the SAME Apple identity from a DIFFERENT anon. Captures the
-  /// real result and confirms the original session survived the failure.
+  /// Phase C — link the SAME Apple identity from a DIFFERENT anon. The Apple
+  /// sub is decoded locally FIRST; if it is absent or differs from Phase B, the
+  /// method REFUSES to call Supabase (no second Apple account is ever linked)
+  /// and records `invalid_reason`. Only on a confirmed same-sub does it attempt
+  /// the link and capture the REAL result — never assuming the error.
   Future<PhaseCResult> linkSameAppleIdentity() async {
     final anonBefore = _auth.currentUser?.id;
+
+    _AppleCredential cred;
     try {
-      final cred = await _getAppleCredential();
+      cred = await _getAppleCredential();
+    } catch (e) {
+      _logStep('phase-c', e);
+      return _buildPhaseC(
+        anonBefore: anonBefore,
+        claims: null,
+        subSame: false,
+        linkAttempted: false,
+        linkSucceeded: false,
+        invalidReason: 'apple_credential_failed',
+        error: SpikeAuthError.from(error: e, message: e.toString()),
+        after: _auth.currentUser,
+      );
+    }
+
+    final claims = decodeAppleIdentityTokenClaims(cred.idToken);
+    final subC = claims?.sub;
+    final subPresentC = claims?.hasSub ?? false;
+    final subSame = _appleSubB != null && subC != null && _appleSubB == subC;
+
+    // GUARD §7 — same Apple account required before touching Supabase.
+    if (_appleSubB == null || !subPresentC || !subSame) {
+      final reason = _appleSubB == null
+          ? 'phase_b_sub_missing'
+          : (!subPresentC ? 'apple_sub_absent' : 'different_apple_identity');
+      return _buildPhaseC(
+        anonBefore: anonBefore,
+        claims: claims,
+        subSame: subSame,
+        linkAttempted: false,
+        linkSucceeded: false,
+        invalidReason: reason,
+        error: null,
+        after: _auth.currentUser,
+      );
+    }
+
+    // Confirmed same Apple sub → attempt the link, capture the real outcome.
+    try {
       await _auth.linkIdentityWithIdToken(
         provider: OAuthProvider.apple,
         idToken: cred.idToken,
         nonce: cred.rawNonce,
       );
-      // If we reach here the link unexpectedly SUCCEEDED — record it truthfully.
-      final after = _auth.currentUser;
-      return PhaseCResult(
-        collisionAnonIdBefore: anonBefore,
-        linkSucceeded: true,
+      return _buildPhaseC(
+        anonBefore: anonBefore,
+        claims: claims,
+        subSame: true,
+        linkAttempted: true,
+        linkSucceeded: true, // unexpected — recorded truthfully
+        invalidReason: null,
         error: null,
-        activeUserIdAfter: after?.id,
-        activeSessionPreserved: sessionPreserved(
-          hasSessionAfter: _auth.currentSession != null,
-          anonIdBefore: anonBefore,
-          activeUserIdAfter: after?.id,
-        ),
-        isAnonymousAfter: after?.isAnonymous ?? false,
-        identitiesAfter: _providerNames(after),
+        after: _auth.currentUser,
       );
     } on AuthException catch (e) {
       _logStep('phase-c', e);
-      final after = _auth.currentUser;
-      return PhaseCResult(
-        collisionAnonIdBefore: anonBefore,
+      return _buildPhaseC(
+        anonBefore: anonBefore,
+        claims: claims,
+        subSame: true,
+        linkAttempted: true,
         linkSucceeded: false,
+        invalidReason: null,
         error: SpikeAuthError.from(
           error: e,
           statusCode: e.statusCode,
           code: e.code,
           message: e.message,
         ),
-        activeUserIdAfter: after?.id,
-        activeSessionPreserved: sessionPreserved(
-          hasSessionAfter: _auth.currentSession != null,
-          anonIdBefore: anonBefore,
-          activeUserIdAfter: after?.id,
-        ),
-        isAnonymousAfter: after?.isAnonymous ?? false,
-        identitiesAfter: _providerNames(after),
+        after: _auth.currentUser,
       );
     } catch (e) {
       _logStep('phase-c', e);
-      final after = _auth.currentUser;
-      return PhaseCResult(
-        collisionAnonIdBefore: anonBefore,
+      return _buildPhaseC(
+        anonBefore: anonBefore,
+        claims: claims,
+        subSame: true,
+        linkAttempted: true,
         linkSucceeded: false,
+        invalidReason: null,
         error: SpikeAuthError.from(error: e, message: e.toString()),
-        activeUserIdAfter: after?.id,
-        activeSessionPreserved: sessionPreserved(
-          hasSessionAfter: _auth.currentSession != null,
-          anonIdBefore: anonBefore,
-          activeUserIdAfter: after?.id,
-        ),
-        isAnonymousAfter: after?.isAnonymous ?? false,
-        identitiesAfter: _providerNames(after),
+        after: _auth.currentUser,
       );
     }
+  }
+
+  PhaseCResult _buildPhaseC({
+    required String? anonBefore,
+    required AppleTokenClaims? claims,
+    required bool subSame,
+    required bool linkAttempted,
+    required bool linkSucceeded,
+    required String? invalidReason,
+    required SpikeAuthError? error,
+    required User? after,
+  }) => PhaseCResult(
+    collisionAnonIdBefore: anonBefore,
+    linkAttempted: linkAttempted,
+    linkSucceeded: linkSucceeded,
+    invalidReason: invalidReason,
+    error: error,
+    activeUserIdAfter: after?.id,
+    activeSessionPreserved: sessionPreserved(
+      hasSessionAfter: _auth.currentSession != null,
+      anonIdBefore: anonBefore,
+      activeUserIdAfter: after?.id,
+    ),
+    isAnonymousAfter: after?.isAnonymous ?? false,
+    identitiesAfter: _providerNames(after),
+    appleSubPresent: claims?.hasSub ?? false,
+    appleSubSameBC: subSame,
+    appleAud: claims?.aud ?? const [],
+    appleAudMatchesExpected: claims?.audContains(kExpectedSpikeAud) ?? false,
+    appleAudSameBC: _audSameBC(claims),
+  );
+
+  bool _audSameBC(AppleTokenClaims? claimsC) {
+    final b = _appleAudB;
+    final c = claimsC?.aud;
+    if (b == null || c == null || b.length != c.length) {
+      return false;
+    }
+    final bs = b.toSet();
+    final cs = c.toSet();
+    return bs.containsAll(cs) && cs.containsAll(bs);
   }
 
   /// "Verify existing-account sign-in": prove the Apple identity belongs to the

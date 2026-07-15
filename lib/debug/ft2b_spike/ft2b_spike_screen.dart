@@ -229,8 +229,13 @@ class _Ft2bSpikeScreenState extends State<Ft2bSpikeScreen> {
       }
       setState(() {
         _phaseC = res;
-        _phase = SpikePhase.phaseCDone;
-        _status = res.linkSucceeded
+        // Stay in phaseCPrepared when the same-identity guard blocked the call,
+        // so the operator can retry with the correct Apple ID.
+        _phase = res.linkAttempted ? SpikePhase.phaseCDone : _phase;
+        _status = !res.linkAttempted
+            ? 'Phase C BLOCKED before Supabase (${res.invalidReason}) — '
+                  'retry with the SAME Apple ID as Phase B.'
+            : res.linkSucceeded
             ? 'Phase C link SUCCEEDED (unexpected — captured).'
             : 'Phase C link failed as hypothesized (captured). See report.';
       });

@@ -23,8 +23,9 @@ final RegExp _emailRe = RegExp(
 // `[REDACTED_BEARER]` is NOT re-clobbered by a later key match (e.g.
 // `Authorization: [REDACTED_BEARER]`), keeping each marker meaningful.
 final RegExp _sensitiveKvRe = RegExp(
-  r'(nonce|id[_-]?token|access[_-]?token|refresh[_-]?token|authorization|'
-  r'apikey|api[_-]?key|password|secret)(\s*[:=]\s*)([^\s,;&})"\[\]]+)',
+  r'\b(nonce|sub|id[_-]?token|identity[_-]?token|access[_-]?token|'
+  r'refresh[_-]?token|authorization|apikey|api[_-]?key|password|secret)'
+  r'(\s*[:=]\s*)([^\s,;&})"\[\]]+)',
   caseSensitive: false,
 );
 
@@ -32,8 +33,9 @@ final RegExp _sensitiveKvRe = RegExp(
 // the value (it begins with a quote). Real tokens are JWTs caught by _jwtRe, but
 // this closes the residual (e.g. a raw nonce embedded in a JSON error body).
 final RegExp _sensitiveJsonKvRe = RegExp(
-  r'"(nonce|id[_-]?token|access[_-]?token|refresh[_-]?token|authorization|'
-  r'apikey|api[_-]?key|password|secret)"(\s*:\s*)"([^"]*)"',
+  r'"(nonce|sub|id[_-]?token|identity[_-]?token|access[_-]?token|'
+  r'refresh[_-]?token|authorization|apikey|api[_-]?key|password|secret)"'
+  r'(\s*:\s*)"([^"]*)"',
   caseSensitive: false,
 );
 

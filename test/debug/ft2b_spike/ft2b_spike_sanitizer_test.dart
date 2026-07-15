@@ -39,6 +39,33 @@ void main() {
       expect(out.contains('[REDACTED]'), isTrue);
     });
 
+    test('redacts Apple sub (JSON and k=v forms)', () {
+      expect(
+        sanitizeText('body {"sub":"001999.RAWSUB.0001"}').contains('RAWSUB'),
+        isFalse,
+      );
+      expect(
+        sanitizeText('sub=001999.RAWSUB.0001').contains('RAWSUB'),
+        isFalse,
+      );
+    });
+
+    test('redacts identity_token / id_token', () {
+      expect(
+        sanitizeText('"identity_token":"IDTOKENraw"').contains('IDTOKENraw'),
+        isFalse,
+      );
+      expect(
+        sanitizeText('id_token=IDTOKENraw2').contains('IDTOKENraw2'),
+        isFalse,
+      );
+    });
+
+    test('does NOT over-redact a normal word containing "sub"', () {
+      final out = sanitizeText('subscription active for the user');
+      expect(out, 'subscription active for the user');
+    });
+
     test('truncates over-long input', () {
       final long = 'x' * 500;
       final out = sanitizeText(long);
