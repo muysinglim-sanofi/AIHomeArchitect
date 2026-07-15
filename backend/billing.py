@@ -18,7 +18,7 @@ Les hooks ne font que RELAYER un événement de transition — aucune logique m�
   RUNNING          → HOLD(-1)      hold:<intent_id>
   SUCCEEDED        → COMMIT(0)     commit:<intent_id>
   FAILED/_TERMINAL → RELEASE(+1)   release:<intent_id>
-  (1re gen d'un user) → TRIAL(+3)  trial:<user_id>
+  (1re gen d'un user) → TRIAL(+TRIAL_CREDITS)  trial:<user_id>
 Net : succeeded = HOLD(-1)+COMMIT(0) = -1 · failed = HOLD(-1)+RELEASE(+1) = 0.
 
 ANOMALIE CONNUE, VOLONTAIREMENT NON COMPENSÉE EN PR1 : si un MÊME intent_id
@@ -39,13 +39,30 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Optional
 
+from free_tier_config import ANONYMOUS_FREE_GENERATIONS, PRE_FT2_ANON_FREE_GENERATIONS
+
 log = logging.getLogger("billing")
 
-TRIAL_CREDITS = 3
+
+def _free_trial_active() -> bool:
+    """FT1 — MÊME flag que les endpoints signup (identity._signup_bonus_enabled)
+    et que l'application de la migration 20260718_ft1b. Défaut OFF."""
+    return os.environ.get("FREE_TRIAL_SIGNUP_BONUS_ENABLED", "false").strip().lower() == "true"
+
+
+# TRIAL_CREDITS pilote UNIQUEMENT la PROJECTION/affichage (_free_bucket_available,
+# /me/status) et grant_trial (réconciliation) — PAS l'enforcement, qui vit en SQL
+# (billing_try_hold). Il DOIT rester == à ce que le SQL accorde réellement :
+#   • fenêtre FT1 (flag OFF, ft1b non appliquée) → SQL accorde 3 → affichage 3 ;
+#   • lancement FT2 (flag ON + ft1b appliquée)   → SQL accorde 1 → affichage 1.
+# Le flag est le point de couplage unique (runbook FT2 : flag ⟺ ft1b). Défaut = 3
+# → FT1 n'introduit AUCUN changement live tant que FT2 n'est pas activé (dormant).
+TRIAL_CREDITS = ANONYMOUS_FREE_GENERATIONS if _free_trial_active() else PRE_FT2_ANON_FREE_GENERATIONS
 
 
 def _get_supa():
@@ -167,7 +184,7 @@ async def _pass_bucket_available(supa, user_id: str, pass_id: str) -> int:
 
 async def _free_bucket_available(supa, user_id: str, *, project_trial: bool = True) -> int:
     """P0 (2026-07-10) — bucket FREE/TRIAL = Σ available_delta des ledger_entries
-    `pass_id IS NULL`, PLANCHÉ à 0, + TRIAL projeté (+3) si pas encore accordé ET
+    `pass_id IS NULL`, PLANCHÉ à 0, + TRIAL projeté (+TRIAL_CREDITS) si pas encore accordé ET
     `project_trial` (grant_trial est idempotent, posé au 1er RUNNING SEULEMENT quand
     aucun pass actif → on ne projette le +3 que dans ce cas, sinon un premium frais
     afficherait un free fantôme). MÊME règle que `billing_reproject_wallet` (branche
@@ -248,7 +265,7 @@ async def _emit(supa, *, user_id: str, entry_type: str, delta: int, key: str,
 
 
 async def grant_trial(*, user_id: str, supa=None) -> None:
-    """TRIAL(+3) une seule fois par user (idempotent trial:<user_id>)."""
+    """TRIAL(+TRIAL_CREDITS) une seule fois par user (idempotent trial:<user_id>)."""
     supa = supa or _get_supa()
     new = await _ledger_insert(
         supa, user_id=user_id, entry_type="TRIAL", available_delta=TRIAL_CREDITS,
@@ -257,6 +274,53 @@ async def grant_trial(*, user_id: str, supa=None) -> None:
     if new:
         log.info("[BILLING] TRIAL(+%d) user=%s", TRIAL_CREDITS, user_id[:8])
         await _reproject_wallet(user_id=user_id, supa=supa)
+
+
+# ── FT1 — Free Trial : éligibilité + bonus de création de compte ─────────────
+# Ces deux wrappers RELAIENT les RPC SQL (billing_mark_signup_eligible /
+# billing_grant_signup_bonus). Toute la logique (vérif anonymat via auth.users,
+# idempotence, advisory-lock, reprojection) vit EN SQL — ici on ne fait que
+# passer p_user_id (= JWT côté endpoint) et remonter le dict. On NE swallow PAS
+# les exceptions (contrairement à grant_trial) : un octroi ne doit jamais
+# fail-open ; l'endpoint mappe l'erreur en 503 → retry sûr (RPC idempotente).
+
+async def mark_signup_eligible(*, user_id: str, supa=None) -> dict:
+    """Marque A éligible au bonus de création SI auth.users confirme l'anonymat
+    (vérif SQL, pas le claim JWT périmé). Idempotent. Ne crédite RIEN.
+    Renvoie {eligible: bool, reason: str}."""
+    supa = supa or _get_supa()
+    res = await asyncio.to_thread(
+        lambda: supa.rpc("billing_mark_signup_eligible", {"p_user_id": user_id}).execute()
+    )
+    data = getattr(res, "data", None)
+    if isinstance(data, list):
+        data = data[0] if data else None
+    data = data or {}
+    log.info("[BILLING] signup_eligible user=%s eligible=%s reason=%s",
+             user_id[:8], data.get("eligible"), data.get("reason"))
+    return data
+
+
+async def grant_signup_bonus(*, user_id: str, supa=None) -> dict:
+    """Accorde le bonus de création RÉELLEMENT dû (plafonné au total gratuit) et
+    garantit le trial (+1 si absent), via billing_grant_signup_bonus (SECURITY
+    DEFINER). Idempotence par CLAIM ATOMIQUE sur account_state (compare-and-swap,
+    AUCUN advisory lock) : auth.users non-anonyme MAINTENANT ∧ signup_bonus_eligible
+    ∧ NOT merged_closed ∧ granted_at NULL. Bonus calculé sur les DROITS ACCORDÉS
+    (jamais les HOLD) → un ancien TRIAL +3 ⇒ 0 (already_entitled), jamais 5.
+    Renvoie {decision: granted|already_entitled|already_processed|merged_closed|
+    not_eligible, bonus_granted, reason}."""
+    supa = supa or _get_supa()
+    res = await asyncio.to_thread(
+        lambda: supa.rpc("billing_grant_signup_bonus", {"p_user_id": user_id}).execute()
+    )
+    data = getattr(res, "data", None)
+    if isinstance(data, list):
+        data = data[0] if data else None
+    data = data or {}
+    log.info("[BILLING] signup_bonus user=%s decision=%s reason=%s",
+             user_id[:8], data.get("decision"), data.get("reason"))
+    return data
 
 
 @dataclass

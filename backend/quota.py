@@ -51,12 +51,14 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional
 
+from free_tier_config import TOTAL_FREE_GENERATIONS
+
 log = logging.getLogger("wave_5_17b.quota")
 
 
 # ── Tunable constants ───────────────────────────────────────────────────────
 
-FREE_TIER_LIMIT = 3                 # Product decision (Sprint 1B, 2026-06-10) — 3 free gens before paywall. Backend-authoritative; /me/status drives the frontend count.
+FREE_TIER_LIMIT = TOTAL_FREE_GENERATIONS   # FT1 (2026-07-15) — plafond gratuit TOTAL (1 anon + 2 création), centralisé dans free_tier_config. Affichage /me/status uniquement (autorité = billing ledger).
 _ROLE_CACHE_TTL_SECONDS = 60        # admin/premium role lookup cache window
 _BYPASS_ROLES = {"admin", "premium"} # any role in this set bypasses quota
 

@@ -382,6 +382,68 @@ async def claim_merge(
     return _map_rpc_row(rows[0])
 
 
+# ══════════ FT1 — Free Trial : éligibilité + bonus de création de compte ══════════
+# Deux endpoints DORMANTS (flag FREE_TRIAL_SIGNUP_BONUS_ENABLED, défaut false),
+# activés au lancement FT2 avec l'auth gate frontend. L'anonymat RÉEL est vérifié
+# EN SQL (auth.users.is_anonymous, dans les RPC) — jamais sur le claim JWT (périmé
+# ~1h après conversion) ni sur la parole du frontend. user_id = JWT, jamais le corps.
+
+
+def _signup_bonus_enabled() -> bool:
+    """Gate FT1. Défaut OFF : dormant jusqu'à l'activation coordonnée FT2
+    (migration flip anon→1 + auth gate frontend)."""
+    return os.environ.get("FREE_TRIAL_SIGNUP_BONUS_ENABLED", "false").strip().lower() == "true"
+
+
+def _require_signup_bonus_enabled() -> None:
+    """Gate flag EN PREMIER (avant auth/DB). Flag OFF → 404 immédiat."""
+    if not _signup_bonus_enabled():
+        raise HTTPException(status_code=404,
+                            detail={"error_code": "not_found", "user_message": "Not found."})
+
+
+def signup_bonus_gate(
+    _flag: None = Depends(_require_signup_bonus_enabled),          # 1) flag → 404
+    current_user: CurrentUser = Depends(require_active_identity),  # 2) JWT → 3) garde merged_closed
+) -> CurrentUser:
+    """Dépendance des 2 endpoints FT1 : flag AVANT auth AVANT garde (ordre de
+    signature FastAPI). Flag OFF ⇒ 404 sans jamais atteindre l'auth ni la DB."""
+    return current_user
+
+
+@identity_router.post("/anon-init")
+async def anon_init(current_user: CurrentUser = Depends(signup_bonus_gate)):
+    """Auth = A (JWT actif). Marque A éligible au bonus de création SSI auth.users
+    confirme que A est anonyme (vérif SQL, pas le claim). Idempotent, appelé une
+    fois au premier boot anonyme. Ne crédite RIEN."""
+    import billing  # noqa: PLC0415 — lazy (mirror _get_supa, évite le cycle)
+    try:
+        return await billing.mark_signup_eligible(user_id=current_user.user_id)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[identity] anon-init RPC failed user=%s err=%s",
+                    current_user.user_id[:8], type(exc).__name__)
+        raise HTTPException(status_code=503,
+                            detail={"error_code": "signup_eligibility_unavailable",
+                                    "user_message": "Please try again."})
+
+
+@identity_router.post("/claim-signup-bonus")
+async def claim_signup_bonus(current_user: CurrentUser = Depends(signup_bonus_gate)):
+    """Auth = compte (JWT actif). Accorde +2 (et garantit trial +1) SSI, VÉRIFIÉ
+    CÔTÉ SERVEUR : auth.users non-anonyme MAINTENANT ∧ signup_bonus_eligible ∧
+    NOT merged_closed ∧ pas déjà accordé. Idempotent. Un compte existant (jamais
+    anonyme) → not_eligible. Ne s'appuie JAMAIS sur le frontend."""
+    import billing  # noqa: PLC0415 — lazy
+    try:
+        return await billing.grant_signup_bonus(user_id=current_user.user_id)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[identity] claim-signup-bonus RPC failed user=%s err=%s",
+                    current_user.user_id[:8], type(exc).__name__)
+        raise HTTPException(status_code=503,
+                            detail={"error_code": "signup_bonus_unavailable",
+                                    "user_message": "Please try again."})
+
+
 # ══════════ COMMIT 3b — révocation Auth de A (défense en profondeur) ══════════
 # Sécurité IMMÉDIATE = le garde merged_closed→403 (3a). Ci-dessous = ban best-effort
 # de A (from_user_id de la LIGNE, jamais fourni par un appelant) + transition
