@@ -167,6 +167,9 @@ async def revenuecat_webhook(request: Request) -> dict:
     app_user_id = event.get("app_user_id") or ""
     entitlement_ids = event.get("entitlement_ids") or []
     expiration_at_ms = event.get("expiration_at_ms")  # may be None
+    # Commit 5b — champ RC RÉEL présent sur CANCELLATION ('CUSTOMER_SUPPORT' = remboursement,
+    # 'UNSUBSCRIBE' = simple résiliation). Aucune valeur inventée, aucun type REFUND fictif.
+    cancel_reason = event.get("cancel_reason") or ""
 
     log.info(
         "[Wave 5.17d webhook] receive type=%s event_id=%s user=%s entitlements=%s",
@@ -180,6 +183,30 @@ async def revenuecat_webhook(request: Request) -> dict:
         # right contract.
         return {"ok": True, "action": "skipped", "reason": "no_user_id"}
 
+    # ── Commit 5b — REMBOURSEMENTS : détectés, VISIBLES, traités MANUELLEMENT ──────
+    # RevenueCat n'émet pas de type REFUND/CHARGEBACK. Un remboursement = CANCELLATION
+    # + cancel_reason='CUSTOMER_SUPPORT'. REFUND_REVERSED est un vrai type RC.
+    # AUCUNE correction ledger auto, AUCUNE mutation pass/rôle, AUCUNE suppression
+    # rétroactive. Log LOUD + code sûr + 0 donnée sensible (user tronqué [:8]). 200
+    # acknowledged_manual_review évite la boucle de retries, sans être silencieux.
+    # (Placé AVANT le filtre entitlements : un remboursement ne doit jamais être « skip ».)
+    if event_type == "CANCELLATION" and cancel_reason == "CUSTOMER_SUPPORT":
+        log.warning(
+            "[Wave 5.17d webhook] RC_REFUND_MANUAL_REVIEW user=%s event_id=%s cancel_reason=%s "
+            "— aucune mutation ledger/pass/rôle ; revue humaine requise",
+            app_user_id[:8], event_id, cancel_reason,
+        )
+        return {"ok": True, "action": "acknowledged_manual_review",
+                "decision": "RC_REFUND_MANUAL_REVIEW"}
+    if event_type == "REFUND_REVERSED":
+        log.warning(
+            "[Wave 5.17d webhook] RC_REFUND_REVERSED_MANUAL_REVIEW user=%s event_id=%s "
+            "— aucune ré-attribution/mutation automatique ; revue humaine",
+            app_user_id[:8], event_id,
+        )
+        return {"ok": True, "action": "acknowledged_manual_review",
+                "decision": "RC_REFUND_REVERSED_MANUAL_REVIEW"}
+
     if PREMIUM_ENTITLEMENT not in entitlement_ids and event_type != "EXPIRATION":
         # Some non-premium entitlement we don't recognise. EXPIRATION
         # events also sometimes drop the entitlement_ids — we still
@@ -191,55 +218,42 @@ async def revenuecat_webhook(request: Request) -> dict:
         return {"ok": True, "action": "skipped", "reason": "no_premium_entitlement"}
 
     supa = _get_supa()
+    import billing  # noqa: PLC0415 — lazy (routage sous verrou, RPC SECURITY DEFINER)
+    from quota import _clear_role_cache  # noqa: PLC0415 — invalide le cache rôle après écriture SQL
 
     if event_type in _GRANTING_EVENTS:
         expires_iso = _ms_to_iso(expiration_at_ms)
-        # (1) Autorité actuelle CONSERVÉE (dual-write RC-PR2, ne rien retirer).
-        await _upsert_premium(
-            supa=supa,
-            user_id=app_user_id,
-            expires_at_iso=expires_iso,
-            event_type=event_type,
-            event_id=event_id,
-        )
-        # (2) RC-PR2 — crédite le wallet EN PLUS, sur les vrais achats. Peut lever
-        #     HTTPException(500) → non-2xx → RevenueCat retente (retry-safe car
-        #     grant_purchase est idempotent). _upsert_premium ci-dessus est déjà
-        #     idempotent, donc le retry ne double rien.
-        grant_info = None
         if event_type in _CREDIT_GRANTING_EVENTS:
-            grant_info = await _dual_write_grant(
-                supa=supa, event=event, user_id=app_user_id, expires_iso=expires_iso,
+            # CRÉDIT (INITIAL_PURCHASE/RENEWAL) : ROUTÉ sous verrou → grant + rôle sur la
+            # cible RÉELLE (A si merge pending, B si revocation/completed, sinon manual_review),
+            # décision prise en SQL, jamais recréditée sur A après revocation_pending/completed.
+            routed = await _routed_grant(
+                supa=supa, event=event, app_user_id=app_user_id, expires_iso=expires_iso,
             )
-        return {
-            "ok": True,
-            "action": "premium_granted",
-            "user_id": app_user_id,
-            "expires_at": expires_iso,
-            "grant": grant_info,
-        }
-
-    if event_type in _REVOKING_EVENTS:
-        # Expire the role immediately. We do NOT delete the row : keeping
-        # historical premium grants is useful for analytics and for the
-        # has_admin_role expiration check (it compares expires_at to now).
-        revoked_iso = _ms_to_iso(expiration_at_ms) or _now_iso()
-        await _expire_premium(
-            supa=supa,
-            user_id=app_user_id,
-            expires_at_iso=revoked_iso,
-            event_type=event_type,
-            event_id=event_id,
+            _clear_role_cache()
+            return {"ok": True, "action": "premium_granted_routed", "routing": routed}
+        # RÔLE SEUL (UNCANCELLATION/PRODUCT_CHANGE/NON_RENEWING_PURCHASE/TRANSFER) : ROUTÉ.
+        routed = await _routed_role_apply(
+            supa=supa, app_user_id=app_user_id, expires_iso=expires_iso,
+            event_type=event_type, event_id=event_id,
         )
-        return {
-            "ok": True,
-            "action": "premium_revoked",
-            "user_id": app_user_id,
-            "expires_at": revoked_iso,
-        }
+        _clear_role_cache()
+        return {"ok": True, "action": "premium_role_routed", "routing": routed}
+
+    if event_type in _REVOKING_EVENTS:  # EXPIRATION
+        # ROUTÉ : pending→A, revocation/completed→B sûr. Helper NULL-safe GREATEST →
+        # une EXPIRATION ancienne ne raccourcit jamais un premium plus récent.
+        revoked_iso = _ms_to_iso(expiration_at_ms) or _now_iso()
+        routed = await _routed_role_apply(
+            supa=supa, app_user_id=app_user_id, expires_iso=revoked_iso,
+            event_type=event_type, event_id=event_id,
+        )
+        _clear_role_cache()
+        return {"ok": True, "action": "premium_expire_routed", "routing": routed}
 
     if event_type in _OBSERVED_ONLY:
-        # No-op — premium stays active until the natural EXPIRATION fires.
+        # CANCELLATION (non-remboursement, ex. UNSUBSCRIBE) / BILLING_ISSUE / SUBSCRIBER_ALIAS.
+        # No-op — l'accès sera retiré à l'EXPIRATION naturelle.
         return {"ok": True, "action": "noop", "type": event_type}
 
     log.info("[Wave 5.17d webhook] unknown event type=%s — acknowledged", event_type)
@@ -251,6 +265,11 @@ async def revenuecat_webhook(request: Request) -> dict:
 import asyncio  # noqa: E402  — used by the awaitable helpers below
 
 
+# ⚠️ LEGACY / NON-ROUTÉ — NE PLUS UTILISER dans le dispatch webhook. Crédite `user_id`
+# DIRECTEMENT (billing.grant_purchase) SANS consulter account_state/identity_merges : c'est
+# EXACTEMENT la fuite que Commit 5b empêche (un crédit RC tardif atterrit sur A après merge
+# A→B). Le dispatch actif appelle _routed_grant (routage A/B sous verrou). Conservé
+# uniquement car référencé par validate_rcpr2_grant_purchase.py. NE PAS ré-appeler ici.
 async def _dual_write_grant(*, supa, event: dict, user_id: str, expires_iso: Optional[str]) -> dict:
     """RC-PR2 — crédite le wallet (Payment/Order/Pass + ledger GRANT) en plus du
     rôle premium. Politique STRICTE (chemin argent) :
@@ -314,6 +333,100 @@ async def _dual_write_grant(*, supa, event: dict, user_id: str, expires_iso: Opt
         "pass_id": result.pass_id,
         "environment": environment or None,
     }
+
+
+def _warn_if_credit_manual(routed: dict, app_user_id: str, ctx: str) -> None:
+    """Crédit RC PAYÉ routé en manual_review = argent encaissé NON livré → VISIBLE (parité
+    avec la voie remboursement). Log LOUD (warning), code sûr, user tronqué, aucun payload."""
+    if isinstance(routed, dict) and routed.get("decision") == "manual_review":
+        log.warning(
+            "[RC-PR2 routed] RC_CREDIT_MANUAL_REVIEW user=%s ctx=%s routing=%s — crédit RC "
+            "encaissé NON livré (routage ambigu) ; revue humaine : créditer l'identité active",
+            app_user_id[:8], ctx, routed.get("routing_code"),
+        )
+
+
+async def _routed_grant(*, supa, event: dict, app_user_id: str, expires_iso: Optional[str]) -> dict:
+    """Commit 5b — variante ROUTÉE de _dual_write_grant : la décision « créditer A ou B »
+    est prise SOUS VERROU dans le RPC billing_grant_purchase_routed (jamais en Python).
+    Même politique STRICTE (chemin argent) : product non mappé / échec RPC →
+    HTTPException(500) → non-2xx → RevenueCat retente (idempotent). Renvoie le jsonb routé
+    {effective_user_id, routing_code, decision, granted, grant}."""
+    import billing  # noqa: PLC0415 — lazy (évite tout cycle d'import au chargement)
+
+    product_id = event.get("product_id") or ""
+    transaction_id = event.get("transaction_id") or ""
+    environment = event.get("environment") or ""
+
+    if not product_id or not transaction_id:
+        # Anomalie (RC envoie toujours ces champs). Le CRÉDIT métré ne peut pas procéder,
+        # mais on route quand même le RÔLE premium (parité avec l'ancien _upsert_premium : ne
+        # pas refuser les features pour un champ manquant). Routage A/B sous verrou.
+        log.warning(
+            "[RC-PR2 routed] crédit SKIPPED (missing fields) user=%s product_id=%r tx=%r env=%s → rôle routé seul",
+            app_user_id[:8], product_id or None, transaction_id or None, environment or "-",
+        )
+        try:
+            routed = await billing.route_role_apply(
+                original_user_id=app_user_id, expires_at_iso=expires_iso,
+                event_type="CREDIT_MISSING_FIELDS", event_id=event.get("id") or "", supa=supa)
+        except billing.RoutingChangedRetry:
+            raise HTTPException(status_code=503, detail="routing_changed_retry")
+        _warn_if_credit_manual(routed, app_user_id, "missing_fields")
+        return {"reason": "missing_fields", "granted": False, **routed}
+
+    try:
+        routed = await billing.grant_purchase_routed(
+            original_user_id=app_user_id,
+            provider="revenuecat",
+            provider_transaction_id=transaction_id,   # transaction_id DU CYCLE
+            store_product_id=product_id,
+            amount=event.get("price"),
+            currency=event.get("currency"),
+            ends_at_iso=expires_iso,                   # autorité = RC expiration
+            raw_payload=event,                         # environment vit ici (audit)
+            supa=supa,
+        )
+    except billing.RoutingChangedRetry:
+        # Course : le merge s'est terminé entre la prélecture et le verrou → RC réessaie (503).
+        log.warning(
+            "[RC-PR2 routed] ROUTING_CHANGED_RETRY user=%s tx=%s → 503 (retry, pas manual_review)",
+            app_user_id[:8], transaction_id,
+        )
+        raise HTTPException(status_code=503, detail="routing_changed_retry")
+    except billing.ProductNotMapped as exc:
+        log.error(
+            "[RC-PR2 routed] product NOT mapped → non-2xx (RC retry) user=%s product_id=%s env=%s",
+            app_user_id[:8], exc.store_product_id, environment or "-",
+        )
+        raise HTTPException(status_code=500, detail="product_not_mapped")
+    except Exception as exc:  # noqa: BLE001 — chemin argent : PAS de fail-open
+        log.error(
+            "[RC-PR2 routed] grant_purchase_routed FAILED → non-2xx (RC retry) user=%s tx=%s err=%s",
+            app_user_id[:8], transaction_id, type(exc).__name__,
+        )
+        raise HTTPException(status_code=500, detail="grant_failed")
+
+    # Crédit PAYÉ routé en manual_review → VISIBLE (both-premium, chaîne A→B→C, etc.).
+    _warn_if_credit_manual(routed, app_user_id, transaction_id)
+    return routed
+
+
+async def _routed_role_apply(*, supa, app_user_id: str, expires_iso, event_type: str, event_id: str) -> dict:
+    """Commit 5b — grant de rôle SEUL / EXPIRATION routé, avec mapping de la course de
+    prélecture (ROUTING_CHANGED_RETRY → 503, RevenueCat réessaie)."""
+    import billing  # noqa: PLC0415
+    try:
+        return await billing.route_role_apply(
+            original_user_id=app_user_id, expires_at_iso=expires_iso,
+            event_type=event_type, event_id=event_id, supa=supa,
+        )
+    except billing.RoutingChangedRetry:
+        log.warning(
+            "[RC-PR2 routed] ROUTING_CHANGED_RETRY (role) user=%s type=%s → 503 (retry)",
+            app_user_id[:8], event_type,
+        )
+        raise HTTPException(status_code=503, detail="routing_changed_retry")
 
 
 async def _upsert_premium(

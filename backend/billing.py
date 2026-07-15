@@ -630,6 +630,116 @@ async def grant_purchase(
     return result
 
 
+# ── Commit 5b — ACQUISITION ROUTÉE (décision A/B SOUS VERROU, en SQL) ─────────
+# La décision « créditer A ou B » n'est JAMAIS prise en Python puis rejouée après
+# attente d'un verrou : elle vit dans les RPC SECURITY DEFINER (billing_grant_purchase_
+# routed / billing_route_role_apply) qui verrouillent, relisent account_state+identity_
+# merges sous verrou, puis écrivent (grant + rôle) dans la MÊME transaction.
+
+
+class RoutingChangedRetry(Exception):
+    """L'état merged_closed/merged_into a changé entre la prélecture et l'acquisition des
+    verrous (course avec la fin d'un merge). AUCUNE écriture ; l'appelant renvoie 503 →
+    RevenueCat réessaie. Ce N'EST PAS un manual_review (course transitoire, pas ambiguïté)."""
+
+
+def _is_routing_changed(exc: Exception) -> bool:
+    s = str(exc)
+    return "ROUTING_CHANGED_RETRY" in s or "40001" in s
+
+
+async def grant_purchase_routed(
+    *,
+    original_user_id: str,
+    provider: str,
+    provider_transaction_id: str,
+    store_product_id: str,
+    amount=None,
+    currency: Optional[str] = None,
+    ends_at_iso: Optional[str] = None,
+    raw_payload: Optional[dict] = None,
+    supa=None,
+) -> dict:
+    """Commit 5b — achat/renouvellement ROUTÉ. Résout le product (comme grant_purchase)
+    puis délègue à billing_grant_purchase_routed (routage A/B sous verrou + grant + rôle,
+    1 txn). NE swallow AUCUNE erreur (chemin argent). Renvoie le jsonb du RPC :
+    {effective_user_id, routing_code, decision(granted|duplicate|manual_review), granted, grant}."""
+    supa = supa or _get_supa()
+    product = await _resolve_product(supa, store_product_id)
+    if product is None:
+        raise ProductNotMapped(store_product_id)
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.rpc(
+                "billing_grant_purchase_routed",
+                {
+                    "p_original_user_id": original_user_id,
+                    "p_provider": provider,
+                    "p_provider_transaction_id": provider_transaction_id,
+                    "p_product_id": product["id"],
+                    "p_credits": int(product["credits_granted"]),
+                    "p_duration_days": product.get("duration_days"),
+                    "p_amount": amount,
+                    "p_currency": currency,
+                    "p_ends_at": ends_at_iso,
+                    "p_raw_payload": raw_payload or {},
+                },
+            ).execute()
+        )
+    except Exception as exc:  # noqa: BLE001
+        if _is_routing_changed(exc):
+            raise RoutingChangedRetry() from exc
+        raise
+    data = getattr(res, "data", None)
+    if isinstance(data, list):
+        data = data[0] if data else None
+    data = data or {}
+    _eff = data.get("effective_user_id")
+    log.info(
+        "[BILLING] grant_purchase_routed original=%s tx=%s routing=%s decision=%s effective=%s",
+        original_user_id[:8], provider_transaction_id, data.get("routing_code"),
+        data.get("decision"), (_eff[:8] if _eff else "-"),
+    )
+    return data
+
+
+async def route_role_apply(
+    *, original_user_id: str, expires_at_iso: Optional[str],
+    event_type: str, event_id: str, supa=None,
+) -> dict:
+    """Commit 5b — grant de rôle SEUL / EXPIRATION ROUTÉ (décision A/B sous verrou).
+    Applique user_roles via billing_route_role_apply (helper NULL-safe GREATEST : un
+    événement ancien ne raccourcit jamais un premium plus récent)."""
+    supa = supa or _get_supa()
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.rpc(
+                "billing_route_role_apply",
+                {
+                    "p_original_user_id": original_user_id,
+                    "p_expires_at": expires_at_iso,
+                    "p_event_type": event_type,
+                    "p_event_id": event_id,
+                },
+            ).execute()
+        )
+    except Exception as exc:  # noqa: BLE001
+        if _is_routing_changed(exc):
+            raise RoutingChangedRetry() from exc
+        raise
+    data = getattr(res, "data", None)
+    if isinstance(data, list):
+        data = data[0] if data else None
+    data = data or {}
+    _eff = data.get("effective_user_id")
+    log.info(
+        "[BILLING] route_role_apply original=%s type=%s routing=%s decision=%s effective=%s",
+        original_user_id[:8], event_type, data.get("routing_code"),
+        data.get("decision"), (_eff[:8] if _eff else "-"),
+    )
+    return data
+
+
 def _iso_in_future(iso) -> bool:
     """True si l'ISO-8601 est dans le futur (best-effort)."""
     try:
