@@ -15,8 +15,9 @@ Couche MINCE au-dessus du RPC validé `public.identity_claim_and_merge`
      du RPC, `p_to_user` = JWT de B (jamais le corps), mapping stable.
 
 Contraintes verrouillées (SPEC V2) :
-  • Endpoints gated par IDENTITY_MERGE_ENDPOINTS_ENABLED (défaut false) —
-    DORMANTS en prod jusqu'à la réconciliation billing du Commit 5.
+  • Endpoints TOUJOURS ACTIFS (aucun feature flag). Unified Identity fait partie
+    du produit normal ; les protections permanentes (garde merged_closed, ticket,
+    locks, idempotence, both_premium, billing) restent en place.
   • Le garde `merged_closed` est INDÉPENDANT de ce flag et n'a AUCUN cache
     en V1 : une lecture `account_state` par requête ; erreur DB → 503.
   • Aucune révocation Auth, aucun scheduler, aucune transition `completed`
@@ -55,9 +56,11 @@ def _get_supa():
     return supa
 
 
-def _merge_endpoints_enabled() -> bool:
-    """Gate the two endpoints. Default OFF (dormant in prod until Commit 5)."""
-    return os.environ.get("IDENTITY_MERGE_ENDPOINTS_ENABLED", "false").strip().lower() == "true"
+# Merge endpoints are now ALWAYS ACTIVE (no feature flag). Décision produit :
+# Unified Identity fait partie du produit normal. Les protections permanentes
+# (JWT, garde merged_closed, ticket, source/cible, locks, idempotence, both_premium,
+# billing, sécurité du compte protégé) restent en place — seul le gating par
+# IDENTITY_MERGE_ENDPOINTS_ENABLED est retiré.
 
 
 def _hash_ticket(ticket: str) -> str:
@@ -212,21 +215,13 @@ class ClaimBody(BaseModel):
                         pattern=r"^[A-Za-z0-9_-]+$")
 
 
-def _require_merge_enabled() -> None:
-    """Gate flag EN PREMIER (avant auth/garde/lecture account_state). Flag OFF
-    → 404 immédiat : ni JWT requis, ni lecture DB."""
-    if not _merge_endpoints_enabled():
-        raise HTTPException(status_code=404,
-                            detail={"error_code": "not_found", "user_message": "Not found."})
-
-
 def merge_gate(
-    _flag: None = Depends(_require_merge_enabled),                 # 1) flag → 404
-    current_user: CurrentUser = Depends(require_active_identity),  # 2) JWT → 3) garde
+    current_user: CurrentUser = Depends(require_active_identity),  # JWT → garde merged_closed
 ) -> CurrentUser:
-    """Dépendance des 2 endpoints de fusion. FastAPI résout les sous-dépendances
-    DANS L'ORDRE de la signature → flag AVANT auth AVANT garde. Flag OFF ⇒ 404
-    sans jamais atteindre l'auth ni la lecture `account_state`."""
+    """Dépendance des 2 endpoints de fusion. Merge TOUJOURS ACTIF (aucun feature flag) :
+    JWT vérifié + garde merged_closed. Les protections métier permanentes (ticket,
+    source/cible, advisory locks, idempotence, both_premium, billing, sécurité du
+    compte protégé) restent dans le RPC identity_claim_and_merge."""
     return current_user
 
 

@@ -21,9 +21,21 @@ from openai import AsyncOpenAI, BadRequestError
 from supabase import create_client
 
 # Wave 5.17a — Identity foundation
+# CORRECTIF PERF fast-path (2026-07-14) — get_current_user est ré-importé : les routes
+# image /generate,/refine passent de require_active_identity (1 SELECT séquentiel) à
+# get_current_user (JWT seul) + garde merged_closed foldée dans le gather du resolver.
 from auth import CurrentUser, get_current_user
-# Unified Identity V1 — Commit 3a. Dormant merge endpoints (POST /identity/merge-ticket + /claim).
-from identity import identity_router
+# Unified Identity V1 — Commit 3a : merge endpoints + active-identity guard
+# Commit 3b : sweep de révocation Auth (même worker, isolé)
+# enforce_identity_from_decision : enforcement 403/503 fast-path (après le gather resolver).
+from identity import (
+    identity_router,
+    require_active_identity,
+    sweep_pending_revocations,
+    enforce_identity_from_decision,   # /generate : identité foldée dans le gather resolver
+    fetch_identity_active,            # /refine : identité foldée EN PARALLÈLE de l'ownership
+    enforce_identity_read,            # /refine : enforce depuis un IdentityRead brut
+)
 # Wave 5.17b — Quota enforcement + IP rate limit
 # Wave 5.18 — Developer Validation Mode admin-flag endpoint
 from quota import (
@@ -864,8 +876,8 @@ async def _server_timing_mw(request: Request, call_next):
 # POST /webhooks/revenuecat ; see revenuecat_webhook.py for the contract.
 app.include_router(revenuecat_router)
 
-# Unified Identity V1 — Commit 3a. Endpoints POST /identity/merge-ticket + /claim.
-# Dormant : gated by IDENTITY_MERGE_ENDPOINTS_ENABLED (default false).
+# Unified Identity V1. Endpoints POST /identity/merge-ticket + /claim — ALWAYS ACTIVE
+# (no feature flag). Protégés par le garde merged_closed + les contrôles métier du RPC.
 app.include_router(identity_router)
 
 # max_retries=0: disable SDK-level retries entirely.
@@ -1388,7 +1400,7 @@ async def health():
 # fields they need.
 @app.get("/me/access")
 async def get_me_access(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Return {is_admin: bool} for the authenticated user."""
     _is_admin = await is_admin_role(current_user.user_id)
@@ -1515,7 +1527,7 @@ def _classify_access_source(
 
 @app.get("/me/status")
 async def get_me_status(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Sprint 1 — READ-ONLY premium + quota snapshot for the UI.
 
@@ -1659,7 +1671,7 @@ async def get_me_status(
 @app.get("/v1/intents/latest")
 async def get_latest_intent(
     session_id: str,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Generation Intent v1 — PR3 (READ-ONLY). État du dernier Intent d'une
     session, pour que le client se ré-attache à une génération en cours après
@@ -1679,7 +1691,7 @@ async def get_latest_intent(
 @app.get("/v1/intents/by-id/{intent_id}")
 async def get_intent_by_id_route(
     intent_id: str,
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Generation Intent v1 — récupération UNIFIÉE par id (Phase 1). Chemin littéral
     'by-id/{id}' → JAMAIS de collision avec /v1/intents/latest. Owner check EXPLICITE
@@ -1698,20 +1710,35 @@ async def get_intent_by_id_route(
 _reconcile_bg_tasks: set = set()
 
 
+async def _reconcile_cycle():
+    """Un cycle du worker : reconcile Intent/billing PUIS sweep de révocation Auth
+    (Commit 3b), chacun ISOLÉ dans son propre try/except — une branche ne bloque
+    JAMAIS l'autre. CancelledError se propage (arrêt propre du worker)."""
+    try:
+        await reconcile_once()
+    except Exception as exc:  # never let billing break the cycle
+        log.warning("[RECONCILE] worker cycle failed (continuing): %s", exc)
+    try:
+        await sweep_pending_revocations()   # no-op si IDENTITY_AUTH_REVOCATION_ENABLED=false
+    except Exception as exc:  # never let revocation break the cycle
+        log.warning("[REVOCATION] sweep cycle failed error=%s", type(exc).__name__)
+
+
 @app.on_event("startup")
 async def _start_reconciliation_worker():
     """Periodic Intent lifecycle reconciliation: repair orphans (image in DB but
     Intent still RUNNING) + timeout-fail stuck RUNNING. Best-effort, in-process;
-    idempotent across instances (transitions guarded by .eq(status,'RUNNING'))."""
+    idempotent across instances (transitions guarded by .eq(status,'RUNNING')).
+    Le même worker porte aussi le sweep de révocation (Commit 3b), isolé — aucun
+    second worker. Démarrage inconditionnel (déjà le cas) ⇒ tourne que billing ou
+    révocation soient actifs."""
     async def _loop():
         while True:
             try:
                 await asyncio.sleep(RECONCILE_INTERVAL_SECONDS)
-                await reconcile_once()
+                await _reconcile_cycle()
             except asyncio.CancelledError:
                 break
-            except Exception as exc:  # never let the worker die silently
-                log.warning("[RECONCILE] worker cycle failed (continuing): %s", exc)
 
     _t = asyncio.create_task(_loop())
     _reconcile_bg_tasks.add(_t)
@@ -1772,7 +1799,7 @@ async def claim_stats(request: Request):
 
 @app.post("/purchases/sync")
 async def purchases_sync(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """P0 (2026-07-10) — RÉCONCILIE un PASS MESURÉ depuis le subscriber RevenueCat
     (restore / sync / reinstall / device-change / RC transfer / webhook manqué / App
@@ -1869,7 +1896,7 @@ async def _require_admin(current_user: CurrentUser) -> None:
 @app.post("/promo/redeem")
 async def promo_redeem_endpoint(
     payload: dict = Body(...),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Redeem a promo code for the authenticated user (atomic, via RPC)."""
     code = str(payload.get("code") or "").strip()
@@ -1907,7 +1934,7 @@ async def promo_redeem_endpoint(
 @app.post("/admin/promo-codes")
 async def admin_create_promo_code(
     payload: dict = Body(...),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     await _require_admin(current_user)
     type_ = str(payload.get("type") or "")
@@ -1951,7 +1978,7 @@ async def admin_create_promo_code(
 
 @app.get("/admin/promo-codes")
 async def admin_list_promo_codes(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     await _require_admin(current_user)
     return {"codes": await list_promo_codes()}
@@ -1961,7 +1988,7 @@ async def admin_list_promo_codes(
 async def admin_patch_promo_code(
     code_id: str,
     payload: dict = Body(...),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     await _require_admin(current_user)
     active = payload.get("active")
@@ -2079,7 +2106,7 @@ async def chat(
     current_image_url: str = Form(""),          # displayed render — vision-input hook (PR2), carried not opened
     displayed_version_id: str = Form(""),       # frontend _branchSourceVersionId / latest
     original_image_url: str = Form(""),         # V1 source upload
-    current_user: CurrentUser = Depends(get_current_user),  # Wave 5.17a
+    current_user: CurrentUser = Depends(require_active_identity),  # Wave 5.17a
 ):
     """
     Conversation-only endpoint — no image generation.
@@ -2665,7 +2692,7 @@ async def chat(
 async def register_device(
     token: str = Form(...),
     platform: str = Form(""),            # "ios" | "android"
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Phase B — register/refresh this device's FCM token for the user, so the
     backend can push "vision ready" when the app is backgrounded. Upsert on the
@@ -2717,7 +2744,11 @@ async def generate(
     versions: str = Form(""),             # Wave 4.7.3 — JSON ledger of prior versions (client round-trip)
     generation_mode: str = Form("preserve"),  # Wave 5.5.14b.1 — bimodal intent: "preserve" | "creative". Default matches today's behaviour. NOT YET ROUTED — read & logged only; composer wiring lands in Wave 5.5.14c.
     ui_locale: str = Form("en"),          # Phase 1 — authoritative reply/caption language (en|fr|km). Does NOT touch the generation prompt (English-internal).
-    current_user: CurrentUser = Depends(get_current_user),  # Wave 5.17a
+    # CORRECTIF PERF fast-path (2026-07-14) — get_current_user (JWT seul, 0 DB) au lieu de
+    # require_active_identity (1 SELECT account_state SÉQUENTIEL). La garde merged_closed est
+    # foldée dans le gather de resolve_generation_access (include_identity=True) puis ENFORCÉE
+    # ci-dessous, AVANT tout write/OpenAI → 0 RTT séquentiel ajouté par Unified Identity.
+    current_user: CurrentUser = Depends(get_current_user),  # Wave 5.17a + fast-path 2026-07-14
 ):
     # PR0 (2026-07-06) — TRUE handler-entry timestamp (before any pre-flight
     # gate). The PERF timer _req_start starts far below (after auth/ownership/
@@ -2742,9 +2773,11 @@ async def generate(
     # frontend's supabase RLS still scopes any subsequent reads. This
     # mirrors the legacy "session_id == 'new'" pattern used by the chat
     # screen for in-memory project starts.
+    _t_own = time.monotonic()
     _ownership_ok = await _validate_session_ownership(
         session_id=session_id, user_id=current_user.user_id
     )
+    _ownership_ms = (time.monotonic() - _t_own) * 1000.0  # fast-path timing (lecture sécurité)
     if not _ownership_ok:
         log.warning(
             "[Wave 5.17a] session ownership rejected — "
@@ -2774,7 +2807,15 @@ async def generate(
     #   admin/premium > promo_unlimited > promo_limited > free(watermark) > blocked
     # It drives: the anon IP-limit bypass, the paywall gate, the free-tier scope
     # check, the usage_log reservation, the promo consume, and the watermark.
-    _decision = await resolve_generation_access(current_user.user_id)
+    # CORRECTIF PERF fast-path — include_identity=True : la lecture merged_closed est
+    # foldée dans le gather (roles/promo/usage/identity) → 0 RTT séquentiel ajouté.
+    _t_access = time.monotonic()
+    _decision = await resolve_generation_access(current_user.user_id, include_identity=True)
+    _access_resolver_ms = (time.monotonic() - _t_access) * 1000.0
+    # ── Garde merged_closed ENFORCÉE ICI — AVANT tout write (claim/HOLD/reserve) et tout
+    #    appel OpenAI. Sémantique identique à require_active_identity (403 merged / 503
+    #    read-error). Rien d'écrit avant ce point : ownership (au-dessus) est une lecture.
+    enforce_identity_from_decision(_decision, current_user.user_id)
     # Entitled tiers (admin/premium/promo) get clean images AND skip the
     # anonymous IP rate limit; free/blocked do not. Kept under the legacy name
     # `_is_admin_bypass` so the watermark site below stays unchanged — it now
@@ -2827,10 +2868,12 @@ async def generate(
     # posé APRÈS le claim-won → « aucune réservation avant ownership ». deny → 402
     # propre, aucun intent créé, aucun HOLD. FAIL-OPEN sur hoquet DB (reason=fail_open).
     import billing  # noqa: PLC0415 — lazy, évite les surprises d'ordre d'import
+    _t_reserve = time.monotonic()
     _gate = await billing.reserve_decision(
         user_id=current_user.user_id, is_free=_decision.consumes_free_quota,
         tier=_decision.tier,   # RC-PR3b — premium = features only ; gén. métrée par le pass
     )
+    _reserve_decision_ms = (time.monotonic() - _t_reserve) * 1000.0  # fast-path timing
     if not _gate.allow:
         raise HTTPException(
             status_code=402,
@@ -2977,6 +3020,7 @@ async def generate(
         intent_id=_intent.id, user_id=current_user.user_id, session_id=session_id,
         iteration=iteration, intent=_intent.intent_dict, client_request_id=request_id,
     )
+    _claim_ms = (time.monotonic() - _claim_t0) * 1000.0  # fast-path timing
     log.info(
         "[CLAIM] intent=%s won=%s status=%s reclaim=%d took=%.1fms",
         _intent.id, _claim.won, _claim.status, _claim.reclaim_count,
@@ -3049,8 +3093,10 @@ async def generate(
     # ne peuvent plus sur-consommer le bucket). Idempotent (hold:<intent> → reclaim/replay
     # ne re-débitent pas). FAIL-OPEN dans le wrapper (un hoquet DB ne bloque jamais).
     import billing  # noqa: PLC0415 — lazy
+    _t_hold = time.monotonic()
     _hold = await billing.try_hold(
         user_id=current_user.user_id, intent_id=_intent.id, tier=_decision.tier, supa=supa)
+    _hold_ms = (time.monotonic() - _t_hold) * 1000.0  # fast-path timing
     if not _hold.get("granted"):
         _hreason = _hold.get("reason") or "insufficient_credits"
         # L'intent est RUNNING (claim gagné) mais AUCUN crédit réservé → on le TERMINALISE
@@ -3104,6 +3150,18 @@ async def generate(
             request_id=request_id,
         )
     _req_start = time.monotonic()
+    # ── CORRECTIF PERF fast-path — la décomposition du pré-vol est REPLIÉE dans le
+    #    [PERF SUMMARY] unique de fin de handler (via preflight_breakdown) : AUCUN log.info
+    #    supplémentaire systématique par génération, et AUCUN user_id (le résumé ne porte
+    #    que request_id + timings). identity_access est FOLDÉ dans access_resolver_ms
+    #    (gather parallèle) → son coût séquentiel propre = 0 ; son temps individuel reste
+    #    tracé par [ACCESS-TIMING] fetch_identity_active. pre_openai_ms == preflight_ms
+    #    (déjà émis par le résumé). Les captures time.monotonic locales sont négligeables.
+    _preflight_breakdown = (
+        f"ownership_ms={_ownership_ms:.0f} access_resolver_ms={_access_resolver_ms:.0f} "
+        f"reserve_decision_ms={_reserve_decision_ms:.0f} claim_ms={_claim_ms:.0f} "
+        f"hold_ms={_hold_ms:.0f}"
+    )
     _timer = PipelineTimer(request_id)
     _payload_bytes_est = 0
     log.info("=== /generate called ===")
@@ -5087,6 +5145,7 @@ async def generate(
         model=IMAGE_MODEL, quality=_effective_quality, iteration=iteration,
         generation_type=_gen_type,
         preflight_ms=(_req_start - _handler_entry) * 1000.0,
+        preflight_breakdown=_preflight_breakdown,  # fast-path : décompo repliée (0 log en +)
     )
     log.info(
         "[Generation Cost] mode=%s  duration=%.1fs  "
@@ -5280,7 +5339,10 @@ async def refine_endpoint(
     operation_id: str = Form(""),          # Phase 1 — 1 soumission utilisateur = 1 operation_id (idempotence)
     retry_of_intent_id: str = Form(""),    # Phase 1 — Retry après FAILED (INFORMATIF : trace, jamais réouverture)
     ui_locale: str = Form("en"),           # BUG1 — langue du push "vision ready" (en|fr|km) ; défaut en
-    current_user: CurrentUser = Depends(get_current_user),
+    # CORRECTIF PERF fast-path (2026-07-14) — get_current_user (JWT seul) au lieu de
+    # require_active_identity : la garde merged_closed est foldée dans le gather du resolver
+    # REMONTÉ ci-dessous (avant tout OpenAI) → 0 RTT séquentiel ajouté.
+    current_user: CurrentUser = Depends(get_current_user),  # + fast-path 2026-07-14
 ):
     """Contrat unique (D-b) : advisory (YELLOW/RED, 0 gen) | completed (image immédiate,
     verification=deferred) | running (lost-claim récupérable). Moteur 2 isolé ; le
@@ -5292,10 +5354,24 @@ async def refine_endpoint(
     _refine_cap_off = _resolve_structural_capture_mode() == "off"
     if _refine_cap_off:
         structural_identity = ""
-    if not await _validate_session_ownership(session_id=session_id, user_id=current_user.user_id):
+    # ── CORRECTIF PERF fast-path — la garde merged_closed est foldée EN PARALLÈLE de la
+    #    validation de propriété de session (lecture réseau DÉJÀ obligatoire) via un
+    #    asyncio.gather → 0 RTT séquentiel ajouté vs le chemin d'avant, Y COMPRIS sur les
+    #    chemins advisory/empty (qui NE lancent PAS le resolver). On N'exécute PAS le
+    #    resolver ici (ces chemins le sautaient auparavant — le resolver reste au gate).
+    #    Enforce AVANT _refine_parse/_refine_advise et avant toute écriture. Aucune écriture
+    #    ni session créée avant ce point (ownership + identité = lectures).
+    _t_own = time.monotonic()
+    _own_ok, _id_read = await asyncio.gather(
+        _validate_session_ownership(session_id=session_id, user_id=current_user.user_id),
+        fetch_identity_active(current_user.user_id),
+    )
+    _ownership_ms = (time.monotonic() - _t_own) * 1000.0  # ownership ∥ identité (1 RTT mural)
+    if not _own_ok:
         raise HTTPException(status_code=403, detail={
             "error_code": "SESSION_OWNERSHIP_DENIED",
             "user_message": "This project belongs to a different account.", "retryable": False})
+    enforce_identity_read(_id_read, current_user.user_id)
 
     # 1) Parser
     _t_parse = time.monotonic()
@@ -5365,7 +5441,12 @@ async def refine_endpoint(
     # RC-PR3b — gate refine sur la MÊME source que /generate (bucket wallet/pass) :
     # un pass à 0 ne peut pas refine non plus. Débit refine reste OFF (Phase 1).
     import billing  # noqa: PLC0415 — lazy (parité /generate)
+    # Resolver à sa POSITION D'ORIGINE (au gate) : les chemins advisory/empty ne
+    # l'atteignent jamais → 0 RTT resolver pour eux (pas de régression). PAS d'include_
+    # identity ici : la garde identité est DÉJÀ faite en tête, foldée dans l'ownership.
+    _t_access = time.monotonic()
     _ref_access = await resolve_generation_access(current_user.user_id)
+    _access_resolver_ms = (time.monotonic() - _t_access) * 1000.0  # replié dans le PERF SUMMARY
     _ref_gate = await billing.reserve_decision(
         user_id=current_user.user_id, is_free=_ref_access.consumes_free_quota,
         tier=_ref_access.tier)
@@ -5424,9 +5505,10 @@ async def refine_endpoint(
     _refine_total_ms = (time.monotonic() - _handler_entry) * 1000.0
     log.info(
         "[PERF SUMMARY] request_id=%s  total_ms=%.0f  model=%s  quality=low  iteration=%d"
-        "  gen_type=refine  parser_ms=%.0f  status=%s  intent=%s",
+        "  gen_type=refine  parser_ms=%.0f  ownership_ms=%.0f  access_resolver_ms=%.0f"
+        "  status=%s  intent=%s",
         (client_request_id.strip() or _op), _refine_total_ms, IMAGE_MODEL, iteration,
-        _parser_ms, resp.get("status"), intent_id,
+        _parser_ms, _ownership_ms, _access_resolver_ms, resp.get("status"), intent_id,
     )
 
     # RUNNING (lost-claim) → statut RÉCUPÉRABLE, aucune génération, pas d'extras 'completed'.
@@ -5468,7 +5550,7 @@ async def refine_verify_endpoint(
     before_image_url: str = Form(...),     # original
     after_image_url: str = Form(...),      # résultat renvoyé par /refine
     changes: str = Form(...),              # JSON list des changements (echo de /refine)
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_active_identity),
 ):
     """Verify STATELESS (2e appel §14) : verified|incomplete|unavailable + report + missing[].
     Gratuit (vision gpt-4o-mini, PAS une génération). Moteur 2 isolé."""
