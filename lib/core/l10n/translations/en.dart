@@ -139,6 +139,24 @@ const Map<String, String> enTranslations = {
   'projectsCount': 'Redesigns',
   'sharedCount': 'Shared',
 
+  // Account (Continue with Apple)
+  'acctSectionTitle': 'ACCOUNT',
+  'acctSaveDesignsSubtitle':
+      'Save your designs and access them on your other devices.',
+  'acctContinueWithApple': 'Continue with Apple',
+  'acctConnectedWithApple': 'Connected with Apple',
+  'acctSignInExisting': 'Sign in to my existing account',
+  'acctAppleAlreadyLinked':
+      'This Apple account may already be connected to Ayden.',
+  'acctConnectedSuccess': 'Your account is now connected.',
+  'acctConnectedPending':
+      'Your account is connected. We\'re finishing the setup.',
+  'acctMergeFailed':
+      'Connected. We couldn\'t recover your previous designs.',
+  'acctRetrySetup': 'Retry account setup',
+  'acctNotAvailable': 'Account sign-in is not available yet.',
+  'acctGenericError': 'Something went wrong. Please try again.',
+
   // Settings
   'settingsLanguage': 'Language',
   'english': 'English',

@@ -331,12 +331,19 @@ class RevenuecatService {
     }
   }
 
-  /// Re-bind RC to a new App User ID. Called after sign-in flows that
-  /// change the Supabase UUID. Sign-in is hidden in V1
-  /// (FeatureFlags.signInEnabled=false) so this is dormant.
+  /// Re-bind RC to a new App User ID. Called after a sign-in flow that
+  /// changes the Supabase UUID (e.g. connecting to an existing account).
+  /// Best-effort + deterministic: feeds the returned customerInfo into the
+  /// premium refresh so entitlement state follows the new user immediately.
+  /// Never throws.
   Future<void> logIn(String userId) async {
     if (!_configured) return;
-    await Purchases.logIn(userId);
+    try {
+      final result = await Purchases.logIn(userId);
+      _onCustomerInfoUpdated(result.customerInfo);
+    } catch (e) {
+      debugPrint('[RevenuecatService] logIn re-bind failed: ${e.runtimeType}');
+    }
   }
 
   // ── Internal ──────────────────────────────────────────────────────────

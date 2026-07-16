@@ -139,10 +139,8 @@ class AuthService {
 
       final newUid = currentUser?.id;
       final upgraded = wasAnon && newUid == previousUid;
-      debugPrint(
-        '[AuthService] Apple sign-in success — '
-        'prev_uid=$previousUid  new_uid=$newUid  upgraded=$upgraded',
-      );
+      // No UUIDs in logs — only the boolean upgrade result.
+      debugPrint('[AuthService] Apple sign-in success — upgraded=$upgraded');
 
       return SignInResult(
         outcome: SignInOutcome.success,
@@ -163,6 +161,84 @@ class AuthService {
       return SignInResult(
         outcome: SignInOutcome.failed,
         errorMessage: e.toString(),
+      );
+    }
+  }
+
+  // ── Account linking — attach a NEW Apple identity to the anon user ─────
+
+  /// LINK a new Apple identity to the CURRENT anonymous user, preserving the
+  /// existing UUID (session, projects, RevenueCat binding all stay attached).
+  /// Uses `linkIdentityWithIdToken` (Supabase Manual Linking), NOT
+  /// `signInWithIdToken`, so no new user is created.
+  ///
+  /// Returns [SignInOutcome.success] on link, `cancelled` if the user dismissed
+  /// the Apple dialog, or `failed` for ANY other error — including the case
+  /// where the Apple identity already belongs to another Ayden account. The
+  /// caller MUST treat `failed` uniformly (offer "sign in to existing account")
+  /// and must NOT inspect a specific status/error_code (Supabase does not
+  /// guarantee it). No identityToken / nonce / JWT / raw exception is ever
+  /// logged.
+  Future<SignInResult> linkAppleIdentity() async {
+    try {
+      final rawNonce = _generateNonce();
+      final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+      final previousUid = currentUser?.id;
+
+      final credential = await SignInWithApple.getAppleIDCredential(
+        scopes: [
+          AppleIDAuthorizationScopes.email,
+          AppleIDAuthorizationScopes.fullName,
+        ],
+        nonce: hashedNonce,
+      );
+
+      final idToken = credential.identityToken;
+      if (idToken == null) {
+        debugPrint('[AuthService] link: Apple credential missing identityToken');
+        return const SignInResult(
+          outcome: SignInOutcome.failed,
+          errorMessage: 'no_identity_token',
+        );
+      }
+
+      await _supabase.auth.linkIdentityWithIdToken(
+        provider: OAuthProvider.apple,
+        idToken: idToken,
+        nonce: rawNonce,
+      );
+
+      final newUid = currentUser?.id;
+      final upgraded = newUid != null && newUid == previousUid;
+      debugPrint('[AuthService] link Apple identity ok — upgraded=$upgraded');
+      return SignInResult(
+        outcome: SignInOutcome.success,
+        userId: newUid,
+        wasAnonymousUpgrade: upgraded,
+      );
+    } on SignInWithAppleAuthorizationException catch (e) {
+      if (e.code == AuthorizationErrorCode.canceled) {
+        return const SignInResult(outcome: SignInOutcome.cancelled);
+      }
+      debugPrint('[AuthService] link Apple auth error: ${e.code}');
+      return const SignInResult(
+        outcome: SignInOutcome.failed,
+        errorMessage: 'apple_error',
+      );
+    } on AuthException catch (e) {
+      // Supabase rejected the link (e.g. identity already linked to another
+      // user). Do NOT inspect the code — treat any AuthException as "failed"
+      // so the UI offers the existing-account path. Log the TYPE only.
+      debugPrint('[AuthService] link Apple rejected: ${e.runtimeType}');
+      return const SignInResult(
+        outcome: SignInOutcome.failed,
+        errorMessage: 'link_failed',
+      );
+    } catch (e) {
+      debugPrint('[AuthService] link Apple unexpected: ${e.runtimeType}');
+      return const SignInResult(
+        outcome: SignInOutcome.failed,
+        errorMessage: 'link_failed',
       );
     }
   }
@@ -210,10 +286,8 @@ class AuthService {
 
       final newUid = currentUser?.id;
       final upgraded = wasAnon && newUid == previousUid;
-      debugPrint(
-        '[AuthService] Google sign-in success — '
-        'prev_uid=$previousUid  new_uid=$newUid  upgraded=$upgraded',
-      );
+      // No UUIDs in logs — only the boolean upgrade result.
+      debugPrint('[AuthService] Google sign-in success — upgraded=$upgraded');
 
       return SignInResult(
         outcome: SignInOutcome.success,
@@ -257,10 +331,9 @@ class AuthService {
   Future<void> signInAnonymouslyIfNeeded() async {
     if (_supabase.auth.currentSession != null) return;
     debugPrint('[AuthService] no session active — signing in anonymously');
-    final res = await _supabase.auth.signInAnonymously();
-    debugPrint(
-      '[AuthService] anonymous sign-in success — user_id: ${res.user?.id}',
-    );
+    await _supabase.auth.signInAnonymously();
+    // No UUID in logs.
+    debugPrint('[AuthService] anonymous sign-in success');
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────────

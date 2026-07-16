@@ -136,6 +136,21 @@ const Map<String, String> kmTranslations = {
   'projectsCount': 'ការ​រចនា​ឡើង​វិញ',
   'sharedCount': 'ចែក​រំលែក',
 
+  // Account (Continue with Apple)
+  'acctSectionTitle': 'គណនី',
+  'acctSaveDesignsSubtitle':
+      'រក្សាទុកការរចនារបស់អ្នក និងចូលប្រើវានៅលើឧបករណ៍ផ្សេងទៀត។',
+  'acctContinueWithApple': 'បន្តជាមួយ Apple',
+  'acctConnectedWithApple': 'បានភ្ជាប់ជាមួយ Apple',
+  'acctSignInExisting': 'ចូលទៅគណនីដែលមានស្រាប់របស់ខ្ញុំ',
+  'acctAppleAlreadyLinked': 'គណនី Apple នេះ​ប្រហែល​ជា​បាន​ភ្ជាប់​ជាមួយ Ayden រួច​ហើយ។',
+  'acctConnectedSuccess': 'គណនីរបស់អ្នកឥឡូវនេះបានភ្ជាប់ហើយ។',
+  'acctConnectedPending': 'គណនីរបស់អ្នកបានភ្ជាប់ហើយ។ យើងកំពុងបញ្ចប់ការរៀបចំ។',
+  'acctMergeFailed': 'បានភ្ជាប់។ យើងមិនអាចយកការរចនាមុនរបស់អ្នកមកវិញបានទេ។',
+  'acctRetrySetup': 'ព្យាយាមរៀបចំគណនីម្តងទៀត',
+  'acctNotAvailable': 'ការចូលគណនីមិនទាន់មានទេ។',
+  'acctGenericError': 'មានបញ្ហាកើតឡើង។ សូមព្យាយាមម្តងទៀត។',
+
   // Settings
   'settingsLanguage': 'ភាសា',
   'english': 'English',

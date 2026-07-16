@@ -188,6 +188,20 @@ class AppLocalizations {
   String get projectsCount => _get('projectsCount');
   String get sharedCount => _get('sharedCount');
 
+  // ── Account (Profile → Continue with Apple) ─────────────────────────────────
+  String get acctSectionTitle => _get('acctSectionTitle');
+  String get acctSaveDesignsSubtitle => _get('acctSaveDesignsSubtitle');
+  String get acctContinueWithApple => _get('acctContinueWithApple');
+  String get acctConnectedWithApple => _get('acctConnectedWithApple');
+  String get acctSignInExisting => _get('acctSignInExisting');
+  String get acctAppleAlreadyLinked => _get('acctAppleAlreadyLinked');
+  String get acctConnectedSuccess => _get('acctConnectedSuccess');
+  String get acctConnectedPending => _get('acctConnectedPending');
+  String get acctMergeFailed => _get('acctMergeFailed');
+  String get acctRetrySetup => _get('acctRetrySetup');
+  String get acctNotAvailable => _get('acctNotAvailable');
+  String get acctGenericError => _get('acctGenericError');
+
   // ── Settings ──────────────────────────────────────────────────────────────
   String get settingsLanguage => _get('settingsLanguage');
   String get english => _get('english');

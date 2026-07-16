@@ -19,6 +19,7 @@ import '../premium/premium_center_sheet.dart';
 import '../../data/services/auth_service.dart';
 import '../auth/sign_in_screen.dart';
 import '../admin/admin_promo_screen.dart';
+import 'account_section.dart';
 
 /// P0 bloc (b) H — compte les redesigns RÉUSSIS : une session ne porte un
 /// `afterImageUrl` (row `latest_preview`) qu'APRÈS une génération réussie, donc une
@@ -96,6 +97,9 @@ class ProfileScreen extends ConsumerWidget {
                 child: const _PremiumStatusCard(),
               ),
             ),
+            // Account — voluntary "Continue with Apple" for anonymous users.
+            // Never blocks Generate; freeTrialAuthGate stays false.
+            const SliverToBoxAdapter(child: AccountSection()),
             _SectionHeader(label: l10n.settingsAccount),
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
             SliverToBoxAdapter(
