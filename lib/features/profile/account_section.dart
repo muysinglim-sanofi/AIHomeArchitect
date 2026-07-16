@@ -31,6 +31,10 @@ import '../../data/services/revenuecat_service.dart';
 import '../../shared/widgets/app_button.dart';
 import 'account_link.dart';
 
+/// Which Account action is currently in flight. Drives a PER-BUTTON spinner:
+/// only the tapped button shows a spinner; the others are disabled (no spinner).
+enum AccountAction { none, linkApple, signInExisting, retryMerge, signOut }
+
 class AccountSection extends ConsumerStatefulWidget {
   const AccountSection({
     super.key,
@@ -38,6 +42,7 @@ class AccountSection extends ConsumerStatefulWidget {
     this.onLink,
     this.onConnectExisting,
     this.onRetry,
+    this.onSignOut,
   });
 
   // TEST seam (all null in production).
@@ -45,6 +50,7 @@ class AccountSection extends ConsumerStatefulWidget {
   final Future<LinkNewIdentityResult> Function()? onLink;
   final Future<ConnectExistingAttempt> Function()? onConnectExisting;
   final Future<ConnectExistingAttempt> Function(String ticket)? onRetry;
+  final Future<SignOutResult> Function()? onSignOut;
 
   @override
   ConsumerState<AccountSection> createState() => _AccountSectionState();
@@ -58,7 +64,10 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
   AuthService get _auth => _authOrNull ??= AuthService();
   IdentityService get _identity => _identityOrNull ??= IdentityService();
 
-  bool _busy = false;
+  // Per-button spinner driver: exactly one action can be in flight; the tapped
+  // button shows the spinner, the others are disabled without one.
+  AccountAction _action = AccountAction.none;
+  bool get _busy => _action != AccountAction.none; // any action in flight
   bool _showExisting = false; // revealed after a failed new-identity link
 
   // Merge (existing-account) state — all in memory.
@@ -99,6 +108,16 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
         uidBefore: _retryUidBefore,
         currentUid: () => _auth.currentUser?.id,
         claim: _identity.claimExistingIdentity,
+        rebindRevenueCat: RevenuecatService.instance.logIn,
+        refreshStatus: _refreshStatus,
+      );
+
+  Future<SignOutResult> _runSignOut() =>
+      widget.onSignOut?.call() ??
+      runSignOut(
+        signOut: _auth.signOut,
+        signInAnonymously: _auth.signInAnonymouslyIfNeeded,
+        currentUid: () => _auth.currentUser?.id,
         rebindRevenueCat: RevenuecatService.instance.logIn,
         refreshStatus: _refreshStatus,
       );
@@ -144,7 +163,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
     if (_busy) {
       return;
     }
-    setState(() => _busy = true);
+    setState(() => _action = AccountAction.linkApple);
     final l10n = context.l10n;
     try {
       final result = await _runLink();
@@ -168,7 +187,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
       }
     } finally {
       if (mounted) {
-        setState(() => _busy = false);
+        setState(() => _action = AccountAction.none);
       }
     }
   }
@@ -178,7 +197,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
     if (_busy) {
       return;
     }
-    setState(() => _busy = true);
+    setState(() => _action = AccountAction.signInExisting);
     final l10n = context.l10n;
     try {
       final attempt = await _runConnectExisting();
@@ -188,7 +207,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
       _applyAttempt(attempt, l10n);
     } finally {
       if (mounted) {
-        setState(() => _busy = false);
+        setState(() => _action = AccountAction.none);
       }
     }
   }
@@ -199,7 +218,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
     if (_busy || ticket == null) {
       return;
     }
-    setState(() => _busy = true);
+    setState(() => _action = AccountAction.retryMerge);
     final l10n = context.l10n;
     try {
       final attempt = await _runRetry(ticket);
@@ -209,9 +228,65 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
       _applyAttempt(attempt, l10n);
     } finally {
       if (mounted) {
-        setState(() => _busy = false);
+        setState(() => _action = AccountAction.none);
       }
     }
+  }
+
+  // ── Sign out → fresh GUEST session (no server data deleted) ─────────────────
+  Future<void> _onSignOut() async {
+    if (_busy) {
+      return;
+    }
+    final l10n = context.l10n;
+    final confirmed = await _confirmSignOut(l10n);
+    if (confirmed != true || !mounted) {
+      return; // cancelled → nothing happens
+    }
+    setState(() => _action = AccountAction.signOut);
+    try {
+      final result = await _runSignOut();
+      if (!mounted) {
+        return;
+      }
+      if (result == SignOutResult.success) {
+        setState(() {
+          _showExisting = false;
+          _mergePending = false;
+          _mergeTerminal = false;
+          _retryTicket = null;
+          _retryUidBefore = null;
+        });
+        _snack(l10n.acctSignedOut);
+      } else {
+        _snack(l10n.acctSignOutFailed);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _action = AccountAction.none);
+      }
+    }
+  }
+
+  /// Confirmation dialog before signing out. Returns true only if confirmed.
+  Future<bool?> _confirmSignOut(AppLocalizations l10n) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.acctSignOutConfirmTitle),
+        content: Text(l10n.acctSignOutConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(l10n.acctSignOutCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l10n.acctSignOutConfirm),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -263,7 +338,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
           label: l10n.acctContinueWithApple,
           onPressed: _busy ? null : _onContinueWithApple,
           variant: AppButtonVariant.dark,
-          loading: _busy,
+          loading: _action == AccountAction.linkApple,
           icon: Icons.apple,
           fullWidth: true,
         ),
@@ -273,7 +348,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
             label: l10n.acctSignInExisting,
             onPressed: _busy ? null : _onSignInExisting,
             variant: AppButtonVariant.secondary,
-            loading: _busy,
+            loading: _action == AccountAction.signInExisting,
             fullWidth: true,
           ),
         ],
@@ -322,10 +397,19 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
             label: l10n.acctRetrySetup,
             onPressed: _busy ? null : _onRetryClaim,
             variant: AppButtonVariant.secondary,
-            loading: _busy,
+            loading: _action == AccountAction.retryMerge,
             fullWidth: true,
           ),
         ],
+        // Sign out → back to a fresh guest session. No server data is touched.
+        const SizedBox(height: AppSpacing.md),
+        AppButton(
+          label: l10n.acctSignOut,
+          onPressed: _busy ? null : _onSignOut,
+          variant: AppButtonVariant.secondary,
+          loading: _action == AccountAction.signOut,
+          fullWidth: true,
+        ),
       ],
     );
   }

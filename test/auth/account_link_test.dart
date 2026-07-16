@@ -376,4 +376,129 @@ void main() {
       },
     );
   });
+
+  group('runSignOut', () {
+    Future<SignOutResult> run({
+      required Future<void> Function() signOut,
+      required Future<void> Function() signInAnonymously,
+      required String? Function() currentUid,
+      required Future<void> Function(String) rebind,
+      required Future<void> Function() refresh,
+    }) => runSignOut(
+      signOut: signOut,
+      signInAnonymously: signInAnonymously,
+      currentUid: currentUid,
+      rebindRevenueCat: rebind,
+      refreshStatus: refresh,
+    );
+
+    test('nominal → success; order signOut→anon→rebind(new uid)→refresh', () async {
+      final log = <String>[];
+      var uid = 'apple-user';
+      final r = await run(
+        signOut: () async => log.add('signOut'),
+        signInAnonymously: () async {
+          uid = 'anon-new';
+          log.add('anon');
+        },
+        currentUid: () => uid,
+        rebind: (u) async => log.add('rebind:$u'),
+        refresh: () async => log.add('refresh'),
+      );
+      expect(r, SignOutResult.success);
+      expect(log, ['signOut', 'anon', 'rebind:anon-new', 'refresh']);
+    });
+
+    test('Case A — anon sign-in fails → failed + best-effort re-anon; no rebind/refresh', () async {
+      final log = <String>[];
+      var attempts = 0;
+      final r = await run(
+        signOut: () async => log.add('signOut'),
+        signInAnonymously: () async {
+          attempts++;
+          log.add('anon:$attempts');
+          throw Exception('anon down');
+        },
+        currentUid: () => 'stale',
+        rebind: (u) async => log.add('rebind'),
+        refresh: () async => log.add('refresh'),
+      );
+      expect(r, SignOutResult.failed);
+      expect(attempts, 2); // best-effort re-anon attempted
+      expect(log.contains('rebind'), isFalse); // never reached (no clean session)
+      expect(log.contains('refresh'), isFalse);
+    });
+
+    test('Case B — rebind fails → failed BUT session is new anon and refresh STILL runs', () async {
+      final log = <String>[];
+      var uid = 'apple-user';
+      final r = await run(
+        signOut: () async => log.add('signOut'),
+        signInAnonymously: () async {
+          uid = 'anon-new';
+          log.add('anon');
+        },
+        currentUid: () => uid,
+        rebind: (u) async {
+          log.add('rebind-throw');
+          throw Exception('RC down');
+        },
+        refresh: () async => log.add('refresh'),
+      );
+      expect(r, SignOutResult.failed);
+      expect(uid, 'anon-new'); // on the NEW anon, never the old identity
+      expect(log, ['signOut', 'anon', 'rebind-throw', 'refresh']); // refresh NOT skipped
+    });
+
+    test('Case C — refresh fails → failed BUT session new anon, rebind ran', () async {
+      final log = <String>[];
+      var uid = 'apple-user';
+      final r = await run(
+        signOut: () async => log.add('signOut'),
+        signInAnonymously: () async {
+          uid = 'anon-new';
+          log.add('anon');
+        },
+        currentUid: () => uid,
+        rebind: (u) async => log.add('rebind'),
+        refresh: () async {
+          log.add('refresh-throw');
+          throw Exception('status down');
+        },
+      );
+      expect(r, SignOutResult.failed);
+      expect(uid, 'anon-new');
+      expect(log, ['signOut', 'anon', 'rebind', 'refresh-throw']);
+    });
+
+    test('anti-abuse — only signOut/anon/rebind/refresh fire; no bonus/grant/wallet/pass hook', () async {
+      // The ONLY side-effect closures are these 4 — there is no parameter, hence no
+      // code path, for a signup bonus, credit grant, wallet/pass transfer, or ledger/
+      // merge mutation. Full success path exercises exactly those effects.
+      final effects = <String>[];
+      final r = await run(
+        signOut: () async => effects.add('signOut'),
+        signInAnonymously: () async => effects.add('anon'),
+        currentUid: () => 'anon-new',
+        rebind: (u) async => effects.add('rebind'),
+        refresh: () async => effects.add('refresh'),
+      );
+      expect(r, SignOutResult.success);
+      expect(effects.toSet(), {'signOut', 'anon', 'rebind', 'refresh'});
+      expect(FeatureFlags.freeTrialAuthGate, isFalse); // untouched
+    });
+
+    test('no rebind when the new uid is null/empty (defensive)', () async {
+      final log = <String>[];
+      final r = await run(
+        signOut: () async => log.add('signOut'),
+        signInAnonymously: () async => log.add('anon'),
+        currentUid: () => null,
+        rebind: (u) async => log.add('rebind'),
+        refresh: () async => log.add('refresh'),
+      );
+      expect(r, SignOutResult.success);
+      expect(log, ['signOut', 'anon', 'refresh']); // no rebind on null uid
+    });
+  });
 }

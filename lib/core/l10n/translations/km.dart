@@ -150,6 +150,14 @@ const Map<String, String> kmTranslations = {
   'acctRetrySetup': 'ព្យាយាមរៀបចំគណនីម្តងទៀត',
   'acctNotAvailable': 'ការចូលគណនីមិនទាន់មានទេ។',
   'acctGenericError': 'មានបញ្ហាកើតឡើង។ សូមព្យាយាមម្តងទៀត។',
+  'acctSignOut': 'ចាកចេញ',
+  'acctSignOutConfirmTitle': 'ចាកចេញ?',
+  'acctSignOutConfirmBody':
+      'អ្នកនឹងត្រឡប់ទៅរបៀបភ្ញៀវវិញ។ គណនី និងការរចនារបស់អ្នកនៅតែមានសុវត្ថិភាព ហើយអ្នកអាចចូលវិញនៅពេលណាក៏បាន។',
+  'acctSignOutConfirm': 'ចាកចេញ',
+  'acctSignOutCancel': 'បោះបង់',
+  'acctSignedOut': 'ឥឡូវនេះអ្នកនៅក្នុងរបៀបភ្ញៀវ។',
+  'acctSignOutFailed': 'មិនអាចចាកចេញបានទេ។ សូមព្យាយាមម្តងទៀត។',
 
   // Settings
   'settingsLanguage': 'ភាសា',

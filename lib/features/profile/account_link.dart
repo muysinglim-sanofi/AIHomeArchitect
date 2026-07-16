@@ -238,3 +238,60 @@ Future<ConnectExistingAttempt> retryExistingAccountClaim({
     uidBefore: uidBefore,
   );
 }
+
+enum SignOutResult { success, failed }
+
+/// Sign out of the permanent (Apple) account and return to a fresh GUEST session.
+/// Order: Supabase signOut → create a NEW anonymous session → re-bind RevenueCat
+/// to the new anonymous UUID → refresh /me/status.
+///
+/// SAFETY (all server data is preserved): this NEVER deletes auth.users, the Apple
+/// identity, server sessions/projects, or ledger/passes/orders; it NEVER detaches
+/// Apple from the account and NEVER modifies the already-completed merge. It only
+/// swaps the LOCAL session back to a guest. It NEVER grants a signup bonus and
+/// NEVER transfers quota — the fresh anonymous user gets nothing from the logout;
+/// server-side quota remains the single authority against free-tier abuse.
+///
+/// On any failure it still tries to leave SOME session active (best-effort
+/// re-anonymize) so the app stays usable, and reports [SignOutResult.failed].
+Future<SignOutResult> runSignOut({
+  required Future<void> Function() signOut,
+  required Future<void> Function() signInAnonymously,
+  required String? Function() currentUid,
+  required Future<void> Function(String uid) rebindRevenueCat,
+  required Future<void> Function() refreshStatus,
+}) async {
+  // Phase 1 (CRITICAL) — drop the old identity and establish a fresh GUEST
+  // session. signOut clears the old session first, so even on failure the app is
+  // never left on the old identity; we retry the anon sign-in best-effort so the
+  // app stays usable.
+  try {
+    await signOut();
+    await signInAnonymously();
+  } catch (_) {
+    try {
+      await signInAnonymously();
+    } catch (_) {}
+    return SignOutResult.failed;
+  }
+
+  // Phase 2 (BEST-EFFORT) — the session is already the fresh anon. Re-bind
+  // RevenueCat to it and refresh /me/status. Each is ISOLATED: a rebind failure
+  // must not skip the refresh (so the old account's premium never stays visible),
+  // and vice-versa. A failure here reports `failed` but the session stays clean.
+  var ok = true;
+  final uidAfter = currentUid();
+  if (uidAfter != null && uidAfter.isNotEmpty) {
+    try {
+      await rebindRevenueCat(uidAfter); // detach old user → bind fresh anon
+    } catch (_) {
+      ok = false;
+    }
+  }
+  try {
+    await refreshStatus();
+  } catch (_) {
+    ok = false;
+  }
+  return ok ? SignOutResult.success : SignOutResult.failed;
+}

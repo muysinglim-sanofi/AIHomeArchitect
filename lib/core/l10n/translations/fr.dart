@@ -157,6 +157,14 @@ const Map<String, String> frTranslations = {
   'acctRetrySetup': "Réessayer la configuration du compte",
   'acctNotAvailable': "La connexion au compte n'est pas encore disponible.",
   'acctGenericError': "Une erreur s'est produite. Veuillez réessayer.",
+  'acctSignOut': "Se déconnecter",
+  'acctSignOutConfirmTitle': "Se déconnecter ?",
+  'acctSignOutConfirmBody':
+      "Vous reviendrez en mode invité. Votre compte et vos designs restent intacts ; vous pourrez vous reconnecter à tout moment.",
+  'acctSignOutConfirm': "Se déconnecter",
+  'acctSignOutCancel': "Annuler",
+  'acctSignedOut': "Vous êtes maintenant en mode invité.",
+  'acctSignOutFailed': "Impossible de se déconnecter. Veuillez réessayer.",
 
   // Settings
   'settingsLanguage': "Langue",

@@ -5,12 +5,15 @@
 // dormant "not available" path, pending≠success, the claim-only Retry, terminal
 // with no retry, and that NO technical data (UUID/JWT/status/error_code/ticket)
 // is ever shown.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_home_architect/core/l10n/app_localizations.dart';
 import 'package:ai_home_architect/features/profile/account_link.dart';
 import 'package:ai_home_architect/features/profile/account_section.dart';
+import 'package:ai_home_architect/shared/widgets/app_button.dart';
 
 final _l10n = AppLocalizations(const Locale('en'));
 
@@ -269,6 +272,220 @@ void main() {
       expect(texts.toLowerCase().contains('bearer'), isFalse);
       expect(texts.contains('identity_already_exists'), isFalse);
       expect(RegExp(r'\b(4\d\d|5\d\d)\b').hasMatch(texts), isFalse);
+    });
+  });
+
+  group('AccountSection — spinner isolation (per-button)', () {
+    AppButton btn(WidgetTester tester, String label) => tester
+        .widgetList<AppButton>(find.byType(AppButton))
+        .firstWhere((b) => b.label == label);
+
+    testWidgets('Sign in existing spins ALONE — Continue does NOT (the bug)', (
+      tester,
+    ) async {
+      final gate = Completer<ConnectExistingAttempt>();
+      await _pump(
+        tester,
+        AccountSection(
+          isAnonymous: () => true,
+          onLink: () async => LinkNewIdentityResult.failed, // reveals 2nd button
+          onConnectExisting: () => gate.future, // held mid-flight
+        ),
+      );
+      await tester.tap(find.text(_l10n.acctContinueWithApple));
+      await tester.pumpAndSettle(); // reveals "Sign in to my existing account"
+      await tester.tap(find.text(_l10n.acctSignInExisting));
+      await tester.pump(); // one frame — action in flight
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(btn(tester, _l10n.acctSignInExisting).loading, isTrue);
+      expect(btn(tester, _l10n.acctContinueWithApple).loading, isFalse);
+      expect(btn(tester, _l10n.acctContinueWithApple).onPressed, isNull); // disabled
+      gate.complete(
+        const ConnectExistingAttempt(
+          outcome: ConnectExistingResult.notAvailable,
+        ),
+      );
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Continue with Apple spins ALONE', (tester) async {
+      final gate = Completer<LinkNewIdentityResult>();
+      await _pump(
+        tester,
+        AccountSection(isAnonymous: () => true, onLink: () => gate.future),
+      );
+      await tester.tap(find.text(_l10n.acctContinueWithApple));
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(btn(tester, _l10n.acctContinueWithApple).loading, isTrue);
+      gate.complete(LinkNewIdentityResult.cancelled);
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Retry spins ALONE — Sign out does NOT', (tester) async {
+      final gate = Completer<ConnectExistingAttempt>();
+      var anon = true;
+      await _pump(
+        tester,
+        AccountSection(
+          isAnonymous: () => anon,
+          onLink: () async => LinkNewIdentityResult.failed,
+          onConnectExisting: () async {
+            anon = false;
+            return const ConnectExistingAttempt(
+              outcome: ConnectExistingResult.retryable,
+              authConnected: true,
+              retryTicket: 'T-1',
+              retryUidBefore: 'anon',
+            );
+          },
+          onRetry: (t) => gate.future,
+        ),
+      );
+      await tester.tap(find.text(_l10n.acctContinueWithApple));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(_l10n.acctSignInExisting));
+      await tester.pumpAndSettle(); // connected + retryable → Retry + Sign out
+      await tester.tap(find.text(_l10n.acctRetrySetup));
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(btn(tester, _l10n.acctRetrySetup).loading, isTrue);
+      expect(btn(tester, _l10n.acctSignOut).loading, isFalse);
+      gate.complete(
+        const ConnectExistingAttempt(
+          outcome: ConnectExistingResult.terminal,
+          authConnected: true,
+        ),
+      );
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Sign out spins ALONE + no double-tap', (tester) async {
+      final gate = Completer<SignOutResult>();
+      var calls = 0;
+      await _pump(
+        tester,
+        AccountSection(
+          isAnonymous: () => false, // connected
+          onSignOut: () {
+            calls++;
+            return gate.future;
+          },
+        ),
+      );
+      await tester.tap(find.text(_l10n.acctSignOut));
+      await tester.pumpAndSettle(); // confirmation dialog
+      await tester.tap(
+        find.widgetWithText(TextButton, _l10n.acctSignOutConfirm),
+      );
+      await tester.pump(); // action in flight
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(btn(tester, _l10n.acctSignOut).loading, isTrue);
+      expect(calls, 1);
+      await tester.tap(
+        find.byType(AppButton).first,
+        warnIfMissed: false,
+      ); // disabled → ignored
+      await tester.pump();
+      expect(calls, 1); // no double invocation
+      gate.complete(SignOutResult.failed);
+      await tester.pumpAndSettle();
+    });
+  });
+
+  group('AccountSection — sign out', () {
+    testWidgets('nominal: confirm → GUEST (Connected + Sign out gone, Continue back)', (
+      tester,
+    ) async {
+      var anon = false;
+      await _pump(
+        tester,
+        AccountSection(
+          isAnonymous: () => anon,
+          onSignOut: () async {
+            anon = true; // becomes guest
+            return SignOutResult.success;
+          },
+        ),
+      );
+      expect(find.text(_l10n.acctConnectedWithApple), findsOneWidget);
+      await tester.tap(find.text(_l10n.acctSignOut));
+      await tester.pumpAndSettle();
+      expect(find.text(_l10n.acctSignOutConfirmTitle), findsOneWidget);
+      await tester.tap(
+        find.widgetWithText(TextButton, _l10n.acctSignOutConfirm),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(_l10n.acctConnectedWithApple), findsNothing);
+      expect(find.text(_l10n.acctSignOut), findsNothing);
+      expect(find.text(_l10n.acctContinueWithApple), findsOneWidget); // guest
+      expect(find.text(_l10n.acctSignedOut), findsWidgets); // snackbar
+    });
+
+    testWidgets('cancel → nothing happens (stays connected, onSignOut NOT called)', (
+      tester,
+    ) async {
+      var calls = 0;
+      await _pump(
+        tester,
+        AccountSection(
+          isAnonymous: () => false,
+          onSignOut: () async {
+            calls++;
+            return SignOutResult.success;
+          },
+        ),
+      );
+      await tester.tap(find.text(_l10n.acctSignOut));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, _l10n.acctSignOutCancel));
+      await tester.pumpAndSettle();
+      expect(calls, 0);
+      expect(find.text(_l10n.acctConnectedWithApple), findsOneWidget);
+    });
+
+    testWidgets('failure → error snackbar', (tester) async {
+      await _pump(
+        tester,
+        AccountSection(
+          isAnonymous: () => false,
+          onSignOut: () async => SignOutResult.failed,
+        ),
+      );
+      await tester.tap(find.text(_l10n.acctSignOut));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(TextButton, _l10n.acctSignOutConfirm),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(_l10n.acctSignOutFailed), findsWidgets);
+    });
+
+    testWidgets('no old UUID/JWT leaks after sign-out', (tester) async {
+      var anon = false;
+      await _pump(
+        tester,
+        AccountSection(
+          isAnonymous: () => anon,
+          onSignOut: () async {
+            anon = true;
+            return SignOutResult.success;
+          },
+        ),
+      );
+      await tester.tap(find.text(_l10n.acctSignOut));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.widgetWithText(TextButton, _l10n.acctSignOutConfirm),
+      );
+      await tester.pumpAndSettle();
+      final texts = tester
+          .widgetList<Text>(find.byType(Text))
+          .map((t) => t.data ?? '')
+          .join('\n');
+      expect(texts.contains('11111111-2222'), isFalse);
+      expect(texts.contains('eyJ'), isFalse);
+      expect(texts.toLowerCase().contains('bearer'), isFalse);
     });
   });
 }

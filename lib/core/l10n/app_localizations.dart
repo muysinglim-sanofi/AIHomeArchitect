@@ -201,6 +201,13 @@ class AppLocalizations {
   String get acctRetrySetup => _get('acctRetrySetup');
   String get acctNotAvailable => _get('acctNotAvailable');
   String get acctGenericError => _get('acctGenericError');
+  String get acctSignOut => _get('acctSignOut');
+  String get acctSignOutConfirmTitle => _get('acctSignOutConfirmTitle');
+  String get acctSignOutConfirmBody => _get('acctSignOutConfirmBody');
+  String get acctSignOutConfirm => _get('acctSignOutConfirm');
+  String get acctSignOutCancel => _get('acctSignOutCancel');
+  String get acctSignedOut => _get('acctSignedOut');
+  String get acctSignOutFailed => _get('acctSignOutFailed');
 
   // ── Settings ──────────────────────────────────────────────────────────────
   String get settingsLanguage => _get('settingsLanguage');

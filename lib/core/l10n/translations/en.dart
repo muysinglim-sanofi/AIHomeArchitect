@@ -156,6 +156,14 @@ const Map<String, String> enTranslations = {
   'acctRetrySetup': 'Retry account setup',
   'acctNotAvailable': 'Account sign-in is not available yet.',
   'acctGenericError': 'Something went wrong. Please try again.',
+  'acctSignOut': 'Sign out',
+  'acctSignOutConfirmTitle': 'Sign out?',
+  'acctSignOutConfirmBody':
+      'You\'ll return to guest mode. Your account and designs stay safe, and you can sign back in anytime.',
+  'acctSignOutConfirm': 'Sign out',
+  'acctSignOutCancel': 'Cancel',
+  'acctSignedOut': 'You\'re now in guest mode.',
+  'acctSignOutFailed': 'Couldn\'t sign out. Please try again.',
 
   // Settings
   'settingsLanguage': 'Language',
