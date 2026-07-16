@@ -22,6 +22,8 @@ from supabase import create_client
 
 # Wave 5.17a — Identity foundation
 from auth import CurrentUser, get_current_user
+# Unified Identity V1 — Commit 3a. Dormant merge endpoints (POST /identity/merge-ticket + /claim).
+from identity import identity_router
 # Wave 5.17b — Quota enforcement + IP rate limit
 # Wave 5.18 — Developer Validation Mode admin-flag endpoint
 from quota import (
@@ -861,6 +863,10 @@ async def _server_timing_mw(request: Request, call_next):
 # Wave 5.17d — Mount the RevenueCat webhook router. The endpoint is
 # POST /webhooks/revenuecat ; see revenuecat_webhook.py for the contract.
 app.include_router(revenuecat_router)
+
+# Unified Identity V1 — Commit 3a. Endpoints POST /identity/merge-ticket + /claim.
+# Dormant : gated by IDENTITY_MERGE_ENDPOINTS_ENABLED (default false).
+app.include_router(identity_router)
 
 # max_retries=0: disable SDK-level retries entirely.
 # The OpenAI Python SDK defaults to max_retries=2 (1 initial + 2 SDK retries = 3 SDK-level
