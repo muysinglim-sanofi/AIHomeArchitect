@@ -337,4 +337,19 @@ class IdentityService {
       );
     }
   }
+
+  /// POST /identity/post-signout-guest — mark the FRESH anon (created by the
+  /// sign-out flow) as trial-consumed so the backend grants it NO new free tier.
+  /// Idempotent server-side (same `trial:<user_id>` key). Returns true on a 2xx,
+  /// false otherwise (the caller retries). No token/UUID is ever logged.
+  Future<bool> postSignoutGuest() async {
+    try {
+      final r = await _dio.post('/identity/post-signout-guest');
+      final s = r.statusCode ?? 0;
+      return s >= 200 && s < 300;
+    } catch (e) {
+      debugPrint('[IdentityService] post-signout-guest failed: ${e.runtimeType}');
+      return false;
+    }
+  }
 }

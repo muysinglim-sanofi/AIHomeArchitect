@@ -14,6 +14,7 @@ import '../../core/models/atmosphere_style.dart';
 import '../../core/providers/premium_provider.dart';
 import '../../core/providers/access_provider.dart';
 import '../../core/providers/me_status_provider.dart';
+import '../../core/providers/post_signout_pending_provider.dart';
 import '../../core/billing/generation_preflight.dart';
 import '../../core/theme/app_theme.dart';
 import '../../shared/widgets/image_picker_sheet.dart';
@@ -348,6 +349,11 @@ class _UploadScreenState extends ConsumerState<UploadScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    // BUG 2 (anti-abus Sign out) — tant que le marqueur post-sign-out d'un invité frais n'est
+    // pas confirmé, on désactive le CTA Generate primaire + on affiche un bandeau message/Retry.
+    // Le gate central (ensureCanGenerateOrShowPaywall) reste le filet non contournable des AUTRES
+    // points d'entrée ; ici c'est l'expression visuelle « bouton désactivé » sur le CTA principal.
+    final guestSetupPending = ref.watch(postSignoutPendingProvider);
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -387,17 +393,41 @@ class _UploadScreenState extends ConsumerState<UploadScreen>
                   primary: AppButton(
                     label: '${context.l10n.uplGenerateDesign} ✨',
                     loading: _checkingBilling,
-                    onPressed: (_canProceed && !_checkingBilling) ? _start : null,
+                    onPressed:
+                        (_canProceed && !_checkingBilling && !guestSetupPending)
+                            ? _start
+                            : null,
                   ),
-                  secondary: Text(
-                    _canProceed
-                        ? context.l10n.uplWillCreate
-                        : _missingHint,
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textTertiary,
+                  secondary: guestSetupPending
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                kGuestSetupPendingMessage,
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(color: AppColors.textTertiary),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => ref
+                                  .read(postSignoutPendingProvider.notifier)
+                                  .resolve(),
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          _canProceed ? context.l10n.uplWillCreate : _missingHint,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppColors.textTertiary,
+                              ),
                         ),
-                  ),
                 ),
               ],
             );

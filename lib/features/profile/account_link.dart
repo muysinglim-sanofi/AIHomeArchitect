@@ -257,6 +257,8 @@ enum SignOutResult { success, failed }
 Future<SignOutResult> runSignOut({
   required Future<void> Function() signOut,
   required Future<void> Function() signInAnonymously,
+  required Future<bool> Function() markTrialConsumed,
+  required Future<void> Function(bool pending) setMarkerPending,
   required String? Function() currentUid,
   required Future<void> Function(String uid) rebindRevenueCat,
   required Future<void> Function() refreshStatus,
@@ -275,10 +277,28 @@ Future<SignOutResult> runSignOut({
     return SignOutResult.failed;
   }
 
-  // Phase 2 (BEST-EFFORT) — the session is already the fresh anon. Re-bind
-  // RevenueCat to it and refresh /me/status. Each is ISOLATED: a rebind failure
-  // must not skip the refresh (so the old account's premium never stays visible),
-  // and vice-versa. A failure here reports `failed` but the session stays clean.
+  // Phase 2 (ANTI-ABUSE, BUG 2) — mark the fresh anon as trial-consumed so the
+  // backend grants it NO new free tier. A LOCAL PERSISTENT flag
+  // (postSignoutMarkerPending) is RAISED before the write and cleared ONLY on a
+  // confirmed success; while it is up, the frontend gates Generate (single
+  // choke-point) AND retries the marker at next boot. NON-BLOCKING: the guest
+  // session already exists and Sign out must stay a SIMPLE operation — a failed
+  // marker never breaks or fails the Sign out, it only keeps Generate gated. So
+  // the worst case is NOT a silent Free 3 (the flag blocks it), just a deferred
+  // marker that a boot-retry / Retry button finishes. Idempotent server-side.
+  try {
+    await setMarkerPending(true); // gate ON before the write (local, idempotent)
+    var marked = await markTrialConsumed();
+    if (!marked) marked = await markTrialConsumed(); // one best-effort retry
+    if (marked) await setMarkerPending(false); // confirmed → gate OFF
+    // else: leave the flag UP → the Generate gate + boot-retry finish the job.
+  } catch (_) {
+    // swallowed on purpose (non-blocking) — the flag stays UP if it was raised.
+  }
+
+  // Phase 3 (BEST-EFFORT) — re-bind RevenueCat to the fresh anon and refresh
+  // /me/status. Each is ISOLATED: a rebind failure must not skip the refresh (so
+  // the old account's premium never stays visible), and vice-versa.
   var ok = true;
   final uidAfter = currentUid();
   if (uidAfter != null && uidAfter.isNotEmpty) {

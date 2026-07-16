@@ -384,9 +384,13 @@ void main() {
       required String? Function() currentUid,
       required Future<void> Function(String) rebind,
       required Future<void> Function() refresh,
+      Future<bool> Function()? markTrialConsumed,
+      Future<void> Function(bool)? setMarkerPending,
     }) => runSignOut(
       signOut: signOut,
       signInAnonymously: signInAnonymously,
+      markTrialConsumed: markTrialConsumed ?? () async => true,
+      setMarkerPending: setMarkerPending ?? (_) async {},
       currentUid: currentUid,
       rebindRevenueCat: rebind,
       refreshStatus: refresh,
@@ -407,6 +411,126 @@ void main() {
       );
       expect(r, SignOutResult.success);
       expect(log, ['signOut', 'anon', 'rebind:anon-new', 'refresh']);
+    });
+
+    test('post-signout order: signOut→anon→pending:true→marker→pending:false→rebind→refresh', () async {
+      final log = <String>[];
+      var uid = 'apple-user';
+      final r = await run(
+        signOut: () async => log.add('signOut'),
+        signInAnonymously: () async {
+          uid = 'anon-new';
+          log.add('anon');
+        },
+        setMarkerPending: (v) async => log.add('pending:$v'),
+        markTrialConsumed: () async {
+          log.add('marker');
+          return true;
+        },
+        currentUid: () => uid,
+        rebind: (u) async => log.add('rebind'),
+        refresh: () async => log.add('refresh'),
+      );
+      expect(r, SignOutResult.success);
+      // Flag raised BEFORE the marker, lowered ONLY after a confirmed success.
+      expect(log,
+          ['signOut', 'anon', 'pending:true', 'marker', 'pending:false', 'rebind', 'refresh']);
+    });
+
+    test('marker SUCCESS → pending raised then cleared (gate opens)', () async {
+      final pend = <bool>[];
+      final r = await run(
+        signOut: () async {},
+        signInAnonymously: () async {},
+        setMarkerPending: (v) async => pend.add(v),
+        markTrialConsumed: () async => true,
+        currentUid: () => 'anon-new',
+        rebind: (u) async {},
+        refresh: () async {},
+      );
+      expect(r, SignOutResult.success);
+      expect(pend, [true, false]); // ON before write, OFF on confirmed success
+    });
+
+    test('marker FAILS (false×2) → pending RAISED and NEVER cleared (gate stays closed)', () async {
+      final pend = <bool>[];
+      final r = await run(
+        signOut: () async {},
+        signInAnonymously: () async {},
+        setMarkerPending: (v) async => pend.add(v),
+        markTrialConsumed: () async => false,
+        currentUid: () => 'anon-new',
+        rebind: (u) async {},
+        refresh: () async {},
+      );
+      expect(r, SignOutResult.success); // Sign out stays simple
+      expect(pend, [true]); // raised, never lowered → Generate stays gated + boot-retry
+    });
+
+    test('marker THROWS → pending RAISED before the throw and never cleared', () async {
+      final pend = <bool>[];
+      final r = await run(
+        signOut: () async {},
+        signInAnonymously: () async {},
+        setMarkerPending: (v) async => pend.add(v),
+        markTrialConsumed: () async => throw Exception('network'),
+        currentUid: () => 'anon-new',
+        rebind: (u) async {},
+        refresh: () async {},
+      );
+      expect(r, SignOutResult.success);
+      expect(pend, [true]); // flag up (set before the write); the throw is swallowed
+    });
+
+    test('trial marker fails (false) twice → still SUCCESS (non-blocking), retried once', () async {
+      var calls = 0;
+      final r = await run(
+        signOut: () async {},
+        signInAnonymously: () async {},
+        markTrialConsumed: () async {
+          calls++;
+          return false;
+        },
+        currentUid: () => 'anon-new',
+        rebind: (u) async {},
+        refresh: () async {},
+      );
+      expect(r, SignOutResult.success); // Sign out stays simple; marker is best-effort
+      expect(calls, 2); // one retry attempted
+    });
+
+    test('trial marker succeeds on retry (false then true) → success', () async {
+      var calls = 0;
+      final r = await run(
+        signOut: () async {},
+        signInAnonymously: () async {},
+        markTrialConsumed: () async {
+          calls++;
+          return calls >= 2;
+        },
+        currentUid: () => 'anon-new',
+        rebind: (u) async {},
+        refresh: () async {},
+      );
+      expect(r, SignOutResult.success);
+      expect(calls, 2);
+    });
+
+    test('trial marker throws → caught → still SUCCESS (non-blocking)', () async {
+      var calls = 0;
+      final r = await run(
+        signOut: () async {},
+        signInAnonymously: () async {},
+        markTrialConsumed: () async {
+          calls++;
+          throw Exception('network');
+        },
+        currentUid: () => 'anon-new',
+        rebind: (u) async {},
+        refresh: () async {},
+      );
+      expect(r, SignOutResult.success); // a network blip never blocks Sign out
+      expect(calls, 1); // throw short-circuits the retry
     });
 
     test('Case A — anon sign-in fails → failed + best-effort re-anon; no rebind/refresh', () async {

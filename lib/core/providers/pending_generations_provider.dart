@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Wave 5.6c — Foreground in-app notification state for in-flight generations.
 ///
@@ -27,7 +30,25 @@ enum GenerationLifecycle {
 
 class PendingGenerationsNotifier
     extends StateNotifier<Map<String, GenerationLifecycle>> {
-  PendingGenerationsNotifier() : super(const {});
+  // Test seam (null in production): drive auth events without Supabase.
+  final Stream<AuthState>? _authStreamOverride;
+  StreamSubscription<AuthState>? _authSub;
+
+  PendingGenerationsNotifier({Stream<AuthState>? authStream})
+      : _authStreamOverride = authStream,
+        super(const {}) {
+    // Guarded: Supabase may be uninitialised (tests) → no listener (pre-change
+    // behaviour) instead of crashing at construction.
+    Stream<AuthState>? stream = _authStreamOverride;
+    if (stream == null) {
+      try {
+        stream = Supabase.instance.client.auth.onAuthStateChange;
+      } catch (_) {
+        stream = null;
+      }
+    }
+    _authSub = stream?.listen(_onAuthEvent);
+  }
 
   // Group 1 — when each in-flight generation STARTED, kept parallel to [state]
   // (app-scoped → survives the chat widget being disposed/recreated). Lets the
@@ -35,6 +56,24 @@ class PendingGenerationsNotifier
   // of restarting from 0 on every rebuild. Not part of [state] so existing
   // `== GenerationLifecycle.x` readers stay untouched.
   final Map<String, DateTime> _startedAt = {};
+
+  // Sign-out must not leak the old user's in-flight / ready-unseen badges into
+  // the guest UI — drop ALL pending state (map + start timestamps).
+  void _onAuthEvent(AuthState data) {
+    if (data.event == AuthChangeEvent.signedOut) resetAll();
+  }
+
+  /// Drop every account-scoped pending entry + its start timestamp.
+  void resetAll() {
+    _startedAt.clear();
+    if (mounted) state = const {};
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
 
   /// When the in-flight generation for [sessionId] started, or null.
   DateTime? startedAt(String sessionId) => _startedAt[sessionId];

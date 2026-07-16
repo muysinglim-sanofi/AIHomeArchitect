@@ -9,9 +9,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ai_home_architect/core/billing/generation_preflight.dart';
 import 'package:ai_home_architect/core/providers/me_status_provider.dart';
+import 'package:ai_home_architect/core/providers/post_signout_pending_provider.dart';
 import 'package:ai_home_architect/data/services/status_service.dart';
 
 MeStatus _st({
@@ -264,6 +266,114 @@ void main() {
       await tester.pump();
       expect(result, isTrue);
       expect(calls, 0);
+    });
+  });
+
+  group('BUG 2 — gate marqueur post-sign-out (priorité absolue sur le paywall)', () {
+    // Un invité FRAIS dont le marqueur n'est pas confirmé (postSignoutMarkerPending=true) est
+    // bloqué ICI, au choke-point unique, AVANT toute logique de paywall. On observe la DÉCISION
+    // (false) + le ROUTAGE (guest-setup, jamais deny) via des presenters injectés.
+    Future<void> pumpGate(
+      WidgetTester tester, {
+      required MeStatus? status,
+      required bool pending,
+      required void Function(bool) onResult,
+      void Function()? onGuestSetup,
+      void Function()? onDeny,
+    }) async {
+      SharedPreferences.setMockInitialValues({});
+      final meNotifier = MeStatusNotifier.forTest(status);
+      final pendingNotifier = PostSignoutPendingNotifier(
+        isAnonymous: () => true,
+        postMarker: () async => false,
+      );
+      if (pending) await pendingNotifier.setPending(true);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          meStatusProvider.overrideWith((ref) => meNotifier),
+          postSignoutPendingProvider.overrideWith((ref) => pendingNotifier),
+        ],
+        child: MaterialApp(
+          home: Consumer(
+            builder: (context, ref, _) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final r = await ensureCanGenerateOrShowPaywall(
+                      ref, context,
+                      fresh: false,
+                      presentDeny: (ref, context, dest) async => onDeny?.call(),
+                      presentGuestSetup: (ref, context) async =>
+                          onGuestSetup?.call(),
+                    );
+                    onResult(r);
+                  },
+                  child: const Text('go'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pump();
+    }
+
+    testWidgets('pending=true → false + guest-setup EXACTEMENT une fois, deny JAMAIS',
+        (tester) async {
+      int guest = 0, deny = 0;
+      bool? result;
+      await pumpGate(
+        tester,
+        status: _st(canGenerate: true, accessSource: 'free'),
+        pending: true,
+        onGuestSetup: () => guest++,
+        onDeny: () => deny++,
+        onResult: (r) => result = r,
+      );
+      await tester.tap(find.text('go'));
+      await tester.pump();
+      expect(result, isFalse); // AUCUNE génération pour un invité en attente
+      expect(guest, 1);
+      expect(deny, 0);
+    });
+
+    testWidgets('pending=true PRIME le deny (free épuisé) → guest-setup, PAS le paywall',
+        (tester) async {
+      int guest = 0, deny = 0;
+      bool? result;
+      await pumpGate(
+        tester,
+        status: _st(
+            canGenerate: false, accessSource: 'free', gateReason: 'insufficient_credits'),
+        pending: true,
+        onGuestSetup: () => guest++,
+        onDeny: () => deny++,
+        onResult: (r) => result = r,
+      );
+      await tester.tap(find.text('go'));
+      await tester.pump();
+      expect(result, isFalse);
+      expect(guest, 1); // le marqueur passe AVANT le paywall
+      expect(deny, 0); // jamais le paywall tant que le marqueur n'est pas confirmé
+    });
+
+    testWidgets('pending=false → comportement inchangé (proceed → true, aucune surface)',
+        (tester) async {
+      int guest = 0, deny = 0;
+      bool? result;
+      await pumpGate(
+        tester,
+        status: _st(canGenerate: true, accessSource: 'pass', planType: 'annual'),
+        pending: false,
+        onGuestSetup: () => guest++,
+        onDeny: () => deny++,
+        onResult: (r) => result = r,
+      );
+      await tester.tap(find.text('go'));
+      await tester.pump();
+      expect(result, isTrue);
+      expect(guest, 0);
+      expect(deny, 0);
     });
   });
 }

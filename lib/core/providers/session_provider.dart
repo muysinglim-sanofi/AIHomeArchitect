@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/models/message_model.dart';
 import '../../data/models/project_model.dart';
 import '../../data/services/supabase_service.dart';
@@ -19,18 +22,82 @@ final sessionProvider =
 class SessionNotifier extends StateNotifier<List<ProjectModel>> {
   final SupabaseService _svc;
 
-  SessionNotifier(this._svc) : super([]) {
+  // Test seams (null in production). Let widget/unit tests drive auth events,
+  // the current uid, and the fetch WITHOUT Supabase. Production reads the live
+  // auth stream + uid + SupabaseService.fetchSessions.
+  final Stream<AuthState>? _authStreamOverride;
+  final String? Function()? _uidOverride;
+  final Future<List<Map<String, dynamic>>> Function()? _fetchOverride;
+
+  StreamSubscription<AuthState>? _authSub;
+  // Monotonic guard against a user-change RACE: rows fetched for one user must
+  // NEVER be applied after a sign-out / new user superseded that load.
+  int _seq = 0;
+
+  SessionNotifier(
+    this._svc, {
+    Stream<AuthState>? authStream,
+    String? Function()? currentUid,
+    Future<List<Map<String, dynamic>>> Function()? fetchSessions,
+  })  : _authStreamOverride = authStream,
+        _uidOverride = currentUid,
+        _fetchOverride = fetchSessions,
+        super([]) {
+    // Account-scoped data must NOT survive a user change — mirror the
+    // onAuthStateChange self-invalidation of meStatusProvider / accessProvider.
+    // Guarded: Supabase may be uninitialised (unit/widget tests) → no listener,
+    // matching the pre-change behaviour instead of crashing at construction.
+    Stream<AuthState>? stream = _authStreamOverride;
+    if (stream == null) {
+      try {
+        stream = Supabase.instance.client.auth.onAuthStateChange;
+      } catch (_) {
+        stream = null;
+      }
+    }
+    _authSub = stream?.listen(_onAuthEvent);
     _load();
+  }
+
+  String? _currentUid() {
+    if (_uidOverride != null) return _uidOverride();
+    try {
+      return Supabase.instance.client.auth.currentUser?.id;
+    } catch (_) {
+      return null; // Supabase not initialised (unit/widget tests)
+    }
+  }
+
+  void _onAuthEvent(AuthState data) {
+    if (data.event == AuthChangeEvent.signedOut) {
+      _seq++; // invalidate any in-flight _load so the old user's rows can't land
+      if (mounted) state = const [];
+      return;
+    }
+    // New session (the fresh anon after Sign out, or boot) → reload for its uid.
+    if (data.event == AuthChangeEvent.signedIn ||
+        data.event == AuthChangeEvent.initialSession ||
+        data.event == AuthChangeEvent.userUpdated) {
+      _load();
+    }
   }
 
   // ── Load ───────────────────────────────────────────────────────────────────
 
   Future<void> _load() async {
+    final int mySeq = ++_seq;
+    final String? uidAtStart = _currentUid();
     debugPrint('[DB] SessionNotifier._load() started');
     try {
-      final rows = await _svc.fetchSessions();
+      final rows = await (_fetchOverride ?? _svc.fetchSessions)();
+      // Race protection: drop the result if a sign-out / newer load / user swap
+      // happened while the fetch was in flight — never show the old user's rows.
+      if (!mounted || mySeq != _seq || _currentUid() != uidAtStart) {
+        debugPrint('[DB] SessionNotifier._load() — stale result discarded');
+        return;
+      }
       debugPrint('[DB] SessionNotifier._load() — got ${rows.length} sessions');
-      if (mounted) state = rows.map(_rowToProject).toList();
+      state = rows.map(_rowToProject).toList();
     } catch (e, st) {
       debugPrint('[DB] SessionNotifier._load() ERROR: $e');
       debugPrint('[DB] SessionNotifier._load() STACK: $st');
@@ -38,6 +105,12 @@ class SessionNotifier extends StateNotifier<List<ProjectModel>> {
   }
 
   Future<void> reload() => _load();
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
 
   // ── Session creation ──────────────────────────────────────────────────────
 

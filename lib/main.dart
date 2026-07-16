@@ -13,6 +13,7 @@ import 'core/feature_flags.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
 import 'core/providers/me_status_provider.dart';
+import 'core/providers/post_signout_pending_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/services/local_notification_service.dart';
 import 'core/widgets/ready_notification_host.dart';
@@ -140,6 +141,11 @@ class App extends ConsumerWidget {
     // whole app lifetime (listen, not watch → no MaterialApp rebuilds). This is
     // what runs POST /purchases/sync on premium signals app-wide.
     ref.listen(meStatusProvider, (_, _) {});
+    // BUG 2 (anti-abus Sign out) — instancie DÈS le boot le flag « marqueur post-sign-out
+    // non confirmé » (listen, pas watch → aucun rebuild de MaterialApp). Son _init charge
+    // SharedPreferences et, si un pending a survécu à un redémarrage, retente le marqueur —
+    // AVANT tout tap Generate (sinon un pending persisté serait ignoré au premier tap = race).
+    ref.listen(postSignoutPendingProvider, (_, _) {});
     return MaterialApp.router(
       title: 'AYDEN Studio',
       theme: AppTheme.light,

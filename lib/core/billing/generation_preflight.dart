@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/me_status_provider.dart';
+import '../providers/post_signout_pending_provider.dart';
 import '../../data/services/status_service.dart';
 import '../../features/paywall/paywall_sheet.dart';
 import '../../features/premium/premium_center_sheet.dart';
@@ -85,7 +86,17 @@ Future<bool> ensureCanGenerateOrShowPaywall(
   required bool fresh,
   Duration refreshTimeout = const Duration(seconds: 3),
   DenyPresenter presentDeny = _routeDeny,
+  GuestSetupPresenter presentGuestSetup = _presentGuestSetup,
 }) async {
+  // 0. Anti-abus (BUG 2) — un invité FRAÎCHEMENT créé par le Sign out, dont le marqueur
+  //    trial-consumed n'est pas encore confirmé, NE DOIT PAS générer (sinon un Free 3 serait
+  //    « offert » au sign-out). Le flag local persistant gate ICI TOUS les points d'entrée
+  //    génératifs (le même choke-point que le paywall) ; la surface propose un Retry qui
+  //    re-tente le marqueur. Priorité sur le paywall : un invité en attente ne voit rien d'autre.
+  if (ref.read(postSignoutPendingProvider)) {
+    await presentGuestSetup(ref, context);
+    return false;
+  }
   // 1. Cache-first — un deny DÉJÀ connu → surface adaptée immédiate, aucun aller-retour réseau.
   final cached = ref.read(meStatusProvider);
   if (cached != null) {
@@ -145,5 +156,34 @@ Future<void> _showQuotaPaywall(BuildContext context) async {
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (_) => PaywallSheet(trigger: PaywallTrigger.quota),
+  );
+}
+
+/// Présentation de la surface « configuration invité en cours » (BUG 2). Seam de TEST
+/// (défaut [_presentGuestSetup]) : un test observe le BLOCAGE (la porte rend `false`) sans
+/// monter le dialog. N'est PAS destiné à la production.
+typedef GuestSetupPresenter = Future<void> Function(
+  WidgetRef ref,
+  BuildContext context,
+);
+
+/// Dialog transitoire : le marqueur post-sign-out n'est pas encore confirmé. Un seul bouton
+/// Retry re-tente le marqueur ([PostSignoutPendingNotifier.resolve]) puis se ferme ; l'invité
+/// re-tapera Generate (la porte re-évalue le flag). Aucune génération n'a lieu tant qu'il est levé.
+Future<void> _presentGuestSetup(WidgetRef ref, BuildContext context) async {
+  await showDialog<void>(
+    context: context,
+    builder: (dctx) => AlertDialog(
+      content: const Text(kGuestSetupPendingMessage),
+      actions: [
+        TextButton(
+          onPressed: () async {
+            await ref.read(postSignoutPendingProvider.notifier).resolve();
+            if (dctx.mounted) Navigator.of(dctx).pop();
+          },
+          child: const Text('Retry'),
+        ),
+      ],
+    ),
   );
 }

@@ -24,7 +24,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
+import '../../core/providers/active_session_provider.dart';
 import '../../core/providers/me_status_provider.dart';
+import '../../core/providers/post_signout_pending_provider.dart';
 import '../../data/services/auth_service.dart';
 import '../../data/services/identity_service.dart';
 import '../../data/services/revenuecat_service.dart';
@@ -117,6 +119,9 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
       runSignOut(
         signOut: _auth.signOut,
         signInAnonymously: _auth.signInAnonymouslyIfNeeded,
+        markTrialConsumed: _identity.postSignoutGuest,
+        setMarkerPending: (v) =>
+            ref.read(postSignoutPendingProvider.notifier).setPending(v),
         currentUid: () => _auth.currentUser?.id,
         rebindRevenueCat: RevenuecatService.instance.logIn,
         refreshStatus: _refreshStatus,
@@ -249,6 +254,11 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
       if (!mounted) {
         return;
       }
+      // The old chat context is stale after the session swap. sessionProvider and
+      // pendingGenerationsProvider self-invalidate on signedOut via their own
+      // onAuthStateChange listeners; the ephemeral active-session pointer has no
+      // notifier, so reset it here in the sign-out flow.
+      ref.read(activeSessionProvider.notifier).state = null;
       if (result == SignOutResult.success) {
         setState(() {
           _showExisting = false;
