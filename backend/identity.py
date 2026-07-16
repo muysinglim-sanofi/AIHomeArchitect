@@ -377,6 +377,35 @@ async def claim_merge(
     return _map_rpc_row(rows[0])
 
 
+@identity_router.post("/post-signout-guest")
+async def post_signout_guest(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Anti-abus Sign out (BUG 2). Le nouvel anonyme créé par le flux Sign out du
+    frontend NE DOIT PAS recevoir un nouveau free trial. Auth = JWT ; l'utilisateur
+    DOIT être anonyme (sinon 400). Pose EXACTEMENT un marqueur ledger TRIAL(delta 0)
+    idempotent (billing.mark_trial_consumed) → les contrôles existants voient
+    trial_granted=true + solde free 0. Ne modifie AUCUNE autre donnée, aucun débit."""
+    if not current_user.is_anonymous:
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "not_anonymous",
+                    "user_message": "Only a guest account applies here."},
+        )
+    import billing  # noqa: PLC0415 — lazy (mirror des endpoints FT1)
+    try:
+        await billing.mark_trial_consumed(user_id=current_user.user_id)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[identity] post-signout-guest failed user=%s err=%s",
+                    current_user.user_id[:8], type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail={"error_code": "post_signout_unavailable",
+                    "user_message": "Please try again."},
+        )
+    return {"status": "ok"}
+
+
 # ══════════ FT1 — Free Trial : éligibilité + bonus de création de compte ══════════
 # Deux endpoints DORMANTS (flag FREE_TRIAL_SIGNUP_BONUS_ENABLED, défaut false),
 # activés au lancement FT2 avec l'auth gate frontend. L'anonymat RÉEL est vérifié

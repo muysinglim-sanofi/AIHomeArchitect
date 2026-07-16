@@ -259,6 +259,25 @@ async def grant_trial(*, user_id: str, supa=None) -> None:
         await _reproject_wallet(user_id=user_id, supa=supa)
 
 
+async def mark_trial_consumed(*, user_id: str, supa=None) -> bool:
+    """Anti-abus Sign out (BUG 2) — marque le nouvel anonyme créé par le flux Sign out
+    du frontend comme AYANT DÉJÀ consommé son trial, SANS créditer. Écrit un TRIAL à
+    delta 0 sur la MÊME clé d'idempotence que grant_trial (`trial:<user_id>`) : un futur
+    grant réel devient no-op (ON CONFLICT DO NOTHING), et les contrôles EXISTANTS
+    (_free_bucket_available l.188-191 ; RPC billing_try_hold `bool_or(TRIAL)`) voient
+    `trial_granted=true` + solde free 0. Idempotent, réutilise le helper ledger existant,
+    ne touche AUCUNE autre donnée. Renvoie True si nouvelle ligne, False si déjà posée."""
+    supa = supa or _get_supa()
+    new = await _ledger_insert(
+        supa, user_id=user_id, entry_type="TRIAL", available_delta=0,
+        idempotency_key=f"trial:{user_id}", reference_type="PROMO", reference_id="post_signout",
+    )
+    if new:
+        log.info("[BILLING] TRIAL(+0) post-signout marker user=%s", user_id[:8])
+        await _reproject_wallet(user_id=user_id, supa=supa)
+    return new
+
+
 @dataclass
 class ReserveDecision:
     """Résultat du gate wallet (lecture seule). `wallet_available` = solde
