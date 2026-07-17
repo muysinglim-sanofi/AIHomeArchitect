@@ -85,6 +85,48 @@ class KeychainLocalStorage extends LocalStorage {
     }
   }
 
+  // ── ON-mode (2026-07-17) — PARKING de la session GUEST ──────────────────────
+  // 2e slot Keychain, DISTINCT de kSessionKey (que Supabase écrase à chaque event
+  // auth). Même config secure (first_unlock_this_device, no iCloud). Stocke le blob
+  // JSON complet de la session guest (access+refresh+user+expiry) pendant qu'un compte
+  // est actif → restauré via recoverSession au sign-out. Fail-safe : toute erreur = no-op.
+  // Inerte en mode OFF (jamais écrit, aucun sign-in/out compte).
+  static const String kParkedGuestKey = 'sb_parked_guest_session';
+
+  static Future<void> parkGuestSession(String sessionJson) async {
+    try {
+      await _storage.write(key: kParkedGuestKey, value: sessionJson);
+    } catch (e) {
+      debugPrint('[Keychain] parkGuestSession failed (non-fatal): $e');
+    }
+  }
+
+  static Future<String?> readParkedGuestSession() async {
+    try {
+      return await _storage.read(key: kParkedGuestKey);
+    } catch (e) {
+      debugPrint('[Keychain] readParkedGuestSession failed (non-fatal): $e');
+      return null;
+    }
+  }
+
+  static Future<bool> hasParkedGuestSession() async {
+    try {
+      final v = await _storage.read(key: kParkedGuestKey);
+      return v != null && v.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> clearParkedGuestSession() async {
+    try {
+      await _storage.delete(key: kParkedGuestKey);
+    } catch (e) {
+      debugPrint('[Keychain] clearParkedGuestSession failed (non-fatal): $e');
+    }
+  }
+
   /// La clé SharedPreferences EXACTE que `Supabase.initialize` utilisait par défaut
   /// (SharedPreferencesLocalStorage) : `sb-<sous-domaine>-auth-token`. PURE/testable —
   /// le succès de toute la migration dépend de la reproduire fidèlement.

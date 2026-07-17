@@ -352,4 +352,55 @@ class IdentityService {
       return false;
     }
   }
+
+  /// ON — POST /identity/claim-ticket : le GUEST (anonyme) obtient un ticket SIGNÉ liant son
+  /// guest_id, AVANT l'OAuth de création de compte. Renvoie le ticket brut (à passer ensuite à
+  /// [claimGuestOnCreate]) ou null en échec. Le ticket n'est jamais loggé.
+  Future<String?> getClaimTicket() async {
+    try {
+      final r = await _dio.post('/identity/claim-ticket');
+      final s = r.statusCode ?? 0;
+      if (s >= 200 && s < 300 && r.data is Map) {
+        return (r.data as Map)['ticket'] as String?;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[IdentityService] claim-ticket failed: ${e.runtimeType}');
+      return null;
+    }
+  }
+
+  /// ON — POST /identity/claim-guest-on-create : le NOUVEAU compte réclame le Free Guest
+  /// admissible + reçoit +2 (RPC atomique côté serveur). guest_id vient du ticket signé.
+  ///   2xx → claimed · 409 → alreadySetUp (guest/compte déjà réclamé) · 400 → invalid
+  ///   (ticket expiré / compte anonyme) · 5xx/réseau → retryable (RPC idempotent → retry sûr).
+  Future<ClaimGuestOutcome> claimGuestOnCreate(String ticket) async {
+    try {
+      final r = await _dio.post('/identity/claim-guest-on-create',
+          data: {'ticket': ticket});
+      final s = r.statusCode ?? 0;
+      if (s >= 200 && s < 300) return ClaimGuestOutcome.claimed;
+      if (s == 409) return ClaimGuestOutcome.alreadySetUp;
+      if (s == 400) return ClaimGuestOutcome.invalid;
+      return ClaimGuestOutcome.retryable;
+    } catch (e) {
+      debugPrint('[IdentityService] claim-guest-on-create failed: ${e.runtimeType}');
+      return ClaimGuestOutcome.retryable;
+    }
+  }
+}
+
+/// Résultat classifié de POST /identity/claim-guest-on-create (ON-mode).
+enum ClaimGuestOutcome {
+  /// 2xx — solde Guest admissible transféré + bonus +2 accordés (ou déjà, idempotent).
+  claimed,
+
+  /// 409 — ce Guest ou ce compte a déjà été configuré (anti-abus atomique) : ne pas re-tenter.
+  alreadySetUp,
+
+  /// 400 — ticket invalide/expiré ou compte anonyme : recommencer la création.
+  invalid,
+
+  /// 5xx / réseau — transitoire ; le RPC est idempotent → un retry est sûr.
+  retryable,
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/me_status_provider.dart';
 import '../providers/post_signout_pending_provider.dart';
+import '../providers/guest_restore_pending_provider.dart';
 import '../../data/services/status_service.dart';
 import '../../features/paywall/paywall_sheet.dart';
 import '../../features/premium/premium_center_sheet.dart';
@@ -87,7 +88,16 @@ Future<bool> ensureCanGenerateOrShowPaywall(
   Duration refreshTimeout = const Duration(seconds: 3),
   DenyPresenter presentDeny = _routeDeny,
   GuestSetupPresenter presentGuestSetup = _presentGuestSetup,
+  GuestSetupPresenter presentGuestRestore = _presentGuestRestore,
 }) async {
+  // -1. ON-mode — RESTAURATION du Guest EN ATTENTE/ÉCHEC : l'identité correcte n'est pas encore
+  //     restaurée (recoverSession a échoué mais un blob parqué existe). BLOQUER toute génération
+  //     → aucun trial/historique fantôme sur une mauvaise identité ; la surface propose un Retry.
+  //     Priorité ABSOLUE (avant même le marqueur post-signout et le paywall).
+  if (ref.read(guestRestorePendingProvider)) {
+    await presentGuestRestore(ref, context);
+    return false;
+  }
   // 0. Anti-abus (BUG 2) — un invité FRAÎCHEMENT créé par le Sign out, dont le marqueur
   //    trial-consumed n'est pas encore confirmé, NE DOIT PAS générer (sinon un Free 3 serait
   //    « offert » au sign-out). Le flag local persistant gate ICI TOUS les points d'entrée
@@ -179,6 +189,28 @@ Future<void> _presentGuestSetup(WidgetRef ref, BuildContext context) async {
         TextButton(
           onPressed: () async {
             await ref.read(postSignoutPendingProvider.notifier).resolve();
+            if (dctx.mounted) Navigator.of(dctx).pop();
+          },
+          child: const Text('Retry'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// ON-mode — dialog transitoire : la restauration du Guest parqué a échoué (réseau / refresh
+/// token indispo). Retry re-tente [GuestRestorePendingNotifier.resolve] (recoverSession + RC
+/// re-bind) puis se ferme. Aucune génération tant que le bon Guest n'est pas restauré — jamais
+/// de nouvel anonyme ni de trial fantôme.
+Future<void> _presentGuestRestore(WidgetRef ref, BuildContext context) async {
+  await showDialog<void>(
+    context: context,
+    builder: (dctx) => AlertDialog(
+      content: const Text(kGuestRestorePendingMessage),
+      actions: [
+        TextButton(
+          onPressed: () async {
+            await ref.read(guestRestorePendingProvider.notifier).resolve();
             if (dctx.mounted) Navigator.of(dctx).pop();
           },
           child: const Text('Retry'),

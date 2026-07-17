@@ -1,317 +1,163 @@
-/// Account-linking orchestration — PURE + dependency-injected so it is unit
-/// tested WITHOUT the RevenueCat/Apple SDKs or a network (the repo convention:
-/// inject closures for side effects, no mockito). The Profile "Account" section
-/// wires the real services into these functions.
+/// Account orchestration — ON-mode (Guest durable : park/restore + create/sign-in).
 ///
-/// Two flows:
-///   • runLinkNewIdentity — anonymous user attaches a NEW Apple identity; the
-///     Supabase UUID is PRESERVED (linkIdentityWithIdToken), so RevenueCat is
-///     NOT re-bound.
-///   • runConnectExistingAccount — the Apple identity already belongs to an
-///     existing Ayden account; a merge ticket is created BEFORE leaving the anon
-///     user, then Apple sign-in (UUID changes) → claim → RevenueCat re-bind →
-///     status refresh.
+/// PURE + dependency-injected so it is unit tested WITHOUT the RevenueCat/Apple
+/// SDKs or a network (repo convention: inject closures for side effects, no
+/// mockito). The Profile "Account" section (account_section.dart) wires the real
+/// services into these functions. Rendered ONLY when
+/// FeatureFlags.accountSystemEnabled is ON.
 ///
-/// Neither function inspects a specific HTTP status / error_code (no 422 / 501 /
-/// identity_already_exists assumption) and neither logs a token/nonce/ticket.
+/// Model — docs/GUEST_ACCOUNT_IDENTITY_SPEC.md. The Guest and the account stay
+/// TWO distinct Supabase identities. The Guest local session is PARKED (2nd
+/// Keychain slot) whenever an account becomes active, and RESTORED exactly on
+/// sign-out — never a fresh anonymous Guest. Three flows only:
+///   • runCreateAccountOn      — defensive create (park → local signOut → fresh
+///     signInWithIdToken → claim Free+bonus ONCE → RC re-bind → refresh). The
+///     account is ALWAYS separate from the Guest whatever U4's outcome, because
+///     there is no active anon at sign-in time (GoTrue cannot auto-link).
+///   • runSignInExistingOn     — returning user; NO claim, NO bonus, NO transfer.
+///   • runSignOutOn            — restore the EXACT parked Guest ; on a transient
+///     restore failure WITH a parked blob still present → restorePending (the
+///     caller gates Generate + offers Retry), NEVER a new anonymous Guest.
+///
+/// No function inspects a specific HTTP status / error_code and none logs a
+/// token / nonce / ticket.
 library;
 
 import '../../data/services/auth_service.dart' show SignInResult, SignInOutcome;
-import '../../data/services/identity_service.dart'
-    show MergeTicketResult, ClaimResult, IdentityOutcome;
+import '../../data/services/identity_service.dart' show ClaimGuestOutcome;
 
-enum LinkNewIdentityResult { success, cancelled, failed }
+enum CreateAccountResult { success, cancelled, failed }
 
-enum ConnectExistingResult {
-  notAvailable, // backend merge endpoints dormant / not anonymous → aborted safely
-  success,
-  pending, // merge accepted, finalizing server-side
-  cancelled,
-  retryable,
-  terminal,
+class CreateAccountAttempt {
+  final CreateAccountResult outcome;
+  final bool claimApplied; // le backend a appliqué (ou déjà) le transfert Free + bonus
+  const CreateAccountAttempt({required this.outcome, this.claimApplied = false});
 }
 
-/// Structured outcome of a connect-existing attempt.
-///
-/// [retryTicket] is the ONLY replayable case: the Apple sign-in succeeded (the
-/// user IS now connected to their existing account) but the claim/merge failed
-/// RETRYABLY. The backend `identity_claim_and_merge` RPC is idempotent and
-/// leaves the ticket UNCONSUMED for retryable states (settlement_active /
-/// transport-rollback), so re-calling `/identity/claim` with the SAME ticket
-/// (no new merge-ticket, no re-sign-in) safely resumes the merge. For every
-/// other outcome the ticket is null (success/pending finalize on their own;
-/// terminal/notAvailable/cancelled are not replayable).
-///
-/// [retryTicket] is held IN MEMORY ONLY — never logged, displayed, persisted, or
-/// sent anywhere except `/identity/claim`. It is excluded from [toString].
-class ConnectExistingAttempt {
-  final ConnectExistingResult outcome;
-  final bool authConnected; // Apple sign-in to the existing account succeeded
-  final bool claimCompleted; // merge finished (non-pending success)
-  final bool claimPending; // merge accepted, finalizing server-side
-  final String? retryTicket; // in-memory only; non-null ONLY when replayable
-  final String?
-  retryUidBefore; // in-memory only; for the retry re-bind decision
-
-  const ConnectExistingAttempt({
-    required this.outcome,
-    this.authConnected = false,
-    this.claimCompleted = false,
-    this.claimPending = false,
-    this.retryTicket,
-    this.retryUidBefore,
-  });
-
-  bool get canRetry => retryTicket != null;
-
-  @override
-  String toString() =>
-      'ConnectExistingAttempt(outcome: $outcome, authConnected: $authConnected, '
-      'claimCompleted: $claimCompleted, claimPending: $claimPending, '
-      'canRetry: $canRetry)'; // NEVER the ticket value
-
-  /// Map a claim result (after a successful sign-in) to a structured attempt.
-  static ConnectExistingAttempt fromClaim(
-    ClaimResult claimRes, {
-    required String ticket,
-    required String? uidBefore,
-  }) {
-    switch (claimRes.outcome) {
-      case IdentityOutcome.success:
-        final st = claimRes.status;
-        final pending =
-            st == 'identity_merge_pending' || st == 'billing_pending';
-        return ConnectExistingAttempt(
-          outcome: pending
-              ? ConnectExistingResult.pending
-              : ConnectExistingResult.success,
-          authConnected: true,
-          claimCompleted: !pending,
-          claimPending: pending,
-        );
-      case IdentityOutcome.retryableFailure:
-        // Replayable: keep the ticket + the anon uid for a claim-only retry.
-        return ConnectExistingAttempt(
-          outcome: ConnectExistingResult.retryable,
-          authConnected: true,
-          retryTicket: ticket,
-          retryUidBefore: uidBefore,
-        );
-      case IdentityOutcome.featureDisabled:
-        return const ConnectExistingAttempt(
-          outcome: ConnectExistingResult.notAvailable,
-          authConnected: true,
-        );
-      default: // terminalFailure — not replayable
-        return const ConnectExistingAttempt(
-          outcome: ConnectExistingResult.terminal,
-          authConnected: true,
-        );
-    }
-  }
-}
-
-/// Re-bind RevenueCat ONLY when the Supabase user id actually changed. A link
-/// (new identity) preserves the UUID → returns false → no re-bind. Connecting
-/// to an existing account changes the UUID → returns true.
-bool shouldRebindRevenueCat({
-  required String? uidBefore,
-  required String? uidAfter,
-}) => uidAfter != null && uidAfter.isNotEmpty && uidAfter != uidBefore;
-
-/// Link a NEW Apple identity to the current anonymous user (UUID preserved).
-/// On success refreshes /me/status; never re-binds RevenueCat (same UUID).
-Future<LinkNewIdentityResult> runLinkNewIdentity({
-  required Future<SignInResult> Function() linkApple,
-  required Future<void> Function() refreshStatus,
-}) async {
-  final res = await linkApple();
-  switch (res.outcome) {
-    case SignInOutcome.success:
-      await refreshStatus();
-      return LinkNewIdentityResult.success;
-    case SignInOutcome.cancelled:
-      return LinkNewIdentityResult.cancelled;
-    case SignInOutcome.failed:
-      return LinkNewIdentityResult.failed;
-  }
-}
-
-/// Connect to an EXISTING account. Safety: the merge ticket is created FIRST;
-/// if it is not available (dormant backend → featureDisabled, or not_anonymous
-/// → terminal), the flow ABORTS and the anonymous session is left untouched
-/// (no sign-in happens). Only on a real ticket does it sign in (UUID changes),
-/// re-bind RevenueCat to the new user, claim the ticket, and refresh status.
-Future<ConnectExistingAttempt> runConnectExistingAccount({
-  required String? Function() currentUid,
-  required Future<MergeTicketResult> Function() createMergeTicket,
-  required Future<SignInResult> Function() signInWithApple,
-  required Future<ClaimResult> Function(String ticket) claim,
-  required Future<void> Function(String uid) rebindRevenueCat,
-  required Future<void> Function() refreshStatus,
-}) async {
-  final uidBefore = currentUid();
-
-  // 1. Merge ticket BEFORE leaving the anonymous user. On failure the user is
-  //    still anonymous → no retry ticket (a retry here would need a NEW ticket).
-  final ticketRes = await createMergeTicket();
-  if (ticketRes.outcome != IdentityOutcome.success ||
-      ticketRes.ticket == null) {
-    switch (ticketRes.outcome) {
-      case IdentityOutcome.retryableFailure:
-        return const ConnectExistingAttempt(
-          outcome: ConnectExistingResult.retryable,
-        );
-      case IdentityOutcome.featureDisabled:
-        return const ConnectExistingAttempt(
-          outcome: ConnectExistingResult.notAvailable,
-        );
-      default:
-        return const ConnectExistingAttempt(
-          outcome: ConnectExistingResult.terminal,
-        );
-    }
-  }
-  final ticket = ticketRes.ticket!;
-
-  // 2. Apple sign-in to the existing account (session/UUID changes).
-  final signIn = await signInWithApple();
-  if (signIn.outcome == SignInOutcome.cancelled) {
-    return const ConnectExistingAttempt(
-      outcome: ConnectExistingResult.cancelled,
-    );
-  }
-  if (signIn.outcome != SignInOutcome.success) {
-    return const ConnectExistingAttempt(
-      outcome: ConnectExistingResult.retryable,
-    );
-  }
-
-  // 3. Claim the ticket on the new account's session (performs the merge).
-  //    ALWAYS attempted BEFORE the RevenueCat re-bind, so the claim's real
-  //    outcome is captured and never masked by the re-bind.
-  final claimRes = await claim(ticket);
-
-  // 4. Re-bind RevenueCat to the current user if the UUID changed — AFTER the
-  //    claim but REGARDLESS of its outcome, so RC never stays on the old anon.
-  final uidAfter = currentUid();
-  if (shouldRebindRevenueCat(uidBefore: uidBefore, uidAfter: uidAfter)) {
-    await rebindRevenueCat(uidAfter!);
-  }
-
-  // 5. Refresh status regardless (the session changed).
-  await refreshStatus();
-
-  return ConnectExistingAttempt.fromClaim(
-    claimRes,
-    ticket: ticket,
-    uidBefore: uidBefore,
-  );
-}
-
-/// Retry ONLY the claim/merge after a retryable failure — the user is already
-/// signed in to their existing account. Re-calls `/identity/claim` with the
-/// SAME ticket (the backend RPC is idempotent and resumes the merge); it NEVER
-/// creates a new merge ticket and NEVER re-runs the Apple sign-in. Order:
-/// claim → RevenueCat re-bind (only if still needed) → refresh. On success the
-/// caller drops the ticket from memory; on terminal it drops it (no more retry).
-Future<ConnectExistingAttempt> retryExistingAccountClaim({
-  required String ticket,
-  required String? uidBefore,
-  required String? Function() currentUid,
-  required Future<ClaimResult> Function(String ticket) claim,
-  required Future<void> Function(String uid) rebindRevenueCat,
-  required Future<void> Function() refreshStatus,
-}) async {
-  final claimRes = await claim(ticket);
-
-  final uidAfter = currentUid();
-  if (shouldRebindRevenueCat(uidBefore: uidBefore, uidAfter: uidAfter)) {
-    await rebindRevenueCat(uidAfter!);
-  }
-
-  await refreshStatus();
-
-  return ConnectExistingAttempt.fromClaim(
-    claimRes,
-    ticket: ticket,
-    uidBefore: uidBefore,
-  );
-}
-
-enum SignOutResult { success, failed }
-
-/// Sign out of the permanent (Apple) account and return to a fresh GUEST session.
-/// Order: Supabase signOut → create a NEW anonymous session → re-bind RevenueCat
-/// to the new anonymous UUID → refresh /me/status.
-///
-/// SAFETY (all server data is preserved): this NEVER deletes auth.users, the Apple
-/// identity, server sessions/projects, or ledger/passes/orders; it NEVER detaches
-/// Apple from the account and NEVER modifies the already-completed merge. It only
-/// swaps the LOCAL session back to a guest. It NEVER grants a signup bonus and
-/// NEVER transfers quota — the fresh anonymous user gets nothing from the logout;
-/// server-side quota remains the single authority against free-tier abuse.
-///
-/// On any failure it still tries to leave SOME session active (best-effort
-/// re-anonymize) so the app stays usable, and reports [SignOutResult.failed].
-Future<SignOutResult> runSignOut({
-  required Future<void> Function() signOut,
-  required Future<void> Function() signInAnonymously,
-  required Future<bool> Function() markTrialConsumed,
-  required Future<void> Function(bool pending) setMarkerPending,
+/// CREATE_NEW_ACCOUNT (ON) — Guest et compte restent DEUX identités distinctes ; seul le Free
+/// admissible est réclamé + bonus +2 une fois. Rollback (restore Guest) si le sign-in échoue.
+Future<CreateAccountAttempt> runCreateAccountOn({
+  required Future<String?> Function() getClaimTicket,
+  required Future<String?> Function() parkGuest,
+  required Future<void> Function() signOutLocal,
+  required Future<SignInResult> Function() signIn,
+  required Future<String?> Function() restoreGuest,
+  required Future<ClaimGuestOutcome> Function(String ticket) claim,
   required String? Function() currentUid,
   required Future<void> Function(String uid) rebindRevenueCat,
   required Future<void> Function() refreshStatus,
 }) async {
-  // Phase 1 (CRITICAL) — drop the old identity and establish a fresh GUEST
-  // session. signOut clears the old session first, so even on failure the app is
-  // never left on the old identity; we retry the anon sign-in best-effort so the
-  // app stays usable.
-  try {
-    await signOut();
-    await signInAnonymously();
-  } catch (_) {
+  final ticket = await getClaimTicket(); // émis à la session GUEST, AVANT toute bascule
+  if (ticket == null) return const CreateAccountAttempt(outcome: CreateAccountResult.failed);
+  final guestUid = await parkGuest(); // copie durable ; le blob reste pour rollback/restore
+  if (guestUid == null) return const CreateAccountAttempt(outcome: CreateAccountResult.failed);
+  await signOutLocal(); // plus de session anon active → pas d'auto-link (U4 moot)
+  final res = await signIn(); // fresh → compte SÉPARÉ
+  if (res.outcome != SignInOutcome.success) {
+    await restoreGuest(); // signé out le Guest → le restaurer (jamais stranded)
+    return CreateAccountAttempt(
+      outcome: res.outcome == SignInOutcome.cancelled
+          ? CreateAccountResult.cancelled
+          : CreateAccountResult.failed);
+  }
+  final accountUid = currentUid();
+  final claimOut = await claim(ticket); // transfert Free admissible + bonus +2 (atomique, backend)
+  if (accountUid != null && accountUid.isNotEmpty) {
     try {
-      await signInAnonymously();
-    } catch (_) {}
-    return SignOutResult.failed;
-  }
-
-  // Phase 2 (ANTI-ABUSE, BUG 2) — mark the fresh anon as trial-consumed so the
-  // backend grants it NO new free tier. A LOCAL PERSISTENT flag
-  // (postSignoutMarkerPending) is RAISED before the write and cleared ONLY on a
-  // confirmed success; while it is up, the frontend gates Generate (single
-  // choke-point) AND retries the marker at next boot. NON-BLOCKING: the guest
-  // session already exists and Sign out must stay a SIMPLE operation — a failed
-  // marker never breaks or fails the Sign out, it only keeps Generate gated. So
-  // the worst case is NOT a silent Free 3 (the flag blocks it), just a deferred
-  // marker that a boot-retry / Retry button finishes. Idempotent server-side.
-  try {
-    await setMarkerPending(true); // gate ON before the write (local, idempotent)
-    var marked = await markTrialConsumed();
-    if (!marked) marked = await markTrialConsumed(); // one best-effort retry
-    if (marked) await setMarkerPending(false); // confirmed → gate OFF
-    // else: leave the flag UP → the Generate gate + boot-retry finish the job.
-  } catch (_) {
-    // swallowed on purpose (non-blocking) — the flag stays UP if it was raised.
-  }
-
-  // Phase 3 (BEST-EFFORT) — re-bind RevenueCat to the fresh anon and refresh
-  // /me/status. Each is ISOLATED: a rebind failure must not skip the refresh (so
-  // the old account's premium never stays visible), and vice-versa.
-  var ok = true;
-  final uidAfter = currentUid();
-  if (uidAfter != null && uidAfter.isNotEmpty) {
-    try {
-      await rebindRevenueCat(uidAfter); // detach old user → bind fresh anon
-    } catch (_) {
-      ok = false;
-    }
+      await rebindRevenueCat(accountUid);
+    } catch (_) {/* isolé */}
   }
   try {
     await refreshStatus();
-  } catch (_) {
-    ok = false;
+  } catch (_) {/* isolé */}
+  return CreateAccountAttempt(
+    outcome: CreateAccountResult.success,
+    claimApplied: claimOut == ClaimGuestOutcome.claimed ||
+        claimOut == ClaimGuestOutcome.alreadySetUp,
+  );
+}
+
+enum SignInExistingResult { success, cancelled, failed }
+
+/// SIGN_IN_EXISTING_ACCOUNT (ON) — AUCUN claim, AUCUN bonus, AUCUN transfert. Park le Guest,
+/// bascule vers le compte existant, re-bind RC, refresh. Guest restauré au sign-out.
+Future<SignInExistingResult> runSignInExistingOn({
+  required Future<String?> Function() parkGuest,
+  required Future<void> Function() signOutLocal,
+  required Future<SignInResult> Function() signIn,
+  required Future<String?> Function() restoreGuest,
+  required String? Function() currentUid,
+  required Future<void> Function(String uid) rebindRevenueCat,
+  required Future<void> Function() refreshStatus,
+}) async {
+  final guestUid = await parkGuest();
+  if (guestUid == null) return SignInExistingResult.failed;
+  await signOutLocal();
+  final res = await signIn();
+  if (res.outcome != SignInOutcome.success) {
+    await restoreGuest();
+    return res.outcome == SignInOutcome.cancelled
+        ? SignInExistingResult.cancelled
+        : SignInExistingResult.failed;
   }
-  return ok ? SignOutResult.success : SignOutResult.failed;
+  final accountUid = currentUid();
+  if (accountUid != null && accountUid.isNotEmpty) {
+    try {
+      await rebindRevenueCat(accountUid);
+    } catch (_) {/* isolé */}
+  }
+  try {
+    await refreshStatus();
+  } catch (_) {/* isolé */}
+  return SignInExistingResult.success;
+}
+
+enum SignOutRestoreResult { restored, restorePending, newGuest, failed }
+
+/// SIGN_OUT (ON) — restaure EXACTEMENT le Guest parqué. CORRECTION OBLIGATOIRE : si un blob
+/// parqué existe MAIS que le restore échoue (réseau / refresh token indispo), NE PAS créer de
+/// nouvel anonyme → renvoyer restorePending (l'appelant lève guestRestorePending qui BLOQUE la
+/// génération/wallet + propose Retry). Nouvel anon UNIQUEMENT s'il est PROUVÉ qu'aucun blob
+/// n'existe (storage réellement vide/supprimé) → aucun trial fantôme, aucune identité fantôme.
+Future<SignOutRestoreResult> runSignOutOn({
+  required Future<void> Function() signOutLocal,
+  required Future<bool> Function() hasParked,
+  required Future<String?> Function() restoreGuest,
+  required Future<void> Function() signInAnonymously,
+  required String? Function() currentUid,
+  required Future<void> Function(String uid) rebindRevenueCat,
+  required Future<void> Function() refreshStatus,
+}) async {
+  await signOutLocal();
+  final restoredUid = await restoreGuest();
+  if (restoredUid != null && restoredUid.isNotEmpty) {
+    try {
+      await rebindRevenueCat(restoredUid); // RC.logIn(guestId)
+    } catch (_) {/* isolé */}
+    try {
+      await refreshStatus();
+    } catch (_) {/* isolé */}
+    return SignOutRestoreResult.restored;
+  }
+  // Restore raté → un blob parqué existe-t-il ENCORE ?
+  if (await hasParked()) {
+    // OUI → JAMAIS d'anon (panne transitoire). L'appelant lève guestRestorePending.
+    return SignOutRestoreResult.restorePending;
+  }
+  // NON (blob réellement absent) → nouvel anon (comportement fresh install prouvé).
+  try {
+    await signInAnonymously();
+    final uid = currentUid();
+    if (uid != null && uid.isNotEmpty) {
+      try {
+        await rebindRevenueCat(uid);
+      } catch (_) {/* isolé */}
+    }
+    try {
+      await refreshStatus();
+    } catch (_) {/* isolé */}
+    return SignOutRestoreResult.newGuest;
+  } catch (_) {
+    return SignOutRestoreResult.failed;
+  }
 }

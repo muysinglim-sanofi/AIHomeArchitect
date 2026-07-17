@@ -1,32 +1,37 @@
-/// Profile → Account section. A VOLUNTARY "Continue with Apple" entry for
-/// anonymous users (never blocks Generate, never shown as a boot popup). It
-/// wires the real services into the pure orchestration in account_link.dart.
+/// Profile → Account section — ON-mode (FeatureFlags.accountSystemEnabled=true).
 ///
-/// Anonymous → subtitle + "Continue with Apple" (links a new identity, UUID
-/// preserved). If that fails, reveals "Sign in to my existing account"
-/// (merge-ticket → Apple sign-in → claim → RevenueCat re-bind → refresh).
+/// This widget is rendered ONLY when the master account-system flag is ON
+/// (profile_screen gates it). It wires the real services into the PURE ON
+/// orchestration in account_link.dart (Guest durable — park/restore model,
+/// docs/GUEST_ACCOUNT_IDENTITY_SPEC.md). The OLD merge model (linkIdentity /
+/// merge-ticket / mint-fresh-anon on sign-out) is NOT used here anymore — the
+/// three flows are exclusively:
+///   • CREATE_NEW_ACCOUNT  → runCreateAccountOn (park Guest → local signOut →
+///     fresh Apple sign-in → claim Free+bonus once → RC re-bind → refresh).
+///   • SIGN_IN_EXISTING    → runSignInExistingOn (park Guest → switch account →
+///     RC re-bind → refresh ; NO claim, NO bonus).
+///   • SIGN_OUT            → runSignOutOn (restore the EXACT parked Guest ; on a
+///     transient restore failure with a parked blob still present it raises
+///     guestRestorePending — NEVER a new anonymous Guest — which gates Generate
+///     and shows a Retry banner).
 ///
-/// Once signed in the row is "Connected with Apple", PLUS — distinctly — the
-/// merge state: pending shows "finishing setup", a retryable claim shows a
-/// "Retry account setup" button (claim-only retry, no new ticket / no re-signin),
-/// and a terminal merge shows a clean "couldn't recover" note. No UUID / JWT /
-/// sub / ticket / status is ever displayed.
+/// No UUID / JWT / sub / ticket / status is ever displayed.
 ///
-/// The four optional constructor callbacks are a TEST seam only (no production
-/// caller passes them): they drive the anonymous/connected state and the flows
-/// WITHOUT the Supabase/Apple/RevenueCat SDKs. When absent the real services are
-/// wired lazily.
+/// The three optional constructor callbacks are a TEST seam only (no production
+/// caller passes them): they drive the flows WITHOUT the Supabase/Apple/
+/// RevenueCat SDKs. When absent the real services are wired lazily.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/auth/guest_parking.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/active_session_provider.dart';
+import '../../core/providers/guest_restore_pending_provider.dart';
 import '../../core/providers/me_status_provider.dart';
-import '../../core/providers/post_signout_pending_provider.dart';
 import '../../data/services/auth_service.dart';
 import '../../data/services/identity_service.dart';
 import '../../data/services/revenuecat_service.dart';
@@ -35,24 +40,22 @@ import 'account_link.dart';
 
 /// Which Account action is currently in flight. Drives a PER-BUTTON spinner:
 /// only the tapped button shows a spinner; the others are disabled (no spinner).
-enum AccountAction { none, linkApple, signInExisting, retryMerge, signOut }
+enum AccountAction { none, create, signInExisting, signOut, restore }
 
 class AccountSection extends ConsumerStatefulWidget {
   const AccountSection({
     super.key,
     this.isAnonymous,
-    this.onLink,
-    this.onConnectExisting,
-    this.onRetry,
+    this.onCreate,
+    this.onSignInExisting,
     this.onSignOut,
   });
 
   // TEST seam (all null in production).
   final bool Function()? isAnonymous;
-  final Future<LinkNewIdentityResult> Function()? onLink;
-  final Future<ConnectExistingAttempt> Function()? onConnectExisting;
-  final Future<ConnectExistingAttempt> Function(String ticket)? onRetry;
-  final Future<SignOutResult> Function()? onSignOut;
+  final Future<CreateAccountAttempt> Function()? onCreate;
+  final Future<SignInExistingResult> Function()? onSignInExisting;
+  final Future<SignOutRestoreResult> Function()? onSignOut;
 
   @override
   ConsumerState<AccountSection> createState() => _AccountSectionState();
@@ -70,13 +73,6 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
   // button shows the spinner, the others are disabled without one.
   AccountAction _action = AccountAction.none;
   bool get _busy => _action != AccountAction.none; // any action in flight
-  bool _showExisting = false; // revealed after a failed new-identity link
-
-  // Merge (existing-account) state — all in memory.
-  bool _mergePending = false;
-  bool _mergeTerminal = false;
-  String? _retryTicket; // non-null ONLY when a claim-only retry is possible
-  String? _retryUidBefore; // for the retry re-bind decision
 
   bool get _hasSession =>
       widget.isAnonymous != null || _auth.currentUser != null;
@@ -85,43 +81,49 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
   Future<void> _refreshStatus() =>
       ref.read(meStatusProvider.notifier).refresh();
 
-  Future<LinkNewIdentityResult> _runLink() =>
-      widget.onLink?.call() ??
-      runLinkNewIdentity(
-        linkApple: _auth.linkAppleIdentity,
-        refreshStatus: _refreshStatus,
-      );
+  // ── ON flows wired to the real services (test seams short-circuit these) ────
 
-  Future<ConnectExistingAttempt> _runConnectExisting() =>
-      widget.onConnectExisting?.call() ??
-      runConnectExistingAccount(
+  /// CREATE — defensive: the claim ticket is issued to the GUEST session FIRST,
+  /// then the Guest is parked, the local session is dropped, and a FRESH Apple
+  /// sign-in creates a SEPARATE account (no active anon → GoTrue cannot auto-link).
+  Future<CreateAccountAttempt> _runCreate() =>
+      widget.onCreate?.call() ??
+      runCreateAccountOn(
+        getClaimTicket: _identity.getClaimTicket,
+        parkGuest: GuestParking.parkCurrent,
+        signOutLocal: _auth.signOut,
+        signIn: _auth.signInWithApple,
+        restoreGuest: GuestParking.restore,
+        claim: _identity.claimGuestOnCreate,
         currentUid: () => _auth.currentUser?.id,
-        createMergeTicket: _identity.createMergeTicket,
-        signInWithApple: _auth.signInWithApple,
-        claim: _identity.claimExistingIdentity,
         rebindRevenueCat: RevenuecatService.instance.logIn,
         refreshStatus: _refreshStatus,
       );
 
-  Future<ConnectExistingAttempt> _runRetry(String ticket) =>
-      widget.onRetry?.call(ticket) ??
-      retryExistingAccountClaim(
-        ticket: ticket,
-        uidBefore: _retryUidBefore,
+  /// SIGN_IN_EXISTING — no claim, no bonus. Park the Guest, switch to the
+  /// existing account, re-bind RevenueCat, refresh. Guest restored on sign-out.
+  Future<SignInExistingResult> _runSignInExisting() =>
+      widget.onSignInExisting?.call() ??
+      runSignInExistingOn(
+        parkGuest: GuestParking.parkCurrent,
+        signOutLocal: _auth.signOut,
+        signIn: _auth.signInWithApple,
+        restoreGuest: GuestParking.restore,
         currentUid: () => _auth.currentUser?.id,
-        claim: _identity.claimExistingIdentity,
         rebindRevenueCat: RevenuecatService.instance.logIn,
         refreshStatus: _refreshStatus,
       );
 
-  Future<SignOutResult> _runSignOut() =>
+  /// SIGN_OUT — restore the EXACT parked Guest. On a transient restore failure
+  /// with a parked blob still present → SignOutRestoreResult.restorePending
+  /// (the caller raises guestRestorePending; NEVER a new anon).
+  Future<SignOutRestoreResult> _runSignOut() =>
       widget.onSignOut?.call() ??
-      runSignOut(
-        signOut: _auth.signOut,
+      runSignOutOn(
+        signOutLocal: _auth.signOut,
+        hasParked: GuestParking.hasParked,
+        restoreGuest: GuestParking.restore,
         signInAnonymously: _auth.signInAnonymouslyIfNeeded,
-        markTrialConsumed: _identity.postSignoutGuest,
-        setMarkerPending: (v) =>
-            ref.read(postSignoutPendingProvider.notifier).setPending(v),
         currentUid: () => _auth.currentUser?.id,
         rebindRevenueCat: RevenuecatService.instance.logIn,
         refreshStatus: _refreshStatus,
@@ -136,63 +138,26 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  /// Fold a connect/retry attempt into the merge display state + a snackbar.
-  void _applyAttempt(ConnectExistingAttempt a, AppLocalizations l10n) {
-    setState(() {
-      _mergePending = a.claimPending;
-      _mergeTerminal = a.outcome == ConnectExistingResult.terminal;
-      _retryTicket = a.retryTicket;
-      _retryUidBefore = a.retryUidBefore;
-      if (a.authConnected) {
-        _showExisting = false; // connected → drop the anonymous CTA path
-      }
-    });
-    switch (a.outcome) {
-      case ConnectExistingResult.success:
-        _snack(l10n.acctConnectedSuccess);
-      case ConnectExistingResult.pending:
-        _snack(l10n.acctConnectedPending);
-      case ConnectExistingResult.notAvailable:
-        _snack(l10n.acctNotAvailable);
-      case ConnectExistingResult.cancelled:
-        break; // silent
-      case ConnectExistingResult.retryable:
-        _snack(l10n.acctGenericError);
-      case ConnectExistingResult.terminal:
-        // PATCH 4 (2026-07-16) — n'affirmer « Connected » (acctMergeFailed) QUE si un sign-in a
-        // réellement eu lieu (a.authConnected). Path A (échec de création du ticket → encore
-        // anonyme, jamais connecté) → message NEUTRE, jamais un faux « Connected ». Aucune donnée
-        // n'est supprimée : elle est préservée côté serveur, seulement injoignable sous ce JWT.
-        _snack(a.authConnected ? l10n.acctMergeFailed : l10n.acctGenericError);
-    }
-  }
-
-  // ── Continue with Apple (link a NEW identity, preserve UUID) ────────────────
-  Future<void> _onContinueWithApple() async {
+  // ── Create a NEW account (Guest stays a distinct identity server-side) ──────
+  Future<void> _onCreate() async {
     if (_busy) {
       return;
     }
-    setState(() => _action = AccountAction.linkApple);
+    setState(() => _action = AccountAction.create);
     final l10n = context.l10n;
     try {
-      final result = await _runLink();
+      final r = await _runCreate();
       if (!mounted) {
         return;
       }
-      switch (result) {
-        case LinkNewIdentityResult.success:
-          setState(() {
-            _showExisting = false;
-            _mergePending = false;
-            _mergeTerminal = false;
-            _retryTicket = null;
-          });
+      switch (r.outcome) {
+        case CreateAccountResult.success:
+          setState(() {});
           _snack(l10n.acctConnectedSuccess);
-        case LinkNewIdentityResult.cancelled:
-          break; // silent
-        case LinkNewIdentityResult.failed:
-          setState(() => _showExisting = true);
-          _snack(l10n.acctAppleAlreadyLinked);
+        case CreateAccountResult.cancelled:
+          break; // silent — Guest was restored, nothing changed
+        case CreateAccountResult.failed:
+          _snack(l10n.acctGenericError);
       }
     } finally {
       if (mounted) {
@@ -201,7 +166,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
     }
   }
 
-  // ── Sign in to my existing account (merge-ticket → sign-in → claim) ──────────
+  // ── Sign in to an EXISTING account (returning user; no claim, no bonus) ──────
   Future<void> _onSignInExisting() async {
     if (_busy) {
       return;
@@ -209,11 +174,19 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
     setState(() => _action = AccountAction.signInExisting);
     final l10n = context.l10n;
     try {
-      final attempt = await _runConnectExisting();
+      final r = await _runSignInExisting();
       if (!mounted) {
         return;
       }
-      _applyAttempt(attempt, l10n);
+      switch (r) {
+        case SignInExistingResult.success:
+          setState(() {});
+          _snack(l10n.acctConnectedSuccess);
+        case SignInExistingResult.cancelled:
+          break; // silent
+        case SignInExistingResult.failed:
+          _snack(l10n.acctGenericError);
+      }
     } finally {
       if (mounted) {
         setState(() => _action = AccountAction.none);
@@ -221,28 +194,7 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
     }
   }
 
-  // ── Retry ONLY the claim (already signed in; no new ticket / no re-signin) ──
-  Future<void> _onRetryClaim() async {
-    final ticket = _retryTicket;
-    if (_busy || ticket == null) {
-      return;
-    }
-    setState(() => _action = AccountAction.retryMerge);
-    final l10n = context.l10n;
-    try {
-      final attempt = await _runRetry(ticket);
-      if (!mounted) {
-        return;
-      }
-      _applyAttempt(attempt, l10n);
-    } finally {
-      if (mounted) {
-        setState(() => _action = AccountAction.none);
-      }
-    }
-  }
-
-  // ── Sign out → fresh GUEST session (no server data deleted) ─────────────────
+  // ── Sign out → restore the EXACT parked GUEST (never a new anon) ────────────
   Future<void> _onSignOut() async {
     if (_busy) {
       return;
@@ -254,27 +206,51 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
     }
     setState(() => _action = AccountAction.signOut);
     try {
-      final result = await _runSignOut();
+      final r = await _runSignOut();
       if (!mounted) {
         return;
       }
       // The old chat context is stale after the session swap. sessionProvider and
-      // pendingGenerationsProvider self-invalidate on signedOut via their own
-      // onAuthStateChange listeners; the ephemeral active-session pointer has no
-      // notifier, so reset it here in the sign-out flow.
+      // pendingGenerationsProvider self-invalidate on the auth change via their
+      // own listeners; the ephemeral active-session pointer has no notifier, so
+      // reset it here.
       ref.read(activeSessionProvider.notifier).state = null;
-      if (result == SignOutResult.success) {
-        setState(() {
-          _showExisting = false;
-          _mergePending = false;
-          _mergeTerminal = false;
-          _retryTicket = null;
-          _retryUidBefore = null;
-        });
-        _snack(l10n.acctSignedOut);
-      } else {
-        _snack(l10n.acctSignOutFailed);
+      switch (r) {
+        case SignOutRestoreResult.restored:
+        case SignOutRestoreResult.newGuest:
+          setState(() {});
+          _snack(l10n.acctSignedOut);
+        case SignOutRestoreResult.restorePending:
+          // CORRECTION anti-anon (obligatoire) — le Guest parqué existe mais la
+          // restauration a échoué (réseau / refresh token indispo). On lève le
+          // flag persistant → la génération/wallet est BLOQUÉE (single choke-point)
+          // et un bandeau Retry re-tente recoverSession. JAMAIS un nouvel anonyme,
+          // donc aucun trial fantôme, aucun historique vide, aucune identité fantôme.
+          await ref
+              .read(guestRestorePendingProvider.notifier)
+              .setPending(true);
+          setState(() {});
+          _snack(l10n.acctSignOutFailed);
+        case SignOutRestoreResult.failed:
+          _snack(l10n.acctSignOutFailed);
       }
+    } finally {
+      if (mounted) {
+        setState(() => _action = AccountAction.none);
+      }
+    }
+  }
+
+  // ── Retry the parked-Guest restoration (banner) ─────────────────────────────
+  Future<void> _onRetryRestore() async {
+    if (_busy) {
+      return;
+    }
+    setState(() => _action = AccountAction.restore);
+    try {
+      // resolve() re-tries recoverSession + RC re-bind; on success it lowers the
+      // flag (the banner disappears via the watch below) and re-opens Generate.
+      await ref.read(guestRestorePendingProvider.notifier).resolve();
     } finally {
       if (mounted) {
         setState(() => _action = AccountAction.none);
@@ -306,9 +282,12 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final restorePending = ref.watch(guestRestorePendingProvider);
 
-    // No session at all → render nothing (there is normally an anon session).
-    if (!_hasSession) {
+    // No session AND no restore pending → render nothing (there is normally an
+    // anon session). While a restore is pending the session may be momentarily
+    // absent (signOut ran, recoverSession failed) — we STILL show the banner.
+    if (!_hasSession && !restorePending) {
       return const SizedBox.shrink();
     }
 
@@ -331,12 +310,19 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          if (_isAnon) _anonymousBody(l10n) else _connectedBody(l10n),
+          if (restorePending)
+            _restoreBanner(l10n)
+          else if (_isAnon)
+            _anonymousBody(l10n)
+          else
+            _connectedBody(l10n),
         ],
       ),
     );
   }
 
+  /// Guest → CREATE a new account (primary) OR SIGN IN to an existing one. Both
+  /// are ON flows; neither ever deletes server data.
   Widget _anonymousBody(AppLocalizations l10n) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,26 +336,25 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
         const SizedBox(height: AppSpacing.md),
         AppButton(
           label: l10n.acctContinueWithApple,
-          onPressed: _busy ? null : _onContinueWithApple,
+          onPressed: _busy ? null : _onCreate,
           variant: AppButtonVariant.dark,
-          loading: _action == AccountAction.linkApple,
+          loading: _action == AccountAction.create,
           icon: Icons.apple,
           fullWidth: true,
         ),
-        if (_showExisting) ...[
-          const SizedBox(height: AppSpacing.sm),
-          AppButton(
-            label: l10n.acctSignInExisting,
-            onPressed: _busy ? null : _onSignInExisting,
-            variant: AppButtonVariant.secondary,
-            loading: _action == AccountAction.signInExisting,
-            fullWidth: true,
-          ),
-        ],
+        const SizedBox(height: AppSpacing.sm),
+        AppButton(
+          label: l10n.acctSignInExisting,
+          onPressed: _busy ? null : _onSignInExisting,
+          variant: AppButtonVariant.secondary,
+          loading: _action == AccountAction.signInExisting,
+          fullWidth: true,
+        ),
       ],
     );
   }
 
+  /// Connected account → "Connected" + Sign out (restores the parked Guest).
   Widget _connectedBody(AppLocalizations l10n) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -384,44 +369,37 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
             ),
           ],
         ),
-        // Merge still finalizing server-side (NOT full success).
-        if (_mergePending) ...[
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            l10n.acctConnectedPending,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
-          ),
-        ],
-        // Merge failed permanently — clean, non-technical note; no retry.
-        if (_mergeTerminal) ...[
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            l10n.acctMergeFailed,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
-          ),
-        ],
-        // Retryable claim — resume the SAME merge (no new ticket / no re-signin).
-        if (_retryTicket != null) ...[
-          const SizedBox(height: AppSpacing.sm),
-          AppButton(
-            label: l10n.acctRetrySetup,
-            onPressed: _busy ? null : _onRetryClaim,
-            variant: AppButtonVariant.secondary,
-            loading: _action == AccountAction.retryMerge,
-            fullWidth: true,
-          ),
-        ],
-        // Sign out → back to a fresh guest session. No server data is touched.
         const SizedBox(height: AppSpacing.md),
         AppButton(
           label: l10n.acctSignOut,
           onPressed: _busy ? null : _onSignOut,
           variant: AppButtonVariant.secondary,
           loading: _action == AccountAction.signOut,
+          fullWidth: true,
+        ),
+      ],
+    );
+  }
+
+  /// Restore-pending banner (anti-anon correction) — the parked Guest could not
+  /// be restored (transient). Generation is gated elsewhere; here we surface a
+  /// clear state + a Retry that re-runs recoverSession. No new anonymous Guest.
+  Widget _restoreBanner(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          kGuestRestorePendingMessage,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        AppButton(
+          label: l10n.acctRetrySetup,
+          onPressed: _busy ? null : _onRetryRestore,
+          variant: AppButtonVariant.secondary,
+          loading: _action == AccountAction.restore,
           fullWidth: true,
         ),
       ],

@@ -14,6 +14,7 @@ import 'core/l10n/app_localizations.dart';
 import 'core/providers/locale_provider.dart';
 import 'core/providers/me_status_provider.dart';
 import 'core/providers/post_signout_pending_provider.dart';
+import 'core/providers/guest_restore_pending_provider.dart';
 import 'core/router/app_router.dart';
 import 'core/services/local_notification_service.dart';
 import 'core/widgets/ready_notification_host.dart';
@@ -146,6 +147,10 @@ class App extends ConsumerWidget {
     // SharedPreferences et, si un pending a survécu à un redémarrage, retente le marqueur —
     // AVANT tout tap Generate (sinon un pending persisté serait ignoré au premier tap = race).
     ref.listen(postSignoutPendingProvider, (_, _) {});
+    // ON-mode — instancie DÈS le boot l'état « restauration Guest en attente » : son _init
+    // recharge SharedPreferences et, si un restore a échoué avant un redémarrage, le retente
+    // (recoverSession) AVANT tout tap Generate ; sinon la génération reste bloquée (Retry).
+    ref.listen(guestRestorePendingProvider, (_, _) {});
     return MaterialApp.router(
       title: 'AYDEN Studio',
       theme: AppTheme.light,
