@@ -3393,6 +3393,25 @@ async def generate(
     except Exception as exc:
         log.error("  FAILED: %s: %s", type(exc).__name__, exc)
         log.error(traceback.format_exc())
+        # PATCH 3 (2026-07-16) — RELEASE le HOLD posé pré-OpenAI AVANT de propager. Cette erreur
+        # survient APRÈS le HOLD atomique (billing.try_hold @ _hold) et AVANT le 1er appel OpenAI :
+        # sans transition terminale, le HOLD(-1) reste ORPHELIN (compteur premium décrémenté)
+        # jusqu'au reconciler (~12 min). On émet EXACTEMENT la même paire terminale que la voie
+        # "OpenAI épuisé" (fail_generation + observe_intent_end FAILED, cf. plus bas) → le HOLD est
+        # relâché (net 0), aucune image produite, aucun coût. Ce `raise` SORT de /generate (capté
+        # par _generation_error_handler) → chemin MUTUELLEMENT EXCLUSIF avec la voie OpenAI → aucun
+        # double-RELEASE. Best-effort : le release ne doit JAMAIS masquer l'échec source.
+        try:
+            if _reservation_id is not None:
+                await fail_generation(_reservation_id)
+                _reservation_id = None
+            await observe_intent_end(
+                _intent.id, "FAILED",
+                error={"type": "pre_openai", "error_code": "IMAGE_FETCH_FAILED"},
+                is_free=_decision.consumes_free_quota,
+            )
+        except Exception:  # noqa: BLE001 — le release est best-effort ; ne masque pas le raise
+            log.exception("[BILLING] pre-OpenAI hold release failed (intent=%s)", _intent.id)
         raise GenerationError(
             error_code="IMAGE_FETCH_FAILED",
             user_message="We couldn't load your photo. Please try again.",

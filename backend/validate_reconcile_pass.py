@@ -111,6 +111,57 @@ r = recon(_sub(product="com.aydenstudio.app.annual"))
 check("9 active annual → grant appelé (store_product_id=annual)",
       r["state"] == "pass" and calls and calls[0]["store_product_id"] == "com.aydenstudio.app.annual", r)
 
+# ── PATCH 2 (2026-07-16) — OWNERSHIP : un pass MESURÉ n'est déclaré QUE si le user COURANT
+#     possède le pass. La clé order:provider:tx est USER-AGNOSTIQUE → une transaction déjà
+#     accordée sous un AUTRE user renvoie un result.pass_id ÉTRANGER (grant already_processed,
+#     credited=False). Sans le garde, reconcile renvoyait 'pass' à tort (faux « Purchase
+#     restored » alors que le guest reste free). ──────────────────────────────────────────────
+print("\n=== PATCH 2 · reconcile ownership (bloque le faux 'restored' cross-user) ===")
+
+_owner_calls = []
+def _make_grant(credited, pass_id="pass-x"):
+    async def _g(**kw):
+        calls.append(kw)
+        return GrantResult(ok=True, status="granted" if credited else "already_processed",
+                           credited=credited, credits=30, order_id="order-x", pass_id=pass_id)
+    return _g
+def _make_owner(owner):
+    async def _po(supa, pass_id):
+        _owner_calls.append(pass_id)
+        return owner
+    return _po
+
+# A. credited=False (already_processed) + pass appartenant au user COURANT → state=pass
+billing.grant_purchase = _make_grant(credited=False)
+billing._pass_owner = _make_owner("user-1")
+r = recon(_sub())
+check("A already_processed + pass appartient au user courant → state=pass",
+      r["state"] == "pass" and r["has_measurable_pass"], r)
+
+# B. credited=False + pass appartenant à un AUTRE user → restore_required (AUCUN faux 'pass')
+billing.grant_purchase = _make_grant(credited=False)
+billing._pass_owner = _make_owner("other-user")
+r = recon(_sub())
+check("B already_processed + pass d'un AUTRE user → restore_required (aucun faux restored)",
+      r["state"] == "restore_required" and not r["has_measurable_pass"]
+      and r["reason"] == "pass_owned_by_other_user", r)
+
+# C. credited=True (nouveau grant) → state=pass SANS consulter _pass_owner (short-circuit)
+_owner_calls.clear()
+billing.grant_purchase = _make_grant(credited=True)
+billing._pass_owner = _make_owner("should-not-be-called")
+r = recon(_sub())
+check("C grant crédité (nouveau) → state=pass SANS lookup _pass_owner (pass forcément au user)",
+      r["state"] == "pass" and r["has_measurable_pass"] and len(_owner_calls) == 0, (r, _owner_calls))
+
+# D. credited=False + _pass_owner renvoie None (lecture DB KO / pass introuvable) → restore_required
+#    (fail-CLOSED : jamais un faux 'pass' sur incertitude de propriété).
+billing.grant_purchase = _make_grant(credited=False)
+billing._pass_owner = _make_owner(None)
+r = recon(_sub())
+check("D already_processed + owner indéterminé (None) → restore_required (fail-closed)",
+      r["state"] == "restore_required" and not r["has_measurable_pass"], r)
+
 total = len(res); passed = sum(res)
 print(f"\n{'='*64}\n  TOTAL {total}  PASSED {passed}  FAILED {total-passed}\n{'='*64}")
 sys.exit(0 if passed == total else 1)

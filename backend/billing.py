@@ -145,6 +145,26 @@ async def _active_pass_id(supa, user_id: str) -> Optional[str]:
         return None
 
 
+async def _pass_owner(supa, pass_id: str) -> Optional[str]:
+    """PATCH 2 (2026-07-16) — user_id PROPRIÉTAIRE d'un pass, ou None. Sert à vérifier qu'un
+    pass retrouvé par grant_purchase appartient bien au user COURANT avant de déclarer un pass
+    MESURÉ : la clé d'idempotence order:provider:tx est USER-AGNOSTIQUE, donc une transaction
+    déjà accordée sous un AUTRE user renvoie un pass_id étranger (ON CONFLICT ne re-parente
+    jamais). Lecture seule, ne modifie rien. Best-effort : sur erreur DB → None (fail-CLOSED côté
+    reconcile → restore_required, JAMAIS un faux 'pass')."""
+    if not pass_id:
+        return None
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("passes").select("user_id").eq("id", pass_id).limit(1).execute()
+        )
+        rows = getattr(res, "data", None) or []
+        return rows[0].get("user_id") if rows else None
+    except Exception as exc:  # noqa: BLE001 — best-effort : pas de faux 'pass' plutôt qu'un crash
+        log.warning("[BILLING] pass_owner lookup failed pass=%s err=%s", (pass_id or "")[:8], exc)
+        return None
+
+
 async def _pass_bucket_available(supa, user_id: str, pass_id: str) -> int:
     """RC-PR3b — solde `available` du bucket d'UN pass : Σ available_delta des
     ledger_entries de CE pass_id. MÊME calcul que `billing_reproject_wallet` pour
@@ -681,9 +701,27 @@ async def reconcile_pass_from_subscriber(*, user_id: str, subscriber: dict, supa
         return {**base, "state": "restore_required", "has_measurable_pass": False,
                 "reason": "grant_error"}
 
-    # RÉPARATION (B′) — RC dit l'abonnement ACTIF (expires futur) : garantir que le pass
-    # est ACTIF jusqu'à l'autorité RC, même si grant a fait already_processed sur un pass
-    # au ends_at périmé. Sinon : entitlement actif ↔ aucun pass actif chez nous = deny.
+    # PATCH 2 (2026-07-16) — OWNERSHIP : ne déclarer un pass MESURÉ que si le user COURANT
+    # possède réellement ce pass. La clé order:provider:tx étant USER-AGNOSTIQUE, une transaction
+    # déjà accordée sous un AUTRE user_id (RC transfer / churn de guest) renvoie un result.pass_id
+    # ÉTRANGER (grant already_processed, credited=False). Sans ce garde, reconcile renvoyait
+    # 'pass' à tort → faux « Purchase restored » alors que le guest reste free. On fait confiance à
+    # deux signaux existants uniquement : (a) le grant vient de CRÉDITER ce user (credited → le pass
+    # est forcément le sien) ; sinon (b) _pass_owner(result.pass_id) == user_id. Sinon →
+    # restore_required, sans JAMAIS toucher au pass d'autrui (on ne répare que le pass DU user).
+    owns_pass = bool(result.credited) or (
+        await _pass_owner(supa, result.pass_id) == user_id
+    )
+    if not owns_pass:
+        log.warning("[reconcile] tx already granted under a DIFFERENT user "
+                    "(user=%s result_pass=%s status=%s credited=%s) → restore_required",
+                    user_id[:8], (result.pass_id or "none")[:8], result.status, result.credited)
+        return {**base, "state": "restore_required", "has_measurable_pass": False,
+                "reason": "pass_owned_by_other_user", "grant_status": result.status}
+
+    # RÉPARATION (B′) — RC dit l'abonnement ACTIF (expires futur) : garantir que le pass DU user
+    # est ACTIF jusqu'à l'autorité RC, même si grant a fait already_processed sur un pass au
+    # ends_at périmé. Sinon : entitlement actif ↔ aucun pass actif chez nous = deny.
     repaired = False
     if result.pass_id and _iso_in_future(expires):
         repaired = await _repair_pass_window(supa, pass_id=result.pass_id, ends_at_iso=expires)
