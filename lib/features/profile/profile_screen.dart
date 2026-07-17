@@ -20,6 +20,7 @@ import '../../data/services/auth_service.dart';
 import '../auth/sign_in_screen.dart';
 import '../admin/admin_promo_screen.dart';
 import 'account_section.dart';
+import 'identity_diag_panel.dart'; // DIAGNOSTIC BUILD ONLY (branch qa/identity-diag)
 
 /// P0 bloc (b) H — compte les redesigns RÉUSSIS : une session ne porte un
 /// `afterImageUrl` (row `latest_preview`) qu'APRÈS une génération réussie, donc une
@@ -97,6 +98,9 @@ class ProfileScreen extends ConsumerWidget {
                 child: const _PremiumStatusCard(),
               ),
             ),
+            // DIAGNOSTIC BUILD ONLY (branch qa/identity-diag) — read-only identity/billing
+            // snapshot to identify the active user_id without a Mac. NOT on the launch branch.
+            const SliverToBoxAdapter(child: IdentityDiagPanel()),
             // Account/Auth system — voluntary "Continue with Apple", Sign out, merge.
             // ★ Gated by the MASTER accountSystemEnabled flag: OFF (V1 launch) = the
             // whole account system is hidden (no Continue with Apple / Sign out / merge);
