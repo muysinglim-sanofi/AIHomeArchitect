@@ -73,6 +73,29 @@ def effective_trial_credits() -> int:
     return TRIAL_CREDITS_ACCOUNT_MODE if account_system_enabled() else TRIAL_CREDITS
 
 
+def billing_reparent_enabled() -> bool:
+    """★ Flag FONCTIONNEL (règle métier billing), env `BILLING_REPARENT_ENABLED` (défaut FALSE).
+
+    OFF (défaut) = comportement PATCH 2 strict : un pass appartenant à une AUTRE identité
+    n'est jamais donné au user courant → `restore_required`. Déploiement 100% sûr (aucun
+    changement de comportement).
+
+    ON = correctif « divergence d'identité » : quand RevenueCat prouve (entitlement premium
+    ACTIF sur le subscriber DU user courant — garde-fou déjà vérifié en amont) que ce user est
+    le détenteur légitime de l'abonnement, mais que le pass de CE cycle est resté parenté à une
+    identité précédente (MÊME personne : sign-out / nouvel anon / reinstall, RC-transféré), on
+    RE-PARENTE le pass (+ son ledger de pass) vers le user courant, en suivant l'autorité RC.
+    Anti-vol : impossible sans entitlement RC actif (un guest sans abo n'atteint jamais cette
+    branche → 'free'). Anti-double-grant : on DÉPLACE le pass (jamais de nouveau GRANT).
+    Anti-merge : SEUL le pass + son ledger bougent — jamais l'identité, le chat, les images
+    ni le bucket free. Idempotent + atomique (RPC) + fail-safe (échec → restore_required).
+
+    À activer APRÈS confirmation du réglage RevenueCat « Transfer behavior » + une validation
+    device (un Restore observé). INUTILE pour le lancement OFF (ni sign-in ni sign-out → aucune
+    divergence d'identité possible)."""
+    return os.environ.get("BILLING_REPARENT_ENABLED", "false").strip().lower() == "true"
+
+
 def _get_supa():
     """Lazy import to avoid a circular dependency at module load (mirrors quota.py)."""
     from main import supa  # noqa: PLC0415
@@ -725,6 +748,40 @@ async def _repair_pass_window(supa, *, pass_id: str, ends_at_iso: str) -> bool:
         return False
 
 
+async def reparent_pass_to_current(supa, *, pass_id: str, from_user: str, to_user: str) -> bool:
+    """PATCH 3 (2026-07-17) — RE-PARENTE un pass (+ son ledger de pass) de `from_user` vers
+    `to_user`, ATOMIQUEMENT via le RPC `billing_reparent_pass`. Appelé UNIQUEMENT depuis le
+    reconcile, quand RevenueCat prouve que `to_user` détient l'entitlement premium ACTIF dont
+    la transaction de cycle a d'abord été accordée sous `from_user` (MÊME personne : divergence
+    d'identité). Suit l'autorité RC.
+
+    Garanties (portées par le RPC) : idempotent (déjà possédé → no-op) ; ne bouge QUE ce pass +
+    ses ledger_entries de pass (jamais le bucket free, ni l'identité/chat/images → PAS un merge) ;
+    ne crée AUCUN nouveau crédit (déplacement, pas GRANT → pas de double-grant) ; reprojette les
+    DEUX wallets (ancien/nouveau). Fail-safe : toute erreur → renvoie False → le reconcile retombe
+    sur `restore_required` (comportement PATCH 2), JAMAIS un faux 'pass'. Renvoie True SSI, après
+    l'opération, `to_user` possède le pass."""
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.rpc("billing_reparent_pass", {
+                "p_pass_id": pass_id, "p_from_user": from_user, "p_to_user": to_user,
+            }).execute()
+        )
+        data = getattr(res, "data", None)
+        if isinstance(data, list):
+            data = data[0] if data else None
+        data = data or {}
+        now_owned = bool(data.get("now_owned"))
+        log.info("[reconcile] reparent pass=%s %s→%s now_owned=%s moved=%s reason=%s",
+                 (pass_id or "")[:8], (from_user or "")[:8], (to_user or "")[:8],
+                 now_owned, data.get("moved_pass"), data.get("reason"))
+        return now_owned
+    except Exception as exc:  # noqa: BLE001 — fail-safe : le reconcile retombe sur restore_required
+        log.error("[reconcile] reparent FAILED pass=%s err=%s: %s",
+                  (pass_id or "")[:8], type(exc).__name__, exc)
+        return False
+
+
 async def reconcile_pass_from_subscriber(*, user_id: str, subscriber: dict, supa=None) -> dict:
     """P0 (2026-07-10) — reconstruit un PASS MESURÉ depuis le subscriber RevenueCat
     (restore / reinstall / device-change / RC transfer / webhook manqué / App Review
@@ -799,9 +856,25 @@ async def reconcile_pass_from_subscriber(*, user_id: str, subscriber: dict, supa
     # deux signaux existants uniquement : (a) le grant vient de CRÉDITER ce user (credited → le pass
     # est forcément le sien) ; sinon (b) _pass_owner(result.pass_id) == user_id. Sinon →
     # restore_required, sans JAMAIS toucher au pass d'autrui (on ne répare que le pass DU user).
-    owns_pass = bool(result.credited) or (
-        await _pass_owner(supa, result.pass_id) == user_id
-    )
+    prev_owner = None
+    if not result.credited:
+        prev_owner = await _pass_owner(supa, result.pass_id)  # une seule lecture
+    owns_pass = bool(result.credited) or (prev_owner == user_id)
+
+    # PATCH 3 (2026-07-17) — RE-PARENT (flag `BILLING_REPARENT_ENABLED`, défaut OFF). Le pass de ce
+    # cycle est parenté à une AUTRE identité, MAIS on n'est ici QUE parce que RC montre l'entitlement
+    # premium ACTIF sur le subscriber DE CE user (garde `active` en amont) → RC affirme que ce user est
+    # le détenteur légitime (MÊME personne : sign-out / nouvel anon / reinstall, RC-transféré). On suit
+    # l'autorité RC : re-parenter le pass au user courant (atomique, idempotent, fail-safe). Anti-vol :
+    # sans entitlement RC actif on ne serait jamais arrivé ici (→ 'free'). OFF → comportement PATCH 2.
+    if (not owns_pass) and result.pass_id and prev_owner and prev_owner != user_id \
+            and billing_reparent_enabled():
+        owns_pass = await reparent_pass_to_current(
+            supa, pass_id=result.pass_id, from_user=prev_owner, to_user=user_id)
+        if owns_pass:
+            log.warning("[reconcile] REPARENTED pass=%s %s→%s (autorité entitlement RC actif)",
+                        result.pass_id[:8], prev_owner[:8], user_id[:8])
+
     if not owns_pass:
         log.warning("[reconcile] tx already granted under a DIFFERENT user "
                     "(user=%s result_pass=%s status=%s credited=%s) → restore_required",
