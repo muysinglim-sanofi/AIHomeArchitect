@@ -83,3 +83,43 @@ comment on function public.billing_reparent_pass(uuid, uuid, uuid) is
     'PATCH 3 — déplace atomiquement un pass + son ledger de pass vers l''identité courante '
     '(divergence d''identité, même personne prouvée RC côté appelant). Idempotent, anti-double-'
     'grant (déplace, ne crédite pas), anti-merge (pass seul), reprojette les 2 wallets.';
+
+
+-- ── REDESIGN (2026-07-17) — signaux d'AUTORISATION du re-parent (le RPC ci-dessus ne DÉCIDE pas ;
+--    il exécute. La décision `reparent_authorized` vit côté Python et exige ces deux signaux). ──────
+
+-- (1) Type d'identité : Guest anonyme (true) vs Account (false). Le re-parent n'est autorisé
+--     qu'entre deux Guests. Lit auth.users (non exposé via PostgREST) → RPC security definer.
+create or replace function public.is_user_anonymous(p_user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public, auth
+as $$
+    select is_anonymous from auth.users where id = p_user_id;
+$$;
+
+comment on function public.is_user_anonymous(uuid) is
+    'PATCH 3 redesign — type d''identité (Guest anonyme=true / Account=false / NULL=inconnu) pour '
+    'gater le re-parent en Guest→Guest uniquement (aucun transfert Guest↔Account = pas de merge).';
+
+-- (2) Preuve serveur explicite d'un transfert RevenueCat (event type TRANSFER : old→new App User ID).
+--     Un entitlement actif NE SUFFIT PAS : le re-parent exige une ligne ici, alimentée par le webhook
+--     RC. NOTE : la forme EXACTE des champs (aliases / original_app_user_id / store_transaction_id)
+--     sera figée APRÈS la capture device du TRANSFER event (protocole en cours). Table créée vide →
+--     tant qu'aucun webhook n'écrit, `_has_authorized_rc_transfer` renvoie false → re-parent refusé.
+create table if not exists public.rc_pass_transfers (
+    id                  uuid primary key default gen_random_uuid(),
+    from_app_user_id    uuid not null,
+    to_app_user_id      uuid not null,
+    store_transaction_id text,
+    rc_event_id         text unique,          -- idempotence webhook (un TRANSFER RC = une ligne)
+    raw_event           jsonb not null default '{}'::jsonb,
+    created_at          timestamptz not null default now()
+);
+create index if not exists rc_pass_transfers_pair_idx
+    on public.rc_pass_transfers (from_app_user_id, to_app_user_id);
+
+comment on table public.rc_pass_transfers is
+    'PATCH 3 redesign — journal des events RevenueCat TRANSFER (old→new App User ID). Preuve serveur '
+    'EXIGÉE avant tout re-parent (un entitlement actif ne suffit pas). Alimentée par le webhook RC.';

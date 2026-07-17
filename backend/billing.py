@@ -96,6 +96,47 @@ def billing_reparent_enabled() -> bool:
     return os.environ.get("BILLING_REPARENT_ENABLED", "false").strip().lower() == "true"
 
 
+def reparent_authorized(*, account_mode: bool, from_is_anon, to_is_anon,
+                        has_authorized_rc_transfer: bool):
+    """PATCH 3 — REDESIGN (2026-07-17). AUTORISATION du re-parent, DÉCOUPLÉE de la simple
+    présence d'un entitlement RC actif (qui ne prouve RIEN à lui seul : avec « Transfer to new
+    App User ID », un Restore peut transférer le reçu Apple vers n'importe quelle identité).
+
+    Deux conditions CUMULATIVES et fail-closed :
+      1. `has_authorized_rc_transfer` — un événement RC **TRANSFER** (old→new App User ID, pour CE
+         reçu) a été explicitement enregistré CÔTÉ SERVEUR (mapping serveur, pas un entitlement seul).
+      2. Parenté **Guest → Guest** UNIQUEMENT (les deux identités anonymes).
+
+    Séparation EXPLICITE des modes :
+      • MODE OFF (guest-only) : seules des identités Guest existent → Guest→Guest autorisé
+        (reinstall / nouvel anon du même device), sous preuve de transfert RC.
+      • MODE ON : TOUT transfert impliquant un Account est INTERDIT —
+          - Guest Premium → Account (login)        → INTERDIT (to = Account)
+          - Account Premium → Guest (sign-out)      → INTERDIT (from = Account)
+          - Account A → Account B (merge)           → INTERDIT (from/to = Account)
+        Les flows CREATE_ACCOUNT / SIGN_IN_EXISTING / SIGN_OUT produisent tous une transition
+        Guest↔Account → jamais Guest↔Guest → JAMAIS ce transfert (subsumé par la règle is_anonymous).
+
+    Renvoie (autorisé: bool, raison: str). from/to inconnus (None) → refus."""
+    if not has_authorized_rc_transfer:
+        return (False, "no_authorized_rc_transfer")
+    if from_is_anon is None or to_is_anon is None:
+        return (False, "identity_kind_unknown")
+    both_guests = (from_is_anon is True) and (to_is_anon is True)
+    if account_mode:  # ── MODE ON ──
+        if not both_guests:
+            if not from_is_anon and not to_is_anon:
+                return (False, "on_account_to_account")   # merge implicite interdit
+            if not to_is_anon:
+                return (False, "on_guest_to_account")     # login : jamais Premium Guest→Account
+            return (False, "on_account_to_guest")         # sign-out : jamais pass Account→Guest
+        return (True, "on_guest_to_guest")
+    # ── MODE OFF (guest-only) ──
+    if not both_guests:
+        return (False, "off_unexpected_account")          # ne devrait jamais arriver en OFF
+    return (True, "off_guest_to_guest")
+
+
 def _get_supa():
     """Lazy import to avoid a circular dependency at module load (mirrors quota.py)."""
     from main import supa  # noqa: PLC0415
@@ -211,6 +252,51 @@ async def _pass_owner(supa, pass_id: str) -> Optional[str]:
     except Exception as exc:  # noqa: BLE001 — best-effort : pas de faux 'pass' plutôt qu'un crash
         log.warning("[BILLING] pass_owner lookup failed pass=%s err=%s", (pass_id or "")[:8], exc)
         return None
+
+
+async def _is_anonymous(supa, user_id: str):
+    """PATCH 3 redesign — le user Supabase est-il un GUEST anonyme (auth.users.is_anonymous) ?
+    True=Guest, False=Account, None=inconnu → fail-closed (re-parent refusé). Via le RPC
+    `public.is_user_anonymous` (security definer, lit auth.users). PENDING : ce RPC est fourni par
+    la migration re-parent (NON appliquée) → tant qu'absent, exception → None → refus (sûr)."""
+    if not user_id:
+        return None
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.rpc("is_user_anonymous", {"p_user_id": user_id}).execute()
+        )
+        data = getattr(res, "data", None)
+        if isinstance(data, list):
+            data = data[0] if data else None
+        if isinstance(data, dict):
+            data = data.get("is_anonymous")
+        return bool(data) if data is not None else None
+    except Exception as exc:  # noqa: BLE001 — fail-closed
+        log.warning("[reconcile] is_anonymous lookup failed user=%s err=%s",
+                    (user_id or "")[:8], type(exc).__name__)
+        return None
+
+
+async def _has_authorized_rc_transfer(supa, *, from_user: str, to_user: str, store_tx: str) -> bool:
+    """PATCH 3 redesign — un événement RC **TRANSFER** (old→new App User ID) a-t-il été explicitement
+    enregistré CÔTÉ SERVEUR pour CE couple d'identités ? C'est LA preuve exigée (un entitlement actif
+    ne suffit pas). Lit `rc_pass_transfers`, table alimentée par le webhook RC (event type TRANSFER).
+    PENDING : table + handler webhook à construire APRÈS la capture device de la forme du TRANSFER
+    event. Tant qu'absents → False → re-parent refusé (défaut sûr : jamais de transfert non prouvé)."""
+    if not from_user or not to_user:
+        return False
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("rc_pass_transfers").select("id")
+            .eq("from_app_user_id", from_user).eq("to_app_user_id", to_user)
+            .limit(1).execute()
+        )
+        rows = getattr(res, "data", None) or []
+        return len(rows) > 0
+    except Exception as exc:  # noqa: BLE001 — table absente (PENDING) / erreur → fail-closed
+        log.info("[reconcile] rc_transfer lookup unavailable (pending) from=%s err=%s",
+                 (from_user or "")[:8], type(exc).__name__)
+        return False
 
 
 async def _pass_bucket_available(supa, user_id: str, pass_id: str) -> int:
@@ -861,19 +947,31 @@ async def reconcile_pass_from_subscriber(*, user_id: str, subscriber: dict, supa
         prev_owner = await _pass_owner(supa, result.pass_id)  # une seule lecture
     owns_pass = bool(result.credited) or (prev_owner == user_id)
 
-    # PATCH 3 (2026-07-17) — RE-PARENT (flag `BILLING_REPARENT_ENABLED`, défaut OFF). Le pass de ce
-    # cycle est parenté à une AUTRE identité, MAIS on n'est ici QUE parce que RC montre l'entitlement
-    # premium ACTIF sur le subscriber DE CE user (garde `active` en amont) → RC affirme que ce user est
-    # le détenteur légitime (MÊME personne : sign-out / nouvel anon / reinstall, RC-transféré). On suit
-    # l'autorité RC : re-parenter le pass au user courant (atomique, idempotent, fail-safe). Anti-vol :
-    # sans entitlement RC actif on ne serait jamais arrivé ici (→ 'free'). OFF → comportement PATCH 2.
+    # PATCH 3 REDESIGN (2026-07-17) — RE-PARENT (flag `BILLING_REPARENT_ENABLED`, défaut OFF).
+    # Un entitlement RC actif NE SUFFIT PAS (avec « Transfer to new App User ID », un Restore peut
+    # transférer le reçu Apple vers n'importe quelle identité). Autoriser le re-parent SEULEMENT si
+    # `reparent_authorized` : (1) un transfert RC est explicitement PROUVÉ côté serveur (rc_pass_
+    # transfers, event RC TRANSFER) ET (2) parenté Guest→Guest (aucun transfert impliquant un Account
+    # en ON : ni Guest→Account, ni Account→Guest, ni Account→Account = pas de merge implicite).
+    # Sinon → refus → restore_required (PATCH 2). Défaut : les deux signaux sont fail-closed → refus.
     if (not owns_pass) and result.pass_id and prev_owner and prev_owner != user_id \
             and billing_reparent_enabled():
-        owns_pass = await reparent_pass_to_current(
-            supa, pass_id=result.pass_id, from_user=prev_owner, to_user=user_id)
-        if owns_pass:
-            log.warning("[reconcile] REPARENTED pass=%s %s→%s (autorité entitlement RC actif)",
-                        result.pass_id[:8], prev_owner[:8], user_id[:8])
+        from_anon = await _is_anonymous(supa, prev_owner)
+        to_anon = await _is_anonymous(supa, user_id)
+        has_transfer = await _has_authorized_rc_transfer(
+            supa, from_user=prev_owner, to_user=user_id, store_tx=store_tx)
+        allowed, why = reparent_authorized(
+            account_mode=account_system_enabled(), from_is_anon=from_anon,
+            to_is_anon=to_anon, has_authorized_rc_transfer=has_transfer)
+        if allowed:
+            owns_pass = await reparent_pass_to_current(
+                supa, pass_id=result.pass_id, from_user=prev_owner, to_user=user_id)
+            if owns_pass:
+                log.warning("[reconcile] REPARENTED pass=%s %s→%s (%s)",
+                            result.pass_id[:8], prev_owner[:8], user_id[:8], why)
+        else:
+            log.warning("[reconcile] re-parent REFUSED pass=%s %s→%s reason=%s",
+                        result.pass_id[:8], prev_owner[:8], user_id[:8], why)
 
     if not owns_pass:
         log.warning("[reconcile] tx already granted under a DIFFERENT user "

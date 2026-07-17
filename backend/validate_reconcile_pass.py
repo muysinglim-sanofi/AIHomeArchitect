@@ -162,11 +162,10 @@ r = recon(_sub())
 check("D already_processed + owner indéterminé (None) → restore_required (fail-closed)",
       r["state"] == "restore_required" and not r["has_measurable_pass"], r)
 
-# ── PATCH 3 (2026-07-17) — RE-PARENT (flag BILLING_REPARENT_ENABLED). Quand RC prouve l'entitlement
-#     premium ACTIF sur l'identité courante mais que le pass de ce cycle est resté sur une AUTRE
-#     identité (MÊME personne : sign-out/reinstall RC-transféré), on RE-PARENTE au lieu de refuser.
-#     Gardé par l'autorité RC (`active` en amont) + le flag. Anti-vol / anti-double-grant / fail-safe.
-print("\n=== PATCH 3 · reconcile re-parent (divergence d'identité, autorité RC) ===")
+# ── PATCH 3 REDESIGN (2026-07-17) — RE-PARENT autorisé UNIQUEMENT si (1) transfert RC PROUVÉ côté
+#     serveur ET (2) parenté Guest→Guest. Un entitlement RC actif NE SUFFIT PAS. Séparation OFF/ON :
+#     tout transfert impliquant un Account est INTERDIT en ON (login / sign-out / merge). ──────────
+print("\n=== PATCH 3 redesign · reconcile re-parent (autorisation stricte) ===")
 
 _reparent_calls = []
 def _make_reparent(return_val):
@@ -174,68 +173,84 @@ def _make_reparent(return_val):
         _reparent_calls.append({"pass_id": pass_id, "from": from_user, "to": to_user})
         return return_val
     return _rp
+def _make_is_anon(mapping):
+    async def _ia(supa, uid):
+        return mapping.get(uid)
+    return _ia
+def _make_transfer(val):
+    async def _ht(supa, *, from_user, to_user, store_tx):
+        return val
+    return _ht
 _orig_flag = billing.billing_reparent_enabled
+_orig_mode = billing.account_system_enabled
 
-# E. flag OFF + pass d'un AUTRE user → restore_required, re-parent JAMAIS appelé (PATCH 2 strict)
-billing.billing_reparent_enabled = lambda: False
-billing.grant_purchase = _make_grant(credited=False)
-billing._pass_owner = _make_owner("other-user")
-_reparent_calls.clear(); billing.reparent_pass_to_current = _make_reparent(True)
+def _setup(*, flag, from_anon=True, to_anon=True, transfer=True, reparent_ok=True,
+           mode_on=False, credited=False, owner="other-user"):
+    billing.billing_reparent_enabled = (lambda: flag)
+    billing.account_system_enabled = (lambda: mode_on)
+    billing.grant_purchase = _make_grant(credited=credited, pass_id="pass-strand")
+    billing._pass_owner = _make_owner(owner)
+    billing._is_anonymous = _make_is_anon({"other-user": from_anon, "user-1": to_anon})
+    billing._has_authorized_rc_transfer = _make_transfer(transfer)
+    _reparent_calls.clear(); billing.reparent_pass_to_current = _make_reparent(reparent_ok)
+
+# E. flag OFF → re-parent JAMAIS tenté (PATCH 2 strict)
+_setup(flag=False)
 r = recon(_sub())
-check("E flag OFF + pass d'un autre → restore_required + re-parent NON appelé (PATCH 2 strict)",
+check("E flag OFF → restore_required + re-parent NON tenté (PATCH 2 strict)",
       r["state"] == "restore_required" and len(_reparent_calls) == 0, (r, _reparent_calls))
 
-# F. flag ON + pass d'un AUTRE user + entitlement actif → RE-PARENT appelé (from→to corrects) → pass
-billing.billing_reparent_enabled = lambda: True
-billing.grant_purchase = _make_grant(credited=False, pass_id="pass-strand")
-billing._pass_owner = _make_owner("other-user")
-_reparent_calls.clear(); billing.reparent_pass_to_current = _make_reparent(True)
+# F. flag ON + Guest→Guest + transfert RC PROUVÉ → RE-PARENT (other→user-1) → pass
+_setup(flag=True, from_anon=True, to_anon=True, transfer=True)
 r = recon(_sub())
-check("F flag ON + pass d'un autre (entitlement RC actif) → RE-PARENT (other→user-1) → state=pass",
-      r["state"] == "pass" and r["has_measurable_pass"] and len(_reparent_calls) == 1
-      and _reparent_calls[0]["from"] == "other-user" and _reparent_calls[0]["to"] == "user-1"
-      and _reparent_calls[0]["pass_id"] == "pass-strand", (r, _reparent_calls))
+check("F flag ON + Guest→Guest + transfert RC prouvé → RE-PARENT → state=pass",
+      r["state"] == "pass" and len(_reparent_calls) == 1
+      and _reparent_calls[0]["from"] == "other-user" and _reparent_calls[0]["to"] == "user-1", (r, _reparent_calls))
 
-# G. flag ON + re-parent ÉCHOUE (False) → restore_required (fail-safe : jamais un faux 'pass')
-billing.billing_reparent_enabled = lambda: True
-billing.grant_purchase = _make_grant(credited=False)
-billing._pass_owner = _make_owner("other-user")
-_reparent_calls.clear(); billing.reparent_pass_to_current = _make_reparent(False)
+# F2. flag ON + Guest→Guest MAIS aucun transfert RC prouvé → REFUS (entitlement seul ≠ autorisation)
+_setup(flag=True, from_anon=True, to_anon=True, transfer=False)
 r = recon(_sub())
-check("G flag ON + re-parent échoue → restore_required (fail-safe)",
-      r["state"] == "restore_required" and not r["has_measurable_pass"]
-      and len(_reparent_calls) == 1, (r, _reparent_calls))
+check("F2 flag ON + Guest→Guest SANS transfert RC prouvé → REFUS → restore_required",
+      r["state"] == "restore_required" and len(_reparent_calls) == 0, (r, _reparent_calls))
 
-# H. flag ON + AUCUN entitlement actif (expiré) → free, re-parent JAMAIS appelé (ANTI-VOL : une
-#    identité sans abo RC actif n'atteint jamais la branche pass → impossible de voler un pass).
-billing.billing_reparent_enabled = lambda: True
-billing.grant_purchase = _make_grant(credited=False)
-billing._pass_owner = _make_owner("other-user")
-_reparent_calls.clear(); billing.reparent_pass_to_current = _make_reparent(True)
+# F3. ON + Guest→Account (login) → REFUS (jamais Premium Guest→Account)
+_setup(flag=True, from_anon=True, to_anon=False, transfer=True, mode_on=True)
+r = recon(_sub())
+check("F3 ON + Guest→Account (login) → REFUS re-parent → restore_required",
+      r["state"] == "restore_required" and len(_reparent_calls) == 0, (r, _reparent_calls))
+
+# F4. ON + Account→Guest (sign-out) → REFUS (jamais pass Account→Guest)
+_setup(flag=True, from_anon=False, to_anon=True, transfer=True, mode_on=True)
+r = recon(_sub())
+check("F4 ON + Account→Guest (sign-out) → REFUS re-parent → restore_required",
+      r["state"] == "restore_required" and len(_reparent_calls) == 0, (r, _reparent_calls))
+
+# G. flag ON + autorisé mais RPC re-parent ÉCHOUE → restore_required (fail-safe)
+_setup(flag=True, reparent_ok=False)
+r = recon(_sub())
+check("G flag ON + autorisé + RPC re-parent échoue → restore_required (fail-safe)",
+      r["state"] == "restore_required" and len(_reparent_calls) == 1, (r, _reparent_calls))
+
+# H. flag ON + AUCUN entitlement actif (expiré) → free, re-parent JAMAIS atteint (anti-vol)
+_setup(flag=True)
 r = recon(_sub(expires=PAST))
-check("H flag ON + entitlement EXPIRÉ → free + re-parent JAMAIS appelé (anti-vol)",
+check("H flag ON + entitlement EXPIRÉ → free + re-parent JAMAIS atteint (anti-vol)",
       r["state"] == "free" and len(_reparent_calls) == 0, (r, _reparent_calls))
 
-# I. flag ON + pass DÉJÀ au user courant → state=pass, re-parent NON appelé (aucun mismatch)
-billing.billing_reparent_enabled = lambda: True
-billing.grant_purchase = _make_grant(credited=False)
-billing._pass_owner = _make_owner("user-1")
-_reparent_calls.clear(); billing.reparent_pass_to_current = _make_reparent(True)
+# I. flag ON + pass DÉJÀ au user courant → pass, re-parent NON tenté
+_setup(flag=True, owner="user-1")
 r = recon(_sub())
-check("I flag ON + pass déjà au user courant → state=pass, re-parent NON appelé",
+check("I flag ON + pass déjà au user courant → state=pass, re-parent NON tenté",
       r["state"] == "pass" and len(_reparent_calls) == 0, (r, _reparent_calls))
 
-# J. flag ON + credited=True (nouveau grant) → state=pass, re-parent NON appelé (déjà propriétaire ;
-#    _pass_owner pas consulté).
-billing.billing_reparent_enabled = lambda: True
-billing.grant_purchase = _make_grant(credited=True)
-billing._pass_owner = _make_owner("should-not-matter")
-_reparent_calls.clear(); billing.reparent_pass_to_current = _make_reparent(True)
+# J. flag ON + credited=True (nouveau) → pass, re-parent NON tenté
+_setup(flag=True, credited=True)
 r = recon(_sub())
-check("J flag ON + grant crédité (nouveau) → state=pass, re-parent NON appelé",
+check("J flag ON + grant crédité (nouveau) → state=pass, re-parent NON tenté",
       r["state"] == "pass" and len(_reparent_calls) == 0, (r, _reparent_calls))
 
 billing.billing_reparent_enabled = _orig_flag
+billing.account_system_enabled = _orig_mode
 
 total = len(res); passed = sum(res)
 print(f"\n{'='*64}\n  TOTAL {total}  PASSED {passed}  FAILED {total-passed}\n{'='*64}")
