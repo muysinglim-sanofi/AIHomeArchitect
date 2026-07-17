@@ -28,14 +28,18 @@ Contraintes verrouillées (SPEC V2) :
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
+import hmac
+import json
 import logging
 import os
 import secrets
+import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -466,6 +470,142 @@ async def claim_signup_bonus(current_user: CurrentUser = Depends(signup_bonus_ga
         raise HTTPException(status_code=503,
                             detail={"error_code": "signup_bonus_unavailable",
                                     "user_message": "Please try again."})
+
+
+# ══════════ ON-mode — création de compte : claim Guest atomique (2026-07-17) ══════════
+# Gaté par l'AUTORITÉ SERVEUR ACCOUNT_SYSTEM_ENABLED (billing.account_system_enabled),
+# jamais un booléen client. Preuve « compte réellement neuf » = TICKET SIGNÉ émis au GUEST
+# AVANT l'OAuth : le guest_id vient du ticket signé (jamais du corps client) → impossible de
+# réclamer un AUTRE Guest. L'anti-abus (guest 1×, compte 1 guest à vie, +2 1×, compte frais)
+# est atomique dans le RPC claim_guest_and_bonus. Ticket HS256 avec un SECRET DÉDIÉ
+# (jamais SUPABASE_JWT_SECRET — Supabase signe ES256, risque alg-confusion), typ contrôlé.
+
+CLAIM_TICKET_TTL_SECONDS = 600  # 10 min : émis avant l'OAuth, consommé juste après.
+
+
+def _claim_ticket_secret() -> str:
+    return os.environ.get("CLAIM_TICKET_SECRET", "")
+
+
+def _b64u(b: bytes) -> str:
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+
+def _b64u_dec(s: str) -> bytes:
+    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+
+
+def issue_claim_ticket(guest_id: str) -> tuple[str, int]:
+    """Ticket signé HS256 (secret dédié) liant guest_id + nonce + exp courte. Renvoie
+    (token, exp_epoch). Lève RuntimeError si le secret n'est pas configuré."""
+    secret = _claim_ticket_secret()
+    if not secret:
+        raise RuntimeError("claim_ticket_secret_missing")
+    now = int(time.time())
+    exp = now + CLAIM_TICKET_TTL_SECONDS
+    payload = {"typ": "guest_claim", "guest_id": guest_id,
+               "nonce": secrets.token_hex(16), "iat": now, "exp": exp}
+    body = _b64u(json.dumps(payload, separators=(",", ":")).encode())
+    sig = _b64u(hmac.new(secret.encode(), body.encode(), hashlib.sha256).digest())
+    return f"{body}.{sig}", exp
+
+
+def verify_claim_ticket(token: str) -> "str | None":
+    """Renvoie guest_id si le ticket est valide (signature HS256, typ, non expiré), sinon
+    None. Comparaison constante (compare_digest). Le nonce n'est pas stocké : l'anti-rejeu
+    repose sur les clés ledger atomiques (un ticket rejoué → guest/compte déjà réclamé → 409)."""
+    secret = _claim_ticket_secret()
+    if not secret or not token or "." not in token:
+        return None
+    try:
+        body, sig = token.split(".", 1)
+        expected = _b64u(hmac.new(secret.encode(), body.encode(), hashlib.sha256).digest())
+        if not hmac.compare_digest(sig, expected):
+            return None
+        payload = json.loads(_b64u_dec(body))
+        if payload.get("typ") != "guest_claim":
+            return None
+        if int(payload.get("exp", 0)) < int(time.time()):
+            return None
+        gid = payload.get("guest_id")
+        return gid if isinstance(gid, str) and gid else None
+    except Exception:  # noqa: BLE001 — un ticket malformé = invalide, jamais une 500
+        return None
+
+
+def _require_account_system_enabled() -> None:
+    """Gate ON EN PREMIER (avant auth/DB). ACCOUNT_SYSTEM_ENABLED OFF → 404 immédiat :
+    un client OFF/ancien ne peut PAS atteindre le claim ni farmer les bonus."""
+    import billing  # noqa: PLC0415 — lazy
+    if not billing.account_system_enabled():
+        raise HTTPException(status_code=404,
+                            detail={"error_code": "not_found", "user_message": "Not found."})
+
+
+def account_system_gate(
+    _flag: None = Depends(_require_account_system_enabled),        # 1) ON → sinon 404
+    current_user: CurrentUser = Depends(require_active_identity),  # 2) JWT → 3) garde merged_closed
+) -> CurrentUser:
+    return current_user
+
+
+@identity_router.post("/claim-ticket")
+async def claim_ticket(current_user: CurrentUser = Depends(account_system_gate)):
+    """ON — le GUEST (anonyme) demande un ticket signé AVANT l'OAuth de création de compte.
+    Le ticket lie SON guest_id ; il sera consommé par le NOUVEAU compte via
+    /claim-guest-on-create. Requiert un user anonyme (sinon 400)."""
+    if not current_user.is_anonymous:
+        raise HTTPException(status_code=400,
+                            detail={"error_code": "not_anonymous",
+                                    "user_message": "Only a guest can request a claim ticket."})
+    try:
+        token, exp = issue_claim_ticket(current_user.user_id)
+    except RuntimeError:
+        log.error("[identity] claim-ticket: CLAIM_TICKET_SECRET manquant")
+        raise HTTPException(status_code=503,
+                            detail={"error_code": "claim_unavailable", "user_message": "Please try again."})
+    return {"ticket": token, "expires_at": exp}
+
+
+@identity_router.post("/claim-guest-on-create")
+async def claim_guest_on_create(
+    body: dict = Body(default=None),
+    current_user: CurrentUser = Depends(account_system_gate),
+):
+    """ON — le NOUVEAU compte (créé séparément du Guest) réclame le solde Free ADMISSIBLE
+    de son Guest d'origine + reçoit +2, ATOMIQUEMENT (RPC claim_guest_and_bonus). guest_id
+    vient du TICKET SIGNÉ (jamais du corps). Refuse si compte anonyme ou guest==compte.
+    Conflit anti-abus (guest/compte déjà réclamé, compte non frais) → 409."""
+    ticket = (body or {}).get("ticket")
+    guest_id = verify_claim_ticket(ticket) if ticket else None
+    if not guest_id:
+        raise HTTPException(status_code=400,
+                            detail={"error_code": "invalid_ticket",
+                                    "user_message": "Your session expired. Please start again."})
+    if current_user.is_anonymous:
+        raise HTTPException(status_code=400,
+                            detail={"error_code": "not_an_account",
+                                    "user_message": "Create your account first."})
+    if guest_id == current_user.user_id:
+        raise HTTPException(status_code=400,
+                            detail={"error_code": "same_identity", "user_message": "Nothing to claim."})
+    import billing  # noqa: PLC0415 — lazy
+    try:
+        return await billing.claim_guest_and_bonus(
+            account_id=current_user.user_id, guest_id=guest_id)
+    except Exception as exc:  # noqa: BLE001
+        _msg = str(exc).lower()
+        if any(k in _msg for k in ("already_claimed", "not_fresh", "other_account",
+                                   "other_guest", "23505", "23514")):
+            log.info("[identity] claim-guest-on-create rejected acct=%s reason=%s",
+                     current_user.user_id[:8], type(exc).__name__)
+            raise HTTPException(status_code=409,
+                                detail={"error_code": "claim_conflict",
+                                        "user_message": "This account is already set up."})
+        log.warning("[identity] claim-guest-on-create failed acct=%s err=%s",
+                    current_user.user_id[:8], type(exc).__name__)
+        raise HTTPException(status_code=503,
+                            detail={"error_code": "claim_unavailable", "user_message": "Please try again."})
 
 
 # ══════════ COMMIT 3b — révocation Auth de A (défense en profondeur) ══════════

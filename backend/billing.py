@@ -39,13 +39,38 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Optional
 
 log = logging.getLogger("billing")
 
+# OFF-mode (lancement V1) = comportement historique : 3 générations gratuites en Guest.
 TRIAL_CREDITS = 3
+# ON-mode (chantier Identity, derrière le flag) : 1 gratuite en Guest, puis +2 à la
+# création RÉELLE d'un compte (max 3). Voir docs/GUEST_ACCOUNT_IDENTITY_SPEC.md.
+TRIAL_CREDITS_ACCOUNT_MODE = 1
+SIGNUP_BONUS_CREDITS = 2
+
+
+def account_system_enabled() -> bool:
+    """★ Autorité de mode BACKEND, synchronisée avec le flag frontend
+    `FeatureFlags.accountSystemEnabled`. Env `ACCOUNT_SYSTEM_ENABLED` (défaut false).
+    OFF = pas de système de comptes (TRIAL=3, aucune RPC/endpoint Identity ON) ; ON =
+    architecture Identity complète (TRIAL=1 + claim +2). Le serveur NE fait JAMAIS
+    confiance à un booléen client : c'est CETTE valeur (déploiement) qui gate les
+    endpoints ON et fixe le TRIAL effectif → un client OFF/ancien ne peut pas farmer
+    les bonus ni obtenir 1-au-lieu-de-3 (les deux règles ne se mélangent jamais pour
+    une même configuration serveur)."""
+    return os.environ.get("ACCOUNT_SYSTEM_ENABLED", "false").strip().lower() == "true"
+
+
+def effective_trial_credits() -> int:
+    """Crédits du trial Guest selon le mode serveur : 1 (ON) / 3 (OFF). SOURCE UNIQUE
+    côté Python — le RPC SQL `billing_try_hold` lit le même mode via son paramètre
+    `p_trial_credits` (passé par `try_hold`), jamais un littéral divergent."""
+    return TRIAL_CREDITS_ACCOUNT_MODE if account_system_enabled() else TRIAL_CREDITS
 
 
 def _get_supa():
@@ -204,10 +229,10 @@ async def _free_bucket_available(supa, user_id: str, *, project_trial: bool = Tr
     except Exception as exc:  # noqa: BLE001 — FAIL-OPEN : fiabilité > double rare
         log.warning("[BILLING-GATE] free bucket read failed user=%s err=%s → fail-open",
                     user_id[:8], exc)
-        return TRIAL_CREDITS
+        return effective_trial_credits()
     raw = sum(int(r.get("available_delta") or 0) for r in rows)
     trial_granted = any(r.get("entry_type") == "TRIAL" for r in rows)
-    trial_bonus = TRIAL_CREDITS if (project_trial and not trial_granted) else 0
+    trial_bonus = effective_trial_credits() if (project_trial and not trial_granted) else 0
     return max(0, raw) + trial_bonus
 
 
@@ -268,14 +293,16 @@ async def _emit(supa, *, user_id: str, entry_type: str, delta: int, key: str,
 
 
 async def grant_trial(*, user_id: str, supa=None) -> None:
-    """TRIAL(+3) une seule fois par user (idempotent trial:<user_id>)."""
+    """TRIAL(+N) une seule fois par user (idempotent trial:<user_id>).
+    N = effective_trial_credits() : 3 (OFF/lancement) ou 1 (ON/compte-mode)."""
     supa = supa or _get_supa()
+    credits = effective_trial_credits()
     new = await _ledger_insert(
-        supa, user_id=user_id, entry_type="TRIAL", available_delta=TRIAL_CREDITS,
+        supa, user_id=user_id, entry_type="TRIAL", available_delta=credits,
         idempotency_key=f"trial:{user_id}", reference_type="PROMO", reference_id="trial",
     )
     if new:
-        log.info("[BILLING] TRIAL(+%d) user=%s", TRIAL_CREDITS, user_id[:8])
+        log.info("[BILLING] TRIAL(+%d) user=%s", credits, user_id[:8])
         await _reproject_wallet(user_id=user_id, supa=supa)
 
 
@@ -296,6 +323,65 @@ async def mark_trial_consumed(*, user_id: str, supa=None) -> bool:
         log.info("[BILLING] TRIAL(+0) post-signout marker user=%s", user_id[:8])
         await _reproject_wallet(user_id=user_id, supa=supa)
     return new
+
+
+async def grant_signup_bonus(*, user_id: str, supa=None) -> dict:
+    """ON-mode — bonus de bienvenue +2 accordé UNE SEULE FOIS par compte (clé idempotente
+    signup_bonus:<user_id>). Écrit comme TRIAL(+2) : pose trial_granted=true (supprime le
+    +3 fantôme sur un compte neuf SANS ligne TRIAL) ET crédite +2. Ne transfère RIEN du
+    Guest — le claim du solde Guest est l'opération atomique SÉPARÉE claim_guest_and_bonus.
+    Idempotent : un 2e appel (retry / autre appareil, MÊME account_id) = no-op. Renvoie la
+    décision pour l'endpoint /identity/claim-signup-bonus."""
+    supa = supa or _get_supa()
+    new = await _ledger_insert(
+        supa, user_id=user_id, entry_type="TRIAL", available_delta=SIGNUP_BONUS_CREDITS,
+        idempotency_key=f"signup_bonus:{user_id}", reference_type="PROMO", reference_id="signup_bonus",
+    )
+    if new:
+        log.info("[BILLING] SIGNUP_BONUS(+%d) user=%s", SIGNUP_BONUS_CREDITS, user_id[:8])
+        await _reproject_wallet(user_id=user_id, supa=supa)
+    return {
+        "decision": "granted" if new else "already_processed",
+        "bonus_granted": SIGNUP_BONUS_CREDITS if new else 0,
+        "reason": None if new else "already_granted",
+    }
+
+
+async def mark_signup_eligible(*, user_id: str, supa=None) -> dict:
+    """ON-mode — anon-init : le compte a-t-il ENCORE droit au bonus +2 ? LECTURE SEULE,
+    idempotent : eligible=false si signup_bonus:<user_id> existe déjà (bonus consommé),
+    sinon eligible=true. L'ENFORCEMENT réel (une seule fois, atomique, anti-concurrence)
+    reste la RPC claim_guest_and_bonus ; ceci n'est qu'un signal d'éligibilité pour l'UI."""
+    supa = supa or _get_supa()
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("ledger_entries").select("id")
+            .eq("idempotency_key", f"signup_bonus:{user_id}").limit(1).execute()
+        )
+        already = bool(getattr(res, "data", None))
+    except Exception as exc:  # noqa: BLE001 — best-effort : ne bloque jamais
+        log.warning("[BILLING] signup_eligible read failed user=%s err=%s", user_id[:8], exc)
+        already = False
+    return {"eligible": not already, "reason": "already_granted" if already else "marked"}
+
+
+async def claim_guest_and_bonus(*, account_id: str, guest_id: str, supa=None) -> dict:
+    """ON — appelle le RPC ATOMIQUE `claim_guest_and_bonus` (transfert du Free Guest
+    admissible + bonus +2, 3 clés d'idempotence, advisory locks, all-or-nothing). Passe
+    le trial effectif (ON=1) et le bonus. Renvoie le dict du RPC ({status, claimed, bonus,
+    account_total, guest_after}). Propage les exceptions : l'endpoint traduit un conflit
+    anti-abus (guest/compte déjà réclamé, compte non frais) en 409, le reste en 503."""
+    supa = supa or _get_supa()
+    res = await asyncio.to_thread(
+        lambda: supa.rpc("claim_guest_and_bonus", {
+            "p_account_id": account_id, "p_guest_id": guest_id,
+            "p_trial_credits": effective_trial_credits(), "p_signup_bonus": SIGNUP_BONUS_CREDITS,
+        }).execute()
+    )
+    data = getattr(res, "data", None)
+    if isinstance(data, list):
+        data = data[0] if data else None
+    return data or {}
 
 
 @dataclass
@@ -453,12 +539,16 @@ async def try_hold(*, user_id: str, intent_id: str, tier: str, supa=None) -> dic
     FAIL-OPEN : hoquet DB → granted=True (parité avec reserve_decision : la fiabilité
     prime ; un payant n'est jamais bloqué par un hoquet)."""
     supa = supa or _get_supa()
+    # BACKWARD-COMPAT : en OFF (effective=3=TRIAL_CREDITS) on appelle le RPC 3-arg (prod
+    # actuel, byte-identique). En ON (effective=1) on passe p_trial_credits au RPC 4-arg
+    # (migration 20260717 appliquée dans le déploiement ON) → trial Guest = 1.
+    _params = {"p_user_id": user_id, "p_intent_id": intent_id, "p_tier": tier}
+    _tc = effective_trial_credits()
+    if _tc != TRIAL_CREDITS:
+        _params["p_trial_credits"] = _tc
     try:
         res = await asyncio.to_thread(
-            lambda: supa.rpc(
-                "billing_try_hold",
-                {"p_user_id": user_id, "p_intent_id": intent_id, "p_tier": tier},
-            ).execute()
+            lambda: supa.rpc("billing_try_hold", _params).execute()
         )
         data = getattr(res, "data", None)
         if isinstance(data, list):
