@@ -159,7 +159,11 @@ class _AccountSectionState extends ConsumerState<AccountSection> {
       case ConnectExistingResult.retryable:
         _snack(l10n.acctGenericError);
       case ConnectExistingResult.terminal:
-        _snack(l10n.acctMergeFailed);
+        // PATCH 4 (2026-07-16) — n'affirmer « Connected » (acctMergeFailed) QUE si un sign-in a
+        // réellement eu lieu (a.authConnected). Path A (échec de création du ticket → encore
+        // anonyme, jamais connecté) → message NEUTRE, jamais un faux « Connected ». Aucune donnée
+        // n'est supprimée : elle est préservée côté serveur, seulement injoignable sous ce JWT.
+        _snack(a.authConnected ? l10n.acctMergeFailed : l10n.acctGenericError);
     }
   }
 

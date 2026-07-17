@@ -231,6 +231,37 @@ void main() {
       expect(find.text(_l10n.acctMergeFailed), findsWidgets);
       expect(find.text(_l10n.acctRetrySetup), findsNothing);
     });
+
+    // PATCH 4 (2026-07-16) — terminal SANS sign-in (Path A : échec de création du ticket →
+    // encore anonyme). Le message ne doit JAMAIS affirmer « Connected » ; message NEUTRE.
+    testWidgets(
+      'PATCH 4 — terminal without sign-in (Path A) → neutral message, NEVER "Connected"',
+      (tester) async {
+        var anon = true;
+        await _pump(
+          tester,
+          AccountSection(
+            isAnonymous: () => anon, // stays anonymous: ticket creation failed, no sign-in
+            onLink: () async => LinkNewIdentityResult.failed, // reveals 2nd button
+            onConnectExisting: () async => const ConnectExistingAttempt(
+              outcome: ConnectExistingResult.terminal,
+              authConnected: false,
+            ),
+          ),
+        );
+        await tester.tap(find.text(_l10n.acctContinueWithApple));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(_l10n.acctSignInExisting));
+        await tester.pumpAndSettle();
+
+        // No false "Connected." (acctMergeFailed) — the user never signed in.
+        expect(find.text(_l10n.acctMergeFailed), findsNothing);
+        // A neutral, honest message is shown instead.
+        expect(find.text(_l10n.acctGenericError), findsWidgets);
+        // Still the guest (anonymous body still visible).
+        expect(find.text(_l10n.acctContinueWithApple), findsOneWidget);
+      },
+    );
   });
 
   group('AccountSection — no technical data leaks', () {

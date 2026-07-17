@@ -9,6 +9,29 @@ library;
 class FeatureFlags {
   FeatureFlags._();
 
+  /// ★ MASTER SWITCH — whole Account / Identity system (2026-07-17).
+  ///
+  /// Découple le LANCEMENT produit du chantier Identity (Guest durable /
+  /// park-restore / création de compte / claim / RevenueCat séparé). Voir
+  /// `docs/GUEST_ACCOUNT_IDENTITY_SPEC.md` + mémoire ★ RÉFÉRENCE.
+  ///
+  /// **MODE OFF (false — LANCEMENT V1, défaut) :** comportement byte-identique à
+  /// la version stable AVANT le chantier Identity. Aucun compte visible : pas de
+  /// création de compte, pas de Sign in Apple/Google, pas de bouton Login/Sign out,
+  /// pas de section Account, aucun flow OAuth, aucune logique Guest↔Account /
+  /// park-restore / claim / signup-bonus / RPC Identity / RevenueCat Guest↔Account.
+  /// Le Guest EST l'utilisateur : install → Guest → 3 générations gratuites
+  /// (TRIAL_CREDITS reste 3, INCHANGÉ) → achat Weekly/Annual → Premium → usage normal.
+  ///
+  /// **MODE ON (true — évolution future) :** active toute l'architecture Identity
+  /// de la spec (Guest durable, park/restore, create/sign-in, Free claim + bonus +2,
+  /// TRIAL_CREDITS=1, wallets/historiques/Premium séparés). NE PAS flipper ON avant
+  /// la confirmation device U4 + l'audit RevenueCat lifecycle (cf. spec).
+  ///
+  /// C'est le SEUL flag à flipper. Ne pas disperser des `if(accountSystemEnabled)`
+  /// dans tout le code : gater au point d'entrée (UI + orchestration), pas partout.
+  static const bool accountSystemEnabled = false;
+
   /// Sign-in flows hidden from the user journey (Decision Wave 5.17d).
   ///
   /// When false :

@@ -149,16 +149,42 @@ class _PaywallSheetState extends State<PaywallSheet> {
       final activated = await RevenuecatService.instance.purchasePackage(pkg);
       if (!mounted) return;
       if (activated) {
-        // P0 (2026-07-10) — réconcilier le PASS MESURÉ côté backend, que ce soit un
-        // achat frais OU un "already subscribed" (RC purchasePackage RÉUSSIT quand
-        // l'entitlement est déjà actif, sans throw). /purchases/sync recrée le pass
-        // idempotent depuis RevenueCat ; le refetch /me/status (fermeture) montre la
-        // vérité (X spaces / restore_required). Sans ça, le sync n'était jamais appelé.
+        // PATCH 1 (2026-07-16) — AUTORITÉ PREMIUM UNIQUE. `activated` = entitlement
+        // RevenueCat LOCAL (purchasePackage réussit même si l'abo est déjà actif) — ce N'EST
+        // PAS une preuve de PASS MESURÉ backend. On ne déclare le succès (pop(true), fermeture
+        // = « Purchase successful ») QUE si /purchases/sync confirme un pass mesuré
+        // (restoreOutcomeFromSync == restored, EXACTEMENT l'autorité que le Restore réutilise
+        // ci-dessous). Sinon : AUCUN faux succès — message honnête, la feuille reste ouverte
+        // (Restore Purchase disponible en bas). Timeout borné comme le Restore (jamais de
+        // spinner infini ni de faux succès sur un sync lent). Ne corrige PAS la cause serveur du
+        // sync (non prouvée) : rend juste l'UI honnête vis-à-vis de la vérité backend.
         debugPrint('[paywall] purchase_activated → purchases_sync_started');
-        await StatusService().syncPurchases();
-        debugPrint('[paywall] purchases_sync_result (post-activated)');
+        final sync = await StatusService().syncPurchases().timeout(
+              const Duration(seconds: 12),
+              onTimeout: () => const <String, dynamic>{},
+            );
+        final RestoreOutcome outcome = restoreOutcomeFromSync(sync);
+        debugPrint('[paywall] purchase_sync_outcome=$outcome');
         if (!mounted) return;
-        Navigator.of(context).pop(true);
+        switch (outcome) {
+          case RestoreOutcome.restored:
+            Navigator.of(context).pop(true); // pass MESURÉ confirmé → vrai succès
+          case RestoreOutcome.activeNoSpaces:
+            setState(() {
+              _busy = false;
+              _errorMessage = l10n.stRestoreActiveNoSpaces;
+            });
+          case RestoreOutcome.noneFound:
+            setState(() {
+              _busy = false;
+              _errorMessage = l10n.pwPurchasePendingActivation;
+            });
+          case RestoreOutcome.failed:
+            setState(() {
+              _busy = false;
+              _errorMessage = l10n.stRestoreFailed;
+            });
+        }
       } else {
         setState(() {
           _busy = false;

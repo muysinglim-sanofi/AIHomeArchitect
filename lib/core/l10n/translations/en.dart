@@ -143,16 +143,16 @@ const Map<String, String> enTranslations = {
   'acctSectionTitle': 'ACCOUNT',
   'acctSaveDesignsSubtitle':
       'Save your designs and access them on your other devices.',
-  'acctContinueWithApple': 'Continue with Apple',
+  'acctContinueWithApple': 'Link this guest with Apple',
   'acctConnectedWithApple': 'Connected with Apple',
-  'acctSignInExisting': 'Sign in to my existing account',
+  'acctSignInExisting': 'Use a different Ayden account',
   'acctAppleAlreadyLinked':
-      'This Apple account may already be connected to Ayden.',
+      'We couldn\'t link this Apple account here. You can use a different Ayden account instead.',
   'acctConnectedSuccess': 'Your account is now connected.',
   'acctConnectedPending':
       'Your account is connected. We\'re finishing the setup.',
   'acctMergeFailed':
-      'Connected. We couldn\'t recover your previous designs.',
+      'Connected. Some older designs may not appear here yet — they stay safe on your account.',
   'acctRetrySetup': 'Retry account setup',
   'acctNotAvailable': 'Account sign-in is not available yet.',
   'acctGenericError': 'Something went wrong. Please try again.',
@@ -271,6 +271,8 @@ const Map<String, String> enTranslations = {
   'pwRestore': 'Restore Purchase',
   'pwNotNow': 'Not now',
   'pwErrIncomplete': 'Purchase did not complete. Please try again.',
+  'pwPurchasePendingActivation':
+      'Purchase received — activating. If Premium doesn\'t appear, tap Restore Purchase.',
   'pwErrNotAvailable': 'Purchases are not available in this test build yet.',
   'pwErrFailed': 'Purchase failed. Please try again.',
   'pwErrNoRestore': 'No prior purchases found on this device.',

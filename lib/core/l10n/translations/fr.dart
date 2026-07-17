@@ -144,16 +144,16 @@ const Map<String, String> frTranslations = {
   'acctSectionTitle': "COMPTE",
   'acctSaveDesignsSubtitle':
       "Enregistrez vos designs et retrouvez-les sur vos autres appareils.",
-  'acctContinueWithApple': "Continuer avec Apple",
+  'acctContinueWithApple': "Lier ce profil invité à Apple",
   'acctConnectedWithApple': "Connecté avec Apple",
-  'acctSignInExisting': "Me connecter à mon compte existant",
+  'acctSignInExisting': "Utiliser un autre compte Ayden",
   'acctAppleAlreadyLinked':
-      "Ce compte Apple est peut-être déjà connecté à Ayden.",
+      "Impossible de lier ce compte Apple ici. Vous pouvez utiliser un autre compte Ayden à la place.",
   'acctConnectedSuccess': "Votre compte est maintenant connecté.",
   'acctConnectedPending':
       "Votre compte est connecté. Nous terminons la configuration.",
   'acctMergeFailed':
-      "Connecté. Nous n'avons pas pu récupérer vos designs précédents.",
+      "Connecté. Certains anciens designs peuvent ne pas apparaître ici pour l'instant — ils restent en sécurité sur votre compte.",
   'acctRetrySetup': "Réessayer la configuration du compte",
   'acctNotAvailable': "La connexion au compte n'est pas encore disponible.",
   'acctGenericError': "Une erreur s'est produite. Veuillez réessayer.",
@@ -274,6 +274,8 @@ const Map<String, String> frTranslations = {
   'pwRestore': "Restaurer l'achat",
   'pwNotNow': "Plus tard",
   'pwErrIncomplete': "L'achat n'a pas abouti. Veuillez réessayer.",
+  'pwPurchasePendingActivation':
+      "Achat reçu — activation en cours. Si Premium n'apparaît pas, touchez Restaurer l'achat.",
   'pwErrNotAvailable':
       "Les achats ne sont pas encore disponibles dans cette version de test.",
   'pwErrFailed': "L'achat a échoué. Veuillez réessayer.",

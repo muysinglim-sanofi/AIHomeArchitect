@@ -97,9 +97,14 @@ class ProfileScreen extends ConsumerWidget {
                 child: const _PremiumStatusCard(),
               ),
             ),
-            // Account — voluntary "Continue with Apple" for anonymous users.
-            // Never blocks Generate; freeTrialAuthGate stays false.
-            const SliverToBoxAdapter(child: AccountSection()),
+            // Account/Auth system — voluntary "Continue with Apple", Sign out, merge.
+            // ★ Gated by the MASTER accountSystemEnabled flag: OFF (V1 launch) = the
+            // whole account system is hidden (no Continue with Apple / Sign out / merge);
+            // the Guest simply IS the user. ON = full Identity system (see spec).
+            // Never blocks Generate. (This is the AUTH section; the "Account" settings
+            // card below — edit profile / notifications / language — is unrelated.)
+            if (FeatureFlags.accountSystemEnabled)
+              const SliverToBoxAdapter(child: AccountSection()),
             _SectionHeader(label: l10n.settingsAccount),
             const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
             SliverToBoxAdapter(

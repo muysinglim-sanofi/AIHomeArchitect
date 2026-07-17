@@ -296,6 +296,7 @@ class AppLocalizations {
   String get pwRestore => _get('pwRestore');
   String get pwNotNow => _get('pwNotNow');
   String get pwErrIncomplete => _get('pwErrIncomplete');
+  String get pwPurchasePendingActivation => _get('pwPurchasePendingActivation');
   String get pwErrNotAvailable => _get('pwErrNotAvailable');
   String get pwErrFailed => _get('pwErrFailed');
   String get pwErrNoRestore => _get('pwErrNoRestore');
