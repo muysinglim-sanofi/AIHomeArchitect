@@ -1478,14 +1478,22 @@ def _sku_to_plan_type(sku: "str | None") -> str:
 
 async def _read_active_pass_product(user_id: str) -> "tuple[str, str | None]":
     """Premium Center (Lot 1) — READ-ONLY, ADDITIF : (plan_type, active_product_id) du pass
-    le plus récent de l'user (embed products via la FK passes.product_id). Purement
-    INFORMATIF pour l'UX (distinguer Weekly d'Annual) — n'entre NI dans reserve_decision,
-    NI dans try_hold, NI dans la projection wallet. Best-effort : erreur → ('none', None)."""
+    ACTIF de l'user (embed products via la FK passes.product_id). Purement INFORMATIF pour l'UX
+    (distinguer Weekly d'Annual) — n'entre NI dans reserve_decision, NI dans try_hold, NI dans la
+    projection wallet. Best-effort : erreur → ('none', None).
+
+    FIX A (2026-07-18) — ne considère QU'UN pass réellement ACTIF (status=ACTIVE ET ends_at>now).
+    L'ancien code lisait le pass le PLUS RÉCENT sans filtre → un Annual EXPIRÉ remontait comme
+    « produit actif » (active_product_id=annual) alors qu'aucun pass n'était actif. Aucun pass
+    actif → ('none', None) : jamais un ancien produit expiré."""
     try:
+        _now = datetime.now(timezone.utc).isoformat()
         res = await asyncio.to_thread(
             lambda: supa.table("passes")
-            .select("ends_at, products(sku, apple_product_id)")
+            .select("ends_at, status, products(sku, apple_product_id)")
             .eq("user_id", user_id)
+            .eq("status", "ACTIVE")
+            .gt("ends_at", _now)
             .order("ends_at", desc=True)
             .limit(1).execute()
         )
@@ -1501,27 +1509,26 @@ async def _read_active_pass_product(user_id: str) -> "tuple[str, str | None]":
 
 def _classify_access_source(
     *, is_admin: bool, has_active_pass: bool, promo_active: bool,
-    has_premium_role: bool, ever_had_pass: bool,
+    has_premium_role: bool,
 ) -> str:
-    """BUG 3 (2026-07-11) — VÉRITÉ de génération, PURE (testable sans DB).
-    Priorité : admin > pass (mesuré) > promo > pass-renewing > restore_required > free.
+    """VÉRITÉ de génération, PURE (testable sans DB).
+    Priorité : admin > pass (mesuré) > promo > restore_required > free.
 
-    Nuance clé : un rôle premium (entitlement RC actif) SANS pass actif se scinde en
-    deux cas radicalement différents pour l'UX :
-      • un pass a DÉJÀ existé (`ever_had_pass`) → la fenêtre a lapsé = renouvellement
-        en attente → 'pass' (0 spaces · renews). Un restore ne créerait RIEN de plus.
-      • aucun pass mesuré → 'restore_required' (restore/sync réel utile).
-    """
+    FIX B (2026-07-18) — SUPERSEDE l'heuristique BUG 3 `ever_had_pass`. Un rôle premium
+    (entitlement RC actif) SANS pass actif POSSÉDÉ ne doit PLUS être classé 'pass' au seul motif
+    qu'un pass a existé : ça masquait le cas réel « le pass de l'abonnement est sur une AUTRE
+    identité (RC-transféré, transaction déjà consommée) ou un webhook a été manqué » en
+    « 0 spaces · renews » sans jamais proposer de restore. → 'restore_required' explicite : un
+    restore/sync déclenche le reconcile (qui crée le pass si l'abo renouvelle réellement sous CE
+    user, ou surface le vrai blocage). On ne déduit JAMAIS 'pass' du seul historique."""
     if is_admin:
         return "admin"
     if has_active_pass:
         return "pass"
     if promo_active:
         return "promo"
-    if has_premium_role and ever_had_pass:
-        return "pass"          # abo actif, fenêtre lapsée → 0 spaces · renews
     if has_premium_role:
-        return "restore_required"
+        return "restore_required"   # premium reconnu MAIS aucun pass actif possédé → restore réel
     return "free"
 
 
@@ -1585,32 +1592,29 @@ async def get_me_status(
         _promo_credits = 0
         _total_credits = _gate.total_credits
 
-    # BUG 3 (2026-07-11) — un rôle premium SANS pass actif : distinguer « abo actif dont
-    # la fenêtre de pass a lapsé » (renouvellement pas encore projeté → 0 spaces · renews,
-    # JAMAIS restore) du vrai « rôle sans aucun pass mesuré » (restore/sync réel). Une
-    # seule lecture indexée de `passes`, UNIQUEMENT dans ce cas ambigu (coût nul sinon).
     _promo_active = d.promo_unlimited_active or d.promo_generations_remaining > 0
+    # FIX B (2026-07-18) — ancre « renews » UNIQUEMENT pour un pass RÉELLEMENT actif ; jamais
+    # l'ends_at d'un ancien pass expiré (l'heuristique `ever_had_pass`/`_read_latest_pass_ends_at`
+    # est supprimée : elle affichait « renews » + produit périmé pour un pass en fait bloqué sur
+    # une autre identité, sans jamais proposer de restore).
     _pass_renews_at = _pass_expires_at if _has_active_pass else None
-    _ever_had_pass = False
-    if _has_premium_role and not is_admin and not _has_active_pass and not _promo_active:
-        _latest_ends = await _read_latest_pass_ends_at(current_user.user_id)
-        _ever_had_pass = _latest_ends is not None
-        if _ever_had_pass:
-            _pass_renews_at = _latest_ends  # ancre d'affichage « renews {date} »
 
     # access_source = la VÉRITÉ de génération (même autorité que le gate), PURE/testable.
     _access_source = _classify_access_source(
         is_admin=is_admin, has_active_pass=_has_active_pass, promo_active=_promo_active,
-        has_premium_role=_has_premium_role, ever_had_pass=_ever_had_pass,
+        has_premium_role=_has_premium_role,
     )
-    if _has_premium_role and not is_admin and not _has_active_pass and not _promo_active:
-        log.info("[me/status] premium role, no active pass → access_source=%s "
-                 "ever_had_pass=%s renews_at=%s user=%s", _access_source,
-                 _ever_had_pass, _pass_renews_at, current_user.user_id[:8])
+    # FIX B — état incohérent « premium reconnu MAIS aucun pass actif possédé » (pass de l'abo sur
+    # une autre identité / webhook manqué) : access_source='restore_required' → needs_restore=true +
+    # gate_reason EXPLICITE. On ne montre JAMAIS 'pass' + 'renews' + un produit périmé pour cet état.
+    if _access_source == "restore_required":
+        _gate_reason = "premium_without_owned_active_pass"
+        log.info("[me/status] premium role, no OWNED active pass → restore_required gate=%s user=%s",
+                 _gate_reason, current_user.user_id[:8])
 
-    # Premium Center (Lot 1) — plan_type/active_product_id INFORMATIFS : distinguer Weekly
-    # d'Annual côté UX. Lecture UNIQUEMENT pour un abonné (access_source=='pass') → coût nul
-    # pour free/promo/admin. N'entre dans AUCUNE décision de gate/débit/projection.
+    # Premium Center (Lot 1) — plan_type/active_product_id INFORMATIFS : distinguer Weekly d'Annual
+    # côté UX. Lecture UNIQUEMENT pour un abonné (access_source=='pass' ⇒ pass actif, cf. FIX A) →
+    # coût nul pour free/promo/admin/restore_required. N'entre dans AUCUNE décision gate/débit/proj.
     _plan_type, _active_product_id = "none", None
     if _access_source == "pass":
         _plan_type, _active_product_id = await _read_active_pass_product(current_user.user_id)
@@ -1659,6 +1663,9 @@ async def get_me_status(
         "pass_renews_at": _pass_renews_at,
         "has_active_pass": _has_active_pass,
         "access_source": _access_source,
+        # FIX B (2026-07-18) — EXPLICITE : premium reconnu mais aucun pass actif possédé → true
+        # (le frontend le dérive déjà de access_source ; on l'expose pour lever toute ambiguïté API).
+        "needs_restore": _access_source == "restore_required",
         # Premium Center (Lot 1) — INFORMATIFS (UX distinguer Weekly/Annual), hors gate/débit.
         "plan_type": _plan_type,                 # "weekly" | "annual" | "none"
         "active_product_id": _active_product_id,  # ex "com.aydenstudio.app.weekly" | None
