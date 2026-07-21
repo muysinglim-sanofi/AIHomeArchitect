@@ -292,6 +292,11 @@ class AppLocalizations {
   String get pwWeeklySpacesSub => _get('pwWeeklySpacesSub');
   String get pwUnlockPremium => _get('pwUnlockPremium');
   String get pwCancelAnytime => _get('pwCancelAnytime');
+  // App Store compliance (Apple Guideline 3.1.2) — auto-renew disclosure +
+  // Privacy Policy / Terms of Use links shown under the paywall CTA.
+  String get pwLegalDisclosure => _get('pwLegalDisclosure');
+  String get pwPrivacyPolicy => _get('pwPrivacyPolicy');
+  String get pwTermsOfUse => _get('pwTermsOfUse');
   String get pwAlreadySubscribed => _get('pwAlreadySubscribed');
   String get pwRestore => _get('pwRestore');
   String get pwNotNow => _get('pwNotNow');

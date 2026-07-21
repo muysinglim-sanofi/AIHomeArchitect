@@ -267,6 +267,16 @@ const Map<String, String> enTranslations = {
   'pwWeeklySpacesSub': 'Perfect for homes & apartments',
   'pwUnlockPremium': 'Unlock Premium',
   'pwCancelAnytime': 'Cancel anytime. No commitment.',
+  // Apple Guideline 3.1.2 — auto-renewable subscription disclosure.
+  'pwLegalDisclosure':
+      'Payment is charged to your Apple ID account at confirmation of purchase. '
+      'Your subscription renews automatically unless it is cancelled at least '
+      '24 hours before the end of the current period, and your account is '
+      'charged for renewal within 24 hours before the period ends. You can '
+      'manage or cancel your subscription in your Apple account settings. '
+      'Already purchased? Use Restore Purchase on this screen.',
+  'pwPrivacyPolicy': 'Privacy Policy',
+  'pwTermsOfUse': 'Terms of Use',
   'pwAlreadySubscribed': 'Already subscribed? ',
   'pwRestore': 'Restore Purchase',
   'pwNotNow': 'Not now',

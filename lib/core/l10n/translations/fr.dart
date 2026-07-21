@@ -270,6 +270,16 @@ const Map<String, String> frTranslations = {
   'pwWeeklySpacesSub': "Idéal pour maisons et appartements",
   'pwUnlockPremium': "Débloquer Premium",
   'pwCancelAnytime': "Annulable à tout moment. Sans engagement.",
+  // Apple Guideline 3.1.2 — mentions obligatoires abonnement auto-renouvelable.
+  'pwLegalDisclosure':
+      "Le paiement est débité sur votre compte Apple ID à la confirmation de "
+      "l'achat. L'abonnement se renouvelle automatiquement sauf annulation au "
+      "moins 24 heures avant la fin de la période en cours, et le renouvellement "
+      "est facturé dans les 24 heures précédant la fin de la période. Vous pouvez "
+      "gérer ou annuler votre abonnement dans les réglages de votre compte Apple. "
+      "Déjà abonné ? Utilisez Restaurer l'achat sur cet écran.",
+  'pwPrivacyPolicy': "Politique de confidentialité",
+  'pwTermsOfUse': "Conditions d'utilisation",
   'pwAlreadySubscribed': "Déjà abonné ? ",
   'pwRestore': "Restaurer l'achat",
   'pwNotNow': "Plus tard",
