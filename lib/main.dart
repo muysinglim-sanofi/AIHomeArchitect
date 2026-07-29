@@ -2,8 +2,9 @@ import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'core/env/app_environment.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -27,11 +28,15 @@ Future<void> main() async {
   final bootSw = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
   bootLog(bootSw, 'ensureInitialized');
-  await dotenv.load(fileName: '.env');
-  bootLog(bootSw, 'dotenv');
+  // Batch 1A — explicit environment resolution. MOBILE: loads the bundled
+  // `.env` exactly as before. WEB: reads --dart-define values and fails fast
+  // (before Supabase.initialize) if the config is missing / unknown /
+  // production, so a web build can never silently transact against production.
+  await AppEnvironment.initialize();
+  bootLog(bootSw, 'env');
 
-  final supabaseUrl = dotenv.env['SUPABASE_URL'] ?? '';
-  final supabaseKey = dotenv.env['SUPABASE_ANON_KEY'] ?? '';
+  final supabaseUrl = AppEnvironment.instance.supabaseUrl;
+  final supabaseKey = AppEnvironment.instance.supabaseAnonKey;
   debugPrint('[DB] SUPABASE_URL loaded: ${supabaseUrl.isNotEmpty}');
 
   // BUG 4 (device-key, Approche 2) — CONDITION 1 : migrer l'ancienne session
@@ -80,14 +85,18 @@ Future<void> main() async {
     // ── LEGACY pre-runApp chain (rollback path; today's behaviour, minus the
     //    RevenueCat rethrow). All heavy/network inits are awaited here → the
     //    native Launch Screen lingers for their sum. ────────────────────────
-    try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      FirebaseMessaging.onBackgroundMessage(fcmBackgroundHandler);
-      debugPrint('[Push] Firebase.initializeApp() complete');
-    } catch (e) {
-      debugPrint('[Push] Firebase init failed (non-fatal): $e');
+    // Batch 1A — Firebase has no web config here (firebase_options throws for
+    // kIsWeb) and web push is out of scope; skip cleanly on web.
+    if (!kIsWeb) {
+      try {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+        FirebaseMessaging.onBackgroundMessage(fcmBackgroundHandler);
+        debugPrint('[Push] Firebase.initializeApp() complete');
+      } catch (e) {
+        debugPrint('[Push] Firebase init failed (non-fatal): $e');
+      }
     }
 
     final auth = Supabase.instance.client.auth;

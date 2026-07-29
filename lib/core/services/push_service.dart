@@ -31,6 +31,9 @@ class PushService {
 
   Future<void> init() async {
     if (_started) return;
+    // Batch 1A — no FCM / web push in this batch (no VAPID, no service worker).
+    // Skip cleanly on web so boot never touches FirebaseMessaging / Platform.
+    if (kIsWeb) return;
     _started = true;
     final fm = FirebaseMessaging.instance;
 

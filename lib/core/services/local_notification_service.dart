@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -45,6 +46,7 @@ class LocalNotificationService {
   /// create the channel, request permission, and capture the cold-start payload.
   /// Same operations/order as before; just factored into the helpers below.
   Future<void> init() async {
+    if (kIsWeb) return; // Batch 1A — no local notifications on web.
     if (_initialized) return;
     _initialized = true;
     await _initializePlugin();
@@ -58,6 +60,7 @@ class LocalNotificationService {
   /// cold-start deep-link is preserved. The slow half runs fire-and-forget via
   /// [setupPermissionsAndChannel].
   Future<void> initFast() async {
+    if (kIsWeb) return; // Batch 1A — no local notifications on web.
     if (_initialized) return;
     _initialized = true;
     await _initializePlugin();
@@ -67,7 +70,10 @@ class LocalNotificationService {
   /// FAST_BOOT — the SLOW half: Android channel + runtime permission (iOS
   /// dialog). Run fire-and-forget after the first frame so it never blocks the
   /// splash. Safe to call after [initFast].
-  Future<void> setupPermissionsAndChannel() => _setupChannelAndPermissions();
+  Future<void> setupPermissionsAndChannel() async {
+    if (kIsWeb) return; // Batch 1A — no local notifications on web.
+    await _setupChannelAndPermissions();
+  }
 
   Future<void> _initializePlugin() async {
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');

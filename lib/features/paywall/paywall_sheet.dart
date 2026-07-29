@@ -38,6 +38,7 @@ library;
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_fonts/google_fonts.dart';
@@ -1721,9 +1722,11 @@ class _PaymentChipRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chips = <_PaymentChip>[
-      if (Platform.isIOS)
+      // Batch 1A — never evaluate dart:io Platform on web; hide the native pay
+      // chips there (generic Visa / Mastercard remain).
+      if (!kIsWeb && Platform.isIOS)
         const _PaymentChip(icon: Icons.apple, label: 'Apple Pay'),
-      if (Platform.isAndroid)
+      if (!kIsWeb && Platform.isAndroid)
         const _PaymentChip(icon: Icons.android, label: 'Google Pay'),
       const _PaymentChip(icon: Icons.credit_card, label: 'Visa'),
       const _PaymentChip(icon: Icons.credit_card, label: 'Mastercard'),

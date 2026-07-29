@@ -83,15 +83,19 @@ class AppBoot {
   static Future<void> _runBackgroundInit() async {
     final sw = Stopwatch()..start();
 
-    // Firebase (FCM). Non-critical → never blocks start.
-    try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      FirebaseMessaging.onBackgroundMessage(fcmBackgroundHandler);
-      bootLog(sw, 'bg: Firebase ready');
-    } catch (e) {
-      debugPrint('[Push] Firebase init failed (non-fatal): $e');
+    // Firebase (FCM). Non-critical → never blocks start. Batch 1A — skipped
+    // cleanly on web (no web Firebase config; firebase_options throws for
+    // kIsWeb) so web boot never triggers the unsupported path.
+    if (!kIsWeb) {
+      try {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+        FirebaseMessaging.onBackgroundMessage(fcmBackgroundHandler);
+        bootLog(sw, 'bg: Firebase ready');
+      } catch (e) {
+        debugPrint('[Push] Firebase init failed (non-fatal): $e');
+      }
     }
 
     // RevenueCat configure (needs the Supabase UUID). No rethrow — graceful

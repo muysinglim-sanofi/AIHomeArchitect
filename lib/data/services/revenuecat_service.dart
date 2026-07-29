@@ -123,6 +123,17 @@ class RevenuecatService {
   /// case the error is logged and the service stays disabled (no
   /// premium ever, purchase flows fail with a clear error).
   Future<void> configure({required String userId}) async {
+    // Batch 1A — RevenueCat has no supported web rail (purchases_flutter is
+    // native-only) and _selectApiKey() would dereference dart:io Platform,
+    // which throws on web. Make web a controlled no-op BEFORE any Platform
+    // access, so the SDK is never configured on web and purchase / restore fail
+    // cleanly (RevenuecatNotConfiguredException) instead of crashing.
+    if (kIsWeb) {
+      debugPrint(
+        '[RevenuecatService] web — unsupported, staying unconfigured (no-op).',
+      );
+      return;
+    }
     if (_configured) {
       // Re-bind only on actual UUID change (e.g. after Restore).
       try {
@@ -349,6 +360,7 @@ class RevenuecatService {
   // ── Internal ──────────────────────────────────────────────────────────
 
   String? _selectApiKey() {
+    if (kIsWeb) return null; // Batch 1A — never evaluate dart:io Platform on web.
     if (Platform.isIOS) {
       return dotenv.env['REVENUECAT_PUBLIC_API_KEY_IOS'];
     }
