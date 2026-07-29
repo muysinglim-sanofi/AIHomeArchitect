@@ -1,13 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 
 import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 import '../../core/feature_flags.dart';
 import '../../core/perf/perf_c2p.dart'; // PR0 — click-to-pixel telemetry (observability)
 import '../cards/card_catalog.dart';
@@ -17,8 +15,9 @@ import '../cards/widgets/ai_action_card.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import '../../shared/widgets/image_picker_sheet.dart';
+import '../../core/media/ayden_image_source.dart';
+import '../../core/media/image_pipeline.dart';
 import 'package:intl/intl.dart';
 import 'widgets/chat_input_bar.dart';
 import '../../core/constants/app_colors.dart';
@@ -144,7 +143,7 @@ class ChatScreen extends ConsumerStatefulWidget {
   // today's behaviour) or "creative". User can flip per-generation later via
   // the source-photo sheet; this seeds the initial value for V1.
   final String initialMode;
-  final File? sourceImageFile;
+  final AydenImageSource? sourceImageFile;
   // Phase A — entered via a "vision ready" notification deep-link. When the
   // target session no longer exists (deleted between completion and tap),
   // _loadMessages bounces cleanly to home instead of showing an empty chat.
@@ -242,7 +241,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   final _titleEditController = TextEditingController();
   final _titleFocusNode = FocusNode();
 
-  File? _sourceImageFile;
+  AydenImageSource? _sourceImageFile;
   // Set when the user replaces the source mid-session; consumed on the next
   // generation to start a FRESH lineage (re-upload + reset chain → FIRST_VISION).
   bool _sourceReplaced = false;
@@ -687,27 +686,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   /// Called once for new sessions. Creates the row in Supabase, persists the
   /// initial greeting, flushes any messages sent before the row was ready,
   /// then updates _project with the real UUID so subsequent writes work.
-  // Wave 6.15 — downscale + JPEG-recompress the source before upload. ~2.2 MB
-  // raw → ~0.6 MB, cutting ~3-4s off the Supabase upload (and the gen start).
-  // q=85 + 1920px cap preserves all detail the model needs (output is
-  // 1536x1024; high-fidelity anchors architecture, not fine grain). Native plugin
-  // auto-applies EXIF rotation. Returns null on any failure → caller uses raw.
-  Future<Uint8List?> _compressSource(String path) async {
-    try {
-      return await FlutterImageCompress.compressWithFile(
-        path,
-        quality: 85,
-        minWidth: 1920,
-        minHeight: 1920,
-        format: CompressFormat.jpeg,
-        keepExif: false,
-      );
-    } catch (e) {
-      debugPrint('[Compress] source compress failed (non-fatal): $e');
-      return null;
-    }
-  }
-
   Future<void> _initNewSession() async {
     // Wave 6.15 — perceived-latency timing. Logs ms elapsed at each Supabase
     // step so we can see exactly where the click→source-image time goes
@@ -721,12 +699,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
       // createSession, le POST part plus tôt. Orchestration seule : MÊMES bytes, même
       // qualité d'image source (aucune réduction de taille ici).
       final imageFile = _sourceImageFile;
-      Future<Uint8List?>? compressFuture;
+      Future<Uint8List>? compressFuture;
       int rawLen = 0;
       if (imageFile != null) {
         debugPrint('[Timing] compression start @ ${sw.elapsedMilliseconds}ms');
-        rawLen = await imageFile.length();
-        compressFuture = _compressSource(imageFile.path); // concurrent — PAS d'await ici
+        rawLen = imageFile.bytes.length;
+        // Batch 1B — compress in memory (web) / via the native path (IO), with a
+        // built-in raw-bytes fallback. Concurrent with createSession (no await).
+        compressFuture = ImagePipeline.compressForUpload(imageFile);
       }
 
       debugPrint('[Timing] createSession start @ ${sw.elapsedMilliseconds}ms');
@@ -744,9 +724,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         debugPrint('[DB] _initNewSession() uploading source image…');
         try {
           // La compression a tourné pendant createSession → cet await est ~instantané.
-          final compressed =
-              compressFuture == null ? null : await compressFuture;
-          final bytes = compressed ?? await imageFile.readAsBytes();
+          // compressForUpload already folds in the raw-bytes fallback.
+          final bytes =
+              compressFuture == null ? imageFile.bytes : await compressFuture;
           debugPrint(
               '[Compress] source ${(rawLen / 1024).round()} KB → ${(bytes.length / 1024).round()} KB done @ ${sw.elapsedMilliseconds}ms');
           final filename = 'source_${DateTime.now().millisecondsSinceEpoch}.jpg';
@@ -3076,11 +3056,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
   // so the user can still pick room + atmosphere). Returns the new file so the
   // sheet can update its own preview; the sheet only closes on quit or on
   // "Generate Design".
-  Future<File?> _replaceSourcePhoto() async {
+  Future<AydenImageSource?> _replaceSourcePhoto() async {
     // CHANTIER C #1 — same premium picker as New Design (Camera / Gallery /
     // Examples) via the SHARED ImagePickerSheet. Returns the picked file so the
     // Design Direction sheet refreshes its preview.
-    final file = await showModalBottomSheet<File?>(
+    final file = await showModalBottomSheet<AydenImageSource?>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -3094,7 +3074,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
           if (sheetCtx.mounted) Navigator.pop(sheetCtx, f);
         },
         onExample: (asset) async {
-          final f = await _exampleToFile(asset);
+          final f = await _exampleToSource(asset);
           if (sheetCtx.mounted) Navigator.pop(sheetCtx, f);
         },
       ),
@@ -3107,24 +3087,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     return file;
   }
 
-  Future<File?> _pickReplacementFile(ImageSource source) async {
+  Future<AydenImageSource?> _pickReplacementFile(ImageSource source) async {
     final picked = await _picker.pickImage(source: source, imageQuality: 85);
-    return picked == null ? null : File(picked.path);
+    return picked == null ? null : await ImagePipeline.fromXFile(picked);
   }
 
-  // Example photo (bundled asset) → temp file, exactly like a Camera/Gallery
-  // pick, so the re-upload flow stays identical downstream.
-  Future<File?> _exampleToFile(String assetPath) async {
+  // Example photo (bundled asset) → in-memory bytes (Batch 1B: no temp file),
+  // exactly like a Camera/Gallery pick, so the re-upload flow stays identical.
+  Future<AydenImageSource?> _exampleToSource(String assetPath) async {
     try {
-      final data = await rootBundle.load(assetPath);
-      final file = File(
-        '${Directory.systemTemp.path}/ayden_example_'
-        '${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
-      await file.writeAsBytes(
-        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-      );
-      return file;
+      return await ImagePipeline.fromAsset(assetPath);
     } catch (e) {
       debugPrint('[Chat] example photo load failed: $e');
       return null;
@@ -3139,9 +3111,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final file = _sourceImageFile;
     if (file == null) return false;
     try {
-      // Wave 6.15 — compress the replaced source too (same as V1 upload).
-      final compressed = await _compressSource(file.path);
-      final bytes = compressed ?? await file.readAsBytes();
+      // Batch 1B — compress the replaced source (native path on IO, in-memory on
+      // web) with the built-in raw-bytes fallback (same as V1 upload).
+      final bytes = await ImagePipeline.compressForUpload(file);
       final filename = 'source_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final newUrl = await _svc.uploadSourceImage(
         sessionId: _project.id,
@@ -3588,7 +3560,7 @@ class _LoadingBubble extends StatefulWidget {
   final int iteration;
   final String atmosphere;
   // Wave 4.9: the image being transformed (cinematic wait presence).
-  final File? sourceFile;
+  final AydenImageSource? sourceFile;
   final String? backdropUrl;
   // Group 1 — when the underlying generation started (app-scoped, survives a
   // widget recreate). Lets the progress bar RESUME at the real elapsed fraction
@@ -3696,7 +3668,7 @@ class _LoadingBubbleState extends State<_LoadingBubble> with TickerProviderState
   // Backdrop = the image being transformed (cinematic wait presence).
   Widget? _backdrop() {
     if (widget.sourceFile != null) {
-      return Image.file(widget.sourceFile!,
+      return Image.memory(widget.sourceFile!.bytes,
           fit: BoxFit.cover,
           width: double.infinity,
           height: double.infinity,
@@ -3733,7 +3705,7 @@ class _LoadingBubbleState extends State<_LoadingBubble> with TickerProviderState
             width: double.infinity,
             child: RevealCanvas(
               ambientImage: widget.sourceFile != null
-                  ? FileImage(widget.sourceFile!)
+                  ? MemoryImage(widget.sourceFile!.bytes)
                   : (widget.backdropUrl != null &&
                           widget.backdropUrl!.isNotEmpty)
                       ? CachedNetworkImageProvider(widget.backdropUrl!)
@@ -4449,7 +4421,7 @@ class _SuggestionBar extends StatelessWidget {
 
 class _SourceContextStrip extends StatelessWidget {
   final ProjectModel project;
-  final File? sourceFile;
+  final AydenImageSource? sourceFile;
   final String currentRoomType;
   final String currentStyle;
   final VoidCallback onTap;
@@ -4480,7 +4452,7 @@ class _SourceContextStrip extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(7),
               child: sourceFile != null
-                  ? Image.file(sourceFile!, width: 34, height: 34, fit: BoxFit.cover,
+                  ? Image.memory(sourceFile!.bytes, width: 34, height: 34, fit: BoxFit.cover,
                       filterQuality: FilterQuality.medium)
                   : project.beforeImageUrl != null
                       ? CachedNetworkImage(
@@ -4533,7 +4505,7 @@ class _SourceContextStrip extends StatelessWidget {
 
 class _SourcePhotoSheet extends ConsumerStatefulWidget {
   final ProjectModel project;
-  final File? sourceFile;
+  final AydenImageSource? sourceFile;
   // Wave 4.6: latest generated vision (continuity header). Null => fall back
   // to the source photo. Read-only context — not part of any contract.
   final String? currentVisionUrl;
@@ -4544,7 +4516,7 @@ class _SourcePhotoSheet extends ConsumerStatefulWidget {
   final void Function(_VisionRef) onContinueFromVision;
   final String initialRoomType;
   final String initialStyle;
-  final Future<File?> Function() onReplace;
+  final Future<AydenImageSource?> Function() onReplace;
   // #8b — aiDecide carries the "Ayden Decide" choice (delegate the room) out of
   // the sheet so the next generation can set let_ai_decide.
   final void Function(
@@ -4582,7 +4554,7 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
 
   // Local source preview — lets "Replace photo" update the sheet in place
   // without closing it.
-  File? _sourceFile;
+  AydenImageSource? _sourceFile;
 
   @override
   void initState() {
@@ -4877,7 +4849,7 @@ class _SourcePhotoSheetState extends ConsumerState<_SourcePhotoSheet> {
                           child: ColoredBox(
                             color: const Color(0xFF0B0B0C),
                             child: _sourceFile != null
-                                ? Image.file(_sourceFile!,
+                                ? Image.memory(_sourceFile!.bytes,
                                     fit: BoxFit.contain,
                                     filterQuality: FilterQuality.medium)
                                 : widget.project.beforeImageUrl != null
@@ -5188,7 +5160,7 @@ class _EvolutionStrip extends StatelessWidget {
 
 class _SheetVisionImage extends StatelessWidget {
   final String? visionUrl;
-  final File? sourceFile;
+  final AydenImageSource? sourceFile;
   final String? beforeUrl;
   const _SheetVisionImage({
     this.visionUrl,
@@ -5210,7 +5182,7 @@ class _SheetVisionImage extends StatelessWidget {
       );
     }
     if (sourceFile != null) {
-      return Image.file(sourceFile!,
+      return Image.memory(sourceFile!.bytes,
           fit: BoxFit.cover,
           width: double.infinity,
           height: double.infinity,

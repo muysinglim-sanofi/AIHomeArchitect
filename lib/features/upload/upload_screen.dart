@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import '../../core/media/ayden_image_source.dart';
+import '../../core/media/image_pipeline.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/providers/locale_provider.dart';
 import 'package:go_router/go_router.dart';
@@ -60,7 +60,7 @@ class UploadScreen extends ConsumerStatefulWidget {
 
 class _UploadScreenState extends ConsumerState<UploadScreen>
     with SingleTickerProviderStateMixin {
-  File? _image;
+  AydenImageSource? _image;
   String? _selectedRoom;
   String? _selectedStyle;
   // Wave 4.8.5 — AI Decide ⇄ explicit room are mutually exclusive; Surprise
@@ -152,12 +152,15 @@ class _UploadScreenState extends ConsumerState<UploadScreen>
   // ── Picker (preserved verbatim — non-regression) ──────────────────────────
   Future<void> _pickImage(ImageSource source) async {
     final picked = await _picker.pickImage(source: source, imageQuality: 85);
-    if (picked != null) {
-      setState(() {
-        _image = File(picked.path);
-        _applyDefaultsAfterUpload();
-      });
-    }
+    if (picked == null) return;
+    // Batch 1B — read bytes at the picker boundary (web XFile has no usable
+    // File path); native path retained on IO for the fast compression path.
+    final img = await ImagePipeline.fromXFile(picked);
+    if (!mounted) return;
+    setState(() {
+      _image = img;
+      _applyDefaultsAfterUpload();
+    });
   }
 
   void _showImagePicker() {
@@ -181,22 +184,16 @@ class _UploadScreenState extends ConsumerState<UploadScreen>
     );
   }
 
-  // Selecting an example = uploading it. The bundled asset is copied to a temp
-  // file and assigned to `_image` exactly like a Camera/Gallery pick, so the
-  // entire downstream flow (4 steps → generation) is unchanged.
+  // Selecting an example = uploading it. Batch 1B — the bundled asset bytes are
+  // loaded in memory (no temp file / Directory.systemTemp) and assigned to
+  // `_image` exactly like a Camera/Gallery pick, so the entire downstream flow
+  // (4 steps → generation) is unchanged.
   Future<void> _useExamplePhoto(String assetPath) async {
     try {
-      final data = await rootBundle.load(assetPath);
-      final file = File(
-        '${Directory.systemTemp.path}/ayden_example_'
-        '${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
-      await file.writeAsBytes(
-        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-      );
+      final img = await ImagePipeline.fromAsset(assetPath);
       if (!mounted) return;
       setState(() {
-        _image = file;
+        _image = img;
         _applyDefaultsAfterUpload();
       });
     } catch (e) {
@@ -1126,7 +1123,7 @@ class _DescriptionFieldState extends ConsumerState<_DescriptionField>
 // filled, "Replace" pill in the corner of the loaded image.
 
 class _UploadZone extends StatelessWidget {
-  final File? image;
+  final AydenImageSource? image;
   final VoidCallback onTap;
   const _UploadZone({this.image, required this.onTap});
 
@@ -1178,7 +1175,7 @@ class _UploadZone extends StatelessWidget {
                     // view. Letterboxed on a neutral cinematic frame instead
                     // of cover-cropping a portrait/wide photo to 4:3.
                     const ColoredBox(color: Color(0xFF0B0B0C)),
-                    Image.file(image!, fit: BoxFit.contain),
+                    Image.memory(image!.bytes, fit: BoxFit.contain),
                     Positioned(
                       top: 12,
                       right: 12,

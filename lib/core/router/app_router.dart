@@ -1,6 +1,5 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
+import '../media/ayden_image_source.dart';
 import 'package:go_router/go_router.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
@@ -94,7 +93,9 @@ final appRouter = GoRouter(
         // the chat screen bounce cleanly to home if the session was deleted
         // between completion and the tap.
         final fromNotification = q['from'] == 'notif';
-        final sourceImageFile = state.extra as File?;
+        // Batch 1B — safe extraction (no blind `as File?`): a wrong extra type
+        // yields null instead of crashing. Carries bytes across navigation.
+        final sourceImageFile = AydenImageSource.tryFrom(state.extra);
         return _slideUpPage(
           ChatScreen(
             projectId: projectId,
