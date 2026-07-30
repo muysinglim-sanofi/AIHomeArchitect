@@ -17,6 +17,7 @@ import 'core/providers/me_status_provider.dart';
 import 'core/providers/post_signout_pending_provider.dart';
 import 'core/providers/guest_restore_pending_provider.dart';
 import 'core/router/app_router.dart';
+import 'features/pwa/presentation/pwa_mock_app.dart';
 import 'core/services/local_notification_service.dart';
 import 'core/widgets/ready_notification_host.dart';
 import 'core/services/push_service.dart';
@@ -35,8 +36,14 @@ Future<void> main() async {
   await AppEnvironment.initialize();
   bootLog(bootSw, 'env');
 
-  final supabaseUrl = AppEnvironment.instance.supabaseUrl;
-  final supabaseKey = AppEnvironment.instance.supabaseAnonKey;
+  final env = AppEnvironment.instance;
+  // Batch 2.0.1 — TRUE offline mock (Flutter Web + AYDEN_ENV=mock): skip
+  // Supabase.initialize, anonymous sign-in and the whole remote boot chain, and
+  // run a self-contained local prototype. Staging web and iOS/Android never
+  // enter this branch (skipsRemoteBootstrap == isWeb && isMock) → unchanged.
+  if (!env.skipsRemoteBootstrap) {
+  final supabaseUrl = env.supabaseUrl;
+  final supabaseKey = env.supabaseAnonKey;
   debugPrint('[DB] SUPABASE_URL loaded: ${supabaseUrl.isNotEmpty}');
 
   // BUG 4 (device-key, Approche 2) — CONDITION 1 : migrer l'ancienne session
@@ -135,10 +142,15 @@ Future<void> main() async {
   }
   // FAST_BOOT: the heavy chain above is SKIPPED here — the SplashScreen runs it
   // (auth awaited + the rest fire-and-forget) behind the Ayden splash.
+  } else {
+    debugPrint('[PWA] offline mock — Supabase & remote boot chain skipped.');
+  }
 
   AppBoot.bootStopwatch = bootSw;
   bootLog(bootSw, 'runApp');
-  runApp(const ProviderScope(child: App()));
+  runApp(ProviderScope(
+    child: env.skipsRemoteBootstrap ? const PwaMockApp() : const App(),
+  ));
 }
 
 class App extends ConsumerWidget {

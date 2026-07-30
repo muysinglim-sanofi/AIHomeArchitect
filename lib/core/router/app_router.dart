@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../media/ayden_image_source.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/pwa/application/pwa_entry.dart';
+import '../../features/pwa/presentation/pwa_experience.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/home/home_screen.dart';
@@ -41,8 +44,16 @@ Page<dynamic> _slideUpPage(Widget child, GoRouterState state) => CustomTransitio
     );
 
 final appRouter = GoRouter(
-  initialLocation: '/splash',
+  // Batch 2 — web boots the mocked PWA prototype; iOS/Android keep '/splash'
+  // (mobile route tree unchanged). Decision is a pure, testable function.
+  initialLocation: initialLocationForPlatform(kIsWeb),
   routes: [
+    // Batch 2 — web-only prototype entry (additive; not reachable on mobile,
+    // which never navigates here).
+    GoRoute(
+      path: kPwaRoutePath,
+      pageBuilder: (context, state) => _fadePage(const PwaExperience(), state),
+    ),
     GoRoute(
       path: '/splash',
       pageBuilder: (context, state) => _fadePage(const SplashScreen(), state),

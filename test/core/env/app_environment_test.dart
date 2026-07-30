@@ -190,4 +190,38 @@ void main() {
       expect(env.supabaseUrl, 'https://staging-xyz.supabase.co');
     });
   });
+
+  group('Batch 2.0.1 — offline mock bootstrap', () {
+    test('mock env is valid WITHOUT any Supabase / API values', () {
+      final env = AppEnvironment.validateWebConfig(
+        envName: 'mock',
+        apiBaseUrl: '',
+        supabaseUrl: '',
+        supabaseAnonKey: '',
+      );
+      expect(env.isMock, isTrue);
+      expect(env.isWeb, isTrue);
+      expect(env.skipsRemoteBootstrap, isTrue);
+    });
+
+    test('staging web still REQUIRES Supabase config and skips no bootstrap', () {
+      expect(
+        () => AppEnvironment.validateWebConfig(
+          envName: 'staging',
+          apiBaseUrl: 'https://api.staging.invalid',
+          supabaseUrl: '',
+          supabaseAnonKey: 'k',
+        ),
+        throwsA(isA<WebEnvironmentError>()),
+      );
+      final staging = AppEnvironment.validateWebConfig(
+        envName: 'staging',
+        apiBaseUrl: 'https://api.staging.invalid',
+        supabaseUrl: 'https://project.staging.invalid',
+        supabaseAnonKey: 'k',
+      );
+      expect(staging.isMock, isFalse);
+      expect(staging.skipsRemoteBootstrap, isFalse);
+    });
+  });
 }

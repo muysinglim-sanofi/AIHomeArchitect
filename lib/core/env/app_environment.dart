@@ -43,6 +43,15 @@ class AppEnvironment {
   final String supabaseAnonKey;
   final bool isWeb;
 
+  /// True on Flutter Web when AYDEN_ENV=mock — the fully offline prototype mode.
+  bool get isMock => name == 'mock';
+
+  /// True ONLY for the offline mock (web + mock). When true the app MUST skip
+  /// Supabase.initialize, anonymous sign-in and the entire remote boot chain
+  /// and run a self-contained local prototype. Always false on iOS/Android and
+  /// on web staging (their boot is unchanged).
+  bool get skipsRemoteBootstrap => isWeb && isMock;
+
   static AppEnvironment? _instance;
 
   /// The resolved environment. Throws if [initialize] has not completed.
@@ -146,6 +155,20 @@ class AppEnvironment {
       throw WebEnvironmentError(
         'Flutter Web refused to start: unknown AYDEN_ENV="$envName" '
         '(expected one of ${allowedWebEnvNames.join(", ")}).',
+      );
+    }
+
+    // Batch 2.0.1 — MOCK is fully offline: no Supabase / backend endpoints are
+    // used, so none are required and there is nothing to validate against
+    // production. `flutter build web --dart-define=AYDEN_ENV=mock` needs no
+    // SUPABASE_URL / SUPABASE_ANON_KEY / API_BASE_URL.
+    if (name == 'mock') {
+      return AppEnvironment._(
+        name: name,
+        apiBaseUrl: apiBaseUrl.trim(),
+        supabaseUrl: supabaseUrl.trim(),
+        supabaseAnonKey: supabaseAnonKey.trim(),
+        isWeb: true,
       );
     }
 
