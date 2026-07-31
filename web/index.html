@@ -31,6 +31,25 @@
 
   <title>ai_home_architect</title>
   <link rel="manifest" href="manifest.json">
+
+  <!--
+    Web-only horizontal-scroll history guard (PWA fast-path carousels).
+    `overscroll-behavior-x: none` tells the browser NOT to perform its default
+    overscroll action (back/forward history navigation, rubber-banding) when a
+    horizontal scroll reaches a boundary. The wheel/trackpad/drag event still
+    reaches Flutter's canvas, so the carousels scroll normally; vertical page
+    scrolling is entirely unaffected. This is the documented standard fix and
+    needs no non-passive JS wheel listener (which would risk swallowing
+    Flutter's own horizontal scroll). Web-only — never compiled into iOS/Android.
+  -->
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overscroll-behavior-x: none;
+      overscroll-behavior-y: none;
+    }
+  </style>
 </head>
 <body>
   <!--

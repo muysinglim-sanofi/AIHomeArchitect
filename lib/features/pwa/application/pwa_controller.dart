@@ -15,15 +15,21 @@ import '../data/pwa_experience_repository.dart';
 import '../domain/pwa_intent.dart';
 import '../domain/pwa_models.dart';
 
-enum PwaPhase { upload, loading, architect }
+enum PwaPhase { entry, loading, architect }
+
+/// Where the current source image came from. Governs mock honesty: only the
+/// bundled example may claim a known room type; an arbitrary user upload must
+/// NOT be labelled (the real backend will detect it later).
+enum PwaImageOrigin { bundledExample, userUpload }
 
 /// Injectable repository. Overridden in tests with a zero-delay mock.
 final pwaRepositoryProvider = Provider<PwaExperienceRepository>(
   (ref) => MockPwaExperienceRepository(),
 );
 
-final pwaControllerProvider =
-    StateNotifierProvider<PwaController, PwaState>((ref) {
+final pwaControllerProvider = StateNotifierProvider<PwaController, PwaState>((
+  ref,
+) {
   return PwaController(ref.watch(pwaRepositoryProvider));
 });
 
@@ -33,6 +39,8 @@ class PwaState {
     required this.project,
     required this.atmospheres,
     this.source,
+    this.sourceOrigin,
+    this.selectedRoomId,
     this.messages = const [],
     this.versions = const [],
     this.currentVisionId,
@@ -44,6 +52,10 @@ class PwaState {
   final PwaProject project;
   final List<PwaAtmosphere> atmospheres;
   final AydenImageSource? source;
+  final PwaImageOrigin? sourceOrigin;
+
+  /// Pre-generation room choice on the fast path. null = Ayden auto-detect.
+  final String? selectedRoomId;
   final List<PwaMessage> messages;
   final List<PwaVision> versions;
   final String? currentVisionId;
@@ -69,6 +81,9 @@ class PwaState {
   PwaState copyWith({
     PwaPhase? phase,
     AydenImageSource? source,
+    PwaImageOrigin? sourceOrigin,
+    String? selectedRoomId,
+    bool clearRoom = false,
     bool clearSource = false,
     List<PwaMessage>? messages,
     List<PwaVision>? versions,
@@ -81,6 +96,10 @@ class PwaState {
       project: project,
       atmospheres: atmospheres,
       source: clearSource ? null : (source ?? this.source),
+      sourceOrigin: clearSource ? null : (sourceOrigin ?? this.sourceOrigin),
+      selectedRoomId: (clearSource || clearRoom)
+          ? null
+          : (selectedRoomId ?? this.selectedRoomId),
       messages: messages ?? this.messages,
       versions: versions ?? this.versions,
       currentVisionId: currentVisionId ?? this.currentVisionId,
@@ -92,29 +111,47 @@ class PwaState {
 
 class PwaController extends StateNotifier<PwaState> {
   PwaController(this._repo)
-      : super(PwaState(
-          phase: PwaPhase.upload,
+    : super(
+        PwaState(
+          phase: PwaPhase.entry,
           project: _repo.project(),
           atmospheres: _repo.atmospheres(),
-        ));
+          selectedAtmosphereId: 'ayden_signature', // Ayden's default direction
+        ),
+      );
 
   final PwaExperienceRepository _repo;
   int _seq = 0;
 
   String _nextId(String prefix) => '$prefix${++_seq}';
-  int _nextOrder() =>
-      state.versions.isEmpty ? 1 : (state.versions.map((v) => v.order).reduce((a, b) => a > b ? a : b) + 1);
+  int _nextOrder() => state.versions.isEmpty
+      ? 1
+      : (state.versions.map((v) => v.order).reduce((a, b) => a > b ? a : b) +
+            1);
 
-  PwaAtmosphere _atmosphere(String id) =>
-      state.atmospheres.firstWhere((a) => a.id == id,
-          orElse: () => state.atmospheres.first);
+  PwaAtmosphere _atmosphere(String id) => state.atmospheres.firstWhere(
+    (a) => a.id == id,
+    orElse: () => state.atmospheres.first,
+  );
 
-  // ── Upload phase ──────────────────────────────────────────────────────────
+  // ── Entry (continuous scroll) ───────────────────────────────────────────────
 
-  void setSource(AydenImageSource src) =>
-      state = state.copyWith(source: src);
+  void setSource(
+    AydenImageSource src, {
+    PwaImageOrigin origin = PwaImageOrigin.userUpload,
+  }) => state = state.copyWith(source: src, sourceOrigin: origin);
 
   void removeSource() => state = state.copyWith(clearSource: true);
+
+  /// Fast-path ROOM choice — pure selection, NO generation / version / backend.
+  /// null returns to Ayden auto-detect.
+  void selectRoom(String? roomId) => state = roomId == null
+      ? state.copyWith(clearRoom: true)
+      : state.copyWith(selectedRoomId: roomId);
+
+  /// Fast-path ATMOSPHERE choice — pure selection, NO generation / version.
+  void selectEntryAtmosphere(String atmosphereId) =>
+      state = state.copyWith(selectedAtmosphereId: atmosphereId);
 
   /// The primary action: one photo, one click → the first Ayden Signature
   /// vision, shown as the first rich message in the conversation.
@@ -122,15 +159,16 @@ class PwaController extends StateNotifier<PwaState> {
     if (state.generating) return;
     state = state.copyWith(phase: PwaPhase.loading, generating: true);
     await _repo.simulateGeneration();
-    final signature = _atmosphere('ayden_signature');
+    // Honour the fast-path selection (defaults to Ayden Signature).
+    final chosen = _atmosphere(state.selectedAtmosphereId ?? 'ayden_signature');
     final v1 = PwaVision(
       versionId: _nextId('v'),
       projectId: state.project.projectId,
       visionNumber: 1,
-      title: 'Ayden Signature',
-      atmosphereId: signature.id,
+      title: chosen.name,
+      atmosphereId: chosen.id,
       actionType: PwaActionType.signature,
-      afterAsset: signature.visionAsset,
+      afterAsset: chosen.visionAsset,
       order: _nextOrder(),
       isCurrent: true,
     );
@@ -152,7 +190,7 @@ class PwaController extends StateNotifier<PwaState> {
       generating: false,
       versions: [v1],
       currentVisionId: v1.versionId,
-      selectedAtmosphereId: signature.id,
+      selectedAtmosphereId: chosen.id,
       messages: [intro],
     );
   }
@@ -201,8 +239,12 @@ class PwaController extends StateNotifier<PwaState> {
       text: _repo.switchIntro(atmo),
       visionId: v.versionId,
     );
-    _commitNewVision(v,
-        replaceLoadingId: loadingMsg.id, revealMsg: aydenMsg, atmosphereId: atmosphereId);
+    _commitNewVision(
+      v,
+      replaceLoadingId: loadingMsg.id,
+      revealMsg: aydenMsg,
+      atmosphereId: atmosphereId,
+    );
   }
 
   /// A typed line → ADVICE (text only, no version) or REFINE (advice + an
@@ -256,8 +298,9 @@ class PwaController extends StateNotifier<PwaState> {
     );
     await _repo.simulateGeneration();
 
-    final refineIndex =
-        state.versions.where((v) => v.actionType == PwaActionType.refine).length;
+    final refineIndex = state.versions
+        .where((v) => v.actionType == PwaActionType.refine)
+        .length;
     final v = _newVision(
       parent: parent,
       atmosphereId: parent.atmosphereId,
@@ -286,7 +329,8 @@ class PwaController extends StateNotifier<PwaState> {
       currentVisionId: versionId,
       selectedAtmosphereId: target.atmosphereId,
       versions: [
-        for (final v in state.versions) v.copyWith(isCurrent: v.versionId == versionId),
+        for (final v in state.versions)
+          v.copyWith(isCurrent: v.versionId == versionId),
       ],
     );
   }

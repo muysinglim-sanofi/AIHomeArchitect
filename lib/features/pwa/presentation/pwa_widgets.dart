@@ -10,25 +10,29 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/media/ayden_image_source.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../shared/widgets/reveal_hero.dart';
 import '../domain/pwa_models.dart';
+import 'pwa_brand.dart';
 
 const Color kPwaGold = AppColors.accent; // #C8A86A
 
+// Batch 2.1 — offline editorial style (no google_fonts runtime fetch). Kept as
+// `pwaSerif` for call-site compatibility; renders in the platform default
+// family with restrained luxury tracking/weight.
 TextStyle pwaSerif({
   required double fontSize,
-  FontWeight fontWeight = FontWeight.w500,
+  FontWeight fontWeight = FontWeight.w400,
   Color color = AppColors.textPrimary,
   double height = 1.15,
   double letterSpacing = -0.2,
 }) =>
-    AppTheme.displayEditorial(
+    TextStyle(
       fontSize: fontSize,
       fontWeight: fontWeight,
+      color: color,
       height: height,
       letterSpacing: letterSpacing,
-    ).copyWith(color: color);
+    );
 
 // ── Brand header ─────────────────────────────────────────────────────────────
 
@@ -42,22 +46,9 @@ class PwaBrandHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(Icons.architecture, size: compact ? 18 : 22, color: kPwaGold),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            'AYDEN STUDIO',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w700,
-              fontSize: compact ? 13 : 15,
-              letterSpacing: 2.4,
-            ),
-          ),
-        ),
-        if (trailing != null) const SizedBox(width: 8),
+        // Official logo (compact dark badge) — no invented icon/text wordmark.
+        PwaLogoBadge(size: compact ? 30 : 38),
+        const Spacer(),
         ?trailing,
       ],
     );
