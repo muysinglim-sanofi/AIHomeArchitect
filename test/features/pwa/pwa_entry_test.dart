@@ -253,18 +253,23 @@ void main() {
         ),
         findsNothing,
       );
-      // Select the optional Dining Room (no generation).
-      await tester.tap(
-        find.descendant(
-          of: carousel('room-optional'),
-          matching: find.text('Dining Room'),
-        ),
+      // Select the optional Dining Room (no generation). The Fast-Path editorial
+      // intro can push the selectors into their scroll area, so bring the card
+      // into view first (behaviour unchanged, position robustness only).
+      final diningOptional = find.descendant(
+        of: carousel('room-optional'),
+        matching: find.text('Dining Room'),
       );
+      await tester.ensureVisible(diningOptional);
+      await tester.pumpAndSettle();
+      await tester.tap(diningOptional);
       await tester.pumpAndSettle();
       expect(c.read(pwaControllerProvider).selectedRoomId, 'diningRoom');
       expect(c.read(pwaControllerProvider).phase, PwaPhase.entry);
       expect(c.read(pwaControllerProvider).versions, isEmpty);
       // §6 Fewer rooms hides the second row.
+      await tester.ensureVisible(find.text('Fewer rooms'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Fewer rooms'));
       await tester.pumpAndSettle();
       expect(carousel('room-optional'), findsNothing);
@@ -391,7 +396,13 @@ void main() {
     await _pumpEntry(tester, size: const Size(390, 844));
     await _enterWorkspace(tester);
     final before = _pageOffset(tester);
-    await tester.drag(find.text('1. ROOM'), const Offset(0, -160));
+    // A vertical drag over the workspace scrolls the PAGE (not a horizontal row).
+    // Drag the editorial title (a page-level element) so the gesture cannot be
+    // absorbed by a card row.
+    await tester.drag(
+      find.text('Shape your space with Ayden.'),
+      const Offset(0, -240),
+    );
     await tester.pumpAndSettle();
     expect(_pageOffset(tester), greaterThan(before));
     expect(tester.takeException(), isNull);
@@ -523,7 +534,13 @@ void main() {
   ) async {
     final c = await _pumpEntry(tester, size: const Size(1440, 900));
     await _enterWorkspace(tester);
+    // Bring each card into view first (the editorial intro can push the
+    // selectors into their scroll area; selection behaviour is unchanged).
+    await tester.ensureVisible(find.text('Bedroom'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Bedroom'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Warm Modern'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Warm Modern'));
     await tester.pumpAndSettle();
@@ -534,6 +551,32 @@ void main() {
     expect(s.versions, isEmpty);
     expect(tester.takeException(), isNull);
   });
+
+  // ── Fast-Path editorial introduction (§4/§6) ────────────────────────────────
+  testWidgets(
+    'Fast Path shows the editorial introduction + selection summary',
+    (tester) async {
+      final c = await _pumpEntry(tester, size: const Size(1440, 900));
+      await _enterWorkspace(tester);
+      // §4 — editorial intro + readiness indicators explaining the defaults.
+      expect(find.text('CREATE YOUR FIRST VISION'), findsOneWidget);
+      expect(find.text('Shape your space with Ayden.'), findsOneWidget);
+      expect(find.text('Photo ready'), findsOneWidget);
+      expect(find.text('Ayden Decide active'), findsOneWidget);
+      // §6 — one-line selection summary above Generate.
+      expect(
+        find.textContaining('Ayden will create your first vision using'),
+        findsOneWidget,
+      );
+      // Defaults intact; no generation from the editorial band.
+      expect(
+        c.read(pwaControllerProvider).selectedAtmosphereId,
+        'ayden_signature',
+      );
+      expect(c.read(pwaControllerProvider).versions, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   // ── Generate wiring (§12.30) ────────────────────────────────────────────────
   testWidgets('Generate button is present and wired', (tester) async {
@@ -614,6 +657,8 @@ void main() {
         await _pumpEntry(tester, size: size);
         await _enterWorkspace(tester);
         expect(tester.takeException(), isNull);
+        await tester.ensureVisible(find.text('More rooms'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('More rooms'));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);

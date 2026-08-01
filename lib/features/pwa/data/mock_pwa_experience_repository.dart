@@ -24,63 +24,70 @@ class MockPwaExperienceRepository implements PwaExperienceRepository {
 
   @override
   PwaProject project() => const PwaProject(
-        projectId: _projectId,
-        originalAsset: 'assets/showcase/apartment_before.jpg',
-        title: 'Your space',
-      );
+    projectId: _projectId,
+    originalAsset: 'assets/showcase/apartment_before.jpg',
+    title: 'Your space',
+  );
 
   @override
   List<PwaAtmosphere> atmospheres() => const [
-        PwaAtmosphere(
-          id: 'ayden_signature',
-          name: 'Ayden Signature',
-          asset: 'assets/atmospheres/ayden_signature.jpg',
-          visionAsset: 'assets/showcase/apartment_after.jpg',
-          isSignature: true,
-        ),
-        PwaAtmosphere(
-          id: 'warm_modern',
-          name: 'Warm Modern',
-          asset: 'assets/cards/atmospheres/warm_modern.png',
-          visionAsset: 'assets/showcase/living_after.jpg',
-        ),
-        PwaAtmosphere(
-          id: 'soft_luxury',
-          name: 'Soft Luxury',
-          asset: 'assets/cards/atmospheres/soft_luxury.png',
-          visionAsset: 'assets/showcase/villa_after.jpg',
-        ),
-        PwaAtmosphere(
-          id: 'japandi_calm',
-          name: 'Japandi Calm',
-          asset: 'assets/cards/atmospheres/japandi_calm.png',
-          visionAsset: 'assets/showcase/smallspace_after.jpg',
-        ),
-        PwaAtmosphere(
-          id: 'nordic_warmth',
-          name: 'Nordic Warmth',
-          asset: 'assets/cards/atmospheres/nordic_warmth.png',
-          visionAsset: 'assets/showcase/bathroom_after.jpg',
-        ),
-        PwaAtmosphere(
-          id: 'tropical_escape',
-          name: 'Tropical Escape',
-          asset: 'assets/cards/atmospheres/tropical_escape.png',
-          visionAsset: 'assets/showcase/facade_after.jpg',
-        ),
-      ];
+    PwaAtmosphere(
+      id: 'ayden_signature',
+      name: 'Ayden Signature',
+      asset: 'assets/atmospheres/ayden_signature.jpg',
+      visionAsset: 'assets/showcase/apartment_after.jpg',
+      descriptor: 'Warm · Timeless · Balanced',
+      isSignature: true,
+    ),
+    PwaAtmosphere(
+      id: 'warm_modern',
+      name: 'Warm Modern',
+      asset: 'assets/cards/atmospheres/warm_modern.png',
+      visionAsset: 'assets/showcase/living_after.jpg',
+      descriptor: 'Cozy · Inviting · Sophisticated',
+    ),
+    PwaAtmosphere(
+      id: 'soft_luxury',
+      name: 'Soft Luxury',
+      asset: 'assets/cards/atmospheres/soft_luxury.png',
+      visionAsset: 'assets/showcase/villa_after.jpg',
+      descriptor: 'Refined · Elegant · Serene',
+    ),
+    PwaAtmosphere(
+      id: 'japandi_calm',
+      name: 'Japandi Calm',
+      asset: 'assets/cards/atmospheres/japandi_calm.png',
+      visionAsset: 'assets/showcase/smallspace_after.jpg',
+      descriptor: 'Minimal · Natural · Peaceful',
+    ),
+    PwaAtmosphere(
+      id: 'nordic_warmth',
+      name: 'Nordic Warmth',
+      asset: 'assets/cards/atmospheres/nordic_warmth.png',
+      visionAsset: 'assets/showcase/bathroom_after.jpg',
+      descriptor: 'Bright · Organic · Airy',
+    ),
+    PwaAtmosphere(
+      id: 'tropical_escape',
+      name: 'Tropical Escape',
+      asset: 'assets/cards/atmospheres/tropical_escape.png',
+      visionAsset: 'assets/showcase/facade_after.jpg',
+      descriptor: 'Lush · Relaxed · Vibrant',
+    ),
+  ];
 
   @override
   List<String> loadingSteps() => const [
-        'Understanding your space',
-        'Preserving the architecture',
-        'Building the Ayden Signature',
-        'Preparing your reveal',
-      ];
+    'Understanding your space',
+    'Preserving the architecture',
+    'Building the Ayden Signature',
+    'Preparing your reveal',
+  ];
 
   @override
-  Future<void> simulateGeneration() =>
-      workDelay == Duration.zero ? Future<void>.value() : Future.delayed(workDelay);
+  Future<void> simulateGeneration() => workDelay == Duration.zero
+      ? Future<void>.value()
+      : Future.delayed(workDelay);
 
   @override
   String firstVisionIntro() =>
@@ -93,6 +100,16 @@ class MockPwaExperienceRepository implements PwaExperienceRepository {
   String switchIntro(PwaAtmosphere atmosphere) =>
       'Here is your space reimagined in ${atmosphere.name}. I preserved the '
       'layout and openings, and shifted the materials and mood to match.';
+
+  @override
+  String switchProposal(PwaAtmosphere atmosphere) =>
+      'A ${atmosphere.name} direction — same architecture and layout, with '
+      'materials, palette and light reworked to match the mood.';
+
+  @override
+  String refineSummary(String instruction) =>
+      'Apply “$instruction” while keeping the architecture intact — adjusting '
+      'the materials and lighting to get there.';
 
   @override
   String adviceResponse(String question) =>

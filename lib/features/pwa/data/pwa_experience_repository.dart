@@ -30,6 +30,13 @@ abstract class PwaExperienceRepository {
   /// Canned Ayden copy for an atmosphere switch.
   String switchIntro(PwaAtmosphere atmosphere);
 
+  /// Concise PRE-confirmation description for a staged atmosphere change
+  /// (§13 pending card, shown before the user confirms — no version yet).
+  String switchProposal(PwaAtmosphere atmosphere);
+
+  /// Concise PRE-confirmation summary for a staged refine (§12 confirm card).
+  String refineSummary(String instruction);
+
   /// Canned text-only advice for an opinion question (no version created).
   String adviceResponse(String question);
 

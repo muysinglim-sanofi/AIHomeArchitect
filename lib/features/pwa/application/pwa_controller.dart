@@ -44,8 +44,12 @@ class PwaState {
     this.messages = const [],
     this.versions = const [],
     this.currentVisionId,
+    this.previewVisionId,
+    this.sourceVisionId,
+    this.pendingAtmosphereId,
     this.selectedAtmosphereId,
     this.generating = false,
+    this.returningToStudio = false,
   });
 
   final PwaPhase phase;
@@ -58,24 +62,84 @@ class PwaState {
   final String? selectedRoomId;
   final List<PwaMessage> messages;
   final List<PwaVision> versions;
+
+  /// The accepted "current" vision (canonical).
   final String? currentVisionId;
+
+  /// A version being PREVIEWED in the Full Reveal (filmstrip click). View-only:
+  /// it does not change the current vision. null → the current vision is shown.
+  final String? previewVisionId;
+
+  /// One-shot parent override for the NEXT confirmed generation (set by
+  /// "Continue from this vision"). null → the next child branches off current.
+  final String? sourceVisionId;
+
+  /// A staged atmosphere awaiting confirmation (§13). null → nothing pending.
+  final String? pendingAtmosphereId;
   final String? selectedAtmosphereId;
   final bool generating;
+
+  /// Transient signal for the entry screen: set by [PwaController.returnToStudio]
+  /// so the freshly-mounted entry screen jumps to the correct preserved section
+  /// (§11). Consumed (cleared) once acted on — never persisted.
+  final bool returningToStudio;
 
   bool get hasSource => source != null;
   int get versionCount => versions.length;
 
-  PwaVision? get currentVision {
+  PwaVision? _byId(String? id) {
+    if (id == null) return null;
     for (final v in versions) {
-      if (v.versionId == currentVisionId) return v;
+      if (v.versionId == id) return v;
     }
-    return versions.isEmpty ? null : versions.last;
+    return null;
   }
+
+  PwaVision? get currentVision =>
+      _byId(currentVisionId) ?? (versions.isEmpty ? null : versions.last);
+
+  /// The vision shown in the Full Reveal (a previewed older version, else the
+  /// current one).
+  PwaVision? get previewedVision => _byId(previewVisionId) ?? currentVision;
+
+  /// True when previewing a version that is NOT the current one.
+  bool get isPreviewingOther =>
+      previewVisionId != null && previewVisionId != currentVisionId;
+
+  /// The parent for the next confirmed generation (an explicit "continue-from"
+  /// source, else the current vision).
+  PwaVision? get sourceVision => _byId(sourceVisionId) ?? currentVision;
 
   /// Versions in chronological order (oldest first).
   List<PwaVision> get versionsChronological {
     final list = [...versions]..sort((a, b) => a.order.compareTo(b.order));
     return list;
+  }
+
+  /// Index of the vision shown in the Full Reveal within [versionsChronological]
+  /// (−1 when there are none). Drives the "Vision N of M" counter + prev/next.
+  int get previewedIndex {
+    final id = previewedVision?.versionId;
+    if (id == null) return -1;
+    return versionsChronological.indexWhere((v) => v.versionId == id);
+  }
+
+  /// Whether an older / newer vision exists to step to from the previewed one.
+  bool get hasPreviousVision => previewedIndex > 0;
+  bool get hasNextVision {
+    final i = previewedIndex;
+    return i >= 0 && i < versionCount - 1;
+  }
+
+  /// The reveal message id that introduced [versionId] (for "Find in chat").
+  /// null when the version has no in-conversation reveal message.
+  String? revealMessageIdForVersion(String versionId) {
+    for (final m in messages) {
+      if (m.kind == PwaMessageKind.reveal && m.visionId == versionId) {
+        return m.id;
+      }
+    }
+    return null;
   }
 
   PwaState copyWith({
@@ -88,8 +152,15 @@ class PwaState {
     List<PwaMessage>? messages,
     List<PwaVision>? versions,
     String? currentVisionId,
+    String? previewVisionId,
+    bool clearPreview = false,
+    String? sourceVisionId,
+    bool clearSourceVision = false,
+    String? pendingAtmosphereId,
+    bool clearPending = false,
     String? selectedAtmosphereId,
     bool? generating,
+    bool? returningToStudio,
   }) {
     return PwaState(
       phase: phase ?? this.phase,
@@ -103,8 +174,18 @@ class PwaState {
       messages: messages ?? this.messages,
       versions: versions ?? this.versions,
       currentVisionId: currentVisionId ?? this.currentVisionId,
+      previewVisionId: clearPreview
+          ? null
+          : (previewVisionId ?? this.previewVisionId),
+      sourceVisionId: clearSourceVision
+          ? null
+          : (sourceVisionId ?? this.sourceVisionId),
+      pendingAtmosphereId: clearPending
+          ? null
+          : (pendingAtmosphereId ?? this.pendingAtmosphereId),
       selectedAtmosphereId: selectedAtmosphereId ?? this.selectedAtmosphereId,
       generating: generating ?? this.generating,
+      returningToStudio: returningToStudio ?? this.returningToStudio,
     );
   }
 }
@@ -134,6 +215,12 @@ class PwaController extends StateNotifier<PwaState> {
     orElse: () => state.atmospheres.first,
   );
 
+  /// Concise pre-confirmation copy for the confirmation cards (§12/§13).
+  String switchProposalText(String atmosphereId) =>
+      _repo.switchProposal(_atmosphere(atmosphereId));
+  String refineSummaryText(String instruction) =>
+      _repo.refineSummary(instruction);
+
   // ── Entry (continuous scroll) ───────────────────────────────────────────────
 
   void setSource(
@@ -157,6 +244,12 @@ class PwaController extends StateNotifier<PwaState> {
   /// vision, shown as the first rich message in the conversation.
   Future<void> generateFirstVision() async {
     if (state.generating) return;
+    // Returning from "Back to Studio" (versions already exist) → resume the
+    // Architect instead of duplicating the first vision.
+    if (state.versions.isNotEmpty) {
+      state = state.copyWith(phase: PwaPhase.architect);
+      return;
+    }
     state = state.copyWith(phase: PwaPhase.loading, generating: true);
     await _repo.simulateGeneration();
     // Honour the fast-path selection (defaults to Ayden Signature).
@@ -197,13 +290,39 @@ class PwaController extends StateNotifier<PwaState> {
 
   // ── In-architect actions ────────────────────────────────────────────────
 
-  /// SWITCH_ATMOSPHERE — tapping an atmosphere creates a new child vision from
-  /// the current one and inserts it into the conversation.
-  Future<void> selectAtmosphere(String atmosphereId) async {
+  /// SWITCH_ATMOSPHERE step 1 (§13) — STAGE an atmosphere for confirmation.
+  /// Selecting the current atmosphere (or the already-pending one) clears the
+  /// pending state. NO version, NO conversation message on selection alone.
+  void stageAtmosphere(String atmosphereId) {
     if (state.generating) return;
-    if (atmosphereId == state.currentVision?.atmosphereId) return;
-    final parent = state.currentVision;
-    if (parent == null) return;
+    final currentAtmo = state.sourceVision?.atmosphereId;
+    if (atmosphereId == currentAtmo ||
+        atmosphereId == state.pendingAtmosphereId) {
+      cancelPendingAtmosphere();
+      return;
+    }
+    state = state.copyWith(
+      pendingAtmosphereId: atmosphereId,
+      selectedAtmosphereId: atmosphereId,
+    );
+  }
+
+  /// SWITCH_ATMOSPHERE — clear the staged atmosphere (Cancel).
+  void cancelPendingAtmosphere() {
+    state = state.copyWith(
+      clearPending: true,
+      selectedAtmosphereId: state.sourceVision?.atmosphereId,
+    );
+  }
+
+  /// SWITCH_ATMOSPHERE step 2 (§13) — CONFIRM: create exactly one child vision
+  /// from the source vision, storing the chosen atmosphere. Future cost: 1 Space
+  /// (informational only — NO wallet/ledger/debit in this mock).
+  Future<void> applyAtmosphere() async {
+    if (state.generating) return;
+    final atmosphereId = state.pendingAtmosphereId;
+    final parent = state.sourceVision;
+    if (atmosphereId == null || parent == null) return;
     final atmo = _atmosphere(atmosphereId);
 
     final userMsg = PwaMessage(
@@ -219,6 +338,7 @@ class PwaController extends StateNotifier<PwaState> {
     );
     state = state.copyWith(
       generating: true,
+      clearPending: true,
       selectedAtmosphereId: atmosphereId,
       messages: [...state.messages, userMsg, loadingMsg],
     );
@@ -282,10 +402,31 @@ class PwaController extends StateNotifier<PwaState> {
     state = state.copyWith(messages: [...state.messages, userMsg, aydenMsg]);
   }
 
-  /// REFINE apply — creates a child vision from the current one.
+  /// REFINE cancel (§12) — dismiss a pending "Apply this change" offer without
+  /// creating any version (keeps the advice text, drops the action).
+  void dismissRefine(String messageId) {
+    state = state.copyWith(
+      messages: [
+        for (final m in state.messages)
+          if (m.id == messageId)
+            PwaMessage(
+              id: m.id,
+              role: m.role,
+              kind: m.kind,
+              text: m.text,
+              visionId: m.visionId,
+            )
+          else
+            m,
+      ],
+    );
+  }
+
+  /// REFINE apply (§12) — creates exactly one child vision from the SOURCE
+  /// vision. Future cost: 1 Space (informational only — NO debit in this mock).
   Future<void> applyRefine(String instruction) async {
     if (state.generating) return;
-    final parent = state.currentVision;
+    final parent = state.sourceVision;
     if (parent == null) return;
     final loadingMsg = PwaMessage(
       id: _nextId('m'),
@@ -319,14 +460,45 @@ class PwaController extends StateNotifier<PwaState> {
     _commitNewVision(v, replaceLoadingId: loadingMsg.id, revealMsg: aydenMsg);
   }
 
-  // ── Version navigation ────────────────────────────────────────────────────
+  // ── Version navigation & lineage ──────────────────────────────────────────
 
-  /// Set the current vision without a chat message (desktop selection).
+  /// §15 — PREVIEW an older version in the Full Reveal (filmstrip click). Does
+  /// NOT change the current vision, delete or overwrite anything.
+  void previewVision(String versionId) {
+    if (!state.versions.any((v) => v.versionId == versionId)) return;
+    state = state.copyWith(previewVisionId: versionId);
+  }
+
+  /// Stop previewing → back to the current vision in the Full Reveal.
+  void clearPreview() => state = state.copyWith(clearPreview: true);
+
+  /// V7 — step the Full Reveal to the previous / next existing vision in
+  /// chronological order (global + chat "Vision N of M" arrows). PREVIEW only:
+  /// creates no version, never changes the current vision or lineage. No-op at
+  /// the ends.
+  void previewPrevious() {
+    final chrono = state.versionsChronological;
+    final i = state.previewedIndex;
+    if (i <= 0 || chrono.isEmpty) return;
+    previewVision(chrono[i - 1].versionId);
+  }
+
+  void previewNext() {
+    final chrono = state.versionsChronological;
+    final i = state.previewedIndex;
+    if (i < 0 || i >= chrono.length - 1) return;
+    previewVision(chrono[i + 1].versionId);
+  }
+
+  /// §16 SET AS CURRENT — updates which existing version is current. Creates NO
+  /// version and does not alter lineage; clears any preview/continue-from state.
   void setCurrentVision(String versionId) {
     if (!state.versions.any((v) => v.versionId == versionId)) return;
     final target = state.versions.firstWhere((v) => v.versionId == versionId);
     state = state.copyWith(
       currentVisionId: versionId,
+      clearPreview: true,
+      clearSourceVision: true,
       selectedAtmosphereId: target.atmosphereId,
       versions: [
         for (final v in state.versions)
@@ -335,19 +507,53 @@ class PwaController extends StateNotifier<PwaState> {
     );
   }
 
-  /// Continue from an older vision: makes it current AND drops a clear
-  /// conversation marker so the next generation branches from it.
+  /// §16 CONTINUE FROM THIS VISION — sets [versionId] as the parent context for
+  /// the NEXT confirmed Refine/Atmosphere action (the future child's
+  /// parentVersionId). Creates nothing immediately; shows the vision and drops a
+  /// clear conversation marker. Does NOT change which version is "current".
   void continueFromVision(String versionId) {
-    if (!state.versions.any((v) => v.versionId == versionId)) return;
-    setCurrentVision(versionId);
-    final v = state.versions.firstWhere((x) => x.versionId == versionId);
+    final v = _find(versionId);
+    if (v == null) return;
     final marker = PwaMessage(
       id: _nextId('m'),
       role: PwaRole.ayden,
       kind: PwaMessageKind.text,
-      text: 'You are now continuing from Vision ${v.visionNumber}.',
+      text:
+          'Continuing from Vision ${v.visionNumber}. '
+          'Your next change will branch from it.',
     );
-    state = state.copyWith(messages: [...state.messages, marker]);
+    state = state.copyWith(
+      sourceVisionId: versionId,
+      previewVisionId: versionId,
+      selectedAtmosphereId: v.atmosphereId,
+      messages: [...state.messages, marker],
+    );
+  }
+
+  /// §26 — "Back home": return to the Studio HERO (offset 0) while preserving
+  /// photo, room, atmosphere, project, versions and conversation. The
+  /// [returningToStudio] flag tells the freshly-mounted entry screen to land on
+  /// the hero without replaying the cinematic (skip → promise); the Hero CTA
+  /// then resumes the preserved Fast Path.
+  void returnToStudio() => state = state.copyWith(
+    phase: PwaPhase.entry,
+    clearPreview: true,
+    clearPending: true,
+    returningToStudio: true,
+  );
+
+  /// Consumed by the entry screen once it has repositioned after a return.
+  void consumeReturnToStudio() {
+    if (state.returningToStudio) {
+      state = state.copyWith(returningToStudio: false);
+    }
+  }
+
+  PwaVision? _find(String versionId) {
+    for (final v in state.versions) {
+      if (v.versionId == versionId) return v;
+    }
+    return null;
   }
 
   // ── Internals ─────────────────────────────────────────────────────────────
@@ -396,6 +602,11 @@ class PwaController extends StateNotifier<PwaState> {
       generating: false,
       versions: versions,
       currentVisionId: v.versionId,
+      // The new child becomes the current AND the source for the next linear
+      // change; any one-shot preview / continue-from override is consumed.
+      clearPreview: true,
+      clearSourceVision: true,
+      clearPending: true,
       selectedAtmosphereId: atmosphereId ?? state.selectedAtmosphereId,
       messages: messages,
     );

@@ -33,6 +33,7 @@ import '../domain/pwa_models.dart';
 import 'hero/pwa_hero_sequence.dart';
 import 'hero/pwa_hero_video.dart';
 import 'pwa_brand.dart';
+import 'pwa_section_nav.dart';
 import 'pwa_select_card.dart';
 import 'pwa_theme.dart';
 
@@ -122,6 +123,12 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
   final _picker = ImagePicker();
   final _focus = FocusNode();
   final _uploadKey = GlobalKey();
+  // P0 — anchors the REAL visible workspace composition (logo + copy + upload,
+  // or the fast-path block), NOT the outer viewport-height section, so the
+  // Hero-CTA scroll frames the actual content instead of an empty parent.
+  final _uploadVisualContentKey = GlobalKey(
+    debugLabel: 'upload-visual-content',
+  );
   PwaHeroSequence? _seq;
   PwaHeroMedia _heroMedia = kHeroMediaDesktop;
   bool _seqStarted = false;
@@ -134,6 +141,39 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
     // keep the PWA fully offline — no runtime font fetch, ever.
     pwaDisableRemoteFonts();
     WidgetsBinding.instance.addObserver(this);
+    // §26 — "Back to Studio" returns to the HERO / Home (offset 0), preserving
+    // all state, and does NOT replay the cinematic: skip straight to its final
+    // promise frame. The Hero CTA then re-enters the preserved Fast Path (if a
+    // photo exists) or the upload showroom.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final s = ref.read(pwaControllerProvider);
+      if (s.returningToStudio) {
+        ref.read(pwaControllerProvider.notifier).consumeReturnToStudio();
+        _seq?.skip(); // no replay — jump to the resting promise frame
+        if (_scroll.hasClients) _scroll.jumpTo(0); // land on the hero
+      }
+    });
+  }
+
+  /// P0 — focus the REAL visible workspace composition (showroom OR fast path).
+  ///
+  /// Earlier attempts targeted the OUTER viewport-height section: on a
+  /// pinned-header viewport `getOffsetToReveal` already offsets by the header,
+  /// and the section ALSO reserved the header in its own padding, so the content
+  /// landed ~one-header too low (measured 204/216px instead of ~116). This
+  /// measures the actual content block and positions IT (centre when it fits,
+  /// top-align ~28px below the header when it nearly fills the viewport).
+  void _focusWorkspace({bool animate = true}) {
+    if (!mounted) return;
+    final isMobile = MediaQuery.sizeOf(context).width < 700;
+    pwaScrollToVisualContent(
+      _scroll,
+      _uploadVisualContentKey,
+      headerExtent: pwaCollapsedHeaderExtent(isMobile),
+      gap: 28,
+      animate: animate,
+    );
   }
 
   @override
@@ -209,16 +249,10 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
     return KeyEventResult.ignored;
   }
 
+  // §4 — hero CTA → upload showroom, viewport-aware & header-aware.
   Future<void> _scrollToUpload() async {
     _skipCinematic();
-    final ctx = _uploadKey.currentContext;
-    if (ctx == null) return;
-    await Scrollable.ensureVisible(
-      ctx,
-      duration: const Duration(milliseconds: 750),
-      curve: Curves.easeInOutCubic,
-      alignment: 0,
-    );
+    _focusWorkspace(animate: true);
   }
 
   void _selectRoom(String? id) =>
@@ -236,6 +270,7 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
     ref
         .read(pwaControllerProvider.notifier)
         .setSource(img, origin: PwaImageOrigin.userUpload);
+    _focusWorkspace(animate: true); // §5 — centre the post-upload fast path
   }
 
   Future<void> _useExample() async {
@@ -245,6 +280,7 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
     ref
         .read(pwaControllerProvider.notifier)
         .setSource(img, origin: PwaImageOrigin.bundledExample);
+    _focusWorkspace(animate: true); // §5 — centre the post-upload fast path
   }
 
   void _remove() => ref.read(pwaControllerProvider.notifier).removeSource();
@@ -292,6 +328,7 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
                 SliverToBoxAdapter(
                   child: _WorkspaceSection(
                     key: _uploadKey,
+                    contentKey: _uploadVisualContentKey,
                     twoPane: twoPane,
                     isMobile: isMobile,
                     viewportHeight: vh,
@@ -792,6 +829,7 @@ class _PhotoFrame extends StatelessWidget {
 class _WorkspaceSection extends StatelessWidget {
   const _WorkspaceSection({
     super.key,
+    required this.contentKey,
     required this.twoPane,
     required this.isMobile,
     required this.viewportHeight,
@@ -807,6 +845,7 @@ class _WorkspaceSection extends StatelessWidget {
     required this.onSelectRoom,
     required this.onSelectAtmosphere,
   });
+  final GlobalKey contentKey;
   final bool twoPane;
   final bool isMobile;
   final double viewportHeight;
@@ -833,6 +872,7 @@ class _WorkspaceSection extends StatelessWidget {
             ? KeyedSubtree(
                 key: const ValueKey('upload'),
                 child: _UploadShowroom(
+                  contentKey: contentKey,
                   twoPane: twoPane,
                   viewportHeight: viewportHeight,
                   collapsedHeader: collapsedHeader,
@@ -842,6 +882,7 @@ class _WorkspaceSection extends StatelessWidget {
               )
             : _FastPath(
                 key: const ValueKey('fast'),
+                contentKey: contentKey,
                 twoPane: twoPane,
                 isMobile: isMobile,
                 viewportHeight: viewportHeight,
@@ -866,12 +907,14 @@ class _WorkspaceSection extends StatelessWidget {
 /// right), left editorial column (~38%), right premium upload zone (~62%).
 class _UploadShowroom extends StatelessWidget {
   const _UploadShowroom({
+    required this.contentKey,
     required this.twoPane,
     required this.viewportHeight,
     required this.collapsedHeader,
     required this.onPick,
     required this.onExample,
   });
+  final GlobalKey contentKey;
   final bool twoPane;
   final double viewportHeight;
   final double collapsedHeader;
@@ -882,10 +925,11 @@ class _UploadShowroom extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       // Official Ayden Studio lockup (transparent → composites cleanly on the
-      // dark panel). Not redrawn / retyped / faked.
+      // dark panel). Not redrawn / retyped / faked. §3 — enlarged ~1.6× so it
+      // reads clearly on a large monitor, without competing with the headline.
       Image.asset(
         kAydenLogoHero,
-        height: twoPane ? 54 : 42,
+        height: twoPane ? 88 : 64,
         fit: BoxFit.contain,
         errorBuilder: (_, _, _) => const SizedBox.shrink(),
       ),
@@ -900,57 +944,69 @@ class _UploadShowroom extends StatelessWidget {
     final canvas = _DropZone(onPick: onPick);
 
     if (!twoPane) {
-      // Mobile — header, editorial, then a tall premium upload canvas.
+      // Mobile — a CONTENT-SIZED block (no internal header reservation): the
+      // Hero-CTA scroll frames THIS block, so padding here is just breathing
+      // room, not a header offset.
       return Padding(
-        padding: EdgeInsets.fromLTRB(24, collapsedHeader + 24, 24, 36),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _header(),
-            const SizedBox(height: 28),
-            copy,
-            const SizedBox(height: 26),
-            SizedBox(height: 320, child: canvas),
-          ],
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+        child: KeyedSubtree(
+          key: contentKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _header(),
+              const SizedBox(height: 28),
+              copy,
+              const SizedBox(height: 26),
+              SizedBox(height: 320, child: canvas),
+            ],
+          ),
         ),
       );
     }
 
-    // Desktop — full-viewport composition: header pinned top, editorial (left)
-    // centred against a dominant upload surface (right).
-    return SizedBox(
-      width: double.infinity,
-      height: viewportHeight,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(64, collapsedHeader + 28, 64, 44),
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final w = c.maxWidth > 1360 ? 1360.0 : c.maxWidth;
-            return Center(
-              child: SizedBox(
-                width: w,
-                height: c.maxHeight,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+    // Desktop — a CONTENT-SIZED two-column composition (editorial left, dominant
+    // upload right). The upload frame gets a definite height near the available
+    // viewport, so the whole block reads as ONE balanced unit that the CTA
+    // scroll frames just below the header. No viewport-height wrapper, no
+    // internal header reservation, and NO vertical Center pushing the copy low —
+    // the editorial copy is centred against the upload frame (the approved
+    // two-column design), not against an empty full-viewport box.
+    // The upload frame fills most of the available viewport so the whole block
+    // reads as one tall balanced unit that top-aligns just below the header
+    // (minimal void above AND below) rather than floating in the lower half.
+    final canvasH = (viewportHeight - collapsedHeader - 150).clamp(
+      360.0,
+      900.0,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 64),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1360),
+          child: KeyedSubtree(
+            key: contentKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _header(),
+                const SizedBox(height: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    _header(),
-                    const SizedBox(height: 12),
+                    Expanded(flex: 38, child: copy),
+                    const SizedBox(width: 56),
                     Expanded(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(flex: 38, child: Center(child: copy)),
-                          const SizedBox(width: 56),
-                          Expanded(flex: 62, child: canvas),
-                        ],
-                      ),
+                      flex: 62,
+                      child: SizedBox(height: canvasH, child: canvas),
                     ),
                   ],
                 ),
-              ),
-            );
-          },
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1252,6 +1308,7 @@ class _DropZoneState extends State<_DropZone> {
 class _FastPath extends StatefulWidget {
   const _FastPath({
     super.key,
+    required this.contentKey,
     required this.twoPane,
     required this.isMobile,
     required this.viewportHeight,
@@ -1266,6 +1323,7 @@ class _FastPath extends StatefulWidget {
     required this.onReplace,
     required this.onRemove,
   });
+  final GlobalKey contentKey;
   final bool twoPane;
   final bool isMobile;
   final double viewportHeight;
@@ -1301,6 +1359,16 @@ class _FastPathState extends State<_FastPath> {
     _atmosPopScroll.dispose();
     _atmosOptScroll.dispose();
     super.dispose();
+  }
+
+  bool get _roomIsAuto => widget.selectedRoomId == null;
+  String get _roomLabel =>
+      pwaRoomById(widget.selectedRoomId)?.label ?? 'Ayden Decide';
+  String get _atmosphereName {
+    for (final a in widget.atmospheres) {
+      if (a.id == widget.selectedAtmosphereId) return a.name;
+    }
+    return 'Ayden Signature';
   }
 
   /// Scroll a horizontal row the minimum amount so card [index] is FULLY
@@ -1537,16 +1605,32 @@ class _FastPathState extends State<_FastPath> {
     );
 
     final generate = _GenerateArea(onGenerate: widget.onGenerate);
+    final intro = _FastPathIntro(
+      roomLabel: _roomLabel,
+      roomIsAuto: _roomIsAuto,
+      atmosphereName: _atmosphereName,
+      twoPane: widget.twoPane,
+      isMobile: widget.isMobile,
+    );
+    final summary = _FastPathSummary(
+      roomLabel: _roomLabel,
+      roomIsAuto: _roomIsAuto,
+      atmosphereName: _atmosphereName,
+    );
 
     if (!widget.twoPane) {
-      return SizedBox(
-        width: double.infinity,
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(20, widget.collapsedHeader + 24, 20, 32),
+      // §4.2/§5 — a CONTENT-SIZED block (no internal header reservation): the
+      // CTA scroll frames THIS block, so padding here is breathing room only.
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        child: KeyedSubtree(
+          key: widget.contentKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              intro,
+              const SizedBox(height: 22),
               _PhotoPanel(
                 bytes: widget.bytes,
                 onReplace: widget.onReplace,
@@ -1556,7 +1640,9 @@ class _FastPathState extends State<_FastPath> {
               roomLevel,
               const SizedBox(height: 20),
               atmosLevel,
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
+              summary,
+              const SizedBox(height: 12),
               generate,
             ],
           ),
@@ -1564,63 +1650,70 @@ class _FastPathState extends State<_FastPath> {
       );
     }
 
-    // Desktop — the workspace fits ENTIRELY below the pinned collapsed hero bar
-    // (which always occupies collapsedHeader at the top), so Generate stays
-    // visible without vertical scroll. The photo is the dominant hero on the
-    // left; the two aligned rows + anchored Generate on the right.
-    final botPad = widget.collapsedHeader + 40;
-    final boxH =
-        (widget.viewportHeight - (widget.collapsedHeader + 32) - botPad).clamp(
-          280.0,
-          widget.viewportHeight,
-        );
-    return SizedBox(
-      width: double.infinity,
-      height: widget.viewportHeight,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          64,
-          widget.collapsedHeader + 32,
-          64,
-          botPad,
-        ),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1500),
+    // Desktop (§3/§5) — a CONTENT-SIZED block that fills most of the available
+    // viewport below the header; the CTA scroll frames it just below the header
+    // (top-aligned). No viewport-height wrapper and no internal header
+    // reservation — the previous `collapsedHeader + …` paddings double-counted
+    // the header (measured intro at 216px instead of ~120).
+    final contentH = (widget.viewportHeight - widget.collapsedHeader - 56)
+        .clamp(360.0, 1000.0);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 64),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1500),
+          child: KeyedSubtree(
+            key: widget.contentKey,
             child: SizedBox(
-              height: boxH,
-              child: Row(
+              height: contentH,
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  intro,
+                  const SizedBox(height: 20),
                   Expanded(
-                    flex: 40,
-                    child: _PhotoPanel(
-                      bytes: widget.bytes,
-                      onReplace: widget.onReplace,
-                      onRemove: widget.onRemove,
-                      fillHeight: true,
-                    ),
-                  ),
-                  const SizedBox(width: 44),
-                  Expanded(
-                    flex: 60,
-                    child: Column(
+                    child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Expanded(
-                          child: SingleChildScrollView(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                roomLevel,
-                                const SizedBox(height: 26),
-                                atmosLevel,
-                              ],
-                            ),
+                          flex: 40,
+                          child: _PhotoPanel(
+                            bytes: widget.bytes,
+                            onReplace: widget.onReplace,
+                            onRemove: widget.onRemove,
+                            fillHeight: true,
                           ),
                         ),
-                        const SizedBox(height: 18),
-                        generate,
+                        const SizedBox(width: 44),
+                        Expanded(
+                          flex: 60,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Selectors + summary scroll together so only the
+                              // Generate button is a fixed footer — the scroll
+                              // area can never be starved into an overflow on a
+                              // short desktop window.
+                              Expanded(
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      roomLevel,
+                                      const SizedBox(height: 26),
+                                      atmosLevel,
+                                      const SizedBox(height: 16),
+                                      summary,
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              generate,
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1630,6 +1723,214 @@ class _FastPathState extends State<_FastPath> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Fast-Path editorial introduction (§4) ────────────────────────────────────
+
+const Color _fpGold = Color(0xFFD3B064);
+const Color _fpWhite = Color(0xFFFFFDFC);
+
+class _FastPathIntro extends StatelessWidget {
+  const _FastPathIntro({
+    required this.roomLabel,
+    required this.roomIsAuto,
+    required this.atmosphereName,
+    required this.twoPane,
+    required this.isMobile,
+  });
+  final String roomLabel;
+  final bool roomIsAuto;
+  final String atmosphereName;
+  final bool twoPane;
+  final bool isMobile;
+
+  @override
+  Widget build(BuildContext context) {
+    final titleSize = twoPane ? 30.0 : (isMobile ? 25.0 : 27.0);
+    final copy = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'CREATE YOUR FIRST VISION',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: isMobile ? 10 : 11,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 2.2,
+            color: _fpGold,
+            height: 1.3,
+            decoration: TextDecoration.none,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Shape your space with Ayden.',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: titleSize,
+            fontWeight: FontWeight.w500,
+            letterSpacing: -0.3,
+            color: _fpWhite,
+            height: 1.15,
+            decoration: TextDecoration.none,
+          ),
+        ),
+        SizedBox(height: isMobile ? 6 : 8),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: Text(
+            // §4.2 — a tighter single sentence on phones so the intro stays
+            // compact and the photo remains in the upper third.
+            isMobile
+                ? 'Your photo is ready — let Ayden set the room and direction, '
+                      'or choose your own.'
+                : 'Your photo is ready. Let Ayden identify the room and choose a '
+                      'signature direction — or select your own.',
+            maxLines: isMobile ? 2 : 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: isMobile ? 13.5 : 14,
+              fontWeight: FontWeight.w400,
+              color: _fpWhite.withValues(alpha: 0.62),
+              height: 1.45,
+              decoration: TextDecoration.none,
+            ),
+          ),
+        ),
+      ],
+    );
+
+    final indicators = <Widget>[
+      const _ReadinessIndicator(
+        icon: Icons.image_outlined,
+        label: 'Photo ready',
+      ),
+      _ReadinessIndicator(
+        icon: roomIsAuto ? Icons.auto_awesome : Icons.meeting_room_outlined,
+        label: roomIsAuto ? 'Ayden Decide active' : roomLabel,
+      ),
+      _ReadinessIndicator(
+        icon: Icons.palette_outlined,
+        label: '$atmosphereName selected',
+      ),
+    ];
+
+    if (twoPane) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: copy),
+          const SizedBox(width: 32),
+          Flexible(
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
+              children: indicators,
+            ),
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        copy,
+        SizedBox(height: isMobile ? 12 : 16),
+        // Mobile: a single compact scroll row (never a tall wrapped block);
+        // tablet: a wrapped row.
+        if (isMobile)
+          SizedBox(
+            height: 34,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const ClampingScrollPhysics(),
+              itemCount: indicators.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (_, i) => indicators[i],
+            ),
+          )
+        else
+          Wrap(spacing: 8, runSpacing: 8, children: indicators),
+      ],
+    );
+  }
+}
+
+/// §4.1 — a restrained readiness pill (explains an automatic default). Not an
+/// interactive Room/Atmosphere card; no green success colour, no checkbox.
+class _ReadinessIndicator extends StatelessWidget {
+  const _ReadinessIndicator({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
+  @override
+  Widget build(BuildContext context) => Container(
+    height: 34,
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.035),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: _fpGold.withValues(alpha: 0.22)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 15, color: _fpGold),
+        const SizedBox(width: 7),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: _fpWhite.withValues(alpha: 0.82),
+            decoration: TextDecoration.none,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+/// §6 — one-line selection summary above Generate (Room/Atmosphere in gold).
+class _FastPathSummary extends StatelessWidget {
+  const _FastPathSummary({
+    required this.roomLabel,
+    required this.roomIsAuto,
+    required this.atmosphereName,
+  });
+  final String roomLabel;
+  final bool roomIsAuto;
+  final String atmosphereName;
+  @override
+  Widget build(BuildContext context) {
+    final room = roomIsAuto ? 'Ayden Decide' : roomLabel;
+    const goldSpan = TextStyle(color: _fpGold, fontWeight: FontWeight.w600);
+    return Text.rich(
+      TextSpan(
+        style: TextStyle(
+          fontSize: 12,
+          height: 1.4,
+          color: _fpWhite.withValues(alpha: 0.55),
+          decoration: TextDecoration.none,
+        ),
+        children: [
+          const TextSpan(text: 'Ayden will create your first vision using '),
+          TextSpan(text: room, style: goldSpan),
+          const TextSpan(text: '  ·  '),
+          TextSpan(text: atmosphereName, style: goldSpan),
+        ],
+      ),
+      textAlign: TextAlign.center,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 }

@@ -9,37 +9,46 @@ import 'package:ai_home_architect/features/pwa/application/pwa_entry.dart';
 import 'package:ai_home_architect/features/pwa/application/pwa_layout.dart';
 import 'package:ai_home_architect/features/pwa/data/mock_pwa_experience_repository.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_experience.dart';
-import 'package:ai_home_architect/features/pwa/presentation/pwa_widgets.dart';
 import 'package:ai_home_architect/shared/widgets/reveal_hero.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 AydenImageSource _fakeSource() => AydenImageSource(
-      bytes: Uint8List.fromList(const [1, 2, 3, 4]),
-      filename: 'room.jpg',
-    );
+  bytes: Uint8List.fromList(const [1, 2, 3, 4]),
+  filename: 'room.jpg',
+);
 
 /// Build the PWA at [size], drive it to the architect phase deterministically,
 /// and return the container so tests can assert on state.
-Future<ProviderContainer> _pumpToArchitect(WidgetTester tester, Size size) async {
+Future<ProviderContainer> _pumpToArchitect(
+  WidgetTester tester,
+  Size size,
+) async {
   await tester.binding.setSurfaceSize(size);
   addTearDown(() => tester.binding.setSurfaceSize(null));
-  final container = ProviderContainer(overrides: [
-    pwaRepositoryProvider
-        .overrideWithValue(MockPwaExperienceRepository(workDelay: Duration.zero)),
-  ]);
+  final container = ProviderContainer(
+    overrides: [
+      pwaRepositoryProvider.overrideWithValue(
+        MockPwaExperienceRepository(workDelay: Duration.zero),
+      ),
+    ],
+  );
   addTearDown(container.dispose);
 
-  await tester.pumpWidget(UncontrolledProviderScope(
-    container: container,
-    child: const MaterialApp(home: PwaExperience()),
-  ));
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: PwaExperience()),
+    ),
+  );
   final controller = container.read(pwaControllerProvider.notifier);
   controller.setSource(_fakeSource()); // no room / atmosphere chosen
   await controller.generateFirstVision();
   await tester.pump(); // rebuild → architect
-  await tester.pump(const Duration(seconds: 3)); // clear reveal auto-sweep timers
+  await tester.pump(
+    const Duration(seconds: 3),
+  ); // clear reveal auto-sweep timers
   return container;
 }
 
@@ -51,11 +60,14 @@ void main() {
     });
   });
 
-  test('default PWA repository is the offline mock (no production service)', () {
-    final c = ProviderContainer();
-    addTearDown(c.dispose);
-    expect(c.read(pwaRepositoryProvider), isA<MockPwaExperienceRepository>());
-  });
+  test(
+    'default PWA repository is the offline mock (no production service)',
+    () {
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      expect(c.read(pwaRepositoryProvider), isA<MockPwaExperienceRepository>());
+    },
+  );
 
   group('Responsive layout utility', () {
     test('breakpoints map width → form factor', () {
@@ -67,17 +79,20 @@ void main() {
     });
   });
 
-  testWidgets('Primary flow reaches architect with the reveal, no mandatory choice',
-      (tester) async {
-    final container = await _pumpToArchitect(tester, const Size(1440, 900));
-    final state = container.read(pwaControllerProvider);
-    expect(state.phase, PwaPhase.architect);
-    expect(state.versions, hasLength(1));
-    // The Full Reveal (RevealHero) is present, with the atmospheres directly below.
-    expect(find.byType(RevealHero), findsWidgets);
-    expect(find.byType(PwaAtmosphereStrip), findsWidgets);
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'Primary flow reaches architect with the reveal, no mandatory choice',
+    (tester) async {
+      final container = await _pumpToArchitect(tester, const Size(1440, 900));
+      final state = container.read(pwaControllerProvider);
+      expect(state.phase, PwaPhase.architect);
+      expect(state.versions, hasLength(1));
+      // The Full Reveal (RevealHero) + the full-width Atmosphere block below it.
+      expect(find.byType(RevealHero), findsWidgets);
+      expect(find.text('ATMOSPHERE'), findsOneWidget);
+      expect(find.text('Vision 1 · Ayden Signature'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   group('Responsive smoke — no overflow', () {
     for (final size in const [
@@ -85,25 +100,47 @@ void main() {
       Size(768, 1024), // tablet
       Size(1440, 900), // desktop
     ]) {
-      testWidgets('renders architect at ${size.width.toInt()}x${size.height.toInt()}',
-          (tester) async {
-        await _pumpToArchitect(tester, size);
-        expect(tester.takeException(), isNull);
-      });
+      testWidgets(
+        'renders architect at ${size.width.toInt()}x${size.height.toInt()}',
+        (tester) async {
+          await _pumpToArchitect(tester, size);
+          expect(tester.takeException(), isNull);
+        },
+      );
     }
   });
 
-  testWidgets('Mobile version chip opens the near-full-screen versions sheet',
-      (tester) async {
+  testWidgets('Mobile architect is a single chronology (no versions sheet)', (
+    tester,
+  ) async {
     final container = await _pumpToArchitect(tester, const Size(390, 844));
-    // Header shows "1 vision"; tap it to open the sheet.
-    final chip = find.text('1 vision');
-    expect(chip, findsOneWidget);
-    await tester.tap(chip);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('Your visions'), findsOneWidget);
+    // §14/§28 — no separate versions sheet; the chat is the history.
+    expect(find.text('Your visions'), findsNothing);
+    expect(find.byType(RevealHero), findsOneWidget);
+    expect(find.text('Vision 1 · Ayden Signature'), findsOneWidget);
     expect(container.read(pwaControllerProvider).versions, hasLength(1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Back to Studio returns to the HERO, preserving state (§26)', (
+    tester,
+  ) async {
+    const size = Size(1440, 900);
+    final container = await _pumpToArchitect(tester, size);
+    expect(find.text('Back home'), findsOneWidget);
+    await tester.tap(find.text('Back home'));
+    await tester
+        .pumpAndSettle(); // entry mounts, skips cinematic, lands on hero
+    final s = container.read(pwaControllerProvider);
+    expect(s.phase, PwaPhase.entry); // back in the Studio entry
+    expect(s.hasSource, isTrue); // photo preserved
+    expect(s.versions, hasLength(1)); // version preserved
+    expect(s.returningToStudio, isFalse); // flag consumed
+    // §26 — it lands on the HERO (offset 0), NOT directly on the Fast Path.
+    final scrollable = tester.widget<Scrollable>(find.byType(Scrollable).first);
+    expect(scrollable.controller!.position.pixels, 0.0);
+    expect(find.text('Upload your room'), findsOneWidget); // hero CTA present
+    expect(find.text('Generate my vision'), findsNothing); // not the fast path
     expect(tester.takeException(), isNull);
   });
 }

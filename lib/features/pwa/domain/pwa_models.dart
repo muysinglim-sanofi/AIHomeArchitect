@@ -37,6 +37,7 @@ class PwaAtmosphere {
     required this.name,
     required this.asset,
     required this.visionAsset,
+    this.descriptor = '',
     this.isSignature = false,
   });
 
@@ -44,6 +45,11 @@ class PwaAtmosphere {
   final String name;
   final String asset;
   final String visionAsset;
+
+  /// Short three-word mood descriptor rendered under the atmosphere card
+  /// ("Warm · Timeless · Balanced"). Empty when unspecified.
+  final String descriptor;
+
   final bool isSignature;
 }
 
@@ -85,26 +91,26 @@ class PwaVision {
 
   /// Human label for the creation reason (mobile "Created from…" line).
   String get reasonLabel => switch (actionType) {
-        PwaActionType.signature => 'Ayden Signature',
-        PwaActionType.switchAtmosphere => 'Atmosphere · $atmosphereId',
-        PwaActionType.refine =>
-          instruction.isEmpty ? 'Refinement' : 'Refine · $instruction',
-      };
+    PwaActionType.signature => 'Ayden Signature',
+    PwaActionType.switchAtmosphere => 'Atmosphere · $atmosphereId',
+    PwaActionType.refine =>
+      instruction.isEmpty ? 'Refinement' : 'Refine · $instruction',
+  };
 
   PwaVision copyWith({bool? isCurrent}) => PwaVision(
-        versionId: versionId,
-        projectId: projectId,
-        visionNumber: visionNumber,
-        title: title,
-        atmosphereId: atmosphereId,
-        actionType: actionType,
-        afterAsset: afterAsset,
-        order: order,
-        parentVersionId: parentVersionId,
-        sourceMessageId: sourceMessageId,
-        instruction: instruction,
-        isCurrent: isCurrent ?? this.isCurrent,
-      );
+    versionId: versionId,
+    projectId: projectId,
+    visionNumber: visionNumber,
+    title: title,
+    atmosphereId: atmosphereId,
+    actionType: actionType,
+    afterAsset: afterAsset,
+    order: order,
+    parentVersionId: parentVersionId,
+    sourceMessageId: sourceMessageId,
+    instruction: instruction,
+    isCurrent: isCurrent ?? this.isCurrent,
+  );
 }
 
 /// A conversation message. A [reveal]/[loading] message binds to a vision via

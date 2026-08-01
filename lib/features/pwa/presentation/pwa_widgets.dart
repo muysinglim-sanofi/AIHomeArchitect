@@ -6,6 +6,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
@@ -13,6 +14,7 @@ import '../../../core/media/ayden_image_source.dart';
 import '../../../shared/widgets/reveal_hero.dart';
 import '../domain/pwa_models.dart';
 import 'pwa_brand.dart';
+import 'pwa_theme.dart';
 
 const Color kPwaGold = AppColors.accent; // #C8A86A
 
@@ -25,14 +27,13 @@ TextStyle pwaSerif({
   Color color = AppColors.textPrimary,
   double height = 1.15,
   double letterSpacing = -0.2,
-}) =>
-    TextStyle(
-      fontSize: fontSize,
-      fontWeight: fontWeight,
-      color: color,
-      height: height,
-      letterSpacing: letterSpacing,
-    );
+}) => TextStyle(
+  fontSize: fontSize,
+  fontWeight: fontWeight,
+  color: color,
+  height: height,
+  letterSpacing: letterSpacing,
+);
 
 // ── Brand header ─────────────────────────────────────────────────────────────
 
@@ -62,12 +63,18 @@ Widget _imgFallback(BuildContext _, Object _, StackTrace? _) =>
 
 Widget pwaBeforeImage(AydenImageSource? source, PwaProject project) =>
     source != null
-        ? Image.memory(source.bytes, fit: BoxFit.cover, errorBuilder: _imgFallback)
-        : Image.asset(project.originalAsset,
-            fit: BoxFit.cover, errorBuilder: _imgFallback);
+    ? Image.memory(source.bytes, fit: BoxFit.cover, errorBuilder: _imgFallback)
+    : Image.asset(
+        project.originalAsset,
+        fit: BoxFit.cover,
+        errorBuilder: _imgFallback,
+      );
 
-Widget pwaAfterImage(PwaVision vision) =>
-    Image.asset(vision.afterAsset, fit: BoxFit.cover, errorBuilder: _imgFallback);
+Widget pwaAfterImage(PwaVision vision) => Image.asset(
+  vision.afterAsset,
+  fit: BoxFit.cover,
+  errorBuilder: _imgFallback,
+);
 
 /// The Full-Reveal card — Before/After of the current vision, tappable to a
 /// full-screen view. Reuses the production RevealHero.
@@ -78,12 +85,23 @@ class PwaRevealCard extends StatelessWidget {
     required this.source,
     required this.project,
     this.aspectRatio = 4 / 3,
+    this.onDark = false,
+    this.showCaption = true,
   });
 
   final PwaVision vision;
   final AydenImageSource? source;
   final PwaProject project;
   final double aspectRatio;
+
+  /// When the card sits on a dark design surface (the Architect workspace / a
+  /// dark reveal frame) the caption below the image switches to warm-white.
+  final bool onDark;
+
+  /// V7 — when false, the built-in "Vision N · title" caption row is omitted so
+  /// the caller can render its own metadata strip (the Architect Full Reveal
+  /// shows a "Vision N • atmosphere • Created just now" line instead).
+  final bool showCaption;
 
   @override
   Widget build(BuildContext context) {
@@ -105,8 +123,11 @@ class PwaRevealCard extends StatelessWidget {
                 afterLabel: 'After',
                 showLabels: true,
               ),
+              // §9 — the full-screen affordance lives at the BOTTOM-right so it
+              // never overlaps the top-corner Before / After labels, at any
+              // divider position or width.
               Positioned(
-                top: 10,
+                bottom: 10,
                 right: 10,
                 child: _FullscreenButton(
                   onTap: () => showPwaFullscreenReveal(
@@ -120,21 +141,27 @@ class PwaRevealCard extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            _VisionChip(label: 'Vision ${vision.visionNumber}'),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                vision.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: pwaSerif(fontSize: 17, fontWeight: FontWeight.w500),
+        if (showCaption) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _VisionChip(label: 'Vision ${vision.visionNumber}'),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  vision.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: pwaSerif(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w500,
+                    color: onDark ? pwaOnDark : AppColors.textPrimary,
+                  ),
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -145,18 +172,21 @@ class _VisionChip extends StatelessWidget {
   final String label;
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-        decoration: BoxDecoration(
-          color: AppColors.textPrimary,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(label,
-            style: const TextStyle(
-                color: AppColors.surface,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.6)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+    decoration: BoxDecoration(
+      color: AppColors.textPrimary,
+      borderRadius: BorderRadius.circular(999),
+    ),
+    child: Text(
+      label,
+      style: const TextStyle(
+        color: AppColors.surface,
+        fontSize: 10.5,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.6,
+      ),
+    ),
+  );
 }
 
 class _FullscreenButton extends StatelessWidget {
@@ -164,17 +194,17 @@ class _FullscreenButton extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => Material(
-        color: Colors.black.withValues(alpha: 0.45),
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: const Padding(
-            padding: EdgeInsets.all(8),
-            child: Icon(Icons.fullscreen, size: 20, color: Colors.white),
-          ),
-        ),
-      );
+    color: Colors.black.withValues(alpha: 0.45),
+    shape: const CircleBorder(),
+    child: InkWell(
+      customBorder: const CircleBorder(),
+      onTap: onTap,
+      child: const Padding(
+        padding: EdgeInsets.all(8),
+        child: Icon(Icons.fullscreen, size: 20, color: Colors.white),
+      ),
+    ),
+  );
 }
 
 Future<void> showPwaFullscreenReveal(
@@ -188,30 +218,59 @@ Future<void> showPwaFullscreenReveal(
     barrierColor: Colors.black,
     builder: (ctx) => Dialog.fullscreen(
       backgroundColor: Colors.black,
-      child: Stack(
-        children: [
-          Center(
-            child: RevealHero(
-              afterImage: pwaAfterImage(vision),
-              beforeImage: pwaBeforeImage(source, project),
-              initialFraction: 0.32,
-              autoSweep: true,
-              beforeLabel: 'Before',
-              afterLabel: 'After',
-              showLabels: true,
-            ),
-          ),
-          Positioned(
-            top: 16,
-            right: 16,
-            child: SafeArea(
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white, size: 28),
-                onPressed: () => Navigator.of(ctx).pop(),
+      // §8 — Escape closes the full-screen reveal (keyboard accessible).
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              Navigator.of(ctx).pop(),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Stack(
+            children: [
+              Center(
+                child: RevealHero(
+                  afterImage: pwaAfterImage(vision),
+                  beforeImage: pwaBeforeImage(source, project),
+                  initialFraction: 0.32,
+                  autoSweep: true,
+                  beforeLabel: 'Before',
+                  afterLabel: 'After',
+                  showLabels: true,
+                ),
               ),
-            ),
+              // Discreet version + atmosphere caption (§8).
+              Positioned(
+                left: 20,
+                bottom: 20,
+                child: SafeArea(
+                  child: Text(
+                    'Vision ${vision.visionNumber} · ${vision.title}',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 16,
+                right: 16,
+                child: SafeArea(
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     ),
   );
@@ -257,8 +316,11 @@ class PwaAtmosphereStrip extends StatelessWidget {
 }
 
 class _AtmosphereTile extends StatelessWidget {
-  const _AtmosphereTile(
-      {required this.atmosphere, required this.selected, required this.onTap});
+  const _AtmosphereTile({
+    required this.atmosphere,
+    required this.selected,
+    required this.onTap,
+  });
   final PwaAtmosphere atmosphere;
   final bool selected;
   final VoidCallback? onTap;
@@ -267,7 +329,9 @@ class _AtmosphereTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final borderColor = selected
         ? kPwaGold
-        : (atmosphere.isSignature ? kPwaGold.withValues(alpha: 0.5) : AppColors.border);
+        : (atmosphere.isSignature
+              ? kPwaGold.withValues(alpha: 0.5)
+              : AppColors.border);
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
@@ -280,16 +344,23 @@ class _AtmosphereTile extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: borderColor, width: selected ? 2 : 1),
                 boxShadow: atmosphere.isSignature
-                    ? [BoxShadow(color: kPwaGold.withValues(alpha: 0.18), blurRadius: 10)]
+                    ? [
+                        BoxShadow(
+                          color: kPwaGold.withValues(alpha: 0.18),
+                          blurRadius: 10,
+                        ),
+                      ]
                     : null,
               ),
               clipBehavior: Clip.antiAlias,
               child: AspectRatio(
                 aspectRatio: 1.2,
-                child: Image.asset(atmosphere.asset,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) =>
-                        const ColoredBox(color: AppColors.surfaceVariant)),
+                child: Image.asset(
+                  atmosphere.asset,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) =>
+                      const ColoredBox(color: AppColors.surfaceVariant),
+                ),
               ),
             ),
             const SizedBox(height: 5),
@@ -308,7 +379,9 @@ class _AtmosphereTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      color: selected ? AppColors.textPrimary : AppColors.textSecondary,
+                      color: selected
+                          ? AppColors.textPrimary
+                          : AppColors.textSecondary,
                     ),
                   ),
                 ),
@@ -359,31 +432,40 @@ class PwaVersionFilmstrip extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                          color: selected ? kPwaGold : AppColors.border,
-                          width: selected ? 2 : 1),
+                        color: selected ? kPwaGold : AppColors.border,
+                        width: selected ? 2 : 1,
+                      ),
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.asset(v.afterAsset,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) =>
-                                const ColoredBox(color: AppColors.surfaceVariant)),
+                        Image.asset(
+                          v.afterAsset,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) =>
+                              const ColoredBox(color: AppColors.surfaceVariant),
+                        ),
                         Positioned(
                           left: 3,
                           bottom: 3,
                           child: Container(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 1,
+                            ),
                             decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.6),
-                                borderRadius: BorderRadius.circular(6)),
-                            child: Text('V${v.visionNumber}',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.w700)),
+                              color: Colors.black.withValues(alpha: 0.6),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'V${v.visionNumber}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -409,28 +491,35 @@ class _ViewAllButton extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 62,
-          decoration: BoxDecoration(
-            color: AppColors.surfaceVariant,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border),
+    onTap: onTap,
+    child: Container(
+      width: 62,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.grid_view_rounded,
+            size: 18,
+            color: AppColors.textSecondary,
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.grid_view_rounded, size: 18, color: AppColors.textSecondary),
-              const SizedBox(height: 3),
-              Text('All $count',
-                  style: const TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary)),
-            ],
+          const SizedBox(height: 3),
+          Text(
+            'All $count',
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }
 
 // ── Chat: text bubble + chips + composer ─────────────────────────────────────
@@ -471,30 +560,35 @@ class PwaLoadingBubble extends StatelessWidget {
   final String label;
   @override
   Widget build(BuildContext context) => Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 5),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
+    alignment: Alignment.centerLeft,
+    child: Container(
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2, color: kPwaGold),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: kPwaGold)),
-              const SizedBox(width: 10),
-              Text(label,
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 13.5)),
-            ],
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13.5,
+            ),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }
 
 class PwaChips extends StatelessWidget {
@@ -503,28 +597,31 @@ class PwaChips extends StatelessWidget {
   final ValueChanged<String> onTap;
   @override
   Widget build(BuildContext context) => Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final c in chips)
-            GestureDetector(
-              onTap: () => onTap(c),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: kPwaGold.withValues(alpha: 0.55)),
-                ),
-                child: Text(c,
-                    style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary)),
+    spacing: 8,
+    runSpacing: 8,
+    children: [
+      for (final c in chips)
+        GestureDetector(
+          onTap: () => onTap(c),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: kPwaGold.withValues(alpha: 0.55)),
+            ),
+            child: Text(
+              c,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
               ),
             ),
-        ],
-      );
+          ),
+        ),
+    ],
+  );
 }
 
 class PwaComposer extends StatefulWidget {
@@ -573,8 +670,10 @@ class _PwaComposerState extends State<PwaComposer> {
                   hintText: 'Ask Ayden anything…',
                   filled: true,
                   fillColor: AppColors.surface,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(999),
                     borderSide: const BorderSide(color: AppColors.border),
@@ -599,7 +698,11 @@ class _PwaComposerState extends State<PwaComposer> {
                 onTap: widget.enabled ? _send : null,
                 child: const Padding(
                   padding: EdgeInsets.all(12),
-                  child: Icon(Icons.arrow_upward, size: 20, color: Colors.white),
+                  child: Icon(
+                    Icons.arrow_upward,
+                    size: 20,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),
