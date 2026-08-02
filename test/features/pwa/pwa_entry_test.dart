@@ -115,11 +115,10 @@ void main() {
 
   // ── References + web guard + no web-only imports (§12.25–26) ────────────────
   group('assets, web guard & isolation invariants', () {
-    test('reference assets exist', () {
-      expect(
-        File('references/REF-PWA-UPLOAD-FASTPATH-V3.png').existsSync(),
-        isTrue,
-      );
+    // Batch 2.3 §12 — design references under references/ are documentation
+    // only: the product must not depend on their presence, so no product test
+    // asserts a reference file exists. The PRODUCTION asset check stays.
+    test('production room asset exists', () {
       expect(File('assets/cards/rooms/ayden_decide.png').existsSync(), isTrue);
     });
 

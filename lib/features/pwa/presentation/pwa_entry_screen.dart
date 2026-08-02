@@ -255,6 +255,9 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
     _focusWorkspace(animate: true);
   }
 
+  // §4 — global access to the My Projects library from the collapsed brand bar.
+  void _openLibrary() => ref.read(pwaControllerProvider.notifier).openLibrary();
+
   void _selectRoom(String? id) =>
       ref.read(pwaControllerProvider.notifier).selectRoom(id);
   void _selectAtmosphere(String id) =>
@@ -322,6 +325,7 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
                     isMobile: isMobile,
                     onUpload: _scrollToUpload,
                     onSkip: _skipCinematic,
+                    onProjects: _openLibrary,
                     hasSource: bytes != null,
                   ),
                 ),
@@ -368,6 +372,7 @@ class _RoomHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.isMobile,
     required this.onUpload,
     required this.onSkip,
+    required this.onProjects,
     required this.hasSource,
   });
 
@@ -378,6 +383,7 @@ class _RoomHeaderDelegate extends SliverPersistentHeaderDelegate {
   final bool isMobile;
   final VoidCallback onUpload;
   final VoidCallback onSkip;
+  final VoidCallback onProjects;
   final bool hasSource;
 
   @override
@@ -424,7 +430,11 @@ class _RoomHeaderDelegate extends SliverPersistentHeaderDelegate {
                 ignoring: compactOpacity < 0.5,
                 child: Opacity(
                   opacity: compactOpacity,
-                  child: _CompactBar(hasSource: hasSource, isMobile: isMobile),
+                  child: _CompactBar(
+                    hasSource: hasSource,
+                    isMobile: isMobile,
+                    onProjects: onProjects,
+                  ),
                 ),
               ),
           ],
@@ -607,9 +617,14 @@ class _HeroPoster extends StatelessWidget {
 }
 
 class _CompactBar extends StatelessWidget {
-  const _CompactBar({required this.hasSource, required this.isMobile});
+  const _CompactBar({
+    required this.hasSource,
+    required this.isMobile,
+    required this.onProjects,
+  });
   final bool hasSource;
   final bool isMobile;
+  final VoidCallback onProjects;
   @override
   Widget build(BuildContext context) {
     return Align(
@@ -627,7 +642,7 @@ class _CompactBar extends StatelessWidget {
           children: [
             const PwaLogoBadge(size: 34),
             const SizedBox(width: 12),
-            Flexible(
+            Expanded(
               child: Text(
                 hasSource ? 'Your space' : 'Ayden Studio',
                 maxLines: 1,
@@ -641,12 +656,67 @@ class _CompactBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Icon(
-              Icons.keyboard_arrow_down_rounded,
-              size: 20,
-              color: pwaOnDark.withValues(alpha: 0.45),
-            ),
+            _CompactProjectsButton(isMobile: isMobile, onTap: onProjects),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// My Projects access on the collapsed brand bar — text on desktop, icon on
+/// mobile. Discreet, and never present over the frozen cinematic (this bar only
+/// appears once the hero has collapsed).
+class _CompactProjectsButton extends StatelessWidget {
+  const _CompactProjectsButton({required this.isMobile, required this.onTap});
+  final bool isMobile;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'My Projects',
+      child: Tooltip(
+        message: 'My Projects',
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          child: InkWell(
+            key: const ValueKey('pwa-compact-projects'),
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(999),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: isMobile ? 6 : 10,
+                vertical: 6,
+              ),
+              child: isMobile
+                  ? Icon(
+                      Icons.grid_view_rounded,
+                      size: 19,
+                      color: pwaOnDark.withValues(alpha: 0.8),
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.grid_view_rounded,
+                          size: 16,
+                          color: pwaOnDark.withValues(alpha: 0.8),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'My Projects',
+                          style: pwaSans(
+                            fontSize: 13,
+                            color: pwaOnDark.withValues(alpha: 0.85),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
         ),
       ),
     );

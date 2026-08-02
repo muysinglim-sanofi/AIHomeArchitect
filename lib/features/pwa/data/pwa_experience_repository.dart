@@ -6,6 +6,7 @@
 library;
 
 import '../domain/pwa_models.dart';
+import '../domain/pwa_project.dart';
 
 abstract class PwaExperienceRepository {
   /// The mocked project (uploaded room → design session).
@@ -49,4 +50,41 @@ abstract class PwaExperienceRepository {
   /// Deterministic mocked "after" image for the Nth refine (cycles a small pool
   /// so refined versions look distinct in the prototype).
   String refineVisionAsset(int refineIndex);
+
+  // ── My Projects library (Batch 2.3) — in-memory, offline ─────────────────
+
+  /// All saved projects (a copy of the current in-memory store).
+  List<PwaProjectSnapshot> listProjects();
+
+  /// The snapshot for [projectId], or null if it no longer exists.
+  PwaProjectSnapshot? openProject(String projectId);
+
+  /// A fresh empty draft project (a new id, no visions, no chat). NOT added to
+  /// the listed library until it earns its first vision.
+  PwaProjectSnapshot createDraftProject();
+
+  /// Upsert [project] into the store (matched by projectId).
+  void saveProject(PwaProjectSnapshot project);
+
+  /// Rename the stored project (no-op if the title is blank or unknown id).
+  void renameProject(String projectId, String title);
+
+  /// Deep-copy [projectId] into a new independent project ("… Copy", new id),
+  /// stored and returned. null if the source id is unknown.
+  PwaProjectSnapshot? duplicateProject(String projectId);
+
+  /// Remove [projectId] from the store (only that project).
+  void deleteProject(String projectId);
+
+  /// Client-side filtered view (title / room / atmosphere), deterministic.
+  List<PwaProjectSnapshot> searchProjects(String query);
+
+  /// Client-side sorted view, deterministic.
+  List<PwaProjectSnapshot> sortProjects(PwaProjectSort order);
+
+  /// Display label for a fast-path room id (null / unknown → "Your space").
+  String roomLabel(String? roomId);
+
+  /// Monotonic ordering key for a library mutation (deterministic; no clock).
+  int nextLibraryOrder();
 }

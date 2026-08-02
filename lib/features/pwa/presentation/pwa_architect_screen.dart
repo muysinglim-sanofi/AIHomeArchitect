@@ -184,6 +184,7 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
           hasPrev: state.hasPreviousVision,
           hasNext: state.hasNextVision,
           onBack: _c.returnToStudio,
+          onProjects: _c.openLibrary,
           onPrev: _prevVision,
           onNext: _nextVision,
         ),
@@ -238,6 +239,7 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
           hasPrev: state.hasPreviousVision,
           hasNext: state.hasNextVision,
           onBack: _c.returnToStudio,
+          onProjects: _c.openLibrary,
           onPrev: _prevVision,
           onNext: _nextVision,
         ),
@@ -1000,6 +1002,7 @@ class _V7GlobalHeader extends StatelessWidget {
     required this.hasPrev,
     required this.hasNext,
     required this.onBack,
+    required this.onProjects,
     required this.onPrev,
     required this.onNext,
   });
@@ -1009,6 +1012,7 @@ class _V7GlobalHeader extends StatelessWidget {
   final bool hasPrev;
   final bool hasNext;
   final VoidCallback onBack;
+  final VoidCallback onProjects;
   final VoidCallback onPrev;
   final VoidCallback onNext;
 
@@ -1025,6 +1029,7 @@ class _V7GlobalHeader extends StatelessWidget {
       child: Row(
         children: [
           _V7BackButton(compact: compact, onTap: onBack),
+          _V7ProjectsButton(onTap: onProjects),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -1113,6 +1118,36 @@ class _V7BackButton extends StatelessWidget {
                   ],
                 ],
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Discreet access to the My Projects library from the workspace header (§4 —
+/// does not overload the header: an icon-only control with a tooltip).
+class _V7ProjectsButton extends StatelessWidget {
+  const _V7ProjectsButton({required this.onTap});
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'My Projects',
+      child: Tooltip(
+        message: 'My Projects',
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          child: InkWell(
+            key: const ValueKey('av7-projects-button'),
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(999),
+            child: const Padding(
+              padding: EdgeInsets.all(8),
+              child: Icon(Icons.grid_view_rounded, size: 19, color: av7OnDark),
             ),
           ),
         ),

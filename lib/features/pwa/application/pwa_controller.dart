@@ -14,8 +14,9 @@ import '../data/mock_pwa_experience_repository.dart';
 import '../data/pwa_experience_repository.dart';
 import '../domain/pwa_intent.dart';
 import '../domain/pwa_models.dart';
+import '../domain/pwa_project.dart';
 
-enum PwaPhase { entry, loading, architect }
+enum PwaPhase { entry, loading, architect, projects }
 
 /// Where the current source image came from. Governs mock honesty: only the
 /// bundled example may claim a known room type; an arbitrary user upload must
@@ -50,6 +51,9 @@ class PwaState {
     this.selectedAtmosphereId,
     this.generating = false,
     this.returningToStudio = false,
+    this.library = const [],
+    this.librarySort = PwaProjectSort.recentlyUpdated,
+    this.librarySearch = '',
   });
 
   final PwaPhase phase;
@@ -83,6 +87,51 @@ class PwaState {
   /// so the freshly-mounted entry screen jumps to the correct preserved section
   /// (§11). Consumed (cleared) once acted on — never persisted.
   final bool returningToStudio;
+
+  /// Batch 2.3 — the My Projects library (a mirror of the repository store, so
+  /// the UI rebuilds on every mutation) and its deterministic view state.
+  final List<PwaProjectSnapshot> library;
+  final PwaProjectSort librarySort;
+  final String librarySearch;
+
+  /// The id of the project currently loaded in the active session.
+  String get activeProjectId => project.projectId;
+
+  /// §4 — the active session as a DRAFT card: a photo has been uploaded but no
+  /// vision generated yet. Synthetic (never stored); the library shows it on top
+  /// with a "Draft" badge and "Continue setup", no fake vision count. Its cover
+  /// is the uploaded photo. Null once a vision exists or before any upload.
+  PwaProjectSnapshot? get activeDraft {
+    if (versions.isNotEmpty || source == null) return null;
+    final atmoId = selectedAtmosphereId ?? 'ayden_signature';
+    final atmo = atmospheres.firstWhere(
+      (a) => a.id == atmoId,
+      orElse: () => atmospheres.first,
+    );
+    return PwaProjectSnapshot(
+      projectId: project.projectId,
+      title: 'Untitled Space',
+      originalImageAsset: project.originalAsset,
+      roomId: selectedRoomId,
+      roomLabel: '', // resolved for display in the draft card
+      selectedAtmosphereId: atmo.id,
+      atmosphereLabel: atmo.name,
+      visions: const [],
+      messages: const [],
+      currentVisionId: null,
+      createdOrder: 0,
+      updatedOrder: 0,
+      updatedLabel: '',
+      status: PwaProjectStatus.draft,
+      source: source,
+    );
+  }
+
+  /// Library filtered by [librarySearch] then sorted by [librarySort].
+  List<PwaProjectSnapshot> get visibleProjects => PwaProjectSnapshot.sortedBy(
+    PwaProjectSnapshot.search(library, librarySearch),
+    librarySort,
+  );
 
   bool get hasSource => source != null;
   int get versionCount => versions.length;
@@ -144,6 +193,7 @@ class PwaState {
 
   PwaState copyWith({
     PwaPhase? phase,
+    PwaProject? project,
     AydenImageSource? source,
     PwaImageOrigin? sourceOrigin,
     String? selectedRoomId,
@@ -161,10 +211,13 @@ class PwaState {
     String? selectedAtmosphereId,
     bool? generating,
     bool? returningToStudio,
+    List<PwaProjectSnapshot>? library,
+    PwaProjectSort? librarySort,
+    String? librarySearch,
   }) {
     return PwaState(
       phase: phase ?? this.phase,
-      project: project,
+      project: project ?? this.project,
       atmospheres: atmospheres,
       source: clearSource ? null : (source ?? this.source),
       sourceOrigin: clearSource ? null : (sourceOrigin ?? this.sourceOrigin),
@@ -186,6 +239,9 @@ class PwaState {
       selectedAtmosphereId: selectedAtmosphereId ?? this.selectedAtmosphereId,
       generating: generating ?? this.generating,
       returningToStudio: returningToStudio ?? this.returningToStudio,
+      library: library ?? this.library,
+      librarySort: librarySort ?? this.librarySort,
+      librarySearch: librarySearch ?? this.librarySearch,
     );
   }
 }
@@ -198,6 +254,7 @@ class PwaController extends StateNotifier<PwaState> {
           project: _repo.project(),
           atmospheres: _repo.atmospheres(),
           selectedAtmosphereId: 'ayden_signature', // Ayden's default direction
+          library: _repo.listProjects(), // seeded My Projects library
         ),
       );
 
@@ -286,6 +343,8 @@ class PwaController extends StateNotifier<PwaState> {
       selectedAtmosphereId: chosen.id,
       messages: [intro],
     );
+    // §12 — the draft becomes a real, listed project on its first vision.
+    _syncActiveProject();
   }
 
   // ── In-architect actions ────────────────────────────────────────────────
@@ -400,6 +459,9 @@ class PwaController extends StateNotifier<PwaState> {
       );
     }
     state = state.copyWith(messages: [...state.messages, userMsg, aydenMsg]);
+    // §12 — advice/refine talk updates the conversation but never a vision;
+    // persist the chat so it is restored on resume, without reordering.
+    if (state.versions.isNotEmpty) _syncActiveProject(bumpUpdated: false);
   }
 
   /// REFINE cancel (§12) — dismiss a pending "Apply this change" offer without
@@ -610,5 +672,146 @@ class PwaController extends StateNotifier<PwaState> {
       selectedAtmosphereId: atmosphereId ?? state.selectedAtmosphereId,
       messages: messages,
     );
+    // §12 — a Refine / Atmosphere vision updates the project (count, cover,
+    // freshness) and re-sorts it to the top of "Recently updated".
+    _syncActiveProject();
   }
+
+  // ── My Projects library (Batch 2.3) ───────────────────────────────────────
+
+  PwaProject _descriptor(PwaProjectSnapshot s) => PwaProject(
+    projectId: s.projectId,
+    originalAsset: s.originalImageAsset,
+    title: s.title,
+  );
+
+  /// Meaningful default title once a project has its first vision (§4/§12):
+  /// Room-based ("Living Room Concept") — or a descriptive space name when the
+  /// room was left to Ayden Decide. Never the ambiguous "New Space".
+  String _defaultTitle() {
+    final label = _repo.roomLabel(state.selectedRoomId);
+    return label == 'Your space' ? 'Open-plan Living Space' : '$label Concept';
+  }
+
+  /// Snapshot the ACTIVE session into the library (upsert). No-op until the
+  /// project has earned its first vision. [bumpUpdated] re-stamps the freshness
+  /// / ordering (true for a new vision, false for chat-only or a passive sync).
+  void _syncActiveProject({bool bumpUpdated = true}) {
+    if (state.versions.isEmpty) return;
+    final existing = _repo.openProject(state.project.projectId);
+    final atmoId =
+        state.currentVision?.atmosphereId ??
+        state.selectedAtmosphereId ??
+        'ayden_signature';
+    final snapshot = PwaProjectSnapshot(
+      projectId: state.project.projectId,
+      title: existing?.title ?? _defaultTitle(),
+      originalImageAsset: state.project.originalAsset,
+      roomId: state.selectedRoomId,
+      roomLabel: _repo.roomLabel(state.selectedRoomId),
+      selectedAtmosphereId: atmoId,
+      atmosphereLabel: _atmosphere(atmoId).name,
+      visions: state.versions,
+      messages: state.messages,
+      currentVisionId: state.currentVisionId,
+      coverVisionId: state.currentVisionId,
+      createdOrder: existing?.createdOrder ?? _repo.nextLibraryOrder(),
+      updatedOrder: bumpUpdated
+          ? _repo.nextLibraryOrder()
+          : (existing?.updatedOrder ?? _repo.nextLibraryOrder()),
+      updatedLabel: bumpUpdated
+          ? 'Updated today'
+          : (existing?.updatedLabel ?? 'Updated today'),
+      status: PwaProjectStatus.active,
+      source: state.source,
+    );
+    _repo.saveProject(snapshot);
+    state = state.copyWith(library: _repo.listProjects());
+  }
+
+  /// Open the My Projects library (persists the in-progress project first).
+  void openLibrary() {
+    if (state.versions.isNotEmpty) _syncActiveProject(bumpUpdated: false);
+    state = state.copyWith(
+      phase: PwaPhase.projects,
+      clearPreview: true,
+      clearPending: true,
+      library: _repo.listProjects(),
+    );
+  }
+
+  /// RESUME a saved project — restore its photo, Room, Atmosphere, every Vision,
+  /// the current Vision and the full conversation, and land in the Architect.
+  /// Creates NO vision and starts NO generation.
+  void openProject(String projectId) {
+    final s = _repo.openProject(projectId);
+    if (s == null) return;
+    state = PwaState(
+      phase: PwaPhase.architect,
+      project: _descriptor(s),
+      atmospheres: state.atmospheres,
+      source: s.source,
+      sourceOrigin: s.source != null ? PwaImageOrigin.userUpload : null,
+      selectedRoomId: s.roomId,
+      messages: s.messages,
+      versions: s.visions,
+      currentVisionId: s.currentVisionId,
+      selectedAtmosphereId: s.selectedAtmosphereId ?? 'ayden_signature',
+      generating: false,
+      library: _repo.listProjects(),
+      librarySort: state.librarySort,
+      librarySearch: state.librarySearch,
+    );
+  }
+
+  /// NEW PROJECT — persist the current project (if any), then start a fresh
+  /// draft: clear the photo, reset Room to Ayden Decide and Atmosphere to Ayden
+  /// Signature, clear Visions/chat, and land on the Hero. Saved projects survive.
+  void newProject() {
+    if (state.versions.isNotEmpty) _syncActiveProject(bumpUpdated: false);
+    final draft = _repo.createDraftProject();
+    state = PwaState(
+      phase: PwaPhase.entry,
+      project: _descriptor(draft),
+      atmospheres: state.atmospheres,
+      selectedAtmosphereId: 'ayden_signature',
+      generating: false,
+      returningToStudio: true, // land on the Hero, no cinematic replay
+      library: _repo.listProjects(),
+      librarySort: state.librarySort,
+      librarySearch: state.librarySearch,
+    );
+  }
+
+  void renameProject(String projectId, String title) {
+    final t = title.trim();
+    if (t.isEmpty) return;
+    _repo.renameProject(projectId, t);
+    // Keep the active session's title in step if it is the one being renamed.
+    final project = projectId == state.project.projectId
+        ? PwaProject(
+            projectId: projectId,
+            originalAsset: state.project.originalAsset,
+            title: t,
+          )
+        : state.project;
+    state = state.copyWith(project: project, library: _repo.listProjects());
+  }
+
+  PwaProjectSnapshot? duplicateProject(String projectId) {
+    final dup = _repo.duplicateProject(projectId);
+    state = state.copyWith(library: _repo.listProjects());
+    return dup;
+  }
+
+  void deleteProject(String projectId) {
+    _repo.deleteProject(projectId);
+    state = state.copyWith(library: _repo.listProjects());
+  }
+
+  void setLibrarySort(PwaProjectSort order) =>
+      state = state.copyWith(librarySort: order);
+
+  void setLibrarySearch(String query) =>
+      state = state.copyWith(librarySearch: query);
 }

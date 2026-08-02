@@ -13,6 +13,7 @@ import '../application/pwa_controller.dart';
 import 'pwa_architect_screen.dart';
 import 'pwa_entry_screen.dart';
 import 'pwa_loading_screen.dart';
+import 'pwa_projects_screen.dart';
 
 class PwaExperience extends ConsumerWidget {
   const PwaExperience({super.key});
@@ -24,6 +25,7 @@ class PwaExperience extends ConsumerWidget {
       PwaPhase.entry => const PwaEntryScreen(),
       PwaPhase.loading => const PwaLoadingScreen(),
       PwaPhase.architect => const PwaArchitectScreen(),
+      PwaPhase.projects => const PwaProjectsScreen(),
     };
   }
 }
