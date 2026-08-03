@@ -15,7 +15,7 @@
 /// flags are OFF). This client is NOT wired to any auth / boot / UI flow in
 /// FT2-A; it is a standalone tool for FT2-B/C to call later.
 ///
-/// Mirrors the JWT-injection Dio convention of PromoService / StatusService
+/// Mirrors the JWT-injection Dio convention of StatusService
 /// (own Dio, request-time Bearer, validateStatus < 500 to read error codes).
 library;
 

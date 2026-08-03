@@ -43,14 +43,13 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/feature_flags.dart';
 import '../../core/l10n/app_localizations.dart';
 import '../../data/services/revenuecat_service.dart';
 import '../../data/services/status_service.dart';
-import '../promo/promo_redeem_sheet.dart';
 import '../../shared/widgets/app_button.dart';
+import '../../shared/widgets/legal_compliance_footer.dart';
 import '../../shared/widgets/reveal_hero.dart';
 
 // ── Palette (paywall-local — dark luxury theme) ─────────────────────────────
@@ -480,7 +479,11 @@ class _PaywallSheetState extends State<PaywallSheet> {
         // checklists already convey the value, an extra row below the
         // prices was visual noise.
         const SizedBox(height: 16),
-        const _LegalComplianceFooter(),
+        const LegalComplianceFooter(
+          disclosureColor: _textDim,
+          linkColor: _champagne,
+          underlineColor: _goldLight,
+        ),
         const SizedBox(height: 16),
         const _PaymentTrustFooter(),
         const SizedBox(height: 14),
@@ -603,7 +606,11 @@ class _PaywallSheetState extends State<PaywallSheet> {
                     style: const TextStyle(color: _textDim, fontSize: 11.5),
                   ),
                   const SizedBox(height: 14),
-                  const _LegalComplianceFooter(),
+                  const LegalComplianceFooter(
+                    disclosureColor: _textDim,
+                    linkColor: _champagne,
+                    underlineColor: _goldLight,
+                  ),
                   const SizedBox(height: 24),
                   const _PaymentTrustFooter(),
                   const SizedBox(height: 16),
@@ -1774,96 +1781,12 @@ class _PaymentChip extends StatelessWidget {
   }
 }
 
-// ── App Store compliance : subscription disclosure + legal links ────────────
-//
-// Apple Guideline 3.1.2 requires the paywall itself to state that payment is
-// charged to the Apple ID, that the subscription auto-renews unless cancelled
-// at least 24h before the period ends, and where it can be managed/cancelled ;
-// plus reachable Privacy Policy and Terms of Use (EULA) links.
-//
-// PURE UI. No billing / RevenueCat / purchase logic here — this block only
-// renders text and opens two external URLs in the system browser.
-
-/// Ayden Studio privacy policy (hosted on the official site).
-const String _kPrivacyPolicyUrl = 'https://aydenstudio.com/privacy';
-
-/// Apple's standard EULA — used as our Terms of Use (no self-hosted terms page).
-const String _kTermsOfUseUrl =
-    'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
-
-class _LegalComplianceFooter extends StatelessWidget {
-  const _LegalComplianceFooter();
-
-  Future<void> _open(String url) async {
-    try {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } catch (_) {/* best-effort : n'interrompt jamais le paywall */}
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return Column(
-      children: [
-        Text(
-          l10n.pwLegalDisclosure,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: _textDim, fontSize: 10.5, height: 1.45),
-        ),
-        const SizedBox(height: 2),
-        // Wrap (not Row) : the FR/KM labels are long and must never overflow
-        // on narrow devices — they fold onto a second line instead.
-        Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            _LegalLink(
-              label: l10n.pwPrivacyPolicy,
-              onTap: () => _open(_kPrivacyPolicyUrl),
-            ),
-            _LegalLink(
-              label: l10n.pwTermsOfUse,
-              onTap: () => _open(_kTermsOfUseUrl),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _LegalLink extends StatelessWidget {
-  final String label;
-  final VoidCallback onTap;
-
-  const _LegalLink({required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      link: true,
-      child: TextButton(
-        onPressed: onTap,
-        style: TextButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-          minimumSize: const Size(0, 40),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          foregroundColor: _textMuted,
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
-            decoration: TextDecoration.underline,
-            decorationColor: _textDim,
-          ),
-        ),
-      ),
-    );
-  }
-}
+// App Store compliance (Apple 3.1.2) legal footer — auto-renew disclosure +
+// Privacy Policy / Terms of Use links — is the shared LegalComplianceFooter
+// widget (lib/shared/widgets/legal_compliance_footer.dart). It renders the
+// links FIRST (prominent, directly under the CTA) so a reviewer sees them the
+// moment they reach the purchase button. Reused here (dark palette) and in the
+// Premium Center upgrade (themed palette).
 
 // ── Restore + dismiss ───────────────────────────────────────────────────────
 
@@ -1908,9 +1831,6 @@ class _RestoreAndDismissActions extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-        // Sprint 1B — discreet promo entry (never competes with the sub CTAs).
-        const PromoCodeLink(),
-        const SizedBox(height: 6),
         AppButton(
           label: context.l10n.pwNotNow,
           variant: AppButtonVariant.ghost,

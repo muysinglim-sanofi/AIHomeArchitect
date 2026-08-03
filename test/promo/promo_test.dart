@@ -70,57 +70,31 @@ void main() {
     });
   });
 
-  group('AppLocalizations — promo strings (EN/FR/KM)', () {
+  // In-app promo REDEMPTION and the admin promo panel were removed for App
+  // Store compliance (Premium is unlocked only via StoreKit/RevenueCat). Only
+  // the PASSIVE access-status labels remain — the backend can still grant a
+  // promo out-of-band and the UI must label it. These verify that retained path.
+  group('AppLocalizations — retained passive promo labels (EN/FR/KM)', () {
     final locales = [
       const Locale('en'),
       const Locale('fr'),
       const Locale('km'),
     ];
 
-    test('promoError maps every backend code to a non-empty message', () {
-      const codes = [
-        'invalid_code',
-        'expired_code',
-        'inactive_code',
-        'already_redeemed',
-        'max_redemptions_reached',
-        'rate_limited',
-        'network',
-        'something_unknown', // → generic fallback
-      ];
+    test('promoAccessLimited interpolates {n}', () {
       for (final loc in locales) {
         final l10n = AppLocalizations(loc);
-        for (final c in codes) {
-          expect(l10n.promoError(c).trim(), isNotEmpty,
-              reason: '${loc.languageCode}/$c');
-        }
-      }
-    });
-
-    test('promoSuccessLimited / promoAccessLimited interpolate {n}', () {
-      for (final loc in locales) {
-        final l10n = AppLocalizations(loc);
-        expect(l10n.promoSuccessLimited(25), contains('25'));
-        expect(l10n.promoSuccessLimited(25), isNot(contains('{n}')));
         expect(l10n.promoAccessLimited(7), contains('7'));
         expect(l10n.promoAccessLimited(7), isNot(contains('{n}')));
       }
     });
 
-    test('key promo/admin getters are localized (not raw keys)', () {
+    test('passive promo-access getters are localized (not raw keys)', () {
       for (final loc in locales) {
         final l10n = AppLocalizations(loc);
-        for (final v in [
-          l10n.promoHaveCode,
-          l10n.promoApply,
-          l10n.promoAccessUnlimited,
-          l10n.admPromoCodes,
-          l10n.admGenerateCode,
-          l10n.admCreate,
-        ]) {
+        for (final v in [l10n.promoAccessUnlimited, l10n.promoAccessLabel]) {
           expect(v.trim(), isNotEmpty);
           expect(v.startsWith('promo'), isFalse); // not the raw key
-          expect(v.startsWith('adm'), isFalse);
         }
       }
     });

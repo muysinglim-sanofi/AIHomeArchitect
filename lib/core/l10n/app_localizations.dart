@@ -534,73 +534,15 @@ class AppLocalizations {
   // Backend `generation_mode` still accepted ; UI no longer renders a
   // choice. Re-introduce here if creative mode ever returns to the UI.
 
-  // ── Sprint 1B — Promo codes (redemption) ──────────────────────────────────
-  String get promoHaveCode => _get('promoHaveCode');
-  String get promoRedeemTitle => _get('promoRedeemTitle');
-  String get promoRedeemSubtitle => _get('promoRedeemSubtitle');
-  String get promoCodeHint => _get('promoCodeHint');
-  String get promoApply => _get('promoApply');
-  String get promoDone => _get('promoDone');
-  String get promoSuccessUnlimited => _get('promoSuccessUnlimited');
-  String promoSuccessLimited(int n) =>
-      _get('promoSuccessLimited').replaceAll('{n}', '$n');
+  // ── Promo access (passive status display only) ────────────────────────────
+  // In-app promo REDEMPTION and the admin promo panel were removed (App Store
+  // compliance — Premium is unlocked only via StoreKit/RevenueCat). These three
+  // remain solely to LABEL an already-granted promo access in the status UI;
+  // they open no redemption path.
   String get promoAccessUnlimited => _get('promoAccessUnlimited');
   String get promoAccessLabel => _get('promoAccessLabel');
   String promoAccessLimited(int n) =>
       _get('promoAccessLimited').replaceAll('{n}', '$n');
-
-  /// Maps a backend error_code → a localized message.
-  String promoError(String code) {
-    switch (code) {
-      case 'invalid_code':
-        return _get('promoErrInvalidCode');
-      case 'expired_code':
-        return _get('promoErrExpired');
-      case 'inactive_code':
-        return _get('promoErrInactive');
-      case 'already_redeemed':
-        return _get('promoErrAlready');
-      case 'max_redemptions_reached':
-        return _get('promoErrMaxRedemptions');
-      case 'rate_limited':
-        return _get('promoErrRateLimited');
-      case 'network':
-        return _get('promoErrNetwork');
-      default:
-        return _get('promoErrGeneric');
-    }
-  }
-
-  // ── Sprint 1B — Admin promo panel ─────────────────────────────────────────
-  String get admTitle => _get('admTitle');
-  String get admPromoCodes => _get('admPromoCodes');
-  String get admGenerateCode => _get('admGenerateCode');
-  String get admType => _get('admType');
-  String get admTypeLimited => _get('admTypeLimited');
-  String get admTypeUnlimited => _get('admTypeUnlimited');
-  String get admCustomCode => _get('admCustomCode');
-  String get admCustomCodeHint => _get('admCustomCodeHint');
-  String get admGenerationLimit => _get('admGenerationLimit');
-  String get admMaxRedemptions => _get('admMaxRedemptions');
-  String get admExpiresAt => _get('admExpiresAt');
-  String get admExpiresNone => _get('admExpiresNone');
-  String get admCampaign => _get('admCampaign');
-  String get admNote => _get('admNote');
-  String get admOptional => _get('admOptional');
-  String get admCreate => _get('admCreate');
-  String get admCreating => _get('admCreating');
-  String get admCodesTitle => _get('admCodesTitle');
-  String get admNoCodes => _get('admNoCodes');
-  String get admActive => _get('admActive');
-  String get admInactive => _get('admInactive');
-  String get admDisable => _get('admDisable');
-  String get admEnable => _get('admEnable');
-  String get admCopy => _get('admCopy');
-  String get admCopied => _get('admCopied');
-  String get admUnlimited => _get('admUnlimited');
-  String get admErrCreate => _get('admErrCreate');
-  String get admErrConflict => _get('admErrConflict');
-  String get admRedeemedLabel => _get('admRedeemedLabel');
 }
 
 // ── Delegate ──────────────────────────────────────────────────────────────────

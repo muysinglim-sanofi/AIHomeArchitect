@@ -18,7 +18,6 @@ import '../paywall/paywall_sheet.dart';
 import '../premium/premium_center_sheet.dart';
 import '../../data/services/auth_service.dart';
 import '../auth/sign_in_screen.dart';
-import '../admin/admin_promo_screen.dart';
 import 'account_section.dart';
 
 /// P0 bloc (b) H — compte les redesigns RÉUSSIS : une session ne porte un
@@ -176,31 +175,6 @@ class ProfileScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            // ── Sprint 1B — Admin section (visible ONLY if backend says admin;
-            // the real gate is server-side is_admin_role on every endpoint) ──
-            if (meStatus?.isAdmin == true) ...[
-              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
-              _SectionHeader(label: l10n.admTitle),
-              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.sm)),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.pagePadding),
-                  child: _SettingsCard(
-                    items: [
-                      _SettingItem(
-                        icon: Icons.confirmation_number_outlined,
-                        label: l10n.admPromoCodes,
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                              builder: (_) => const AdminPromoScreen()),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
             // ── Voluntary sign-in entry (Wave 5.17b, hidden in 5.17d) ─────
             // The funnel no longer requires sign-in (Decision Wave 5.17d).
             // Restore Purchases lives on the paywall sheet (D7). To

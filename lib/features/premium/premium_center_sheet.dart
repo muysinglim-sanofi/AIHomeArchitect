@@ -29,6 +29,7 @@ import '../../core/providers/me_status_provider.dart';
 import '../../data/services/revenuecat_service.dart';
 import '../../data/services/status_service.dart';
 import '../../shared/widgets/app_button.dart';
+import '../../shared/widgets/legal_compliance_footer.dart';
 import '../paywall/paywall_sheet.dart';
 
 /// Product-id App Store du pass Annual (autorité = App Store Connect / backend
@@ -399,7 +400,10 @@ class _PremiumCenterSheetState extends ConsumerState<PremiumCenterSheet> {
         view.mode == PremiumCenterMode.premiumGeneric;
 
     return SafeArea(
-      child: Container(
+      // Scrollable so the card never clips/overflows on short screens (e.g.
+      // iPhone SE) once the App Store legal footer is appended under the
+      // upgrade CTA — visually identical on tall screens where it already fits.
+      child: SingleChildScrollView(child: Container(
         margin: const EdgeInsets.all(AppSpacing.md),
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
@@ -476,7 +480,7 @@ class _PremiumCenterSheetState extends ConsumerState<PremiumCenterSheet> {
             ),
           ],
         ),
-      ),
+      )),
     );
   }
 
@@ -524,6 +528,15 @@ class _PremiumCenterSheetState extends ConsumerState<PremiumCenterSheet> {
             variant: AppButtonVariant.primary,
             loading: _upgrading, // spinner + CTA désactivé pendant l'achat/sync
             onPressed: _upgrade,
+          ),
+          // App Store compliance (Apple 3.1.2) — the Weekly→Annual upgrade is a
+          // purchase, so the legal links + auto-renew disclosure sit right under
+          // its CTA. Same shared widget as the paywall (themed palette).
+          const SizedBox(height: AppSpacing.sm),
+          const LegalComplianceFooter(
+            disclosureColor: AppColors.textSecondary,
+            linkColor: AppColors.accent,
+            underlineColor: AppColors.accent,
           ),
         ],
       ),
