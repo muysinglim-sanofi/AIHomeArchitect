@@ -40,10 +40,10 @@ class PwaProjectsScreen extends ConsumerWidget {
 
     final query = state.librarySearch.trim();
     final results = state.visibleProjects;
-    // The active draft is a top-of-grid card only when not searching.
-    final draft = query.isEmpty ? state.activeDraft : null;
-    final showGlobalEmpty =
-        state.library.isEmpty && draft == null && query.isEmpty;
+    // Step 6A — a pre-Generate creation is NOT a project: no synthetic Draft card
+    // in My Projects. The grid shows only usable generated projects (results).
+    const PwaProjectSnapshot? draft = null;
+    final showGlobalEmpty = results.isEmpty && query.isEmpty;
     final showSearchEmpty = query.isNotEmpty && results.isEmpty;
 
     return Material(
@@ -786,9 +786,16 @@ class _DraftBadge extends StatelessWidget {
 enum _CardAction { rename, duplicate, delete }
 
 class _CardMenu extends ConsumerWidget {
-  const _CardMenu({required this.project, this.hovered = false});
+  const _CardMenu({
+    required this.project,
+    this.hovered = false,
+    this.renameOnly = false,
+  });
   final PwaProjectSnapshot project;
   final bool hovered;
+
+  /// A Draft has no meaningful Duplicate/Delete yet — show only Rename.
+  final bool renameOnly;
 
   void _run(BuildContext context, WidgetRef ref, _CardAction action) {
     final c = ref.read(pwaControllerProvider.notifier);
@@ -933,19 +940,21 @@ class _CardMenu extends ConsumerWidget {
             ),
             const SizedBox(height: 6),
             _sheetTile(ctx, Icons.edit_outlined, 'Rename', _CardAction.rename),
-            _sheetTile(
-              ctx,
-              Icons.copy_all_outlined,
-              'Duplicate',
-              _CardAction.duplicate,
-            ),
-            _sheetTile(
-              ctx,
-              Icons.delete_outline_rounded,
-              'Delete',
-              _CardAction.delete,
-              danger: true,
-            ),
+            if (!renameOnly) ...[
+              _sheetTile(
+                ctx,
+                Icons.copy_all_outlined,
+                'Duplicate',
+                _CardAction.duplicate,
+              ),
+              _sheetTile(
+                ctx,
+                Icons.delete_outline_rounded,
+                'Delete',
+                _CardAction.delete,
+                danger: true,
+              ),
+            ],
             const SizedBox(height: 6),
           ],
         ),
@@ -1015,17 +1024,19 @@ class _CardMenu extends ConsumerWidget {
         onSelected: (a) => _run(context, ref, a),
         itemBuilder: (ctx) => [
           _menuItem(_CardAction.rename, Icons.edit_outlined, 'Rename'),
-          _menuItem(
-            _CardAction.duplicate,
-            Icons.copy_all_outlined,
-            'Duplicate',
-          ),
-          _menuItem(
-            _CardAction.delete,
-            Icons.delete_outline_rounded,
-            'Delete',
-            danger: true,
-          ),
+          if (!renameOnly) ...[
+            _menuItem(
+              _CardAction.duplicate,
+              Icons.copy_all_outlined,
+              'Duplicate',
+            ),
+            _menuItem(
+              _CardAction.delete,
+              Icons.delete_outline_rounded,
+              'Delete',
+              danger: true,
+            ),
+          ],
         ],
         child: target,
       ),
@@ -1288,6 +1299,17 @@ class _DraftProjectCardState extends State<_DraftProjectCard> {
                 ),
               ),
               const Positioned(top: 12, left: 12, child: _DraftBadge()),
+              // Rename is reachable on the Draft via the SAME card menu (rename
+              // only — Duplicate/Delete are meaningless before the first Vision).
+              Positioned(
+                top: 5,
+                right: 5,
+                child: _CardMenu(
+                  project: widget.draft,
+                  hovered: lifted,
+                  renameOnly: true,
+                ),
+              ),
             ],
           ),
           Padding(

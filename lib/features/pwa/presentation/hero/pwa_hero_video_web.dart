@@ -8,14 +8,20 @@ import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/widgets.dart';
-// `web` ships with the Flutter web engine (transitive); we intentionally do NOT
-// add it to pubspec (no dependency change for this batch).
-// ignore: depend_on_referenced_packages
 import 'package:web/web.dart' as web;
 
 import 'pwa_hero_video.dart';
 
 int _counter = 0;
+
+/// A tiny mutable box the view-factory closure captures INSTEAD of the video
+/// element (or `this`). Nulling it on dispose lets the detached `<video>` be
+/// garbage-collected even though the platform-view registry keeps the factory
+/// for the life of the tab (`dart:ui_web` exposes no unregister API).
+class _HeroVideoHolder {
+  _HeroVideoHolder(this.element);
+  web.HTMLElement? element;
+}
 
 class _WebHeroVideo implements PwaHeroVideo {
   _WebHeroVideo({
@@ -68,14 +74,21 @@ class _WebHeroVideo implements PwaHeroVideo {
     _video.addEventListener('error', _errorJs);
     _video.addEventListener('stalled', _errorJs);
 
+    // Capture a HOLDER local — never `this` or the `_video` field — so dispose()
+    // can release the element for GC (the registry keeps this factory forever;
+    // every Replay-intro tap builds a fresh instance that would otherwise leak
+    // its detached <video> + decoder for the life of the tab).
+    final holder = _HeroVideoHolder(_video);
+    _holder = holder;
     ui_web.platformViewRegistry.registerViewFactory(
       _viewType,
-      (int _) => _video,
+      (int _) => holder.element ?? web.HTMLDivElement(),
     );
   }
 
   final String _viewType;
   late final web.HTMLVideoElement _video;
+  late final _HeroVideoHolder _holder;
   final VoidCallback onReady;
   final VoidCallback onEnded;
   final VoidCallback onError;
@@ -118,6 +131,7 @@ class _WebHeroVideo implements PwaHeroVideo {
       _video.removeChild(_video.firstChild!);
     }
     _video.load(); // release the decoder
+    _holder.element = null; // drop the registry's last ref → element is GC-able
   }
 }
 

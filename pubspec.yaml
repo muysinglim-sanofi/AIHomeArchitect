@@ -45,6 +45,14 @@ dependencies:
   # Backend
   supabase_flutter: ^2.8.4
   shared_preferences: ^2.3.5
+  # Stable UUIDs for PWA staging rows (id / idempotency_key are uuid columns).
+  # Already resolved transitively via supabase_flutter — declared directly here.
+  uuid: ^4.0.0
+
+  # PWA-only: History API + sessionStorage bridge (lib/features/pwa/data/
+  # pwa_web_navigation.dart, imported solely by main_pwa). Already resolved
+  # transitively — declared directly so the direct import is lint-clean.
+  web: ^1.1.1
 
   # BUG 4 (device-key, Approche 2) — persiste la session Supabase (anonyme) dans le
   # Keychain iOS, qui SURVIT à la désinstallation/réinstallation (≠ SharedPreferences,

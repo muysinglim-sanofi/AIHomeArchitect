@@ -18,6 +18,17 @@ import 'pwa_repository_error.dart';
 /// Current record schema version. A row with a higher version is refused.
 const int kPwaSchemaVersion = 1;
 
+/// Sentinel stored in the NOT NULL `room_id` column for "Ayden Decide" (no
+/// explicit room). The deployed schema forbids null room_id; this preserves the
+/// null (auto-detect) semantics across a round-trip — mapped back to null on read.
+const String kPwaAydenDecideRoom = '__ayden_decide__';
+
+/// Default atmosphere id written when the snapshot's (nullable) atmosphere is
+/// null, satisfying the NOT NULL `selected_atmosphere_id` column. Unlike the
+/// room sentinel this is a REAL id (the app already treats null == this default),
+/// so it needs no read-side remap.
+const String kPwaDefaultAtmosphere = 'ayden_signature';
+
 /// Where a persisted image lives (§11 / §20).
 enum PwaImageSourceKind { bundle, stagingStorage }
 
@@ -152,9 +163,13 @@ PwaProjectRecords pwaRecordsFromSnapshot(
     'installation_id': installationId,
     'title': s.title,
     'status': pwaStatusToDb(s.status),
-    'room_id': s.roomId,
+    // room_id is NOT NULL in the deployed schema; a null (Ayden Decide) room is
+    // stored as the sentinel and restored to null on read.
+    'room_id': s.roomId ?? kPwaAydenDecideRoom,
     'room_label': s.roomLabel,
-    'selected_atmosphere_id': s.selectedAtmosphereId,
+    // selected_atmosphere_id is NOT NULL too; the domain field is nullable, so
+    // default it (the app treats null == the signature default) — self-protecting.
+    'selected_atmosphere_id': s.selectedAtmosphereId ?? kPwaDefaultAtmosphere,
     'selected_atmosphere_label': s.atmosphereLabel,
     'original_image_path': s.originalImageAsset,
     'original_image_source': pwaImageSourceToDb(
@@ -162,7 +177,6 @@ PwaProjectRecords pwaRecordsFromSnapshot(
     ),
     'current_vision_id': s.currentVisionId,
     'cover_vision_id': s.coverVisionId,
-    'updated_label': s.updatedLabel,
     'client_created_order': s.createdOrder,
     'client_updated_order': s.updatedOrder,
     'schema_version': kPwaSchemaVersion,
@@ -173,7 +187,6 @@ PwaProjectRecords pwaRecordsFromSnapshot(
       {
         'id': v.versionId,
         'project_id': s.projectId,
-        'installation_id': installationId,
         'vision_number': v.visionNumber,
         'parent_vision_id': v.parentVersionId,
         'action_type': pwaActionToDb(v.actionType),
@@ -185,6 +198,9 @@ PwaProjectRecords pwaRecordsFromSnapshot(
         'image_source': pwaImageSourceToDb(pwaImageSourceForPath(v.afterAsset)),
         'source_message_id': v.sourceMessageId,
         'client_order': v.order,
+        // idempotency_key = the entity's own stable UUID (retry-safe, unique per
+        // owner). The same vision UUID is reused on retry — no derived id.
+        'idempotency_key': v.versionId,
         'schema_version': kPwaSchemaVersion,
       },
   ];
@@ -196,13 +212,14 @@ PwaProjectRecords pwaRecordsFromSnapshot(
         return <String, dynamic>{
           'id': m.id,
           'project_id': s.projectId,
-          'installation_id': installationId,
           'role': pwaRoleToDb(m.role),
           'message_type': pwaMessageKindToDb(m.kind),
           'text_content': m.text.isEmpty ? null : m.text,
           'referenced_vision_id': m.visionId,
           'confirmation_state': m.pendingRefine != null ? 'pending' : null,
           'client_order': i,
+          // idempotency_key = the message's own stable UUID (retry-safe).
+          'idempotency_key': m.id,
           'metadata_json': {
             if (m.chips.isNotEmpty) 'chips': m.chips,
             if (m.pendingRefine != null) 'pending_refine': m.pendingRefine,
@@ -217,6 +234,100 @@ PwaProjectRecords pwaRecordsFromSnapshot(
     visions: visions,
     messages: messages,
   );
+}
+
+// ── idempotent append planner (§ Phase D, point 4) ───────────────────────────
+
+/// Immutable columns compared to decide whether a colliding row is the SAME
+/// operation (an idempotent retry) or a real divergence. Kept in sync with the
+/// serialization above; excludes DB-managed columns (owner_user_id, timestamps).
+const List<String> kPwaVisionImmutableKeys = [
+  'id',
+  'project_id',
+  'idempotency_key',
+  'vision_number',
+  'parent_vision_id',
+  'action_type',
+  'atmosphere_id',
+  'image_path',
+  'source_message_id',
+  'client_order',
+];
+
+const List<String> kPwaMessageImmutableKeys = [
+  'id',
+  'project_id',
+  'idempotency_key',
+  'role',
+  'message_type',
+  'referenced_vision_id',
+  'text_content',
+  'client_order',
+];
+
+/// Decide which append-only child rows are genuinely NEW and must be inserted —
+/// WITHOUT ever updating an existing row (§ point 4). [existingRows] are the DB
+/// rows already stored that match a local row by `id` OR `idempotency_key`.
+///
+/// - id absent + key absent → new (insert).
+/// - id present → allowed ONLY if every immutable column is identical (an
+///   idempotent retry → skipped, never re-inserted, never UPDATEd); otherwise
+///   [PwaRepositoryError.conflict].
+/// - key present under a DIFFERENT id → the idempotency key was reused by another
+///   operation → [PwaRepositoryError.conflict].
+List<Map<String, dynamic>> planIdempotentAppend({
+  required List<Map<String, dynamic>> localRows,
+  required List<Map<String, dynamic>> existingRows,
+  required List<String> immutableKeys,
+  required String op,
+}) {
+  final byId = <Object?, Map<String, dynamic>>{
+    for (final e in existingRows) e['id']: e,
+  };
+  final byKey = <Object?, Map<String, dynamic>>{
+    for (final e in existingRows) e['idempotency_key']: e,
+  };
+  final toInsert = <Map<String, dynamic>>[];
+  for (final row in localRows) {
+    final existById = byId[row['id']];
+    final existByKey = byKey[row['idempotency_key']];
+    if (existById == null && existByKey == null) {
+      toInsert.add(row); // genuinely new
+      continue;
+    }
+    if (existById != null) {
+      // Same id already stored → allowed ONLY as the identical operation.
+      _assertRowUnchanged(row, existById, immutableKeys, op);
+      continue; // idempotent retry: no re-insert, no UPDATE
+    }
+    // idempotency_key present under a different id → reused by another op.
+    throw PwaRepositoryError(
+      PwaErrorKind.conflict,
+      'Idempotency key for $op is already used by a different row.',
+    );
+  }
+  return toInsert;
+}
+
+void _assertRowUnchanged(
+  Map<String, dynamic> local,
+  Map<String, dynamic> stored,
+  List<String> immutableKeys,
+  String op,
+) {
+  for (final k in immutableKeys) {
+    if (!_scalarEquals(local[k], stored[k])) {
+      throw PwaRepositoryError(
+        PwaErrorKind.conflict,
+        'Idempotency conflict on $op: "$k" differs for id ${local['id']}.',
+      );
+    }
+  }
+}
+
+bool _scalarEquals(Object? a, Object? b) {
+  if (a is num && b is num) return a.toDouble() == b.toDouble();
+  return a == b;
 }
 
 // ── records → snapshot ───────────────────────────────────────────────────────
@@ -286,7 +397,11 @@ PwaProjectSnapshot pwaSnapshotFromRecords({
     projectId: projectId,
     title: _reqStr(project, 'title'),
     originalImageAsset: _reqStr(project, 'original_image_path'),
-    roomId: _optStr(project, 'room_id'),
+    // Map the Ayden-Decide sentinel back to null (no explicit room).
+    roomId: () {
+      final r = _optStr(project, 'room_id');
+      return r == kPwaAydenDecideRoom ? null : r;
+    }(),
     roomLabel: _optStr(project, 'room_label') ?? '',
     selectedAtmosphereId: _optStr(project, 'selected_atmosphere_id'),
     atmosphereLabel: _optStr(project, 'selected_atmosphere_label') ?? '',

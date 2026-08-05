@@ -24,7 +24,9 @@ class PwaMockApp extends StatelessWidget {
     // lines"): none is set in source, this is a defensive hard-off.
     pwaHardenDebugPaints();
     return MaterialApp(
-      title: 'AYDEN Studio',
+      // Browser tab title (§9/§11) — a constant "Ayden Studio". Flutter web's
+      // runtime title overrides the HTML <title>, so it must match exactly.
+      title: 'Ayden Studio',
       theme: pwaTheme(),
       debugShowCheckedModeBanner: false,
       home: const PwaExperience(),

@@ -272,21 +272,21 @@ void main() {
       expect(_libProject(c, id).title, 'Living Room Concept');
     });
 
-    test('27. duplicate creates a new projectId', () {
+    test('27. duplicate creates a new projectId', () async {
       final c = _container();
       addTearDown(c.dispose);
       final src = _seed(c, 'Living Room Concept');
-      final dup = _notifier(c).duplicateProject(src.projectId)!;
+      final dup = (await _notifier(c).duplicateProject(src.projectId))!;
       expect(dup.projectId, isNot(src.projectId));
       expect(dup.title, 'Living Room Concept Copy');
       expect(_state(c).library.length, 6);
     });
 
-    test('28. duplicate is independent of its source', () {
+    test('28. duplicate is independent of its source', () async {
       final c = _container();
       addTearDown(c.dispose);
       final src = _seed(c, 'Living Room Concept');
-      final dup = _notifier(c).duplicateProject(src.projectId)!;
+      final dup = (await _notifier(c).duplicateProject(src.projectId))!;
       _notifier(c).renameProject(dup.projectId, 'Independent Copy');
       expect(_libProject(c, src.projectId).title, 'Living Room Concept');
       expect(_libProject(c, dup.projectId).title, 'Independent Copy');

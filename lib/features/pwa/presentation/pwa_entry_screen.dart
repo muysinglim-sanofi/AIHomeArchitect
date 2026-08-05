@@ -28,6 +28,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/media/image_pipeline.dart';
 import '../../cards/card_catalog.dart';
 import '../application/pwa_controller.dart';
+import '../application/pwa_intro_gate.dart';
 import '../application/pwa_layout.dart';
 import '../domain/pwa_models.dart';
 import 'hero/pwa_hero_sequence.dart';
@@ -151,7 +152,13 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
       if (s.returningToStudio) {
         ref.read(pwaControllerProvider.notifier).consumeReturnToStudio();
         _seq?.skip(); // no replay — jump to the resting promise frame
-        if (_scroll.hasClients) _scroll.jumpTo(0); // land on the hero
+        // A RESTORED Draft (photo uploaded, no Vision) lands DIRECTLY on its
+        // Fast Path; every other return lands on the hero (offset 0).
+        if (s.hasSource && s.versions.isEmpty) {
+          _focusWorkspace(animate: false);
+        } else if (_scroll.hasClients) {
+          _scroll.jumpTo(0);
+        }
       }
     });
   }
@@ -189,13 +196,20 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
     final isMobile = mq.size.width < 700;
     final media = pwaHeroMediaFor(isMobile);
     _heroMedia = media;
-    final useVideo = pwaHeroUseVideo(isWeb: kIsWeb, reduceMotion: reduce);
+    // §7 — the cinematic autoplays ONCE per tab session. The intro gate (backed
+    // by sessionStorage on web) decides: a fresh tab autoplays and marks the
+    // session; an F5 / same-tab return finds the marker and skips straight to the
+    // resting promise frame (no replay, no mid-timeline resume). Explicit replay
+    // (the Replay-intro control) bypasses the gate — see [_replayIntro].
+    final wantVideo = pwaHeroUseVideo(isWeb: kIsWeb, reduceMotion: reduce);
+    final gate = ref.read(pwaIntroGateProvider);
+    final autoplay = wantVideo && gate.shouldAutoplay();
     precacheImage(
       const AssetImage(kAydenLogoHero),
       context,
       onError: (_, _) {},
     );
-    if (useVideo) {
+    if (autoplay) {
       precacheImage(
         NetworkImage(media.startPoster),
         context,
@@ -203,7 +217,18 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
       );
     }
     precacheImage(NetworkImage(media.endPoster), context, onError: (_, _) {});
-    _seq = PwaHeroSequence(
+    _seq = _buildSequence(useVideo: autoplay);
+    // Mark BEFORE playback so an F5 mid-cinematic finds the marker and won't replay.
+    if (autoplay) {
+      gate.markStarted();
+    }
+  }
+
+  /// Build a fresh cinematic instance for [_heroMedia]. `useVideo:false` resolves
+  /// straight to the resting promise frame (no video created / no flash).
+  PwaHeroSequence _buildSequence({required bool useVideo}) {
+    final media = _heroMedia;
+    return PwaHeroSequence(
       useVideo: useVideo,
       createVideo: ({required onReady, required onEnded, required onError}) =>
           createPwaHeroVideo(
@@ -237,6 +262,22 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
   }
 
   void _skipCinematic() => _seq?.skip();
+
+  /// §7 — explicit "Replay intro": re-plays the cinematic from frame zero,
+  /// repeatable. It bypasses the once-per-tab gate WITHOUT clearing the marker
+  /// (the next boot still won't autoplay), stays on Home ('/'), touches no
+  /// project / session state, and resets ONLY the cinematic (a fresh sequence).
+  void _replayIntro() {
+    final useVideo = pwaHeroUseVideo(
+      isWeb: kIsWeb,
+      reduceMotion: MediaQuery.of(context).disableAnimations,
+    );
+    final old = _seq;
+    final next = _buildSequence(useVideo: useVideo);
+    setState(() => _seq = next);
+    old?.dispose();
+    if (_scroll.hasClients) _scroll.jumpTo(0); // bring the hero back into view
+  }
 
   KeyEventResult _onKey(FocusNode _, KeyEvent e) {
     if (e is KeyDownEvent &&
@@ -325,6 +366,7 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
                     isMobile: isMobile,
                     onUpload: _scrollToUpload,
                     onSkip: _skipCinematic,
+                    onReplay: _replayIntro,
                     onProjects: _openLibrary,
                     hasSource: bytes != null,
                   ),
@@ -372,6 +414,7 @@ class _RoomHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.isMobile,
     required this.onUpload,
     required this.onSkip,
+    required this.onReplay,
     required this.onProjects,
     required this.hasSource,
   });
@@ -383,6 +426,7 @@ class _RoomHeaderDelegate extends SliverPersistentHeaderDelegate {
   final bool isMobile;
   final VoidCallback onUpload;
   final VoidCallback onSkip;
+  final VoidCallback onReplay;
   final VoidCallback onProjects;
   final bool hasSource;
 
@@ -421,6 +465,7 @@ class _RoomHeaderDelegate extends SliverPersistentHeaderDelegate {
                       userBytes,
                       onUpload,
                       onSkip,
+                      onReplay,
                     ),
                   ),
                 ),
@@ -468,6 +513,7 @@ Widget _videoCinematic(
   Uint8List? userBytes,
   VoidCallback onUpload,
   VoidCallback onSkip,
+  VoidCallback onReplay,
 ) {
   final logoW = isMobile ? 210.0 : 300.0;
   final phase = seq.phase;
@@ -576,28 +622,92 @@ Widget _videoCinematic(
               ),
             ),
           ),
-        // 7) Skip affordance during the cinematic only.
-        if (userBytes == null && phase != PwaHeroPhase.promise)
+        // 7) Top-right affordance: "Tap to skip" during the cinematic; a discreet
+        //    "Replay intro" once it has settled on the final promise frame (§7).
+        if (userBytes == null)
           Positioned(
             top: 0,
             right: 0,
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text(
-                  'Tap to skip',
-                  style: pwaSans(
-                    fontSize: 11.5,
-                    color: pwaOnDark.withValues(alpha: 0.5),
-                    letterSpacing: 0.6,
-                  ),
-                ),
+                child: phase == PwaHeroPhase.promise
+                    ? _ReplayIntroButton(onTap: onReplay)
+                    : Text(
+                        'Tap to skip',
+                        style: pwaSans(
+                          fontSize: 11.5,
+                          color: pwaOnDark.withValues(alpha: 0.5),
+                          letterSpacing: 0.6,
+                        ),
+                      ),
               ),
             ),
           ),
       ],
     ),
   );
+}
+
+/// §7 — discreet, premium "Replay intro" affordance on the final hero. Secondary
+/// by design (low-opacity, brightens on hover); replays the cinematic from frame
+/// zero without leaving Home or touching any project / session state.
+class _ReplayIntroButton extends StatefulWidget {
+  const _ReplayIntroButton({required this.onTap});
+  final VoidCallback onTap;
+  @override
+  State<_ReplayIntroButton> createState() => _ReplayIntroButtonState();
+}
+
+class _ReplayIntroButtonState extends State<_ReplayIntroButton> {
+  bool _hover = false;
+  @override
+  Widget build(BuildContext context) {
+    final alpha = _hover ? 0.92 : 0.55;
+    final tint = pwaOnDark.withValues(alpha: alpha);
+    return Semantics(
+      button: true,
+      label: 'Replay intro',
+      child: Tooltip(
+        message: 'Replay intro',
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hover = true),
+          onExit: (_) => setState(() => _hover = false),
+          cursor: SystemMouseCursors.click,
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            child: InkWell(
+              key: const ValueKey('pwa-replay-intro'),
+              onTap: widget.onTap,
+              borderRadius: BorderRadius.circular(999),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.replay, size: 15, color: tint),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Replay intro',
+                      style: pwaSans(
+                        fontSize: 11.5,
+                        color: tint,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Same-origin runtime poster (webp under /media/hero, served at /media/hero).

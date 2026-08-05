@@ -303,7 +303,10 @@ void main() {
   group('staging adapter fail-closed (§32)', () {
     PwaEnvironment stagingEnv() => PwaEnvironment.parse({
       'AYDEN_ENV': 'staging',
-      'AYDEN_STAGING_SUPABASE_URL': 'https://abc-staging.supabase.co',
+      'AYDEN_STAGING_SUPABASE_URL': 'https://eedcahzekpgxvvfxufbk.supabase.co',
+      'AYDEN_STAGING_PROJECT_REF': kStagingProjectRef,
+      'AYDEN_STAGING_SUPABASE_PUBLISHABLE_KEY':
+          'sb_publishable_TEST_placeholder_not_a_real_key',
     });
 
     test(

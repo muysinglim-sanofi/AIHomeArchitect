@@ -133,30 +133,15 @@ void main() {
   // ── DRAFT (§17) ────────────────────────────────────────────────────────────
   group('draft card', () {
     testWidgets(
-      '13/15/16. draft shows Draft + Continue setup, no vision count',
+      'Step 6A: a pre-Generate creation shows NO Draft card in My Projects',
       (tester) async {
         await _pumpLibrary(tester, withDraft: true);
-        final draftCard = find.byKey(const ValueKey('pwa-draft-card'));
-        expect(draftCard, findsOneWidget);
-        expect(find.text('Draft'), findsOneWidget);
-        expect(find.text('Draft · Continue setup'), findsOneWidget);
-        // No fake vision count on the DRAFT card (seed cards still show theirs).
-        expect(
-          find.descendant(
-            of: draftCard,
-            matching: find.textContaining('vision'),
-          ),
-          findsNothing,
-        );
+        // The synthetic Draft card was removed: before Generate there is no
+        // project, hence no card (no "Continue setup", no Draft badge).
+        expect(find.byKey(const ValueKey('pwa-draft-card')), findsNothing);
+        expect(find.text('Draft · Continue setup'), findsNothing);
       },
     );
-    testWidgets('14. draft title is Untitled Space, never New Space', (
-      tester,
-    ) async {
-      await _pumpLibrary(tester, withDraft: true);
-      expect(find.text('Untitled Space'), findsOneWidget);
-      expect(find.text('New Space'), findsNothing);
-    });
     testWidgets('17. completed active project shows no Draft badge', (
       tester,
     ) async {
@@ -260,26 +245,31 @@ void main() {
       final v = _state(c).visibleProjects;
       expect(v.first.title, 'Bedroom Retreat'); // alphabetical within filter
     });
-    test('30/31/32. result count updates after rename/duplicate/delete', () {
-      final c = _container();
-      addTearDown(c.dispose);
-      // Title-only term (room label "Kitchen" would otherwise still match).
-      _notifier(c).setLibrarySearch('Transformation');
-      expect(_state(c).visibleProjects.length, 1);
-      // rename away from the query → drops to 0
-      _notifier(
-        c,
-      ).renameProject(_seed(c, 'Kitchen Transformation').projectId, 'Zephyr');
-      expect(_state(c).visibleProjects.length, 0);
-      // duplicate a matching project → count rises
-      _notifier(c).setLibrarySearch('living');
-      final before = _state(c).visibleProjects.length;
-      _notifier(c).duplicateProject(_seed(c, 'Living Room Concept').projectId);
-      expect(_state(c).visibleProjects.length, before + 1);
-      // delete → count falls
-      _notifier(c).deleteProject(_seed(c, 'Living Room Concept').projectId);
-      expect(_state(c).visibleProjects.length, before);
-    });
+    test(
+      '30/31/32. result count updates after rename/duplicate/delete',
+      () async {
+        final c = _container();
+        addTearDown(c.dispose);
+        // Title-only term (room label "Kitchen" would otherwise still match).
+        _notifier(c).setLibrarySearch('Transformation');
+        expect(_state(c).visibleProjects.length, 1);
+        // rename away from the query → drops to 0
+        _notifier(
+          c,
+        ).renameProject(_seed(c, 'Kitchen Transformation').projectId, 'Zephyr');
+        expect(_state(c).visibleProjects.length, 0);
+        // duplicate a matching project → count rises
+        _notifier(c).setLibrarySearch('living');
+        final before = _state(c).visibleProjects.length;
+        await _notifier(
+          c,
+        ).duplicateProject(_seed(c, 'Living Room Concept').projectId);
+        expect(_state(c).visibleProjects.length, before + 1);
+        // delete → count falls
+        _notifier(c).deleteProject(_seed(c, 'Living Room Concept').projectId);
+        expect(_state(c).visibleProjects.length, before);
+      },
+    );
   });
 
   // ── THREE-DOT MENU (§19) ───────────────────────────────────────────────────
@@ -375,7 +365,7 @@ void main() {
         final c = await withLineage();
         addTearDown(c.dispose);
         final src = _lib(c, _state(c).activeProjectId);
-        final dup = _notifier(c).duplicateProject(src.projectId)!;
+        final dup = (await _notifier(c).duplicateProject(src.projectId))!;
 
         final srcV = src.visions.map((v) => v.versionId).toSet();
         final srcM = src.messages.map((m) => m.id).toSet();
@@ -414,40 +404,46 @@ void main() {
       },
     );
 
-    test('52-54. collections independent; edits do not leak either way', () {
-      final c = _container();
-      addTearDown(c.dispose);
-      final src = _seed(c, 'Living Room Concept');
-      final dup = _notifier(c).duplicateProject(src.projectId)!;
-      expect(identical(dup.visions, src.visions), isFalse);
-      expect(identical(dup.messages, src.messages), isFalse);
-      _notifier(c).renameProject(dup.projectId, 'Edited Copy');
-      expect(_lib(c, src.projectId).title, 'Living Room Concept'); // src intact
-      _notifier(c).renameProject(src.projectId, 'Edited Source');
-      expect(_lib(c, dup.projectId).title, 'Edited Copy'); // dup intact
-    });
+    test(
+      '52-54. collections independent; edits do not leak either way',
+      () async {
+        final c = _container();
+        addTearDown(c.dispose);
+        final src = _seed(c, 'Living Room Concept');
+        final dup = (await _notifier(c).duplicateProject(src.projectId))!;
+        expect(identical(dup.visions, src.visions), isFalse);
+        expect(identical(dup.messages, src.messages), isFalse);
+        _notifier(c).renameProject(dup.projectId, 'Edited Copy');
+        expect(
+          _lib(c, src.projectId).title,
+          'Living Room Concept',
+        ); // src intact
+        _notifier(c).renameProject(src.projectId, 'Edited Source');
+        expect(_lib(c, dup.projectId).title, 'Edited Copy'); // dup intact
+      },
+    );
 
-    test('55/56. deterministic, collision-free copy titles', () {
+    test('55/56. deterministic, collision-free copy titles', () async {
       final c = _container();
       addTearDown(c.dispose);
       final id = _seed(c, 'Living Room Concept').projectId;
-      final d1 = _notifier(c).duplicateProject(id)!;
-      final d2 = _notifier(c).duplicateProject(id)!;
+      final d1 = (await _notifier(c).duplicateProject(id))!;
+      final d2 = (await _notifier(c).duplicateProject(id))!;
       expect(d1.title, 'Living Room Concept Copy');
       expect(d2.title, 'Living Room Concept Copy 2');
       // Duplicating a copy strips the suffix (never "Copy Copy").
-      final d3 = _notifier(c).duplicateProject(d1.projectId)!;
+      final d3 = (await _notifier(c).duplicateProject(d1.projectId))!;
       expect(d3.title, 'Living Room Concept Copy 3');
     });
 
     test(
       '57-60. duplicate opens in Architect, coherent, current vision, no gen',
-      () {
+      () async {
         final c = _container();
         addTearDown(c.dispose);
-        final dup = _notifier(
+        final dup = (await _notifier(
           c,
-        ).duplicateProject(_seed(c, 'Kitchen Transformation').projectId)!;
+        ).duplicateProject(_seed(c, 'Kitchen Transformation').projectId))!;
         _notifier(c).openProject(dup.projectId);
         expect(_state(c).phase, PwaPhase.architect); // 57
         expect(_state(c).versions.length, dup.visions.length); // 58 chronology

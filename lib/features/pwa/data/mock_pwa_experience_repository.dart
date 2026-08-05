@@ -11,20 +11,31 @@
 /// photos so lineage reads clearly — a documented mock limitation.
 library;
 
+import 'package:uuid/uuid.dart';
+
 import '../domain/pwa_models.dart';
 import '../domain/pwa_project.dart';
 import 'pwa_experience_repository.dart';
 
 class MockPwaExperienceRepository implements PwaExperienceRepository {
-  MockPwaExperienceRepository({this.workDelay = const Duration(seconds: 3)});
+  MockPwaExperienceRepository({
+    this.workDelay = const Duration(seconds: 3),
+    this.seedLibrary = true,
+  });
 
   @override
   final Duration workDelay;
 
-  static const String _projectId = 'pwa-mock-project';
+  /// Seed the demo library with bundled showcase projects. TRUE for the offline
+  /// mock; FALSE in staging, where the library is restored from the durable
+  /// backend only (never mixed with fake seeds).
+  final bool seedLibrary;
+
+  // Real UUID so the seed project persists to the uuid `id` column in staging.
+  final String _projectId = const Uuid().v4();
 
   @override
-  PwaProject project() => const PwaProject(
+  PwaProject project() => PwaProject(
     projectId: _projectId,
     originalAsset: 'assets/showcase/apartment_before.jpg',
     title: 'Your space',
@@ -148,7 +159,8 @@ class MockPwaExperienceRepository implements PwaExperienceRepository {
   // sort as the most recent.
   int _orderSeq = 100;
 
-  List<PwaProjectSnapshot> get _projects => _store ??= _seedLibrary();
+  List<PwaProjectSnapshot> get _projects =>
+      _store ??= (seedLibrary ? _seedLibrary() : <PwaProjectSnapshot>[]);
 
   static const Map<String, String> _roomLabels = {
     'livingRoom': 'Living Room',
@@ -186,7 +198,7 @@ class MockPwaExperienceRepository implements PwaExperienceRepository {
   PwaProjectSnapshot createDraftProject() {
     final o = nextLibraryOrder();
     return PwaProjectSnapshot(
-      projectId: 'draft-${++_projSeq}',
+      projectId: const Uuid().v4(),
       title: 'Untitled project',
       originalImageAsset: 'assets/showcase/apartment_before.jpg',
       roomId: null,
@@ -205,6 +217,11 @@ class MockPwaExperienceRepository implements PwaExperienceRepository {
 
   @override
   void saveProject(PwaProjectSnapshot project) {
+    // Keep the order counter monotonic across restored projects (whose orders
+    // come from a prior session) so nextLibraryOrder() never re-bases BELOW them
+    // and "most recently updated" stays correct after a refresh.
+    if (project.createdOrder > _orderSeq) _orderSeq = project.createdOrder;
+    if (project.updatedOrder > _orderSeq) _orderSeq = project.updatedOrder;
     final i = _projects.indexWhere((e) => e.projectId == project.projectId);
     if (i >= 0) {
       _projects[i] = project;

@@ -6,6 +6,8 @@
 /// contract without a backend. Scoped to a single fixed installation id.
 library;
 
+import 'dart:typed_data';
+
 import '../domain/pwa_models.dart';
 import '../domain/pwa_project.dart';
 import 'pwa_persistence_repository.dart';
@@ -64,7 +66,12 @@ class MockPwaPersistenceRepository implements PwaPersistenceRepository {
   }
 
   @override
-  Future<void> saveProject(PwaProjectSnapshot project) async {
+  Future<void> saveProject(
+    PwaProjectSnapshot project, {
+    bool replaceOriginal = false,
+  }) async {
+    // Offline mock: originals are bundle assets with no Storage object, so
+    // [replaceOriginal] is a no-op here (loadOriginalBytes always returns null).
     if (project.title.trim().isEmpty) {
       throw PwaRepositoryError.validation('Project title must not be empty.');
     }
@@ -172,4 +179,9 @@ class MockPwaPersistenceRepository implements PwaPersistenceRepository {
     _require(projectId);
     _deleted.add(projectId);
   }
+
+  // Offline: originals are bundle assets — no bytes to fetch.
+  @override
+  Future<Uint8List?> loadOriginalBytes(PwaProjectSnapshot snapshot) async =>
+      null;
 }

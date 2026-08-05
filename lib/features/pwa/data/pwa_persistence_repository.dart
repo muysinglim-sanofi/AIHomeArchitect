@@ -10,6 +10,8 @@
 /// Every operation returns domain data or throws a [PwaRepositoryError].
 library;
 
+import 'dart:typed_data';
+
 import '../domain/pwa_models.dart';
 import '../domain/pwa_project.dart';
 
@@ -35,7 +37,17 @@ abstract class PwaPersistenceRepository {
   Future<PwaProjectSnapshot?> loadProject(String projectId);
 
   /// Idempotent upsert of a project's FULL graph, keyed by projectId (§16).
-  Future<void> saveProject(PwaProjectSnapshot project);
+  ///
+  /// [replaceOriginal] — Step 5: the session's original photo was REPLACED and
+  /// its new bytes ([PwaProjectSnapshot.source]) must become the authoritative
+  /// durable original even on an already-persisted project. When false the
+  /// original is treated as immutable (the row's existing path is preserved).
+  /// The caller sets this ONLY when the photo actually changed, so a Rename /
+  /// Room / Atmosphere save never re-uploads.
+  Future<void> saveProject(
+    PwaProjectSnapshot project, {
+    bool replaceOriginal = false,
+  });
 
   /// Append-only vision write. Never overwrites an existing vision.
   Future<void> appendVision(String projectId, PwaVision vision);
@@ -53,4 +65,10 @@ abstract class PwaPersistenceRepository {
 
   /// Soft delete — hidden from [loadLibrary], not physically purged (§16).
   Future<void> softDeleteProject(String projectId);
+
+  /// The original photo bytes for [snapshot], for rebuilding an in-memory
+  /// [AydenImageSource] on hydration (the bytes are never stored on the row).
+  /// Returns null for a bundle-asset original (no Storage object) so the caller
+  /// falls back to the AssetBundle.
+  Future<Uint8List?> loadOriginalBytes(PwaProjectSnapshot snapshot);
 }

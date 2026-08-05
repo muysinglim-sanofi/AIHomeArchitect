@@ -1,11 +1,11 @@
 {
-    "name": "ai_home_architect",
-    "short_name": "ai_home_architect",
+    "name": "Ayden Studio",
+    "short_name": "Ayden Studio",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0B0B0C",
+    "theme_color": "#0B0B0C",
+    "description": "Ayden Studio — AI interior design.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

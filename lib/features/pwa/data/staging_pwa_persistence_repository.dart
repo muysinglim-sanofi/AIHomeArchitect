@@ -15,6 +15,8 @@
 /// carries zero remote surface until activation.
 library;
 
+import 'dart:typed_data';
+
 import '../config/pwa_environment.dart';
 import '../domain/pwa_models.dart';
 import '../domain/pwa_project.dart';
@@ -48,8 +50,10 @@ class StagingPwaPersistenceRepository implements PwaPersistenceRepository {
       _notActivated('loadProject');
 
   @override
-  Future<void> saveProject(PwaProjectSnapshot project) async =>
-      _notActivated('saveProject');
+  Future<void> saveProject(
+    PwaProjectSnapshot project, {
+    bool replaceOriginal = false,
+  }) async => _notActivated('saveProject');
 
   @override
   Future<void> appendVision(String projectId, PwaVision vision) async =>
@@ -78,6 +82,10 @@ class StagingPwaPersistenceRepository implements PwaPersistenceRepository {
   @override
   Future<void> softDeleteProject(String projectId) async =>
       _notActivated('softDeleteProject');
+
+  @override
+  Future<Uint8List?> loadOriginalBytes(PwaProjectSnapshot snapshot) async =>
+      _notActivated('loadOriginalBytes');
 }
 
 /// Select the persistence adapter for [environment] WITHOUT ever silently

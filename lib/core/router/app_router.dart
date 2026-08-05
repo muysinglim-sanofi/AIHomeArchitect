@@ -1,9 +1,6 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../media/ayden_image_source.dart';
 import 'package:go_router/go_router.dart';
-import '../../features/pwa/application/pwa_entry.dart';
-import '../../features/pwa/presentation/pwa_experience.dart';
 import '../../features/splash/splash_screen.dart';
 import '../../features/onboarding/onboarding_screen.dart';
 import '../../features/home/home_screen.dart';
@@ -16,7 +13,8 @@ import '../../features/profile/profile_screen.dart';
 import '../../features/cards/cards_preview_screen.dart';
 import '../../shared/widgets/main_shell.dart';
 
-Page<dynamic> _fadePage(Widget child, GoRouterState state) => CustomTransitionPage(
+Page<dynamic> _fadePage(Widget child, GoRouterState state) =>
+    CustomTransitionPage(
       key: state.pageKey,
       child: child,
       transitionDuration: const Duration(milliseconds: 500),
@@ -27,40 +25,40 @@ Page<dynamic> _fadePage(Widget child, GoRouterState state) => CustomTransitionPa
       ),
     );
 
-Page<dynamic> _slideUpPage(Widget child, GoRouterState state) => CustomTransitionPage(
-      key: state.pageKey,
-      child: child,
-      transitionDuration: const Duration(milliseconds: 580),
-      reverseTransitionDuration: const Duration(milliseconds: 400),
-      transitionsBuilder: (context, animation, _, child) {
-        final slide = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
-          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-        );
-        return FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-          child: SlideTransition(position: slide, child: child),
-        );
-      },
+Page<dynamic> _slideUpPage(
+  Widget child,
+  GoRouterState state,
+) => CustomTransitionPage(
+  key: state.pageKey,
+  child: child,
+  transitionDuration: const Duration(milliseconds: 580),
+  reverseTransitionDuration: const Duration(milliseconds: 400),
+  transitionsBuilder: (context, animation, _, child) {
+    final slide = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+    return FadeTransition(
+      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+      child: SlideTransition(position: slide, child: child),
     );
+  },
+);
 
 final appRouter = GoRouter(
-  // Batch 2 — web boots the mocked PWA prototype; iOS/Android keep '/splash'
-  // (mobile route tree unchanged). Decision is a pure, testable function.
-  initialLocation: initialLocationForPlatform(kIsWeb),
+  // Batch 3.1 — MOBILE router. The web PWA has its own entrypoint
+  // (lib/main_pwa.dart), so this router references no features/pwa code and
+  // always starts at the mobile splash.
+  initialLocation: '/splash',
   routes: [
-    // Batch 2 — web-only prototype entry (additive; not reachable on mobile,
-    // which never navigates here).
-    GoRoute(
-      path: kPwaRoutePath,
-      pageBuilder: (context, state) => _fadePage(const PwaExperience(), state),
-    ),
     GoRoute(
       path: '/splash',
       pageBuilder: (context, state) => _fadePage(const SplashScreen(), state),
     ),
     GoRoute(
       path: '/onboarding',
-      pageBuilder: (context, state) => _fadePage(const OnboardingScreen(), state),
+      pageBuilder: (context, state) =>
+          _fadePage(const OnboardingScreen(), state),
     ),
     ShellRoute(
       builder: (context, state, child) => MainShell(child: child),
@@ -71,17 +69,20 @@ final appRouter = GoRouter(
         ),
         GoRoute(
           path: '/projects',
-          pageBuilder: (context, state) => _fadePage(const ProjectsHistoryScreen(), state),
+          pageBuilder: (context, state) =>
+              _fadePage(const ProjectsHistoryScreen(), state),
         ),
         GoRoute(
           path: '/profile',
-          pageBuilder: (context, state) => _fadePage(const ProfileScreen(), state),
+          pageBuilder: (context, state) =>
+              _fadePage(const ProfileScreen(), state),
         ),
       ],
     ),
     GoRoute(
       path: '/upload',
-      pageBuilder: (context, state) => _slideUpPage(const UploadScreen(), state),
+      pageBuilder: (context, state) =>
+          _slideUpPage(const UploadScreen(), state),
     ),
     GoRoute(
       path: '/chat/:projectId',
@@ -125,13 +126,17 @@ final appRouter = GoRouter(
     ),
     GoRoute(
       path: '/loading',
-      pageBuilder: (context, state) => _fadePage(const GenerationLoadingScreen(), state),
+      pageBuilder: (context, state) =>
+          _fadePage(const GenerationLoadingScreen(), state),
     ),
     GoRoute(
       path: '/result/:projectId',
       pageBuilder: (context, state) {
         final projectId = state.pathParameters['projectId'] ?? '1';
-        return _slideUpPage(BeforeAfterScreen(projectId: projectId, resultExtra: state.extra), state);
+        return _slideUpPage(
+          BeforeAfterScreen(projectId: projectId, resultExtra: state.extra),
+          state,
+        );
       },
     ),
     // AYDEN card system preview (dev, flag-gated entry in Profile).

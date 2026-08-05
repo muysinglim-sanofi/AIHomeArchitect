@@ -51,6 +51,16 @@ app.*.map.json
 !android/app/src/main/kotlin/**
 
 .env
+
+# Batch 3.1 — PWA staging config (LOCAL ONLY, holds the staging publishable key).
+# Never commit real keys. Order matters: the wildcard ignores every variant, the
+# trailing negations re-include the safe committed templates.
+.env.pwa-staging
+.env.pwa-staging.json
+.env.pwa-staging.*
+!.env.pwa-staging.example
+!.env.pwa-staging.example.json
+
 android/build/assets/_source/
 android/build/
 _signing_cert_key.pem

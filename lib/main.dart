@@ -17,7 +17,6 @@ import 'core/providers/me_status_provider.dart';
 import 'core/providers/post_signout_pending_provider.dart';
 import 'core/providers/guest_restore_pending_provider.dart';
 import 'core/router/app_router.dart';
-import 'features/pwa/presentation/pwa_mock_app.dart';
 import 'core/services/local_notification_service.dart';
 import 'core/widgets/ready_notification_host.dart';
 import 'core/services/push_service.dart';
@@ -25,23 +24,18 @@ import 'core/theme/app_theme.dart';
 import 'data/services/revenuecat_service.dart';
 import 'firebase_options.dart';
 
+/// Batch 3.1 — MOBILE (iOS/Android) entrypoint ONLY. The web PWA has its own
+/// entrypoint (`lib/main_pwa.dart`, built with `-t lib/main_pwa.dart`); this file
+/// imports no `features/pwa` code and boots the production mobile stack only.
 Future<void> main() async {
   final bootSw = Stopwatch()..start();
   WidgetsFlutterBinding.ensureInitialized();
   bootLog(bootSw, 'ensureInitialized');
-  // Batch 1A — explicit environment resolution. MOBILE: loads the bundled
-  // `.env` exactly as before. WEB: reads --dart-define values and fails fast
-  // (before Supabase.initialize) if the config is missing / unknown /
-  // production, so a web build can never silently transact against production.
+  // Batch 1A — explicit environment resolution: loads the bundled `.env`.
   await AppEnvironment.initialize();
   bootLog(bootSw, 'env');
 
   final env = AppEnvironment.instance;
-  // Batch 2.0.1 — TRUE offline mock (Flutter Web + AYDEN_ENV=mock): skip
-  // Supabase.initialize, anonymous sign-in and the whole remote boot chain, and
-  // run a self-contained local prototype. Staging web and iOS/Android never
-  // enter this branch (skipsRemoteBootstrap == isWeb && isMock) → unchanged.
-  if (!env.skipsRemoteBootstrap) {
   final supabaseUrl = env.supabaseUrl;
   final supabaseKey = env.supabaseAnonKey;
   debugPrint('[DB] SUPABASE_URL loaded: ${supabaseUrl.isNotEmpty}');
@@ -63,13 +57,17 @@ Future<void> main() async {
         kcDecodedSub = (m['user'] as Map)['id'] as String?;
       }
     }
-  } catch (_) {/* décodage best-effort */}
-  debugPrint('[IDENTITY][KEYCHAIN_BEFORE_SUPABASE] '
-      'has_session=${kcSession != null && kcSession.isNotEmpty} '
-      'session_length=${kcSession?.length ?? 0} decoded_sub=$kcDecodedSub');
+  } catch (_) {
+    /* décodage best-effort */
+  }
+  debugPrint(
+    '[IDENTITY][KEYCHAIN_BEFORE_SUPABASE] '
+    'has_session=${kcSession != null && kcSession.isNotEmpty} '
+    'session_length=${kcSession?.length ?? 0} decoded_sub=$kcDecodedSub',
+  );
 
-  // KEPT before runApp in BOTH modes: Supabase.instance must exist when App /
-  // providers (meStatusProvider, etc.) build, and it's local/fast (~<200ms).
+  // KEPT before runApp: Supabase.instance must exist when App / providers
+  // (meStatusProvider, etc.) build, and it's local/fast (~<200ms).
   // BUG 4 — la session est persistée dans le Keychain (survit au reinstall iOS) → user_id
   // stable → free/pass/RC-appUserID conservés. CONDITION 2 : la session est restaurée ICI,
   // AVANT toute config RevenueCat (faite plus tard dans app_boot/splash).
@@ -84,16 +82,16 @@ Future<void> main() async {
   // Un NOUVEAU user_id + is_anonymous=true au reinstall (alors que le Keychain avait une session)
   // = refresh_token rejeté non-retryable → session détruite → BUG 4 se matérialise.
   final sbAuth = Supabase.instance.client.auth;
-  debugPrint('[IDENTITY][SUPABASE_AFTER_INIT] '
-      'current_session=${sbAuth.currentSession != null} '
-      'user_id=${sbAuth.currentUser?.id} is_anonymous=${sbAuth.currentUser?.isAnonymous}');
+  debugPrint(
+    '[IDENTITY][SUPABASE_AFTER_INIT] '
+    'current_session=${sbAuth.currentSession != null} '
+    'user_id=${sbAuth.currentUser?.id} is_anonymous=${sbAuth.currentUser?.isAnonymous}',
+  );
 
   if (!FeatureFlags.fastBoot) {
     // ── LEGACY pre-runApp chain (rollback path; today's behaviour, minus the
     //    RevenueCat rethrow). All heavy/network inits are awaited here → the
     //    native Launch Screen lingers for their sum. ────────────────────────
-    // Batch 1A — Firebase has no web config here (firebase_options throws for
-    // kIsWeb) and web push is out of scope; skip cleanly on web.
     if (!kIsWeb) {
       try {
         await Firebase.initializeApp(
@@ -110,12 +108,16 @@ Future<void> main() async {
     if (auth.currentSession == null) {
       try {
         final res = await auth.signInAnonymously();
-        debugPrint('[DB] signInAnonymously() success — user_id: ${res.user?.id}');
+        debugPrint(
+          '[DB] signInAnonymously() success — user_id: ${res.user?.id}',
+        );
       } catch (e) {
         debugPrint('[DB] signInAnonymously() FAILED: $e');
       }
     } else {
-      debugPrint('[DB] Existing session RESTORED — user_id: ${auth.currentUser?.id}');
+      debugPrint(
+        '[DB] Existing session RESTORED — user_id: ${auth.currentUser?.id}',
+      );
     }
 
     final userId = auth.currentUser?.id;
@@ -124,7 +126,9 @@ Future<void> main() async {
       try {
         await RevenuecatService.instance.configure(userId: userId);
       } catch (e) {
-        debugPrint('[RevenuecatService] configure() failed at boot (non-fatal): $e');
+        debugPrint(
+          '[RevenuecatService] configure() failed at boot (non-fatal): $e',
+        );
       }
     }
 
@@ -142,15 +146,10 @@ Future<void> main() async {
   }
   // FAST_BOOT: the heavy chain above is SKIPPED here — the SplashScreen runs it
   // (auth awaited + the rest fire-and-forget) behind the Ayden splash.
-  } else {
-    debugPrint('[PWA] offline mock — Supabase & remote boot chain skipped.');
-  }
 
   AppBoot.bootStopwatch = bootSw;
   bootLog(bootSw, 'runApp');
-  runApp(ProviderScope(
-    child: env.skipsRemoteBootstrap ? const PwaMockApp() : const App(),
-  ));
+  runApp(const ProviderScope(child: App()));
 }
 
 class App extends ConsumerWidget {

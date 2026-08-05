@@ -25,6 +25,7 @@ class PwaLoadingScreen extends ConsumerStatefulWidget {
 class _PwaLoadingScreenState extends ConsumerState<PwaLoadingScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
+  bool _warmed = false;
 
   @override
   void initState() {
@@ -33,6 +34,23 @@ class _PwaLoadingScreenState extends ConsumerState<PwaLoadingScreen>
       vsync: this,
       duration: const Duration(milliseconds: 2600),
     )..forward();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_warmed) return;
+    _warmed = true;
+    // Warm-decode the NEW Before photo during this already-awaited loading
+    // window so Ayden Architect's FIRST frame paints the user's replaced photo
+    // immediately — never an After-only frame (the After is a bundled, already-
+    // cached per-atmosphere asset that would otherwise dominate for the frames
+    // it takes Image.memory(newBytes) to decode). Reuses existing state.source;
+    // adds no state, no save path, no UX change.
+    final src = ref.read(pwaControllerProvider).source;
+    if (src != null) {
+      precacheImage(MemoryImage(src.bytes), context, onError: (_, _) {});
+    }
   }
 
   @override
@@ -51,7 +69,10 @@ class _PwaLoadingScreenState extends ConsumerState<PwaLoadingScreen>
           animation: _ctrl,
           builder: (context, _) {
             final v = _ctrl.value;
-            final stepIndex = (v * steps.length).floor().clamp(0, steps.length - 1);
+            final stepIndex = (v * steps.length).floor().clamp(
+              0,
+              steps.length - 1,
+            );
             final pulse = 1 + 0.07 * math.sin(v * math.pi * 6);
             return Column(
               mainAxisSize: MainAxisSize.min,
@@ -64,9 +85,15 @@ class _PwaLoadingScreenState extends ConsumerState<PwaLoadingScreen>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: kPwaGold.withValues(alpha: 0.12),
-                      border: Border.all(color: kPwaGold.withValues(alpha: 0.5)),
+                      border: Border.all(
+                        color: kPwaGold.withValues(alpha: 0.5),
+                      ),
                     ),
-                    child: const Icon(Icons.architecture, color: kPwaGold, size: 34),
+                    child: const Icon(
+                      Icons.architecture,
+                      color: kPwaGold,
+                      size: 34,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 28),
