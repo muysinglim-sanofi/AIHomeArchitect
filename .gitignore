@@ -9,6 +9,11 @@ backend/.env
 # …but DO commit the no-secret templates (placeholders only).
 !.env.example
 !**/.env.example
+# The PWA staging launcher reads `backend/.env.pwa-staging.local`, which holds
+# the staging server key and stays ignored by the `.env.*` rule above. Its
+# TEMPLATE carries key names and no values, and has to be committed or the
+# staging launch is not reproducible.
+!backend/.env.pwa-staging.local.example
 
 # Firebase iOS client config — belongs to the iOS app bundle (frontend),
 # NOT the backend repo. Holds API_KEY / GOOGLE_APP_ID / GCM_SENDER_ID; keep it
