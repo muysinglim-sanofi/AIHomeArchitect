@@ -7,12 +7,20 @@ import 'package:ai_home_architect/core/media/ayden_image_source.dart';
 import 'package:ai_home_architect/features/pwa/application/pwa_controller.dart';
 import 'package:ai_home_architect/features/pwa/application/pwa_route.dart';
 import 'package:ai_home_architect/features/pwa/data/mock_pwa_experience_repository.dart';
+import 'package:ai_home_architect/features/pwa/data/pwa_mock_generation_service.dart';
+import 'package:ai_home_architect/features/pwa/data/pwa_pending_generation.dart';
 import 'package:ai_home_architect/features/pwa/domain/pwa_intent.dart';
 import 'package:ai_home_architect/features/pwa/domain/pwa_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-PwaController makeController() =>
-    PwaController(MockPwaExperienceRepository(workDelay: Duration.zero));
+PwaController makeController() {
+  final repo = MockPwaExperienceRepository(workDelay: Duration.zero);
+  return PwaController(
+    repo,
+    generation: PwaMockGenerationService(repo),
+    pending: PwaMemoryPendingGenerationStore(),
+  );
+}
 
 AydenImageSource fakeSource() => AydenImageSource(
   bytes: Uint8List.fromList(const [1, 2, 3]),

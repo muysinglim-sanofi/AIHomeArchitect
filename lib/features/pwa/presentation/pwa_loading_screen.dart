@@ -1,9 +1,15 @@
-/// Batch 2 — cinematic mock loading. Elegant, deterministic, no backend.
+/// The wait while a real vision is rendered.
 ///
-/// Runs a single forward AnimationController (test-safe — it settles, unlike a
-/// repeating one) and derives the progressive status line from it. The actual
-/// transition to Ayden Architect is driven by the controller's injectable
-/// delay, not by this screen.
+/// A generation measures around two minutes end to end — upload, engine, store,
+/// persist, resolve. This screen covers ALL of it and says nothing it cannot
+/// know: there is no percentage, because no progress is reported, and a bar
+/// that fills in 2.6 s in front of a 2-minute wait is a lie that gets found out
+/// at second three.
+///
+/// What it does show is where the work is: a qualitative step that advances on
+/// a slow cadence, and an indeterminate motion so the page never looks frozen.
+/// The screen NEVER decides when the wait ends — the controller leaves this
+/// phase when the vision actually exists and is stored.
 library;
 
 import 'dart:math' as math;
@@ -27,13 +33,21 @@ class _PwaLoadingScreenState extends ConsumerState<PwaLoadingScreen>
   late final AnimationController _ctrl;
   bool _warmed = false;
 
+  /// How long each step is shown. Four steps at this cadence describe roughly
+  /// the first two minutes; the last one then HOLDS for as long as the render
+  /// actually takes. The steps narrate the work — they never predict its end.
+  static const Duration _stepDuration = Duration(seconds: 30);
+
   @override
   void initState() {
     super.initState();
+    // One breathing cycle, repeated: indeterminate by construction, because the
+    // backend reports no progress to be determinate about. Total elapsed time
+    // comes from the same ticker, so there is no second timer to leak.
     _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2600),
-    )..forward();
+    )..repeat();
   }
 
   @override
@@ -69,10 +83,15 @@ class _PwaLoadingScreenState extends ConsumerState<PwaLoadingScreen>
           animation: _ctrl,
           builder: (context, _) {
             final v = _ctrl.value;
-            final stepIndex = (v * steps.length).floor().clamp(
-              0,
-              steps.length - 1,
-            );
+            // The step follows real elapsed time and STOPS at the last one, so a
+            // slow render keeps saying "finishing the details" instead of
+            // looping back to "understanding your space".
+            final elapsed = _ctrl.lastElapsedDuration ?? Duration.zero;
+            final stepIndex =
+                (elapsed.inMilliseconds ~/ _stepDuration.inMilliseconds).clamp(
+                  0,
+                  steps.length - 1,
+                );
             final pulse = 1 + 0.07 * math.sin(v * math.pi * 6);
             return Column(
               mainAxisSize: MainAxisSize.min,
@@ -102,16 +121,36 @@ class _PwaLoadingScreenState extends ConsumerState<PwaLoadingScreen>
                   key: ValueKey('loading-step-$stepIndex'),
                   style: pwaSerif(fontSize: 20, fontWeight: FontWeight.w500),
                 ),
+                const SizedBox(height: 10),
+                Text(
+                  'This usually takes a couple of minutes.',
+                  key: const ValueKey('loading-duration-note'),
+                  style: pwaSerif(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                    letterSpacing: 0,
+                  ),
+                ),
                 const SizedBox(height: 18),
+                // A travelling highlight, NOT a progress bar: it says "still
+                // working", which is the only thing that is actually known.
                 SizedBox(
                   width: 180,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(999),
-                    child: LinearProgressIndicator(
-                      value: v,
-                      minHeight: 4,
-                      backgroundColor: AppColors.border,
-                      valueColor: const AlwaysStoppedAnimation(kPwaGold),
+                    child: SizedBox(
+                      height: 4,
+                      child: ColoredBox(
+                        color: AppColors.border,
+                        child: Align(
+                          alignment: Alignment(-1 + 2 * v, 0),
+                          child: const FractionallySizedBox(
+                            widthFactor: 0.34,
+                            heightFactor: 1,
+                            child: ColoredBox(color: kPwaGold),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),

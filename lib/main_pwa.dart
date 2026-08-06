@@ -28,6 +28,10 @@ import 'features/pwa/application/pwa_route.dart';
 import 'features/pwa/application/pwa_url_bridge.dart';
 import 'features/pwa/config/pwa_environment.dart';
 import 'features/pwa/data/mock_pwa_experience_repository.dart';
+import 'features/pwa/data/pwa_generation_api.dart';
+import 'features/pwa/data/pwa_generation_service.dart';
+import 'features/pwa/data/pwa_image_url_resolver.dart';
+import 'features/pwa/data/pwa_pending_generation.dart';
 import 'features/pwa/data/pwa_staging_supabase_client.dart';
 import 'features/pwa/data/pwa_web_navigation.dart';
 import 'features/pwa/data/supabase_pwa_persistence_repository.dart';
@@ -109,8 +113,13 @@ PwaBootRestore _mockBootRestore(
 /// Staging boot (§5 order): build the ISOLATED staging Supabase client, restore
 /// or create the anonymous session, hydrate the durable library + the URL-named
 /// project (NOT most-recent) + its photo BEFORE the first frame, normalize the
-/// address bar, then mount the PWA with staging persistence + boot restore + the
-/// web navigation overrides injected. Config errors propagate (fail closed).
+/// address bar, then mount the PWA with staging persistence + the REAL
+/// generation service + boot restore + the web navigation overrides injected.
+/// Config errors propagate (fail closed).
+///
+/// The generation service is built HERE and nowhere else. No widget constructs
+/// one, no provider falls back to a mock, and nothing reads [PwaEnvironment]
+/// downstream: staging gets the real engine or the boot fails.
 Future<void> _bootPwaStaging(
   PwaEnvironment env,
   PwaUrlBridge bridge,
@@ -122,7 +131,41 @@ Future<void> _bootPwaStaging(
     client,
     installationId: installationId,
   );
-  final restore = await pwaResolveBootRestore(persistence, route: bootRoute);
+
+  // The real engine. The URL was validated against the exact-origin allowlist by
+  // PwaEnvironment.parse; the token is read fresh per call so a session renewed
+  // mid-session is used, and it is never stored in this closure.
+  final generation = PwaStagingGenerationService(
+    PwaGenerationApi(
+      baseUrl: env.stagingBackendUrl!,
+      tokenProvider: () async {
+        await client.ensureSession();
+        return client.client.auth.currentSession?.accessToken;
+      },
+    ),
+  );
+
+  // Private images are rendered through short-lived signed URLs minted from the
+  // durable path. The path is what is stored; this is only how a pixel arrives.
+  final resolver = PwaImageUrlResolver(signer: persistence.signedImageUrl);
+
+  final pendingStore = PwaPrefsPendingGenerationStore(
+    await SharedPreferences.getInstance(),
+  );
+  final base = await pwaResolveBootRestore(persistence, route: bootRoute);
+  // A generation that was in flight when the tab was reloaded. Carried into the
+  // restore so the controller can replay it with the SAME key on the first
+  // frame — the backend then returns the vision it already made, if it made one.
+  final pending = await pendingStore.read();
+  final restore = PwaBootRestore(
+    library: base.library,
+    active: base.active,
+    activeSource: base.activeSource,
+    route: base.route,
+    legacyHidden: base.legacyHidden,
+    pending: pending,
+  );
+
   bridge.replace(restore.route?.location ?? PwaRoute.home.location);
   runApp(
     ProviderScope(
@@ -133,6 +176,9 @@ Future<void> _bootPwaStaging(
           MockPwaExperienceRepository(seedLibrary: false),
         ),
         pwaPersistenceProvider.overrideWithValue(persistence),
+        pwaGenerationServiceProvider.overrideWithValue(generation),
+        pwaImageUrlResolverProvider.overrideWithValue(resolver),
+        pwaPendingGenerationStoreProvider.overrideWithValue(pendingStore),
         pwaBootRestoreProvider.overrideWithValue(restore),
         ..._webNavOverrides(bridge),
       ],

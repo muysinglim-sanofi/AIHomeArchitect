@@ -435,12 +435,18 @@ void main() {
         .join('\n')
         .toLowerCase();
 
+    // The PWA has its OWN generation seam (`data/pwa_generation_service.dart`)
+    // and its own HTTP client behind it. What must never appear in these files
+    // is the MOBILE stack — `data/services/generation_service.dart`,
+    // StatusService, or a raw network client used directly by state/domain
+    // code. The paths below name the mobile files exactly, so the PWA's own
+    // seam is not caught by a substring.
     test('43. no backend / network / generation dependency', () {
       for (final path in pwaSources) {
         final imports = importsOf(path);
         for (final banned in const [
-          'generation_service',
-          'status_service',
+          'data/services/generation_service',
+          'data/services/status_service',
           'package:http',
           'package:dio',
           'dart:io',
@@ -457,7 +463,14 @@ void main() {
           'StatusService(',
           'SupabaseService(',
         ]) {
-          expect(code.contains(call), isFalse, reason: '$path uses $call');
+          // A preceding letter means this is a DIFFERENT type whose name merely
+          // ends in the same word — `PwaMockGenerationService(` is the PWA's own
+          // offline seam, not the mobile `GenerationService`.
+          expect(
+            RegExp('(?<![A-Za-z])${RegExp.escape(call)}').hasMatch(code),
+            isFalse,
+            reason: '$path uses $call',
+          );
         }
       }
     });

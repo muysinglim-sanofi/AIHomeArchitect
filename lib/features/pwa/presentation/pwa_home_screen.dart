@@ -27,6 +27,7 @@ import 'hero/pwa_hero_sequence.dart';
 import 'hero/pwa_hero_video.dart';
 import 'pwa_architect_tokens.dart';
 import 'pwa_brand.dart';
+import 'pwa_stored_image.dart';
 import 'pwa_theme.dart';
 
 /// A generic label the repository returns when no room was ever chosen. It
@@ -778,13 +779,15 @@ class _ProjectCard extends StatelessWidget {
   }
 }
 
-/// The project cover, or a calm placeholder when the asset cannot be read.
+/// The project cover — the generated image of its cover vision, resolved from
+/// its durable Storage path. A calm placeholder when there is none, never a
+/// stand-in photo of a different room.
 Widget _cover(PwaVision? cover) => cover == null
     ? const ColoredBox(color: av7RevealRaised)
-    : Image.asset(
-        cover.afterAsset,
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => const ColoredBox(color: av7RevealRaised),
+    : PwaStoredImage(
+        key: ValueKey('cover-${cover.versionId}'),
+        reference: cover.afterAsset,
+        placeholderColor: av7RevealRaised,
       );
 
 // ── Closing call to action ───────────────────────────────────────────────────

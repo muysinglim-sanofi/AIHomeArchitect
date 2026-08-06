@@ -307,6 +307,7 @@ void main() {
       'AYDEN_STAGING_PROJECT_REF': kStagingProjectRef,
       'AYDEN_STAGING_SUPABASE_PUBLISHABLE_KEY':
           'sb_publishable_TEST_placeholder_not_a_real_key',
+      'AYDEN_STAGING_BACKEND_URL': 'http://127.0.0.1:8000',
     });
 
     test(

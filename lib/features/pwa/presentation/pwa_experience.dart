@@ -1,14 +1,20 @@
-/// Batch 2 / 2.1 — the PWA prototype entry widget (web route '/pwa').
+/// Batch 2 / 2.1 — the PWA entry widget.
 ///
 /// Switches on the controller phase: a single continuous vertical ENTRY
 /// experience (cinematic hero → upload showroom → Ayden Decide → Ayden Signature
-/// → Generate) → cinematic loading → Ayden Architect. Additive and web-only; the
-/// mobile route tree never reaches this widget.
+/// → Generate) → loading → Ayden Architect. Additive and web-only; the mobile
+/// route tree never reaches this widget.
+///
+/// It also owns the ONE place a generation failure is shown. A failed render is
+/// a real event with a real cause, and the app says so here rather than
+/// pretending on any individual screen — which is what makes "no fixture on
+/// failure" a visible promise instead of an invisible one.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_colors.dart';
 import '../application/pwa_controller.dart';
 import 'pwa_architect_screen.dart';
 import 'pwa_entry_screen.dart';
@@ -17,6 +23,7 @@ import 'pwa_loading_screen.dart';
 import 'pwa_projects_screen.dart';
 import 'pwa_first_reveal_screen.dart';
 import 'pwa_reveal_screen.dart';
+import 'pwa_widgets.dart';
 
 class PwaExperience extends ConsumerWidget {
   const PwaExperience({super.key});
@@ -24,7 +31,7 @@ class PwaExperience extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final phase = ref.watch(pwaControllerProvider.select((s) => s.phase));
-    return switch (phase) {
+    final screen = switch (phase) {
       PwaPhase.home => const PwaHomeScreen(),
       PwaPhase.entry => const PwaEntryScreen(),
       PwaPhase.loading => const PwaLoadingScreen(),
@@ -33,5 +40,76 @@ class PwaExperience extends ConsumerWidget {
       PwaPhase.reveal => const PwaRevealScreen(),
       PwaPhase.projects => const PwaProjectsScreen(),
     };
+    return Stack(
+      children: [
+        Positioned.fill(child: screen),
+        const Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(child: _PwaGenerationErrorBar()),
+        ),
+      ],
+    );
+  }
+}
+
+/// The failure notice. Present only when the last generation failed, and gone
+/// the moment a new one starts.
+class _PwaGenerationErrorBar extends ConsumerWidget {
+  const _PwaGenerationErrorBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final message = ref.watch(
+      pwaControllerProvider.select((s) => s.generationError),
+    );
+    if (message == null) return const SizedBox.shrink();
+    final retryable = ref.watch(
+      pwaControllerProvider.select((s) => s.generationRetryable),
+    );
+    final busy = ref.watch(pwaControllerProvider.select((s) => s.generating));
+    final controller = ref.read(pwaControllerProvider.notifier);
+
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Material(
+        key: const ValueKey('pwa-generation-error'),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        elevation: 6,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                size: 20,
+                color: AppColors.textPrimary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: pwaSerif(fontSize: 14, letterSpacing: 0),
+                ),
+              ),
+              if (retryable && !busy)
+                TextButton(
+                  key: const ValueKey('pwa-generation-retry'),
+                  onPressed: controller.retryGeneration,
+                  child: const Text('Try again'),
+                ),
+              IconButton(
+                key: const ValueKey('pwa-generation-error-dismiss'),
+                icon: const Icon(Icons.close_rounded, size: 18),
+                tooltip: 'Dismiss',
+                onPressed: controller.clearGenerationError,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

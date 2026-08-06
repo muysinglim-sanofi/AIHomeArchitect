@@ -86,6 +86,16 @@ class StagingPwaPersistenceRepository implements PwaPersistenceRepository {
   @override
   Future<Uint8List?> loadOriginalBytes(PwaProjectSnapshot snapshot) async =>
       _notActivated('loadOriginalBytes');
+
+  @override
+  Future<PwaOriginalUpload> prepareGeneration(
+    PwaProjectSnapshot snapshot, {
+    bool replaceOriginal = false,
+  }) async => _notActivated('prepareGeneration');
+
+  @override
+  Future<String> signedImageUrl(String path, int expiresInSeconds) async =>
+      _notActivated('signedImageUrl');
 }
 
 /// Select the persistence adapter for [environment] WITHOUT ever silently

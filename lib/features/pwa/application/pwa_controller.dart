@@ -1,10 +1,14 @@
-/// Batch 2 — the PWA prototype state machine (Riverpod StateNotifier).
+/// Batch 2 — the PWA state machine (Riverpod StateNotifier).
 ///
 /// Owns the conversation, the branched version tree, the current selection and
-/// the upload → loading → architect phase. Drives the mocked repository only —
-/// it never imports GenerationService / SupabaseService / StatusService /
-/// RevenueCat. Deterministic: ids come from an internal counter, timing from
-/// the repository's injectable delay, so it is fully unit-testable.
+/// the upload → loading → architect phase. It never imports GenerationService /
+/// SupabaseService / StatusService / RevenueCat: a generation is asked of an
+/// INJECTED [PwaGenerationService] and nothing else.
+///
+/// There is exactly one generation code path. The controller does not know, and
+/// must not ask, whether a backend exists: staging injects the real service and
+/// mock injects the offline one. What it does enforce is that a failed
+/// generation stays a failure — no fixture is ever substituted for a render.
 library;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,7 +17,13 @@ import 'package:uuid/uuid.dart';
 import '../../../core/media/ayden_image_source.dart';
 import '../data/mock_pwa_experience_repository.dart';
 import '../data/pwa_experience_repository.dart';
+import '../data/pwa_generation_service.dart';
+import '../data/pwa_image_url_resolver.dart';
+import '../data/pwa_mock_generation_service.dart';
+import '../data/pwa_pending_generation.dart';
 import '../data/pwa_persistence_repository.dart';
+import '../data/pwa_project_serialization.dart';
+import '../data/pwa_repository_error.dart';
 import '../domain/pwa_intent.dart';
 import '../domain/pwa_models.dart';
 import '../domain/pwa_project.dart';
@@ -45,12 +55,35 @@ final pwaPersistenceProvider = Provider<PwaPersistenceRepository?>(
 /// cinematic flash). `null` in mock / tests → normal Hero entry.
 final pwaBootRestoreProvider = Provider<PwaBootRestore?>((ref) => null);
 
+/// The generation seam. The DEFAULT is the offline mock service, so a plain
+/// build is the offline experience and nothing reaches a network by accident.
+/// The staging boot overrides it with [PwaStagingGenerationService]; tests
+/// override it with a fake. Widgets never read it — only the controller does.
+final pwaGenerationServiceProvider = Provider<PwaGenerationService>(
+  (ref) => PwaMockGenerationService(ref.watch(pwaRepositoryProvider)),
+);
+
+/// Where an in-flight generation is remembered across a reload. In-memory by
+/// default (mock / tests keep nothing); the staging boot overrides it with the
+/// `localStorage`-backed store.
+final pwaPendingGenerationStoreProvider = Provider<PwaPendingGenerationStore>(
+  (ref) => PwaMemoryPendingGenerationStore(),
+);
+
+/// Turns a private Storage path into a renderable URL. `null` offline, where
+/// every image reference is a bundle asset and nothing needs signing.
+final pwaImageUrlResolverProvider = Provider<PwaImageUrlResolver?>(
+  (ref) => null,
+);
+
 final pwaControllerProvider = StateNotifierProvider<PwaController, PwaState>((
   ref,
 ) {
   return PwaController(
     ref.watch(pwaRepositoryProvider),
+    generation: ref.watch(pwaGenerationServiceProvider),
     persistence: ref.watch(pwaPersistenceProvider),
+    pending: ref.watch(pwaPendingGenerationStoreProvider),
     restore: ref.watch(pwaBootRestoreProvider),
   );
 });
@@ -64,6 +97,7 @@ class PwaBootRestore {
     this.activeSource,
     this.route,
     this.legacyHidden = 0,
+    this.pending,
   });
 
   /// All non-deleted projects (already loaded) to seed the working library.
@@ -83,6 +117,11 @@ class PwaBootRestore {
   /// Step 6A — how many legacy zero-Vision rows were excluded from this boot's
   /// library (hidden, not deleted). For diagnostics / the manual-review report.
   final int legacyHidden;
+
+  /// A generation this browser had already asked for when it was reloaded.
+  /// Non-null → the controller replays it with the SAME idempotency key, which
+  /// returns the existing vision if the first request had in fact succeeded.
+  final PwaPendingGeneration? pending;
 }
 
 /// Find a project by id in an already-loaded list (no `package:collection`).
@@ -219,6 +258,8 @@ class PwaState {
     this.saveState = PwaSaveState.idle,
     this.activeTitleOverride,
     this.refineContextVisionId,
+    this.generationError,
+    this.generationRetryable = false,
   });
 
   final PwaPhase phase;
@@ -271,6 +312,15 @@ class PwaState {
   /// Reveal so the conversation can say what it is about to change and focus the
   /// composer. Never persisted, never a message — the user writes their own.
   final String? refineContextVisionId;
+
+  /// The user-facing message of the LAST generation failure, or null when the
+  /// last attempt succeeded. A generation that fails produces this and nothing
+  /// else: no vision, no cover, no fixture standing in for a render.
+  final String? generationError;
+
+  /// Whether that failure is worth retrying (a timeout, an unreachable backend)
+  /// as opposed to terminal (an expired session, a forbidden project).
+  final bool generationRetryable;
 
   /// The vision behind [refineContextVisionId], if it still exists.
   PwaVision? get refineContextVision => _byId(refineContextVisionId);
@@ -449,6 +499,9 @@ class PwaState {
     bool clearTitleOverride = false,
     String? refineContextVisionId,
     bool clearRefineContext = false,
+    String? generationError,
+    bool? generationRetryable,
+    bool clearGenerationError = false,
   }) {
     return PwaState(
       phase: phase ?? this.phase,
@@ -484,6 +537,12 @@ class PwaState {
       refineContextVisionId: clearRefineContext
           ? null
           : (refineContextVisionId ?? this.refineContextVisionId),
+      generationError: clearGenerationError
+          ? null
+          : (generationError ?? this.generationError),
+      generationRetryable: clearGenerationError
+          ? false
+          : (generationRetryable ?? this.generationRetryable),
     );
   }
 }
@@ -491,9 +550,13 @@ class PwaState {
 class PwaController extends StateNotifier<PwaState> {
   PwaController(
     this._repo, {
+    required PwaGenerationService generation,
+    required PwaPendingGenerationStore pending,
     PwaPersistenceRepository? persistence,
     PwaBootRestore? restore,
-  }) : _persistence = persistence,
+  }) : _generation = generation,
+       _pending = pending,
+       _persistence = persistence,
        super(_initialState(_repo, restore)) {
     // The first-frame screen was already chosen from `restore` (no async
     // flash). Seed the in-memory working library so My Projects + open/duplicate
@@ -504,6 +567,13 @@ class PwaController extends StateNotifier<PwaState> {
         _repo.saveProject(s);
       }
       state = state.copyWith(library: _repo.listProjects());
+    }
+    // A generation was in flight when the tab was reloaded. Replaying it with
+    // the same key is what makes the refresh free: the backend returns the
+    // vision it already made rather than making (and charging for) a second.
+    final p = r?.pending;
+    if (p != null) {
+      Future<void>.microtask(() => _replayPending(p));
     }
   }
 
@@ -592,9 +662,22 @@ class PwaController extends StateNotifier<PwaState> {
 
   final PwaExperienceRepository _repo;
 
+  /// The ONLY way a vision image comes into existence. Injected; never
+  /// constructed here, never bypassed, never substituted on failure.
+  final PwaGenerationService _generation;
+
+  /// Remembers an in-flight generation so a reload can replay it idempotently.
+  final PwaPendingGenerationStore _pending;
+
   /// Durable store (staging) or `null` (mock). The controller's single write
   /// seam is [_syncActiveProject] → [_persistRemote]; reads stay on [_repo].
   final PwaPersistenceRepository? _persistence;
+
+  /// The idempotency key of the generation currently being attempted. Kept
+  /// across a RETRY of the same logical generation (so the backend recognises
+  /// it as one operation) and dropped once it succeeds — a deliberate second
+  /// generation must be a new key, or it would silently replay the first.
+  String? _activeGenerationKey;
 
   /// Serialises durable saves so rapid mutations persist IN ORDER, never
   /// concurrently — the simplest local ordering (no queue/stream/state machine).
@@ -639,13 +722,265 @@ class PwaController extends StateNotifier<PwaState> {
   String refineSummaryText(String instruction) =>
       _repo.refineSummary(instruction);
 
+  // ── Real generation ─────────────────────────────────────────────────────────
+
+  /// Make the project GENERATABLE and report where its original photo lives.
+  ///
+  /// This is the step that turns a local creation session into something a
+  /// backend can act on: the project row must exist and the photo must be a
+  /// private Storage object the backend is allowed to read. Offline there is
+  /// neither, so the bundle asset is reported unchanged.
+  Future<PwaOriginalUpload> _prepareOriginal() async {
+    final p = _persistence;
+    if (p == null) {
+      return PwaOriginalUpload.forPath(
+        state.project.projectId,
+        state.project.originalAsset,
+      );
+    }
+    final src = state.source;
+    // Only a genuine Replace-photo re-uploads: a retry of the same generation
+    // reuses the object already in Storage.
+    final replace = src != null && !identical(src, _persistedSource);
+    final upload = await p.prepareGeneration(
+      _activeSnapshot(bumpUpdated: false),
+      replaceOriginal: replace,
+    );
+    _persistedSource = src;
+    // Adopt the durable path as the session's original, so the in-memory project
+    // describes itself exactly as the stored row does — before and after a
+    // refresh — and the Before pane has something to resolve if the bytes are
+    // ever absent.
+    if (mounted && state.project.originalAsset != upload.originalStoragePath) {
+      state = state.copyWith(
+        project: PwaProject(
+          projectId: state.project.projectId,
+          originalAsset: upload.originalStoragePath,
+          title: state.project.title,
+        ),
+      );
+    }
+    return upload;
+  }
+
+  /// Describe one generation completely enough to reissue it verbatim.
+  PwaPendingGeneration _pendingFor({
+    required String idempotencyKey,
+    required PwaActionType actionType,
+    required String atmosphereId,
+    required String originalStoragePath,
+    required int visionNumber,
+    String parentVisionId = '',
+    String userInstruction = '',
+  }) {
+    final atmo = _atmosphere(atmosphereId);
+    return PwaPendingGeneration(
+      projectId: state.project.projectId,
+      idempotencyKey: idempotencyKey,
+      actionType: pwaActionToDb(actionType),
+      roomId: state.selectedRoomId ?? '',
+      roomLabel: _repo.roomLabel(state.selectedRoomId),
+      atmosphereId: atmo.id,
+      atmosphereLabel: atmo.name,
+      originalStoragePath: originalStoragePath,
+      visionNumber: visionNumber,
+      parentVisionId: parentVisionId,
+      userInstruction: userInstruction,
+    );
+  }
+
+  /// Record the intent, then run it. The record is written BEFORE the call —
+  /// that ordering is the whole point: a tab closed mid-render leaves behind the
+  /// key that makes the next boot's replay free.
+  Future<PwaGeneratedVision> _execute(PwaPendingGeneration p) async {
+    await _pending.write(p);
+    final made = await _generation.generate(
+      PwaGenerationIntent(
+        projectId: p.projectId,
+        roomId: p.roomId,
+        roomLabel: p.roomLabel,
+        atmosphereId: p.atmosphereId,
+        atmosphereLabel: p.atmosphereLabel,
+        originalImagePath: p.originalStoragePath,
+        idempotencyKey: p.idempotencyKey,
+        visionNumber: p.visionNumber,
+        actionType: p.actionType,
+        parentVisionId: p.parentVisionId,
+        userInstruction: p.userInstruction,
+      ),
+    );
+    await _pending.clear();
+    return made;
+  }
+
+  /// Everything that can go wrong before the engine is reached — an upload that
+  /// fails, a row that cannot be written — reaches the UI as the same kind of
+  /// failure as an engine error, because to the person waiting it is one.
+  PwaGenerationFailure _asFailure(Object e) {
+    if (e is PwaGenerationFailure) return e;
+    if (e is PwaRepositoryError) {
+      return PwaGenerationFailure(
+        code: e.kind.name,
+        userMessage: switch (e.kind) {
+          PwaErrorKind.unauthorized =>
+            'Your session expired. Reload the page to continue.',
+          PwaErrorKind.storage => "Your photo couldn't be uploaded. Try again.",
+          PwaErrorKind.configuration =>
+            'This build cannot reach a generation backend.',
+          _ => "Your vision couldn't be prepared. Try again.",
+        },
+        retryable:
+            e.kind != PwaErrorKind.unauthorized &&
+            e.kind != PwaErrorKind.configuration,
+      );
+    }
+    return const PwaGenerationFailure(
+      code: 'UNKNOWN',
+      userMessage: 'Something went wrong. Try again.',
+      retryable: true,
+    );
+  }
+
+  /// Build the domain vision for a completed generation.
+  ///
+  /// The IMAGE is whatever the service produced — a Storage path in staging, a
+  /// bundle asset offline — and never anything this method chose. When the
+  /// backend persisted the row it also owns the id, so the client adopts it
+  /// rather than minting a second identity for the same vision.
+  PwaVision _visionFrom(
+    PwaGeneratedVision made, {
+    required PwaActionType actionType,
+    required String atmosphereId,
+    required String title,
+    required int visionNumber,
+    String? parentVersionId,
+    String? sourceMessageId,
+    String instruction = '',
+  }) => PwaVision(
+    versionId: made.backendVisionId ?? _nextId('v'),
+    projectId: state.project.projectId,
+    visionNumber: visionNumber,
+    title: title,
+    atmosphereId: atmosphereId,
+    actionType: actionType,
+    afterAsset: made.imagePath,
+    order: _nextOrder(),
+    parentVersionId: parentVersionId,
+    sourceMessageId: sourceMessageId,
+    instruction: instruction,
+    isCurrent: true,
+    remotePersisted: made.backendVisionId != null,
+  );
+
+  /// Surface a failure without inventing anything: the loading placeholder is
+  /// removed, no vision is created, no cover changes, and the error is shown.
+  void _failGeneration(PwaGenerationFailure f, {String? removeMessageId}) {
+    state = state.copyWith(
+      generating: false,
+      messages: removeMessageId == null
+          ? state.messages
+          : [
+              for (final m in state.messages)
+                if (m.id != removeMessageId) m,
+            ],
+      generationError: f.userMessage,
+      generationRetryable: f.retryable,
+    );
+  }
+
+  /// Dismiss a generation error (the user chose to move on).
+  void clearGenerationError() =>
+      state = state.copyWith(clearGenerationError: true);
+
+  /// Re-run the generation that just failed, with the SAME idempotency key, so
+  /// the backend treats it as one operation and can never charge twice.
+  Future<void> retryGeneration() async {
+    if (state.generating) return;
+    final p = await _pending.read();
+    if (p == null) return;
+    await _replayPending(p);
+  }
+
+  /// Run (or re-run) a recorded generation and fold its result into the
+  /// session. Shared by the retry button and the after-reload resume, so both
+  /// converge on exactly one vision.
+  Future<void> _replayPending(PwaPendingGeneration p) async {
+    if (!mounted || state.generating) return;
+    if (state.activeProjectId != p.projectId) return;
+    // Already reconciled (the reload restored the vision the backend made) —
+    // nothing to replay, and the record is stale.
+    if (state.versions.any((v) => v.visionNumber == p.visionNumber)) {
+      await _pending.clear();
+      return;
+    }
+    final isFirst = state.versions.isEmpty;
+    state = state.copyWith(
+      generating: true,
+      phase: isFirst ? PwaPhase.loading : state.phase,
+      clearGenerationError: true,
+    );
+    final PwaGeneratedVision made;
+    try {
+      made = await _execute(p);
+    } catch (e) {
+      if (!mounted) return;
+      _failGeneration(_asFailure(e));
+      if (isFirst) state = state.copyWith(phase: PwaPhase.entry);
+      return;
+    }
+    if (!mounted) return;
+    _activeGenerationKey = null;
+    final action = pwaActionFromDb(p.actionType);
+    final v = _visionFrom(
+      made,
+      actionType: action,
+      atmosphereId: p.atmosphereId,
+      title: action == PwaActionType.refine
+          ? p.userInstruction
+          : p.atmosphereLabel,
+      visionNumber: p.visionNumber,
+      parentVersionId: p.parentVisionId.isEmpty ? null : p.parentVisionId,
+      instruction: p.userInstruction,
+    );
+    final reveal = PwaMessage(
+      id: _nextId('m'),
+      role: PwaRole.ayden,
+      kind: PwaMessageKind.reveal,
+      text: switch (action) {
+        PwaActionType.signature => _repo.firstVisionIntro(),
+        PwaActionType.refine => _repo.refineApplied(p.userInstruction),
+        PwaActionType.switchAtmosphere => _repo.switchIntro(
+          _atmosphere(p.atmosphereId),
+        ),
+      },
+      visionId: v.versionId,
+    );
+    if (isFirst) {
+      await _settleFirstVision(v, reveal, p.atmosphereId);
+    } else {
+      _commitNewVision(
+        v,
+        replaceLoadingId: '',
+        revealMsg: reveal,
+        atmosphereId: p.atmosphereId,
+      );
+    }
+  }
+
   // ── Entry (continuous scroll) ───────────────────────────────────────────────
 
   void setSource(
     AydenImageSource src, {
     PwaImageOrigin origin = PwaImageOrigin.userUpload,
   }) {
-    state = state.copyWith(source: src, sourceOrigin: origin);
+    // A different photo is a different generation: the previous attempt's key
+    // must not be reused, or the backend would replay a render of the old one.
+    _activeGenerationKey = null;
+    state = state.copyWith(
+      source: src,
+      sourceOrigin: origin,
+      clearGenerationError: true,
+    );
     _syncActiveProject(bumpUpdated: false); // persist the Draft on upload
   }
 
@@ -670,8 +1005,9 @@ class PwaController extends StateNotifier<PwaState> {
     ); // update the Draft (no-op pre-upload)
   }
 
-  /// The primary action: one photo, one click → the first Ayden Signature
-  /// vision, shown as the first rich message in the conversation.
+  /// The primary action: one photo, one click → the first REAL vision. The
+  /// image comes from the engine; nothing is revealed until it exists and is
+  /// durably stored.
   Future<void> generateFirstVision() async {
     if (state.generating) return;
     // Returning from "Back to Studio" (versions already exist) → resume the
@@ -683,19 +1019,50 @@ class PwaController extends StateNotifier<PwaState> {
     // §Generate 1 — validate the local creation session (Room may be Ayden
     // Decide / null; Atmosphere defaults to Ayden Signature). A photo is required.
     if (state.source == null) return;
-    state = state.copyWith(phase: PwaPhase.loading, generating: true);
-    await _repo.simulateGeneration();
-    final chosen = _atmosphere(state.selectedAtmosphereId ?? 'ayden_signature');
-    final v1 = PwaVision(
-      versionId: _nextId('v'),
-      projectId: state.project.projectId,
-      visionNumber: 1,
-      title: chosen.name,
-      atmosphereId: chosen.id,
+    // Set synchronously, BEFORE the first await: a second tap finds `generating`
+    // already true and returns, so one click is one upload and one generation.
+    state = state.copyWith(
+      phase: PwaPhase.loading,
+      generating: true,
+      clearGenerationError: true,
+    );
+    final atmosphereId = state.selectedAtmosphereId ?? 'ayden_signature';
+    // Kept across a retry of THIS generation, minted fresh for a new one.
+    final key = _activeGenerationKey ??= const Uuid().v4();
+
+    final PwaGeneratedVision made;
+    try {
+      // §Generate 2-4 — the durable project row and the original photo in
+      // private Storage FIRST (the backend downloads that exact path and
+      // refuses anything outside the caller's namespace), then the engine.
+      final upload = await _prepareOriginal();
+      made = await _execute(
+        _pendingFor(
+          idempotencyKey: key,
+          actionType: PwaActionType.signature,
+          atmosphereId: atmosphereId,
+          originalStoragePath: upload.originalStoragePath,
+          visionNumber: 1,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      // §Failure — stay on Create with the photo, Room and Atmosphere intact
+      // and the real error visible. No vision, no card, no fixture. The pending
+      // record survives, so Retry reuses the same key.
+      _failGeneration(_asFailure(e));
+      state = state.copyWith(phase: PwaPhase.entry);
+      return;
+    }
+    if (!mounted) return;
+    _activeGenerationKey = null;
+    final chosen = _atmosphere(atmosphereId);
+    final v1 = _visionFrom(
+      made,
       actionType: PwaActionType.signature,
-      afterAsset: chosen.visionAsset,
-      order: _nextOrder(),
-      isCurrent: true,
+      atmosphereId: chosen.id,
+      title: chosen.name,
+      visionNumber: 1,
     );
     final intro = PwaMessage(
       id: _nextId('m'),
@@ -710,21 +1077,30 @@ class PwaController extends StateNotifier<PwaState> {
         'Open the kitchen',
       ],
     );
-    // §Generate 2-8 — the creation becomes a Project now: commit the first Vision
-    // into state (phase STAYS loading, so Architect is NOT revealed yet), then
-    // durably persist (upload original + create row + Vision + current/cover) and
-    // AWAIT the save chain BEFORE settling. Exactly ONE project is created.
+    await _settleFirstVision(v1, intro, chosen.id);
+  }
+
+  /// §Generate 5-10 — commit the first vision, persist the project, and only
+  /// then unveil it. The phase STAYS `loading` across the durable save, so the
+  /// First Reveal is reached by a real success and never by a timer.
+  Future<void> _settleFirstVision(
+    PwaVision v1,
+    PwaMessage intro,
+    String atmosphereId,
+  ) async {
     state = state.copyWith(
       versions: [v1],
       currentVisionId: v1.versionId,
-      selectedAtmosphereId: chosen.id,
-      messages: [intro],
+      selectedAtmosphereId: atmosphereId,
+      messages: [...state.messages, intro],
+      generating: true,
     );
     _syncActiveProject();
     await _saveChain;
+    if (!mounted) return;
     if (state.saveState == PwaSaveState.error) {
       // §Failure — persistence failed: undo the in-memory exposure and remain on
-      // Create (source/Room/Atmosphere preserved) with the save error visible. No
+      // Create (source/Room/Atmosphere preserved) with the error visible. No
       // Architect, no My Projects card.
       _repo.deleteProject(state.project.projectId);
       state = PwaState(
@@ -739,6 +1115,8 @@ class PwaController extends StateNotifier<PwaState> {
         librarySort: state.librarySort,
         librarySearch: state.librarySearch,
         saveState: PwaSaveState.error,
+        generationError: 'Your vision could not be saved. Try again.',
+        generationRetryable: true,
       );
       return;
     }
@@ -807,15 +1185,40 @@ class PwaController extends StateNotifier<PwaState> {
       clearPending: true,
       selectedAtmosphereId: atmosphereId,
       messages: [...state.messages, userMsg, loadingMsg],
+      clearGenerationError: true,
     );
-    await _repo.simulateGeneration();
+    final key = _activeGenerationKey ??= const Uuid().v4();
 
-    final v = _newVision(
-      parent: parent,
-      atmosphereId: atmosphereId,
+    // A switch is a REAL generation, not a relabel: the engine renders the same
+    // space in the new atmosphere and returns a new image.
+    final PwaGeneratedVision made;
+    try {
+      final upload = await _prepareOriginal();
+      made = await _execute(
+        _pendingFor(
+          idempotencyKey: key,
+          actionType: PwaActionType.switchAtmosphere,
+          atmosphereId: atmosphereId,
+          originalStoragePath: upload.originalStoragePath,
+          visionNumber: state.versions.length + 1,
+          parentVisionId: parent.versionId,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _failGeneration(_asFailure(e), removeMessageId: loadingMsg.id);
+      return;
+    }
+    if (!mounted) return;
+    _activeGenerationKey = null;
+
+    final v = _visionFrom(
+      made,
       actionType: PwaActionType.switchAtmosphere,
-      afterAsset: atmo.visionAsset,
+      atmosphereId: atmosphereId,
       title: atmo.name,
+      visionNumber: state.versions.length + 1,
+      parentVersionId: parent.versionId,
       sourceMessageId: userMsg.id,
     );
     final aydenMsg = PwaMessage(
@@ -905,18 +1308,42 @@ class PwaController extends StateNotifier<PwaState> {
     state = state.copyWith(
       generating: true,
       messages: [...state.messages, loadingMsg],
+      clearGenerationError: true,
     );
-    await _repo.simulateGeneration();
+    final key = _activeGenerationKey ??= const Uuid().v4();
 
-    final refineIndex = state.versions
-        .where((v) => v.actionType == PwaActionType.refine)
-        .length;
-    final v = _newVision(
-      parent: parent,
-      atmosphereId: parent.atmosphereId,
+    // The instruction is carried as a structured fact; the engine composes the
+    // prompt. The parent vision is named so the backend can verify it belongs
+    // to this project before branching from it.
+    final PwaGeneratedVision made;
+    try {
+      final upload = await _prepareOriginal();
+      made = await _execute(
+        _pendingFor(
+          idempotencyKey: key,
+          actionType: PwaActionType.refine,
+          atmosphereId: parent.atmosphereId,
+          originalStoragePath: upload.originalStoragePath,
+          visionNumber: state.versions.length + 1,
+          parentVisionId: parent.versionId,
+          userInstruction: instruction,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _failGeneration(_asFailure(e), removeMessageId: loadingMsg.id);
+      return;
+    }
+    if (!mounted) return;
+    _activeGenerationKey = null;
+
+    final v = _visionFrom(
+      made,
       actionType: PwaActionType.refine,
-      afterAsset: _repo.refineVisionAsset(refineIndex),
+      atmosphereId: parent.atmosphereId,
       title: instruction,
+      visionNumber: state.versions.length + 1,
+      parentVersionId: parent.versionId,
       instruction: instruction,
     );
     final aydenMsg = PwaMessage(
@@ -1052,15 +1479,20 @@ class PwaController extends StateNotifier<PwaState> {
   /// A brand-new local session on [phase]: no photo, Ayden Decide + Ayden
   /// Signature restored, no visions, no chat. The durable library is untouched —
   /// this only clears what lives in memory before Generate.
-  PwaState _freshSession(PwaPhase phase) => PwaState(
-    phase: phase,
-    project: _descriptor(_repo.createDraftProject()),
-    atmospheres: state.atmospheres,
-    selectedAtmosphereId: 'ayden_signature',
-    library: _repo.listProjects(),
-    librarySort: state.librarySort,
-    librarySearch: state.librarySearch,
-  );
+  PwaState _freshSession(PwaPhase phase) {
+    // A new session is a new generation: never inherit the previous key, or the
+    // backend would replay the old project's render for the new one.
+    _activeGenerationKey = null;
+    return PwaState(
+      phase: phase,
+      project: _descriptor(_repo.createDraftProject()),
+      atmospheres: state.atmospheres,
+      selectedAtmosphereId: 'ayden_signature',
+      library: _repo.listProjects(),
+      librarySort: state.librarySort,
+      librarySearch: state.librarySearch,
+    );
+  }
 
   /// "Back home" — the dashboard. Any in-progress creation session is dropped
   /// (it was never durable); saved projects are of course untouched.
@@ -1088,31 +1520,6 @@ class PwaController extends StateNotifier<PwaState> {
   }
 
   // ── Internals ─────────────────────────────────────────────────────────────
-
-  PwaVision _newVision({
-    required PwaVision parent,
-    required String atmosphereId,
-    required PwaActionType actionType,
-    required String afterAsset,
-    required String title,
-    String? sourceMessageId,
-    String instruction = '',
-  }) {
-    return PwaVision(
-      versionId: _nextId('v'),
-      projectId: state.project.projectId,
-      visionNumber: state.versions.length + 1,
-      title: title,
-      atmosphereId: atmosphereId,
-      actionType: actionType,
-      afterAsset: afterAsset,
-      order: _nextOrder(),
-      parentVersionId: parent.versionId,
-      sourceMessageId: sourceMessageId,
-      instruction: instruction,
-      isCurrent: true,
-    );
-  }
 
   void _commitNewVision(
     PwaVision v, {
@@ -1170,19 +1577,17 @@ class PwaController extends StateNotifier<PwaState> {
   /// photo is uploaded — a Draft (no Vision yet) is a real, durable project so
   /// it survives a refresh (§ point 2); a project with Visions is `active`.
   /// No-op before any upload. [bumpUpdated] re-stamps the freshness/ordering.
-  void _syncActiveProject({bool bumpUpdated = true}) {
+  /// The ACTIVE session as a snapshot. Pure — it reads state and the working
+  /// library and writes nothing, so both the durable save seam and the
+  /// pre-generation upload describe the same project the same way.
+  PwaProjectSnapshot _activeSnapshot({required bool bumpUpdated}) {
     final isDraft = state.versions.isEmpty;
-    // Step 6A — a zero-Vision creation is a LOCAL session, NOT a durable Project:
-    // no row, no Storage upload, no My Projects card until Generate commits the
-    // first Vision. (Photo/Room/Atmosphere edits still call here but no-op for a
-    // Draft; a generated project persists normally, incl. Replace-photo.)
-    if (isDraft) return;
     final existing = _repo.openProject(state.project.projectId);
     final atmoId =
         state.currentVision?.atmosphereId ??
         state.selectedAtmosphereId ??
         'ayden_signature';
-    final snapshot = PwaProjectSnapshot(
+    return PwaProjectSnapshot(
       projectId: state.project.projectId,
       // A Draft's name tracks the current Room until renamed; a real project's
       // title is fixed at its first Vision (then changed only via rename).
@@ -1208,6 +1613,16 @@ class PwaController extends StateNotifier<PwaState> {
       status: isDraft ? PwaProjectStatus.draft : PwaProjectStatus.active,
       source: state.source,
     );
+  }
+
+  void _syncActiveProject({bool bumpUpdated = true}) {
+    final isDraft = state.versions.isEmpty;
+    // Step 6A — a zero-Vision creation is a LOCAL session, NOT a durable Project:
+    // no row, no Storage upload, no My Projects card until Generate commits the
+    // first Vision. (Photo/Room/Atmosphere edits still call here but no-op for a
+    // Draft; a generated project persists normally, incl. Replace-photo.)
+    if (isDraft) return;
+    final snapshot = _activeSnapshot(bumpUpdated: bumpUpdated);
     _repo.saveProject(snapshot); // in-memory working library (UI reads this)
     state = state.copyWith(library: _repo.listProjects());
     // The single durable write seam (staging only): non-destructive saveProject.

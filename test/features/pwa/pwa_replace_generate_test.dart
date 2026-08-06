@@ -14,6 +14,8 @@ import 'dart:typed_data';
 import 'package:ai_home_architect/core/media/ayden_image_source.dart';
 import 'package:ai_home_architect/features/pwa/application/pwa_controller.dart';
 import 'package:ai_home_architect/features/pwa/data/mock_pwa_experience_repository.dart';
+import 'package:ai_home_architect/features/pwa/data/pwa_mock_generation_service.dart';
+import 'package:ai_home_architect/features/pwa/data/pwa_pending_generation.dart';
 import 'package:ai_home_architect/features/pwa/domain/pwa_models.dart';
 import 'package:ai_home_architect/features/pwa/domain/pwa_project.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_loading_screen.dart';
@@ -27,8 +29,14 @@ AydenImageSource _src(List<int> bytes) => AydenImageSource(
   mimeType: 'image/jpeg',
 );
 
-PwaController _controller() =>
-    PwaController(MockPwaExperienceRepository(workDelay: Duration.zero));
+PwaController _controller() {
+  final repo = MockPwaExperienceRepository(workDelay: Duration.zero);
+  return PwaController(
+    repo,
+    generation: PwaMockGenerationService(repo),
+    pending: PwaMemoryPendingGenerationStore(),
+  );
+}
 
 PwaVision _vision(String id, String projectId, {String? afterAsset}) =>
     PwaVision(

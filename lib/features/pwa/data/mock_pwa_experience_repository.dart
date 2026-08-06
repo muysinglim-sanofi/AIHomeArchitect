@@ -88,12 +88,16 @@ class MockPwaExperienceRepository implements PwaExperienceRepository {
     ),
   ];
 
+  /// The four stages a real generation actually goes through: the photo is
+  /// uploaded, the engine reads the space, it renders, and the result is stored
+  /// and resolved. Qualitative on purpose — the backend reports no progress, so
+  /// naming the stage is the most that can honestly be said.
   @override
   List<String> loadingSteps() => const [
+    'Preparing your photo',
     'Understanding your space',
-    'Preserving the architecture',
-    'Building the Ayden Signature',
-    'Preparing your reveal',
+    'Creating your vision',
+    'Finishing the details',
   ];
 
   @override

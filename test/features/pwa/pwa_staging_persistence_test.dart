@@ -11,6 +11,8 @@ import 'package:ai_home_architect/core/media/ayden_image_source.dart';
 import 'package:ai_home_architect/features/pwa/application/pwa_controller.dart';
 import 'package:ai_home_architect/features/pwa/application/pwa_route.dart';
 import 'package:ai_home_architect/features/pwa/data/mock_pwa_experience_repository.dart';
+import 'package:ai_home_architect/features/pwa/data/pwa_mock_generation_service.dart';
+import 'package:ai_home_architect/features/pwa/data/pwa_pending_generation.dart';
 import 'package:ai_home_architect/features/pwa/data/pwa_persistence_repository.dart';
 import 'package:ai_home_architect/features/pwa/data/pwa_project_serialization.dart';
 import 'package:ai_home_architect/features/pwa/data/pwa_repository_error.dart';
@@ -194,6 +196,29 @@ class _FakePersistence implements PwaPersistenceRepository {
         : p;
   }
 
+  /// Mirrors the deployed adapter: guarantees the row exists, uploads the
+  /// original the FIRST time (or on an explicit replace) and reuses the durable
+  /// object otherwise — so a retry of the same generation uploads nothing.
+  @override
+  Future<PwaOriginalUpload> prepareGeneration(
+    PwaProjectSnapshot snapshot, {
+    bool replaceOriginal = false,
+  }) async {
+    calls.add('prepareGeneration:${snapshot.projectId}');
+    final stored = _withStorage(snapshot, replaceOriginal);
+    store[snapshot.projectId] = stored;
+    return PwaOriginalUpload.forPath(
+      snapshot.projectId,
+      stored.originalImageAsset,
+    );
+  }
+
+  @override
+  Future<String> signedImageUrl(String path, int expiresInSeconds) async {
+    calls.add('signedImageUrl:$path');
+    return 'https://signed.test/$path?expires=$expiresInSeconds';
+  }
+
   @override
   Future<void> appendVision(String projectId, PwaVision vision) async =>
       calls.add('appendVision');
@@ -273,20 +298,30 @@ class _FakePersistence implements PwaPersistenceRepository {
   }
 }
 
-PwaController _controller({PwaPersistenceRepository? persistence}) =>
-    PwaController(
-      MockPwaExperienceRepository(workDelay: Duration.zero),
-      persistence: persistence,
-    );
+PwaController _controller({PwaPersistenceRepository? persistence}) {
+  final repo = MockPwaExperienceRepository(workDelay: Duration.zero);
+  return PwaController(
+    repo,
+    generation: PwaMockGenerationService(repo),
+    pending: PwaMemoryPendingGenerationStore(),
+    persistence: persistence,
+  );
+}
 
 /// Reproduce the FULL staging boot: run the real [pwaResolveBootRestore] against
 /// the fake, then construct the controller with that restore — exactly what
 /// `main._bootPwaStaging` does. This is the boot the routing tests exercise.
 Future<PwaController> _boot(_FakePersistence fake) async {
   final restore = await pwaResolveBootRestore(fake);
+  // Staging uses a NON-seeding repo — the library is durable-only.
+  final repo = MockPwaExperienceRepository(
+    workDelay: Duration.zero,
+    seedLibrary: false,
+  );
   return PwaController(
-    // Staging uses a NON-seeding repo — the library is durable-only.
-    MockPwaExperienceRepository(workDelay: Duration.zero, seedLibrary: false),
+    repo,
+    generation: PwaMockGenerationService(repo),
+    pending: PwaMemoryPendingGenerationStore(),
     persistence: fake,
     restore: restore,
   );
@@ -296,8 +331,14 @@ Future<PwaController> _boot(_FakePersistence fake) async {
 /// `main._bootPwaStaging` does when the browser opens a deep link / after F5.
 Future<PwaController> _bootRoute(_FakePersistence fake, PwaRoute route) async {
   final restore = await pwaResolveBootRestore(fake, route: route);
+  final repo = MockPwaExperienceRepository(
+    workDelay: Duration.zero,
+    seedLibrary: false,
+  );
   return PwaController(
-    MockPwaExperienceRepository(workDelay: Duration.zero, seedLibrary: false),
+    repo,
+    generation: PwaMockGenerationService(repo),
+    pending: PwaMemoryPendingGenerationStore(),
     persistence: fake,
     restore: restore,
   );

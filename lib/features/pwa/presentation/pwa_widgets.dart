@@ -14,6 +14,7 @@ import '../../../core/media/ayden_image_source.dart';
 import '../../../shared/widgets/reveal_hero.dart';
 import '../domain/pwa_models.dart';
 import 'pwa_brand.dart';
+import 'pwa_stored_image.dart';
 import 'pwa_theme.dart';
 
 const Color kPwaGold = AppColors.accent; // #C8A86A
@@ -61,19 +62,26 @@ class PwaBrandHeader extends StatelessWidget {
 Widget _imgFallback(BuildContext _, Object _, StackTrace? _) =>
     const ColoredBox(color: AppColors.surfaceVariant);
 
+/// The "before": the user's own photo. In-memory bytes when the session has
+/// them (the common case — upload, and hydration on open/boot), otherwise the
+/// durable original resolved from Storage. Still an asset for a bundled
+/// original, which [PwaStoredImage] handles without a round-trip.
 Widget pwaBeforeImage(AydenImageSource? source, PwaProject project) =>
     source != null
     ? Image.memory(source.bytes, fit: BoxFit.cover, errorBuilder: _imgFallback)
-    : Image.asset(
-        project.originalAsset,
-        fit: BoxFit.cover,
-        errorBuilder: _imgFallback,
+    : PwaStoredImage(
+        key: ValueKey('before-${project.projectId}'),
+        reference: project.originalAsset,
+        placeholderColor: AppColors.surfaceVariant,
       );
 
-Widget pwaAfterImage(PwaVision vision) => Image.asset(
-  vision.afterAsset,
-  fit: BoxFit.cover,
-  errorBuilder: _imgFallback,
+/// The generated image of [vision]. Its reference is a private Storage path in
+/// the real runtime, so it goes through [PwaStoredImage] — which signs it, and
+/// which never substitutes a bundle asset when it cannot.
+Widget pwaAfterImage(PwaVision vision) => PwaStoredImage(
+  key: ValueKey('after-${vision.versionId}'),
+  reference: vision.afterAsset,
+  placeholderColor: AppColors.surfaceVariant,
 );
 
 /// The Full-Reveal card — Before/After of the current vision, tappable to a
@@ -440,11 +448,10 @@ class PwaVersionFilmstrip extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.asset(
-                          v.afterAsset,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) =>
-                              const ColoredBox(color: AppColors.surfaceVariant),
+                        PwaStoredImage(
+                          key: ValueKey('filmstrip-${v.versionId}'),
+                          reference: v.afterAsset,
+                          placeholderColor: AppColors.surfaceVariant,
                         ),
                         Positioned(
                           left: 3,

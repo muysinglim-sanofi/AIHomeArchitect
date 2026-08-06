@@ -12,6 +12,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../application/pwa_controller.dart';
 import '../domain/pwa_models.dart';
+import 'pwa_stored_image.dart';
 import 'pwa_widgets.dart';
 
 Future<void> showPwaVersionsSheet(BuildContext context, WidgetRef ref) {
@@ -51,22 +52,30 @@ class _PwaVersionsSheet extends ConsumerWidget {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-                color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+              color: AppColors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 8),
             child: Row(
               children: [
                 Expanded(
-                  child: Text('Your visions',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: pwaSerif(fontSize: 22, fontWeight: FontWeight.w500)),
+                  child: Text(
+                    'Your visions',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: pwaSerif(fontSize: 22, fontWeight: FontWeight.w500),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                Text('${versions.length} total',
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 13)),
+                Text(
+                  '${versions.length} total',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
               ],
             ),
           ),
@@ -99,7 +108,9 @@ class _PwaVersionsSheet extends ConsumerWidget {
                     Navigator.of(context).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Jumped to Vision ${v.visionNumber} in the conversation'),
+                        content: Text(
+                          'Jumped to Vision ${v.visionNumber} in the conversation',
+                        ),
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
@@ -146,7 +157,10 @@ class _VersionRow extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppSpacing.radiusCard),
-        border: Border.all(color: isCurrent ? kPwaGold : AppColors.border, width: isCurrent ? 2 : 1),
+        border: Border.all(
+          color: isCurrent ? kPwaGold : AppColors.border,
+          width: isCurrent ? 2 : 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,10 +173,11 @@ class _VersionRow extends StatelessWidget {
                 child: SizedBox(
                   width: 68,
                   height: 68,
-                  child: Image.asset(vision.afterAsset,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) =>
-                          const ColoredBox(color: AppColors.surfaceVariant)),
+                  child: PwaStoredImage(
+                    key: ValueKey('versions-${vision.versionId}'),
+                    reference: vision.afterAsset,
+                    placeholderColor: AppColors.surfaceVariant,
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -172,35 +187,53 @@ class _VersionRow extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        Text('Vision ${vision.visionNumber}',
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 14)),
+                        Text(
+                          'Vision ${vision.visionNumber}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                        ),
                         if (isCurrent) ...[
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
-                                color: kPwaGold, borderRadius: BorderRadius.circular(999)),
-                            child: const Text('Current',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w700)),
+                              color: kPwaGold,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Text(
+                              'Current',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
                         ],
                       ],
                     ),
                     const SizedBox(height: 2),
-                    Text(vision.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13)),
+                    Text(
+                      vision.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13),
+                    ),
                     const SizedBox(height: 3),
-                    Text('Created from $parentLabel · ${vision.reasonLabel}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 11.5, color: AppColors.textTertiary)),
+                    Text(
+                      'Created from $parentLabel · ${vision.reasonLabel}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -230,17 +263,22 @@ class _Action extends StatelessWidget {
   final VoidCallback onTap;
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceVariant,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Text(label,
-              style: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
         ),
-      );
+      ),
+    ),
+  );
 }

@@ -184,4 +184,29 @@ class MockPwaPersistenceRepository implements PwaPersistenceRepository {
   @override
   Future<Uint8List?> loadOriginalBytes(PwaProjectSnapshot snapshot) async =>
       null;
+
+  /// Offline: there is no Storage and no backend, so there is nothing to
+  /// prepare. Persists the row (so a Draft round-trips) and reports the bundle
+  /// asset as the original — the mock generation service ignores it anyway.
+  @override
+  Future<PwaOriginalUpload> prepareGeneration(
+    PwaProjectSnapshot snapshot, {
+    bool replaceOriginal = false,
+  }) async {
+    await saveProject(snapshot);
+    return PwaOriginalUpload.forPath(
+      snapshot.projectId,
+      snapshot.originalImageAsset,
+    );
+  }
+
+  /// A bundle asset needs no signature; anything else would mean the offline
+  /// adapter is being asked to reach a Storage it does not have.
+  @override
+  Future<String> signedImageUrl(String path, int expiresInSeconds) async {
+    if (path.startsWith('assets/')) return path;
+    throw PwaRepositoryError.configuration(
+      'The offline adapter cannot sign a Storage path (got "$path").',
+    );
+  }
 }

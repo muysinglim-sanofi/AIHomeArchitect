@@ -128,6 +128,22 @@ int _reqInt(Map<String, dynamic> r, String k) {
   throw PwaRepositoryError.serialization('Missing/invalid required int "$k".');
 }
 
+/// Chronological rank of a vision row.
+///
+/// `client_order` is a CLIENT sequence: it exists on rows this app wrote, and is
+/// NULL on rows the BACKEND authored — the generation adapter inserts the vision
+/// itself and has no client sequence to write. `vision_number` is then the
+/// authority, and it is assigned by the same backend, so the two agree.
+///
+/// Reading it as required is what broke a refresh after a real generation: every
+/// row came back without it, the whole library failed to deserialize, and the
+/// app opened on an empty Home with three visions sitting safely in the database.
+int _visionOrder(Map<String, dynamic> r) {
+  final v = r['client_order'];
+  if (v is num) return v.toInt();
+  return _reqInt(r, 'vision_number');
+}
+
 void _checkSchema(Map<String, dynamic> r) {
   final v = r['schema_version'];
   final n = v is num ? v.toInt() : null;
@@ -342,10 +358,7 @@ PwaProjectSnapshot pwaSnapshotFromRecords({
   final currentVisionId = _optStr(project, 'current_vision_id');
 
   final visionRows = [...visions]
-    ..sort(
-      (a, b) =>
-          _reqInt(a, 'client_order').compareTo(_reqInt(b, 'client_order')),
-    );
+    ..sort((a, b) => _visionOrder(a).compareTo(_visionOrder(b)));
   final parsedVisions = <PwaVision>[
     for (final r in visionRows)
       () {
@@ -359,11 +372,15 @@ PwaProjectSnapshot pwaSnapshotFromRecords({
           atmosphereId: _reqStr(r, 'atmosphere_id'),
           actionType: pwaActionFromDb(_reqStr(r, 'action_type')),
           afterAsset: _reqStr(r, 'image_path'),
-          order: _reqInt(r, 'client_order'),
+          order: _visionOrder(r),
           parentVersionId: _optStr(r, 'parent_vision_id'),
           sourceMessageId: _optStr(r, 'source_message_id'),
           instruction: _optStr(r, 'prompt_text') ?? '',
           isCurrent: id == currentVisionId,
+          // It came FROM a record, so its row exists: a later save must not try
+          // to append it again (the backend, not this client, wrote the row for
+          // a real generation, and its idempotency_key is not the vision id).
+          remotePersisted: true,
         );
       }(),
   ];

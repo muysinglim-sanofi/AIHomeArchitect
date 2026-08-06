@@ -68,6 +68,7 @@ class PwaVision {
     this.sourceMessageId,
     this.instruction = '',
     this.isCurrent = false,
+    this.remotePersisted = false,
   });
 
   final String versionId;
@@ -80,7 +81,10 @@ class PwaVision {
   final PwaActionType actionType;
   final String instruction;
 
-  /// Asset reference for the mocked "after" image (the generated vision).
+  /// Where the "after" image lives: a private Storage PATH for a real
+  /// generation (`users/{uid}/projects/{id}/generated/{visionId}.jpg`), or a
+  /// bundle asset (`assets/...`) in the offline mock. Never a signed URL — a URL
+  /// expires, a path does not.
   final String afterAsset;
 
   /// Deterministic creation order (replaces a wall-clock timestamp so tests are
@@ -88,6 +92,13 @@ class PwaVision {
   final int order;
 
   final bool isCurrent;
+
+  /// True when the ROW for this vision was already written by the backend (a
+  /// real generation) or read back from it. The durable save then skips it: the
+  /// backend owns that row, and re-appending it locally would either duplicate
+  /// it or collide on its idempotency key. Purely a persistence concern — the
+  /// domain treats a remote and a local vision identically everywhere else.
+  final bool remotePersisted;
 
   /// Human label for the creation reason (mobile "Created from…" line).
   String get reasonLabel => switch (actionType) {
@@ -110,6 +121,7 @@ class PwaVision {
     sourceMessageId: sourceMessageId,
     instruction: instruction,
     isCurrent: isCurrent ?? this.isCurrent,
+    remotePersisted: remotePersisted,
   );
 }
 

@@ -208,9 +208,14 @@ class SupabasePwaPersistenceRepository implements PwaPersistenceRepository {
       // Append-only children: insert only genuinely-new rows. A collision is
       // accepted ONLY as an identical retry (verified column-by-column); a real
       // divergence or a reused idempotency_key raises conflict. Never UPDATEs.
+      //
+      // Visions the BACKEND wrote are excluded: their row already exists, it was
+      // keyed on the generation's idempotency key (not the vision id), and it
+      // carries columns this client never had. Re-planning them here would read
+      // as a divergence and raise a conflict on every subsequent save.
       await _appendChildren(
         'pwa_visions',
-        records.visions,
+        _clientOwnedVisions(snapshot, records.visions),
         kPwaVisionImmutableKeys,
         'vision',
       );
@@ -339,7 +344,120 @@ class SupabasePwaPersistenceRepository implements PwaPersistenceRepository {
     }
   }
 
+  // ── real generation: prepare + sign ────────────────────────────────────────
+
+  @override
+  Future<PwaOriginalUpload> prepareGeneration(
+    PwaProjectSnapshot snapshot, {
+    bool replaceOriginal = false,
+  }) async {
+    if (snapshot.title.trim().isEmpty) {
+      throw const PwaRepositoryError.validation(
+        'Project title must not be empty.',
+      );
+    }
+    try {
+      await _staging.ensureSession();
+      final existing = await _db
+          .from('pwa_projects')
+          .select('revision, original_image_path, original_image_source')
+          .eq('id', snapshot.projectId)
+          .maybeSingle();
+
+      final storedPath = existing?['original_image_path'] as String?;
+      final storedIsObject =
+          storedPath != null &&
+          storedPath.isNotEmpty &&
+          pwaImageSourceForPath(storedPath) ==
+              PwaImageSourceKind.stagingStorage;
+
+      // The photo is already a durable object and has not changed → REUSE it.
+      // This is what makes a retry free: the same generation never re-uploads
+      // the same bytes, and the backend keeps seeing one canonical path.
+      if (existing != null && storedIsObject && !replaceOriginal) {
+        return PwaOriginalUpload.forPath(snapshot.projectId, storedPath);
+      }
+
+      final src = snapshot.source;
+      if (src == null) {
+        throw const PwaRepositoryError.validation(
+          'This project has no photo bytes to upload.',
+        );
+      }
+      // Upload BEFORE writing the row, so a failed upload leaves nothing
+      // pointing at an object that does not exist.
+      final path = await _uploadOriginal(snapshot.projectId, src);
+
+      final records = pwaRecordsFromSnapshot(
+        snapshot,
+        installationId: installationId,
+      );
+      final project = Map<String, dynamic>.from(records.project)
+        ..['original_image_path'] = path
+        ..['original_image_source'] = 'staging_storage';
+
+      if (existing == null) {
+        // current/cover stay null until a vision exists to point at.
+        project['current_vision_id'] = null;
+        project['cover_vision_id'] = null;
+        await _db.from('pwa_projects').insert(project);
+        _revisions[snapshot.projectId] = 1;
+      } else {
+        final rev =
+            _revisions[snapshot.projectId] ??
+            (existing['revision'] as num).toInt();
+        final upd = Map<String, dynamic>.from(project)
+          ..remove('current_vision_id')
+          ..remove('cover_vision_id')
+          ..['revision'] = rev + 1;
+        final updated = await _db
+            .from('pwa_projects')
+            .update(upd)
+            .eq('id', snapshot.projectId)
+            .eq('revision', rev)
+            .select('revision');
+        if (updated.isEmpty) {
+          throw const PwaRepositoryError.conflict(
+            'Project changed elsewhere (revision mismatch). Reload and retry.',
+          );
+        }
+        _revisions[snapshot.projectId] = rev + 1;
+      }
+      return PwaOriginalUpload.forPath(
+        snapshot.projectId,
+        path,
+        mimeType: src.mimeType,
+      );
+    } catch (e) {
+      _map(e, 'prepareGeneration');
+    }
+  }
+
+  @override
+  Future<String> signedImageUrl(String path, int expiresInSeconds) async {
+    try {
+      await _staging.ensureSession();
+      return await _c.storage
+          .from(_kBucket)
+          .createSignedUrl(path, expiresInSeconds);
+    } catch (e) {
+      _map(e, 'signedImageUrl');
+    }
+  }
+
   // ── helpers ─────────────────────────────────────────────────────────────────
+
+  /// The vision rows this CLIENT is responsible for inserting — i.e. everything
+  /// the backend did not already write. Matched positionally against the
+  /// snapshot, which is how [pwaRecordsFromSnapshot] builds them.
+  List<Map<String, dynamic>> _clientOwnedVisions(
+    PwaProjectSnapshot snapshot,
+    List<Map<String, dynamic>> rows,
+  ) => [
+    for (var i = 0; i < rows.length; i++)
+      if (i >= snapshot.visions.length || !snapshot.visions[i].remotePersisted)
+        rows[i],
+  ];
 
   /// Insert only genuinely-new child rows (§ point 4). Reads the rows already
   /// stored that match a local `id` OR `idempotency_key`, plans the append with

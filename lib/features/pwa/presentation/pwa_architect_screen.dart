@@ -20,6 +20,7 @@ import '../domain/pwa_models.dart';
 import '../domain/pwa_project.dart';
 import 'pwa_architect_tokens.dart';
 import 'pwa_brand.dart';
+import 'pwa_stored_image.dart';
 
 // V7 responsive tiers (§4). Local to the Architect so the shared
 // `pwaFormFactorForWidth` (used by the frozen entry screen) stays untouched.
@@ -1150,11 +1151,10 @@ class _V7VisionCard extends StatelessWidget {
                         cursor: SystemMouseCursors.click,
                         child: GestureDetector(
                           onTap: onOpenReveal,
-                          child: Image.asset(
-                            vision.afterAsset,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) =>
-                                const ColoredBox(color: av7RevealRaised),
+                          child: PwaStoredImage(
+                            key: ValueKey('vision-card-${vision.versionId}'),
+                            reference: vision.afterAsset,
+                            placeholderColor: av7RevealRaised,
                           ),
                         ),
                       ),

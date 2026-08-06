@@ -55,6 +55,18 @@ const List<String> kProductionHostDenylist = <String>[
   'aydenstudio.com',
 ];
 
+/// The EXACT origins allowed for the staging generation backend — the canonical
+/// FastAPI run locally against the staging project.
+///
+/// An exact-ORIGIN allowlist, not a host one: the scheme and the port are part
+/// of the decision, so `http://127.0.0.1:9999` and `https://127.0.0.1:8000` are
+/// both rejected. There is deliberately no remote entry: when a real staging
+/// domain exists it is added here, reviewed, rather than inferred at runtime.
+const List<String> kStagingBackendOriginAllowlist = <String>[
+  'http://127.0.0.1:8000',
+  'http://localhost:8000',
+];
+
 /// Resolved, validated environment configuration.
 class PwaEnvironment {
   const PwaEnvironment._(
@@ -62,6 +74,7 @@ class PwaEnvironment {
     this.stagingSupabaseUrl,
     this.stagingProjectRef,
     this.stagingPublishableKey,
+    this.stagingBackendUrl,
     this.allowStagingMigrations = false,
     this.seedDemo = false,
   });
@@ -73,6 +86,14 @@ class PwaEnvironment {
   /// The staging PUBLISHABLE (public) key only — a service-role/secret key must
   /// never reach the client (§3). Kept nullable; mock never holds it.
   final String? stagingPublishableKey;
+
+  /// Origin of the canonical generation backend for staging. Validated against
+  /// [kStagingBackendOriginAllowlist]; null in mock, never null in staging.
+  ///
+  /// The client only ever holds this URL — every provider secret stays on the
+  /// server, which is the whole reason generation goes through the backend
+  /// instead of the browser.
+  final String? stagingBackendUrl;
   final bool allowStagingMigrations;
   final bool seedDemo;
 
@@ -88,18 +109,26 @@ class PwaEnvironment {
   /// `--dart-define-from-file`). Defaults to mock so a plain build is always
   /// the offline experience.
   factory PwaEnvironment.current() => PwaEnvironment.parse(const {
-        'AYDEN_ENV': String.fromEnvironment('AYDEN_ENV', defaultValue: 'mock'),
-        'AYDEN_STAGING_SUPABASE_URL':
-            String.fromEnvironment('AYDEN_STAGING_SUPABASE_URL'),
-        'AYDEN_STAGING_PROJECT_REF':
-            String.fromEnvironment('AYDEN_STAGING_PROJECT_REF'),
-        'AYDEN_STAGING_SUPABASE_PUBLISHABLE_KEY':
-            String.fromEnvironment('AYDEN_STAGING_SUPABASE_PUBLISHABLE_KEY'),
-        'AYDEN_ALLOW_STAGING_MIGRATIONS':
-            String.fromEnvironment('AYDEN_ALLOW_STAGING_MIGRATIONS'),
-        'AYDEN_STAGING_SEED_DEMO':
-            String.fromEnvironment('AYDEN_STAGING_SEED_DEMO'),
-      });
+    'AYDEN_ENV': String.fromEnvironment('AYDEN_ENV', defaultValue: 'mock'),
+    'AYDEN_STAGING_SUPABASE_URL': String.fromEnvironment(
+      'AYDEN_STAGING_SUPABASE_URL',
+    ),
+    'AYDEN_STAGING_PROJECT_REF': String.fromEnvironment(
+      'AYDEN_STAGING_PROJECT_REF',
+    ),
+    'AYDEN_STAGING_SUPABASE_PUBLISHABLE_KEY': String.fromEnvironment(
+      'AYDEN_STAGING_SUPABASE_PUBLISHABLE_KEY',
+    ),
+    'AYDEN_STAGING_BACKEND_URL': String.fromEnvironment(
+      'AYDEN_STAGING_BACKEND_URL',
+    ),
+    'AYDEN_ALLOW_STAGING_MIGRATIONS': String.fromEnvironment(
+      'AYDEN_ALLOW_STAGING_MIGRATIONS',
+    ),
+    'AYDEN_STAGING_SEED_DEMO': String.fromEnvironment(
+      'AYDEN_STAGING_SEED_DEMO',
+    ),
+  });
 
   /// Pure parser (unit-testable without touching real dart-defines). Fails
   /// CLOSED: unknown env, production, or any staging config that is not the
@@ -122,6 +151,7 @@ class PwaEnvironment {
     final supaUrl = defines['AYDEN_STAGING_SUPABASE_URL']?.trim();
     final projectRef = defines['AYDEN_STAGING_PROJECT_REF']?.trim();
     final pubKey = defines['AYDEN_STAGING_SUPABASE_PUBLISHABLE_KEY']?.trim();
+    final backendUrl = defines['AYDEN_STAGING_BACKEND_URL']?.trim();
     final allowMig =
         (defines['AYDEN_ALLOW_STAGING_MIGRATIONS'] ?? 'false').trim() == 'true';
     final seed =
@@ -132,6 +162,7 @@ class PwaEnvironment {
       assertStagingTargetAllowed(url);
       assertProjectRefAllowed(projectRef ?? '', url);
       assertPublishableKeyAllowed(pubKey ?? '');
+      assertBackendUrlAllowed(backendUrl ?? '');
     }
 
     return PwaEnvironment._(
@@ -139,9 +170,58 @@ class PwaEnvironment {
       stagingSupabaseUrl: supaUrl,
       stagingProjectRef: projectRef,
       stagingPublishableKey: pubKey,
+      stagingBackendUrl: backendUrl,
       allowStagingMigrations: allowMig,
       seedDemo: seed,
     );
+  }
+
+  /// Backend guard (§"URL backend PWA staging"). Throws [PwaConfigError] unless
+  /// [url] is EXACTLY one of [kStagingBackendOriginAllowlist].
+  ///
+  /// Deliberately origin-exact rather than host-based: a generation backend
+  /// receives the user's session token, so "close enough" is not a category
+  /// that may exist here. Absent, ambiguous, production, or plain-http remote
+  /// all land in the same place — refuse to boot.
+  static void assertBackendUrlAllowed(String url) {
+    final u = url.trim();
+    if (u.isEmpty) {
+      throw const PwaConfigError(
+        'AYDEN_STAGING_BACKEND_URL is not configured (fail closed — the PWA '
+        'never guesses a generation backend).',
+      );
+    }
+    final parsed = Uri.tryParse(u);
+    final host = (parsed?.host ?? '').toLowerCase();
+    if (parsed == null || host.isEmpty) {
+      throw PwaConfigError('Staging backend URL has no host (got "$url").');
+    }
+    // Denylist first, so a production host is named as such in the error even
+    // if it would also have failed the allowlist.
+    for (final banned in kProductionHostDenylist) {
+      if (host.contains(banned)) {
+        throw PwaConfigError(
+          'Refusing a production backend host in staging (matched "$banned").',
+        );
+      }
+    }
+    if (parsed.hasQuery ||
+        parsed.hasFragment ||
+        parsed.path.replaceAll('/', '').isNotEmpty) {
+      throw PwaConfigError(
+        'Staging backend URL must be a bare origin, no path or query '
+        '(got "$url").',
+      );
+    }
+    final origin =
+        '${parsed.scheme.toLowerCase()}://$host'
+        '${parsed.hasPort ? ':${parsed.port}' : ''}';
+    if (!kStagingBackendOriginAllowlist.contains(origin)) {
+      throw PwaConfigError(
+        'Staging backend origin "$origin" is not authorized (fail closed). '
+        'Allowed: ${kStagingBackendOriginAllowlist.join(", ")}.',
+      );
+    }
   }
 
   /// Host guard (§2/§9). Throws [PwaConfigError] unless [target] is a non-empty
@@ -161,7 +241,8 @@ class PwaEnvironment {
     }
     final isLocal = host == 'localhost' || host == '127.0.0.1';
     // https required; http tolerated ONLY for an explicit localhost dev target.
-    if (!lower.startsWith('https://') && !(isLocal && lower.startsWith('http://'))) {
+    if (!lower.startsWith('https://') &&
+        !(isLocal && lower.startsWith('http://'))) {
       throw PwaConfigError('Staging target must be https (got "$target").');
     }
     // Denylist (substring on HOST only — never the path) as defense-in-depth.
