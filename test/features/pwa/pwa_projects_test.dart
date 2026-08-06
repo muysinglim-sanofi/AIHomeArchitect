@@ -513,13 +513,17 @@ void main() {
       addTearDown(c.dispose);
       await tester.pumpWidget(_app(c, const Size(1440, 900)));
       await tester.pump();
-      expect(find.text('Upload your room'), findsOneWidget);
+      // The app opens on the dashboard; Create is one deliberate step away.
+      expect(find.byKey(const ValueKey('pwa-home')), findsOneWidget);
+      _notifier(c).newProject();
+      await tester.pump();
+      expect(find.byKey(const ValueKey('pwa-create')), findsOneWidget);
       // Architect (resumed) still renders its workspace + chat panel.
       _notifier(c).openProject(_seed(c, 'Kitchen Transformation').projectId);
       await tester.pump();
       await tester.pump(const Duration(seconds: 3));
       expect(find.byKey(const ValueKey('av7-global-header')), findsOneWidget);
-      expect(find.byKey(const ValueKey('av7-chat-panel')), findsOneWidget);
+      expect(find.byKey(const ValueKey('av7-chat-feed')), findsOneWidget);
     });
   });
 }

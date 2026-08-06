@@ -47,6 +47,7 @@ Future<String> _genPersisted(_FakePersistence fake, List<int> a) async {
   c.selectRoom('living_room');
   c.setSource(_srcOf(a));
   await c.generateFirstVision();
+  c.continueToArchitect();
   await pumpEventQueue();
   return c.state.project.projectId;
 }
@@ -595,7 +596,8 @@ void main() {
           fake2,
           const PwaRoute(PwaPage.architect, projectId: 'legacy-2'),
         );
-        expect(c2.state.phase, PwaPhase.entry);
+        // …and an otherwise-empty library sends it to the dashboard.
+        expect(c2.state.phase, PwaPhase.home);
       },
     );
 
@@ -777,7 +779,7 @@ void main() {
 
     test('1. no durable project → Hero (entry, no photo)', () async {
       final c = await _boot(_FakePersistence());
-      expect(c.state.phase, PwaPhase.entry);
+      expect(c.state.phase, PwaPhase.home);
       expect(c.state.hasSource, isFalse);
       expect(c.state.versions, isEmpty);
     });
@@ -791,7 +793,7 @@ void main() {
         );
         expect(fake.store, isEmpty); // nothing durable before Generate
         final c = await _boot(fake);
-        expect(c.state.phase, PwaPhase.entry); // clean Create/Home
+        expect(c.state.phase, PwaPhase.home); // clean Create/Home
         expect(c.state.hasSource, isFalse); // no phantom photo restored
         expect(c.state.versions, isEmpty);
       },
@@ -860,7 +862,7 @@ void main() {
       final id = fake.store.keys.first;
       await fake.softDeleteProject(id);
       final c = await _boot(fake);
-      expect(c.state.phase, PwaPhase.entry);
+      expect(c.state.phase, PwaPhase.home);
       expect(c.state.library.where((p) => p.projectId == id), isEmpty);
     });
 
@@ -886,7 +888,7 @@ void main() {
 
     test('9. mock stays offline — boot restore is a no-op', () {
       final c = _controller(); // no persistence, no restore
-      expect(c.state.phase, PwaPhase.entry);
+      expect(c.state.phase, PwaPhase.home);
       expect(c.state.saveState, PwaSaveState.idle);
     });
   });
@@ -921,7 +923,7 @@ void main() {
 
     test('URL "/" → Hero even with durable projects present', () async {
       final c = await _bootRoute(twoActive(), PwaRoute.home);
-      expect(c.state.phase, PwaPhase.entry);
+      expect(c.state.phase, PwaPhase.home);
       expect(c.state.hasSource, isFalse);
     });
 
@@ -956,7 +958,7 @@ void main() {
         _FakePersistence(),
         const PwaRoute(PwaPage.architect, projectId: 'proj-A'),
       );
-      expect(c.state.phase, PwaPhase.entry);
+      expect(c.state.phase, PwaPhase.home);
       expect(c.state.library, isEmpty);
     });
   });

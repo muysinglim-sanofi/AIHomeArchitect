@@ -83,10 +83,16 @@ class _PwaUrlSyncScopeState extends ConsumerState<PwaUrlSyncScope> {
     final canonical = ref.read(pwaControllerProvider).canonicalRoute.location;
     final fromHistory = _fromHistory;
     _fromHistory = false;
+    // Consume unconditionally so a flagged transition that needed no URL change
+    // cannot leak its "replace" intent into a later, unrelated navigation.
+    final replaceRequested = ref
+        .read(pwaControllerProvider.notifier)
+        .consumeReplaceNav();
     if (_locationOf(_bridge.current()) == canonical) return; // already correct
-    // Replace (no new entry) for a Back/Forward normalization or when the URL's
-    // project just disappeared (delete-current, §3); push for a normal nav.
-    if (fromHistory || _currentUrlProjectGone()) {
+    // Replace (no new entry) for a Back/Forward normalization, when the URL's
+    // project just disappeared (delete-current, §3), or when the controller asked
+    // for it (Generate: the Architect supersedes `/create`); else push.
+    if (fromHistory || replaceRequested || _currentUrlProjectGone()) {
       _bridge.replace(canonical);
     } else {
       _bridge.push(canonical);

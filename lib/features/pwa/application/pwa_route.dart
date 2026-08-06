@@ -7,25 +7,38 @@
 /// the persistence repository.
 ///
 /// Route map:
-///   /                                  → Home / Hero
+///   /                                  → Home dashboard
+///   /create                            → New project (local, pre-Generate)
 ///   /projects                          → My Projects
 ///   /projects/:id/draft                → Draft Fast Path
-///   /projects/:id/architect            → Architect
+///   /projects/:id/architect            → Architect (the conversation)
 ///   /projects/:id/architect?vision=:v  → Architect with a selected vision
+///   /projects/:id/reveal?vision=:v     → Full Reveal for that vision
+///   …&mode=first                       → the one-off First Reveal after Generate
 library;
 
 import '../domain/pwa_project.dart';
 
-enum PwaPage { home, projects, draft, architect }
+enum PwaPage { home, create, projects, draft, architect, reveal }
 
 class PwaRoute {
-  const PwaRoute(this.page, {this.projectId, this.visionId});
+  const PwaRoute(
+    this.page, {
+    this.projectId,
+    this.visionId,
+    this.firstLook = false,
+  });
 
   final PwaPage page;
   final String? projectId;
   final String? visionId;
 
+  /// Reveal only — the immersive one-off shown right after the first Generate.
+  /// It is a presentation mode of the same vision, never a second entity.
+  final bool firstLook;
+
   static const PwaRoute home = PwaRoute(PwaPage.home);
+  static const PwaRoute create = PwaRoute(PwaPage.create);
   static const PwaRoute projects = PwaRoute(PwaPage.projects);
 
   /// Parse a browser [uri] into a route. Unknown shapes fall back to the nearest
@@ -33,6 +46,7 @@ class PwaRoute {
   static PwaRoute parse(Uri uri) {
     final segs = uri.pathSegments.where((s) => s.isNotEmpty).toList();
     if (segs.isEmpty) return home;
+    if (segs.first == 'create') return create;
     if (segs.first != 'projects') return home;
     if (segs.length == 1) return projects;
     final id = segs[1];
@@ -48,6 +62,14 @@ class PwaRoute {
             projectId: id,
             visionId: (v != null && v.isNotEmpty) ? v : null,
           );
+        case 'reveal':
+          final v = uri.queryParameters['vision'];
+          return PwaRoute(
+            PwaPage.reveal,
+            projectId: id,
+            visionId: (v != null && v.isNotEmpty) ? v : null,
+            firstLook: uri.queryParameters['mode'] == 'first',
+          );
       }
     }
     return projects; // /projects/:id with no/unknown leaf → the library
@@ -58,6 +80,8 @@ class PwaRoute {
     switch (page) {
       case PwaPage.home:
         return '/';
+      case PwaPage.create:
+        return '/create';
       case PwaPage.projects:
         return '/projects';
       case PwaPage.draft:
@@ -67,6 +91,11 @@ class PwaRoute {
             ? '?vision=$visionId'
             : '';
         return '/projects/$projectId/architect$q';
+      case PwaPage.reveal:
+        final q = (visionId != null && visionId!.isNotEmpty)
+            ? '?vision=$visionId${firstLook ? '&mode=first' : ''}'
+            : '';
+        return '/projects/$projectId/reveal$q';
     }
   }
 
@@ -81,10 +110,15 @@ class PwaRoute {
     switch (route.page) {
       case PwaPage.home:
         return home;
+      case PwaPage.create:
+        // A creation session is purely local — it is always a valid destination
+        // and never depends on the durable library.
+        return create;
       case PwaPage.projects:
         return projects;
       case PwaPage.draft:
       case PwaPage.architect:
+      case PwaPage.reveal:
         final id = route.projectId;
         final p = id == null ? null : lookup(id);
         if (p == null) {
@@ -98,6 +132,25 @@ class PwaRoute {
         }
         if (route.page == PwaPage.architect && !hasVisions) {
           return PwaRoute(PwaPage.draft, projectId: p.projectId);
+        }
+        if (route.page == PwaPage.reveal) {
+          // A Reveal is only meaningful for a vision that exists IN THIS
+          // project. An absent / unknown / foreign vision NEVER silently
+          // resolves to a different one — it falls back to the conversation.
+          final v = route.visionId;
+          final valid =
+              hasVisions && v != null && p.visions.any((x) => x.versionId == v);
+          if (!valid) {
+            return hasVisions
+                ? PwaRoute(PwaPage.architect, projectId: p.projectId)
+                : PwaRoute(PwaPage.draft, projectId: p.projectId);
+          }
+          return PwaRoute(
+            PwaPage.reveal,
+            projectId: p.projectId,
+            visionId: v,
+            firstLook: route.firstLook,
+          );
         }
         if (route.page == PwaPage.architect) {
           // Invalid vision query → keep the project, drop to current vision.
@@ -118,10 +171,11 @@ class PwaRoute {
       other is PwaRoute &&
       other.page == page &&
       other.projectId == projectId &&
-      other.visionId == visionId;
+      other.visionId == visionId &&
+      other.firstLook == firstLook;
 
   @override
-  int get hashCode => Object.hash(page, projectId, visionId);
+  int get hashCode => Object.hash(page, projectId, visionId, firstLook);
 
   @override
   String toString() => 'PwaRoute($location)';

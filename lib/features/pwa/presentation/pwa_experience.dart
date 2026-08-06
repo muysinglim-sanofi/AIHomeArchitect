@@ -12,8 +12,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../application/pwa_controller.dart';
 import 'pwa_architect_screen.dart';
 import 'pwa_entry_screen.dart';
+import 'pwa_home_screen.dart';
 import 'pwa_loading_screen.dart';
 import 'pwa_projects_screen.dart';
+import 'pwa_first_reveal_screen.dart';
+import 'pwa_reveal_screen.dart';
 
 class PwaExperience extends ConsumerWidget {
   const PwaExperience({super.key});
@@ -22,9 +25,12 @@ class PwaExperience extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final phase = ref.watch(pwaControllerProvider.select((s) => s.phase));
     return switch (phase) {
+      PwaPhase.home => const PwaHomeScreen(),
       PwaPhase.entry => const PwaEntryScreen(),
       PwaPhase.loading => const PwaLoadingScreen(),
       PwaPhase.architect => const PwaArchitectScreen(),
+      PwaPhase.firstReveal => const PwaFirstRevealScreen(),
+      PwaPhase.reveal => const PwaRevealScreen(),
       PwaPhase.projects => const PwaProjectsScreen(),
     };
   }

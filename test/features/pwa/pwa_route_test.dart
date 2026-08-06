@@ -146,4 +146,169 @@ void main() {
       expect(r.visionId, isNull);
     });
   });
+
+  // ── Reveal: a durable URL for ONE vision of ONE project ────────────────────
+  group('reveal route', () {
+    test('REVEAL01: parses /projects/:id/reveal?vision=:v', () {
+      final r = PwaRoute.parse(Uri.parse('/projects/p1/reveal?vision=v9'));
+      expect(r.page, PwaPage.reveal);
+      expect(r.projectId, 'p1');
+      expect(r.visionId, 'v9');
+    });
+
+    test('REVEAL02: location round-trips', () {
+      const r = PwaRoute(PwaPage.reveal, projectId: 'p1', visionId: 'v9');
+      expect(r.location, '/projects/p1/reveal?vision=v9');
+      expect(PwaRoute.parse(Uri.parse(r.location)), r);
+    });
+
+    test('REVEAL03: a valid vision of THIS project is kept', () {
+      final p = _project('p1', visions: 2, visionId: 'vA');
+      final out = PwaRoute.normalize(
+        const PwaRoute(PwaPage.reveal, projectId: 'p1', visionId: 'vA'),
+        lookup: (id) => id == 'p1' ? p : null,
+        libraryEmpty: false,
+      );
+      expect(out.page, PwaPage.reveal);
+      expect(out.visionId, 'vA');
+    });
+
+    test('REVEAL04: an unknown vision falls back to the conversation — never '
+        'silently to another vision', () {
+      final p = _project('p1', visions: 2, visionId: 'vA');
+      final out = PwaRoute.normalize(
+        const PwaRoute(PwaPage.reveal, projectId: 'p1', visionId: 'ghost'),
+        lookup: (id) => id == 'p1' ? p : null,
+        libraryEmpty: false,
+      );
+      expect(out.page, PwaPage.architect);
+      expect(out.projectId, 'p1');
+      expect(out.visionId, isNull);
+    });
+
+    test('REVEAL05: a vision belonging to ANOTHER project is refused', () {
+      final p1 = _project('p1', visions: 1, visionId: 'vA');
+      final p2 = _project('p2', visions: 1, visionId: 'vB');
+      final out = PwaRoute.normalize(
+        // vB exists — but not in p1.
+        const PwaRoute(PwaPage.reveal, projectId: 'p1', visionId: 'vB'),
+        lookup: (id) => id == 'p1' ? p1 : (id == 'p2' ? p2 : null),
+        libraryEmpty: false,
+      );
+      expect(out.page, PwaPage.architect);
+      expect(out.projectId, 'p1');
+    });
+
+    test('REVEAL06: reveal with no query at all → the conversation', () {
+      final p = _project('p1', visions: 1, visionId: 'vA');
+      final out = PwaRoute.normalize(
+        const PwaRoute(PwaPage.reveal, projectId: 'p1'),
+        lookup: (id) => id == 'p1' ? p : null,
+        libraryEmpty: false,
+      );
+      expect(out.page, PwaPage.architect);
+    });
+
+    test('REVEAL07: reveal on a zero-vision draft → the Draft', () {
+      final p = _project('p1');
+      final out = PwaRoute.normalize(
+        const PwaRoute(PwaPage.reveal, projectId: 'p1', visionId: 'vA'),
+        lookup: (id) => id == 'p1' ? p : null,
+        libraryEmpty: false,
+      );
+      expect(out.page, PwaPage.draft);
+    });
+
+    test('REVEAL08: unknown project → library, never another project', () {
+      final out = PwaRoute.normalize(
+        const PwaRoute(PwaPage.reveal, projectId: 'nope', visionId: 'v'),
+        lookup: (_) => null,
+        libraryEmpty: false,
+      );
+      expect(out, PwaRoute.projects);
+    });
+  });
+
+  // ── mode=first is a presentation mode of the SAME vision ──────────────────
+  group('first-look reveal mode', () {
+    test('FIRST01: parses and round-trips &mode=first', () {
+      final r = PwaRoute.parse(
+        Uri.parse('/projects/p1/reveal?vision=v9&mode=first'),
+      );
+      expect(r.page, PwaPage.reveal);
+      expect(r.visionId, 'v9');
+      expect(r.firstLook, isTrue);
+      expect(r.location, '/projects/p1/reveal?vision=v9&mode=first');
+      expect(PwaRoute.parse(Uri.parse(r.location)), r);
+    });
+
+    test('FIRST02: a plain reveal URL is NOT the first look', () {
+      final r = PwaRoute.parse(Uri.parse('/projects/p1/reveal?vision=v9'));
+      expect(r.firstLook, isFalse);
+      expect(r.location, '/projects/p1/reveal?vision=v9');
+      // The two modes are distinct routes for history purposes.
+      expect(
+        r,
+        isNot(
+          const PwaRoute(
+            PwaPage.reveal,
+            projectId: 'p1',
+            visionId: 'v9',
+            firstLook: true,
+          ),
+        ),
+      );
+    });
+
+    test('FIRST03: a valid first-look survives normalization', () {
+      final p = _project('p1', visions: 1, visionId: 'vA');
+      final out = PwaRoute.normalize(
+        const PwaRoute(
+          PwaPage.reveal,
+          projectId: 'p1',
+          visionId: 'vA',
+          firstLook: true,
+        ),
+        lookup: (id) => id == 'p1' ? p : null,
+        libraryEmpty: false,
+      );
+      expect(out.page, PwaPage.reveal);
+      expect(out.firstLook, isTrue);
+    });
+
+    test('FIRST04: an unknown vision falls back to the conversation, never to '
+        'another vision', () {
+      final p = _project('p1', visions: 2, visionId: 'vA');
+      final out = PwaRoute.normalize(
+        const PwaRoute(
+          PwaPage.reveal,
+          projectId: 'p1',
+          visionId: 'ghost',
+          firstLook: true,
+        ),
+        lookup: (id) => id == 'p1' ? p : null,
+        libraryEmpty: false,
+      );
+      expect(out.page, PwaPage.architect);
+      expect(out.firstLook, isFalse);
+      expect(out.visionId, isNull);
+    });
+
+    test('FIRST05: a vision from ANOTHER project is refused', () {
+      final p1 = _project('p1', visions: 1, visionId: 'vA');
+      final p2 = _project('p2', visions: 1, visionId: 'vB');
+      final out = PwaRoute.normalize(
+        const PwaRoute(
+          PwaPage.reveal,
+          projectId: 'p1',
+          visionId: 'vB',
+          firstLook: true,
+        ),
+        lookup: (id) => id == 'p1' ? p1 : (id == 'p2' ? p2 : null),
+        libraryEmpty: false,
+      );
+      expect(out.page, PwaPage.architect);
+      expect(out.projectId, 'p1');
+    });
+  });
 }

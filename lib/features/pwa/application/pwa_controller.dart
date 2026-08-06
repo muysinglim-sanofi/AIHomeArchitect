@@ -19,7 +19,8 @@ import '../domain/pwa_models.dart';
 import '../domain/pwa_project.dart';
 import 'pwa_route.dart';
 
-enum PwaPhase { entry, loading, architect, projects }
+/// `entry` is the CREATE session (`/create`); `home` is the dashboard (`/`).
+enum PwaPhase { home, entry, loading, architect, firstReveal, reveal, projects }
 
 /// Where the current source image came from. Governs mock honesty: only the
 /// bundled example may claim a known room type; an arbitrary user upload must
@@ -135,7 +136,9 @@ Future<PwaBootRestore> pwaResolveBootRestore(
       );
       resolved = norm;
       if (norm.projectId != null &&
-          (norm.page == PwaPage.draft || norm.page == PwaPage.architect)) {
+          (norm.page == PwaPage.draft ||
+              norm.page == PwaPage.architect ||
+              norm.page == PwaPage.reveal)) {
         active = pwaFindProject(library, norm.projectId!);
       }
       // home / projects → no active project (Hero / My Projects).
@@ -215,6 +218,7 @@ class PwaState {
     this.librarySearch = '',
     this.saveState = PwaSaveState.idle,
     this.activeTitleOverride,
+    this.refineContextVisionId,
   });
 
   final PwaPhase phase;
@@ -263,6 +267,14 @@ class PwaState {
   /// used as the persisted title, surviving Room/Atmosphere changes and refresh).
   final String? activeTitleOverride;
 
+  /// UI-only: the vision the user asked to refine, carried back from the Full
+  /// Reveal so the conversation can say what it is about to change and focus the
+  /// composer. Never persisted, never a message — the user writes their own.
+  final String? refineContextVisionId;
+
+  /// The vision behind [refineContextVisionId], if it still exists.
+  PwaVision? get refineContextVision => _byId(refineContextVisionId);
+
   /// The id of the project currently loaded in the active session.
   String get activeProjectId => project.projectId;
 
@@ -274,6 +286,8 @@ class PwaState {
   /// URL until the vision lands and the phase becomes Architect.
   PwaRoute get canonicalRoute {
     switch (phase) {
+      case PwaPhase.home:
+        return PwaRoute.home;
       case PwaPhase.projects:
         return PwaRoute.projects;
       case PwaPhase.architect:
@@ -284,11 +298,21 @@ class PwaState {
           projectId: project.projectId,
           visionId: vid,
         );
+      case PwaPhase.reveal:
+      case PwaPhase.firstReveal:
+        // The Reveal always names the vision it is showing — that is the whole
+        // point of the durable URL. `mode=first` marks the one-off unveiling.
+        return PwaRoute(
+          PwaPage.reveal,
+          projectId: project.projectId,
+          visionId: previewedVision?.versionId,
+          firstLook: phase == PwaPhase.firstReveal,
+        );
       case PwaPhase.loading:
       case PwaPhase.entry:
-        // Step 6A — a pre-Generate creation session is Home/Create: never a
+        // Step 6A — a pre-Generate creation session is `/create`: never a
         // durable `/projects/{id}/draft` URL (there is no durable project yet).
-        return PwaRoute.home;
+        return PwaRoute.create;
     }
   }
 
@@ -423,6 +447,8 @@ class PwaState {
     PwaSaveState? saveState,
     String? activeTitleOverride,
     bool clearTitleOverride = false,
+    String? refineContextVisionId,
+    bool clearRefineContext = false,
   }) {
     return PwaState(
       phase: phase ?? this.phase,
@@ -455,6 +481,9 @@ class PwaState {
       activeTitleOverride: clearTitleOverride
           ? null
           : (activeTitleOverride ?? this.activeTitleOverride),
+      refineContextVisionId: clearRefineContext
+          ? null
+          : (refineContextVisionId ?? this.refineContextVisionId),
     );
   }
 }
@@ -486,7 +515,8 @@ class PwaController extends StateNotifier<PwaState> {
     PwaBootRestore? restore,
   ) {
     final base = PwaState(
-      phase: PwaPhase.entry,
+      // The dashboard is the front door now; Create is a deliberate step.
+      phase: PwaPhase.home,
       project: repo.project(),
       atmospheres: repo.atmospheres(),
       selectedAtmosphereId: 'ayden_signature',
@@ -494,11 +524,14 @@ class PwaController extends StateNotifier<PwaState> {
     );
     final active = restore?.active;
     if (active == null) {
-      // No durable project, but the URL may still name My Projects (§5).
+      // No durable project, but the URL may still name another top-level page.
       if (restore?.route?.page == PwaPage.projects) {
         return base.copyWith(phase: PwaPhase.projects);
       }
-      return base; // Hero
+      if (restore?.route?.page == PwaPage.create) {
+        return base.copyWith(phase: PwaPhase.entry);
+      }
+      return base; // Home
     }
     final descriptor = PwaProject(
       projectId: active.projectId,
@@ -526,15 +559,24 @@ class PwaController extends StateNotifier<PwaState> {
     }
     // Active project (has Visions) → Ayden Architect. If the URL carried a valid
     // `?vision=` for a NON-current vision, restore that preview (§6).
+    final isReveal = restore.route?.page == PwaPage.reveal;
+    final isFirstLook = isReveal && (restore.route?.firstLook ?? false);
     final routeVision = restore.route?.visionId;
-    final preview =
-        (routeVision != null &&
-            routeVision != active.currentVisionId &&
-            active.visions.any((v) => v.versionId == routeVision))
-        ? routeVision
-        : null;
+    final validRouteVision =
+        routeVision != null &&
+        active.visions.any((v) => v.versionId == routeVision);
+    // Architect carries `?vision=` only for a NON-current vision; the Reveal
+    // always shows exactly the vision its URL names (normalize already proved it
+    // belongs to THIS project).
+    final preview = isReveal
+        ? (validRouteVision ? routeVision : active.currentVisionId)
+        : ((validRouteVision && routeVision != active.currentVisionId)
+              ? routeVision
+              : null);
     return base.copyWith(
-      phase: PwaPhase.architect,
+      phase: isFirstLook
+          ? PwaPhase.firstReveal
+          : (isReveal ? PwaPhase.reveal : PwaPhase.architect),
       project: descriptor,
       source: source,
       sourceOrigin: origin,
@@ -557,6 +599,18 @@ class PwaController extends StateNotifier<PwaState> {
   /// Serialises durable saves so rapid mutations persist IN ORDER, never
   /// concurrently — the simplest local ordering (no queue/stream/state machine).
   Future<void> _saveChain = Future.value();
+
+  /// Set when the NEXT url reconciliation must replace the current history entry
+  /// instead of pushing a new one. Purely a navigation concern — it changes no
+  /// persistence, no lifecycle, no state.
+  bool _replaceNextNav = false;
+
+  /// Read-and-clear, called by the URL sync layer.
+  bool consumeReplaceNav() {
+    final v = _replaceNextNav;
+    _replaceNextNav = false;
+    return v;
+  }
 
   /// Step 5 — the [AydenImageSource] whose bytes are DURABLY persisted as the
   /// project's original. Compared by object identity: only a real Replace-photo
@@ -688,8 +742,16 @@ class PwaController extends StateNotifier<PwaState> {
       );
       return;
     }
-    // §Generate 9-10 — reveal Architect (the project is now visible in My Projects).
-    state = state.copyWith(phase: PwaPhase.architect, generating: false);
+    // §Generate 9-10 — the project is saved and listed; now UNVEIL it. The
+    // first vision earns a full-screen moment before the conversation starts.
+    // It REPLACES `/create` in history, so Back from the project returns Home
+    // and never to a Create still holding the photo that just became a project.
+    _replaceNextNav = true;
+    state = state.copyWith(
+      phase: PwaPhase.firstReveal,
+      previewVisionId: v1.versionId,
+      generating: false,
+    );
   }
 
   // ── In-architect actions ────────────────────────────────────────────────
@@ -879,6 +941,56 @@ class PwaController extends StateNotifier<PwaState> {
   /// Stop previewing → back to the current vision in the Full Reveal.
   void clearPreview() => state = state.copyWith(clearPreview: true);
 
+  /// Open the Full Reveal for [versionId] — the secondary, exploration-only
+  /// view. Creates nothing, changes no lineage; a vision that does not belong to
+  /// the open project is ignored rather than silently swapped for another.
+  void openReveal(String versionId) {
+    if (!state.versions.any((v) => v.versionId == versionId)) return;
+    state = state.copyWith(
+      phase: PwaPhase.reveal,
+      previewVisionId: versionId,
+      clearPending: true,
+    );
+  }
+
+  /// Leave the Full Reveal and return to the conversation. [focusVisionId] keeps
+  /// the reveal's vision selected so the caller can scroll to its message. A
+  /// plain return carries no refinement intent.
+  void backToConversation({String? focusVisionId}) {
+    final keep = focusVisionId ?? state.previewVisionId;
+    state = state.copyWith(
+      phase: PwaPhase.architect,
+      previewVisionId: keep,
+      clearPending: true,
+      clearRefineContext: true,
+    );
+  }
+
+  /// "Refine with Ayden" — return to the conversation ABOUT [versionId], with
+  /// the composer ready. It sends nothing: the user writes the actual request,
+  /// and can drop the context without touching the vision.
+  void startRefineContext(String versionId) {
+    if (!state.versions.any((v) => v.versionId == versionId)) return;
+    state = state.copyWith(
+      phase: PwaPhase.architect,
+      previewVisionId: versionId,
+      refineContextVisionId: versionId,
+      clearPending: true,
+    );
+  }
+
+  /// "Continue with Ayden" — leave the one-off unveiling for the conversation.
+  /// The First Reveal is transient: it REPLACES itself in history, so Back from
+  /// the Architect goes Home rather than back to a moment already lived.
+  void continueToArchitect() {
+    if (state.phase != PwaPhase.firstReveal) return;
+    _replaceNextNav = true;
+    state = state.copyWith(phase: PwaPhase.architect, clearPreview: true);
+  }
+
+  /// Drop the refinement context. Creates nothing, changes no vision.
+  void clearRefineContext() => state = state.copyWith(clearRefineContext: true);
+
   /// V7 — step the Full Reveal to the previous / next existing vision in
   /// chronological order (global + chat "Vision N of M" arrows). PREVIEW only:
   /// creates no version, never changes the current vision or lineage. No-op at
@@ -937,17 +1049,29 @@ class PwaController extends StateNotifier<PwaState> {
     );
   }
 
-  /// §26 — "Back home": return to the Studio HERO (offset 0) while preserving
-  /// photo, room, atmosphere, project, versions and conversation. The
-  /// [returningToStudio] flag tells the freshly-mounted entry screen to land on
-  /// the hero without replaying the cinematic (skip → promise); the Hero CTA
-  /// then resumes the preserved Fast Path.
-  void returnToStudio() => state = state.copyWith(
-    phase: PwaPhase.entry,
-    clearPreview: true,
-    clearPending: true,
-    returningToStudio: true,
+  /// A brand-new local session on [phase]: no photo, Ayden Decide + Ayden
+  /// Signature restored, no visions, no chat. The durable library is untouched —
+  /// this only clears what lives in memory before Generate.
+  PwaState _freshSession(PwaPhase phase) => PwaState(
+    phase: phase,
+    project: _descriptor(_repo.createDraftProject()),
+    atmospheres: state.atmospheres,
+    selectedAtmosphereId: 'ayden_signature',
+    library: _repo.listProjects(),
+    librarySort: state.librarySort,
+    librarySearch: state.librarySearch,
   );
+
+  /// "Back home" — the dashboard. Any in-progress creation session is dropped
+  /// (it was never durable); saved projects are of course untouched.
+  void returnToStudio() {
+    if (state.versions.isNotEmpty) _syncActiveProject(bumpUpdated: false);
+    state = _freshSession(PwaPhase.home);
+  }
+
+  /// Open the Home dashboard. Alias of [returnToStudio] for call sites that
+  /// read better as "go home".
+  void openHome() => returnToStudio();
 
   /// Consumed by the entry screen once it has repositioned after a return.
   void consumeReturnToStudio() {
@@ -1199,19 +1323,9 @@ class PwaController extends StateNotifier<PwaState> {
   /// Signature, clear Visions/chat, and land on the Hero. Saved projects survive.
   void newProject() {
     if (state.versions.isNotEmpty) _syncActiveProject(bumpUpdated: false);
-    // A fresh Draft auto-titles from its Room: no override (fresh PwaState).
-    final draft = _repo.createDraftProject();
-    state = PwaState(
-      phase: PwaPhase.entry,
-      project: _descriptor(draft),
-      atmospheres: state.atmospheres,
-      selectedAtmosphereId: 'ayden_signature',
-      generating: false,
-      returningToStudio: true, // land on the Hero, no cinematic replay
-      library: _repo.listProjects(),
-      librarySort: state.librarySort,
-      librarySearch: state.librarySearch,
-    );
+    // Always a genuinely empty Create: the previous photo, Room and Atmosphere
+    // never leak into the next project.
+    state = _freshSession(PwaPhase.entry);
   }
 
   /// §7 — apply a durable route to the state (Back/Forward + boot). Idempotent;
@@ -1220,23 +1334,63 @@ class PwaController extends StateNotifier<PwaState> {
   void applyRoute(PwaRoute route) {
     switch (route.page) {
       case PwaPage.home:
-        // '/' is a clean Hero: reset the active session (persisted projects stay
-        // in the library). Distinct from returnToStudio, which preserves state.
-        state = PwaState(
-          phase: PwaPhase.entry,
-          project: _repo.project(),
-          atmospheres: state.atmospheres,
-          selectedAtmosphereId: 'ayden_signature',
-          returningToStudio: true,
-          library: _repo.listProjects(),
-          librarySort: state.librarySort,
-          librarySearch: state.librarySearch,
-        );
+        // '/' is the dashboard, and it drops any half-finished creation session
+        // so Back can never restore a Create still holding the last photo.
+        state = _freshSession(PwaPhase.home);
+      case PwaPage.create:
+        // A create URL always opens an EMPTY creation session unless one is
+        // already in progress on screen (a reconcile must not wipe it).
+        if (state.phase != PwaPhase.entry) {
+          state = _freshSession(PwaPhase.entry);
+        }
       case PwaPage.projects:
         if (state.phase != PwaPhase.projects) openLibrary();
+      case PwaPage.reveal:
+        final rid = route.projectId;
+        final rv = route.visionId;
+        if (rid == null || rv == null) return;
+        if (state.activeProjectId == rid && state.versions.isNotEmpty) {
+          if (route.firstLook) {
+            if (state.versions.any((v) => v.versionId == rv)) {
+              state = state.copyWith(
+                phase: PwaPhase.firstReveal,
+                previewVisionId: rv,
+                clearPending: true,
+              );
+            }
+            return;
+          }
+          openReveal(rv);
+          return;
+        }
+        // Different project → load it (hydrates the original), then settle the
+        // Reveal on the named vision.
+        openProject(rid, previewVisionId: rv).then((_) {
+          if (!mounted || state.activeProjectId != rid) return;
+          if (route.firstLook) {
+            state = state.copyWith(
+              phase: PwaPhase.firstReveal,
+              previewVisionId: rv,
+            );
+          } else {
+            openReveal(rv);
+          }
+        });
       case PwaPage.architect:
         final id = route.projectId;
         if (id == null) return;
+        // Coming back from the Reveal of the SAME project is a phase change, not
+        // a reload — never re-hydrate and never push a second history entry.
+        if (state.activeProjectId == id && state.phase == PwaPhase.reveal) {
+          final v = route.visionId;
+          state = state.copyWith(
+            phase: PwaPhase.architect,
+            previewVisionId: v,
+            clearPreview: v == null,
+            clearPending: true,
+          );
+          return;
+        }
         if (state.phase != PwaPhase.architect || state.activeProjectId != id) {
           // Reopen (hydrates the original + applies ?vision after settling).
           openProject(id, previewVisionId: route.visionId);

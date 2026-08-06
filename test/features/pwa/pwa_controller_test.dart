@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:ai_home_architect/core/media/ayden_image_source.dart';
 import 'package:ai_home_architect/features/pwa/application/pwa_controller.dart';
+import 'package:ai_home_architect/features/pwa/application/pwa_route.dart';
 import 'package:ai_home_architect/features/pwa/data/mock_pwa_experience_repository.dart';
 import 'package:ai_home_architect/features/pwa/domain/pwa_intent.dart';
 import 'package:ai_home_architect/features/pwa/domain/pwa_models.dart';
@@ -37,16 +38,23 @@ void main() {
   });
 
   group('Primary flow + first reveal (§31)', () {
-    test('generateFirstVision → architect + Vision 1', () async {
-      final c = await generated();
-      expect(c.state.phase, PwaPhase.architect);
-      expect(c.state.versions, hasLength(1));
-      expect(c.state.hasSource, isTrue); // the "Original" source is preserved
-      final v1 = c.state.currentVision!;
-      expect(v1.visionNumber, 1);
-      expect(v1.actionType, PwaActionType.signature);
-      expect(c.state.selectedAtmosphereId, 'ayden_signature');
-    });
+    test(
+      'generateFirstVision → first reveal, then architect + Vision 1',
+      () async {
+        final c = await generated();
+        // The first vision is unveiled full-screen before the conversation.
+        expect(c.state.phase, PwaPhase.firstReveal);
+        expect(c.state.previewedVision, isNotNull);
+        c.continueToArchitect();
+        expect(c.state.phase, PwaPhase.architect);
+        expect(c.state.versions, hasLength(1));
+        expect(c.state.hasSource, isTrue); // the "Original" source is preserved
+        final v1 = c.state.currentVision!;
+        expect(v1.visionNumber, 1);
+        expect(v1.actionType, PwaActionType.signature);
+        expect(c.state.selectedAtmosphereId, 'ayden_signature');
+      },
+    );
 
     test('FIRST rich message is an Ayden reveal bound to V1 (§11)', () async {
       final c = await generated();
@@ -256,49 +264,55 @@ void main() {
     });
   });
 
-  group('Back to Studio (§5)', () {
-    test('returnToStudio → entry, preserves everything', () async {
-      final c = await generated();
-      c.selectRoom('kitchen');
-      c.stageAtmosphere('soft_luxury');
-      await c.applyAtmosphere();
-      final versions = c.state.versions.length;
-      final msgs = c.state.messages.length;
-      c.returnToStudio();
-      expect(c.state.phase, PwaPhase.entry);
-      expect(c.state.hasSource, isTrue); // photo preserved
-      expect(c.state.selectedRoomId, 'kitchen'); // room preserved
-      expect(c.state.versions.length, versions); // versions preserved
-      expect(c.state.messages.length, msgs); // conversation preserved
-      // Re-generating from the fast path RESUMES (no duplicate v1).
-      await c.generateFirstVision();
-      expect(c.state.phase, PwaPhase.architect);
-      expect(c.state.versions.length, versions);
-    });
-  });
-
-  group('Back to Studio focus flag (§11 / V5)', () {
+  group('Back home (§5)', () {
     test(
-      'returnToStudio raises returningToStudio; consume clears it',
+      'returnToStudio → the dashboard, project saved, session dropped',
       () async {
         final c = await generated();
-        expect(c.state.returningToStudio, isFalse);
+        c.selectRoom('kitchen');
+        c.stageAtmosphere('soft_luxury');
+        await c.applyAtmosphere();
+        final id = c.state.activeProjectId;
+        final versions = c.state.versions.length;
         c.returnToStudio();
+        // Home is a dashboard, not a half-finished Create: the in-memory session
+        // is dropped so Back can never resurrect the last photo.
+        expect(c.state.phase, PwaPhase.home);
+        expect(c.state.hasSource, isFalse);
+        expect(c.state.versions, isEmpty);
+        // …and the durable project is intact and reopenable.
+        final saved = c.state.library.where((p) => p.projectId == id);
+        expect(saved, hasLength(1));
+        expect(saved.first.visions.length, versions);
+        await c.openProject(id);
+        expect(c.state.phase, PwaPhase.architect);
+        expect(c.state.versions.length, versions);
+      },
+    );
+  });
+
+  group('New Project always opens an EMPTY Create', () {
+    test(
+      'the previous photo, room and atmosphere never leak forward',
+      () async {
+        final c = await generated();
+        c.selectRoom('kitchen');
+        expect(c.state.hasSource, isTrue);
+        c.newProject();
         expect(c.state.phase, PwaPhase.entry);
-        expect(
-          c.state.returningToStudio,
-          isTrue,
-        ); // entry mount will focus fast path
-        c.consumeReturnToStudio();
-        expect(c.state.returningToStudio, isFalse);
-        c.consumeReturnToStudio(); // idempotent
-        expect(c.state.returningToStudio, isFalse);
+        expect(c.state.hasSource, isFalse);
+        expect(c.state.selectedRoomId, isNull); // Ayden Decide
+        expect(c.state.selectedAtmosphereId, 'ayden_signature');
+        expect(c.state.versions, isEmpty);
+        expect(c.state.messages, isEmpty);
+        expect(c.state.canonicalRoute, PwaRoute.create);
       },
     );
 
-    test('the flag never fires on the initial entry mount', () {
+    test('the app opens on the dashboard, not on Create', () {
       final c = makeController();
-      expect(c.state.returningToStudio, isFalse); // fresh state → no auto-jump
+      expect(c.state.phase, PwaPhase.home);
+      expect(c.state.canonicalRoute, PwaRoute.home);
     });
   });
 

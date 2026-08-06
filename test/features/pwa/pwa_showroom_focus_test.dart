@@ -148,6 +148,8 @@ Future<ProviderContainer> _pumpEntry(
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final container = _container();
   addTearDown(container.dispose);
+  // Create is a step now, not the landing page: open it explicitly.
+  container.read(pwaControllerProvider.notifier).newProject();
   if (withSource != null) {
     container
         .read(pwaControllerProvider.notifier)
@@ -164,24 +166,6 @@ Future<ProviderContainer> _pumpEntry(
   );
   await tester.pump();
   return container;
-}
-
-Future<void> _tapCta(WidgetTester tester) async {
-  await tester.tap(find.text('Upload your room'));
-  await tester.pumpAndSettle();
-}
-
-/// Global top of the framed workspace block. The mobile layouts wrap the keyed
-/// block in a Padding with a 20px top inset, so add it back to recover the real
-/// visual-content top in both cases.
-double _workspaceBlockTop(
-  WidgetTester tester, {
-  required bool fast,
-  required bool mobile,
-}) {
-  final key = fast ? const ValueKey('fast') : const ValueKey('upload');
-  final top = tester.getTopLeft(find.byKey(key)).dy;
-  return mobile ? top + 20 : top;
 }
 
 void main() {
@@ -417,56 +401,58 @@ void main() {
     });
   });
 
-  // ── 3. End-to-end framing at every breakpoint ──────────────────────────────
-  group('end-to-end — block framed just below the header', () {
-    // Old bug parked the composition ~one collapsed-header too low (~112px below
-    // the header). The fix keeps it in a tight band just under the header.
+  // ── 3. Create is framed by the slim bar, with nothing to scroll to ─────────
+  //
+  // UX-A1 retired the viewport-tall pinned hero and the CTA scroll it required,
+  // so the old "block framed just below the header after tapping the CTA" group
+  // no longer describes the product. What still matters is that Create starts
+  // immediately under the slim bar at rest — asserted here without any scroll.
+  group('Create starts directly under the slim bar', () {
     Future<void> expectFramed(
       WidgetTester tester, {
       required Size size,
-      required bool fast,
+      required bool withPhoto,
     }) async {
-      final mobile = size.width < 700;
       await _pumpEntry(
         tester,
         size: size,
-        withSource: fast ? PwaImageOrigin.userUpload : null,
+        withSource: withPhoto ? PwaImageOrigin.userUpload : null,
       );
-      await _tapCta(tester);
-      final header = pwaCollapsedHeaderExtent(mobile);
-      final top = _workspaceBlockTop(tester, fast: fast, mobile: mobile);
-      final belowHeader = top - header;
+      final barBottom = tester
+          .getRect(find.byKey(const ValueKey('pwa-slim-bar')))
+          .bottom;
+      final top = tester
+          .getTopLeft(find.byKey(const ValueKey('pwa-create')))
+          .dy;
       expect(
-        belowHeader,
-        inInclusiveRange(10, 90),
+        top,
+        closeTo(barBottom, 1.0),
         reason:
-            'block top ${top.toStringAsFixed(1)} is ${belowHeader.toStringAsFixed(1)}px '
-            'below the ${header}px header (must be a tight band, not ~112 like the old bug) '
-            'at $size fast=$fast',
+            'Create top ${top.toStringAsFixed(1)} must sit flush under the slim '
+            'bar (${barBottom.toStringAsFixed(1)}) at $size photo=$withPhoto',
       );
+      expect(barBottom, closeTo(pwaCollapsedHeaderExtent(size.width < 700), 1));
     }
 
-    testWidgets('showroom @1536×864', (t) async {
-      await expectFramed(t, size: const Size(1536, 864), fast: false);
+    testWidgets('no photo @1536×864', (t) async {
+      await expectFramed(t, size: const Size(1536, 864), withPhoto: false);
     });
-    testWidgets('showroom @1920×1080 (not pushed to the lower half)', (
-      t,
-    ) async {
-      await expectFramed(t, size: const Size(1920, 1080), fast: false);
+    testWidgets('no photo @1920×1080', (t) async {
+      await expectFramed(t, size: const Size(1920, 1080), withPhoto: false);
     });
-    testWidgets('showroom @1440×900', (t) async {
-      await expectFramed(t, size: const Size(1440, 900), fast: false);
+    testWidgets('no photo @1440×900', (t) async {
+      await expectFramed(t, size: const Size(1440, 900), withPhoto: false);
     });
-    testWidgets('fast path @1536×864 (unchanged framing behaviour)', (t) async {
-      await expectFramed(t, size: const Size(1536, 864), fast: true);
+    testWidgets('with photo @1536×864', (t) async {
+      await expectFramed(t, size: const Size(1536, 864), withPhoto: true);
     });
-    testWidgets('fast path @1920×1080', (t) async {
-      await expectFramed(t, size: const Size(1920, 1080), fast: true);
+    testWidgets('with photo @1920×1080', (t) async {
+      await expectFramed(t, size: const Size(1920, 1080), withPhoto: true);
     });
   });
 
   // ── 4. No overflow across the mandated breakpoints ─────────────────────────
-  group('no overflow at every breakpoint (showroom + fast path)', () {
+  group('no overflow at every breakpoint (both Create states)', () {
     for (final size in const [
       Size(1536, 864),
       Size(1920, 1080),
@@ -474,66 +460,24 @@ void main() {
       Size(768, 1024),
       Size(390, 844),
     ]) {
-      testWidgets('showroom ${size.width.toInt()}×${size.height.toInt()}', (
+      testWidgets('no photo ${size.width.toInt()}×${size.height.toInt()}', (
         t,
       ) async {
         await _pumpEntry(t, size: size, withSource: null);
-        await _tapCta(t);
+        await t.pumpAndSettle();
         expect(t.takeException(), isNull);
       });
-      testWidgets('fast path ${size.width.toInt()}×${size.height.toInt()}', (
+      testWidgets('with photo ${size.width.toInt()}×${size.height.toInt()}', (
         t,
       ) async {
         await _pumpEntry(t, size: size, withSource: PwaImageOrigin.userUpload);
-        await _tapCta(t);
+        await t.pumpAndSettle();
         expect(t.takeException(), isNull);
       });
     }
   });
 
-  // ── 5. Re-focus is idempotent — no replay, no state reset ───────────────────
-  group('re-focus is idempotent', () {
-    testWidgets(
-      're-triggering the CTA lands at the same geometry, keeps state',
-      (tester) async {
-        const size = Size(1440, 900);
-        await _pumpEntry(
-          tester,
-          size: size,
-          withSource: PwaImageOrigin.userUpload,
-        );
-        await _tapCta(tester);
-        final first = _workspaceBlockTop(tester, fast: true, mobile: false);
-        expect(find.byKey(const ValueKey('fast')), findsOneWidget);
-
-        // Back to the top of the page, then focus again.
-        final scroll = tester
-            .state<ScrollableState>(find.byType(Scrollable).first)
-            .position;
-        scroll.jumpTo(0);
-        await tester.pump();
-        await _tapCta(tester);
-        final second = _workspaceBlockTop(tester, fast: true, mobile: false);
-
-        expect(second, closeTo(first, 1.0));
-        // The uploaded source survived (no state reset) → still the fast path.
-        expect(find.byKey(const ValueKey('fast')), findsOneWidget);
-        expect(find.byKey(const ValueKey('upload')), findsNothing);
-      },
-    );
-
-    testWidgets('reduced-motion path frames the block just below the header', (
-      tester,
-    ) async {
-      const size = Size(1536, 864);
-      await _pumpEntry(tester, size: size, withSource: null);
-      await _tapCta(tester);
-      final top = _workspaceBlockTop(tester, fast: false, mobile: false);
-      expect(top - pwaCollapsedHeaderExtent(false), inInclusiveRange(10, 90));
-    });
-  });
-
-  // ── 6. Frozen-scope integrity guards ───────────────────────────────────────
+  // ── 5. Frozen-scope integrity guards ───────────────────────────────────────
   group('frozen scope untouched', () {
     test('pubspec.lock is present and pins no new source/git dependency', () {
       final lock = File('pubspec.lock');

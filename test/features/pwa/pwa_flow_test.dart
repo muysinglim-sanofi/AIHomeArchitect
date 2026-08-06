@@ -45,6 +45,7 @@ Future<ProviderContainer> _pumpToArchitect(
   final controller = container.read(pwaControllerProvider.notifier);
   controller.setSource(_fakeSource()); // no room / atmosphere chosen
   await controller.generateFirstVision();
+  controller.continueToArchitect();
   await tester.pump(); // rebuild → architect
   await tester.pump(
     const Duration(seconds: 3),
@@ -86,10 +87,12 @@ void main() {
       final state = container.read(pwaControllerProvider);
       expect(state.phase, PwaPhase.architect);
       expect(state.versions, hasLength(1));
-      // The Full Reveal (RevealHero) + the full-width Atmosphere block below it.
-      expect(find.byType(RevealHero), findsWidgets);
-      expect(find.text('ATMOSPHERE'), findsOneWidget);
+      // Chat-first: the conversation carries the result. The Before/After and
+      // the atmosphere rail now live on the Full Reveal, not here.
+      expect(find.byKey(const ValueKey('av7-chat-feed')), findsOneWidget);
       expect(find.text('Vision 1 · Ayden Signature'), findsOneWidget);
+      expect(find.byType(RevealHero), findsNothing);
+      expect(find.text('ATMOSPHERE'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
@@ -114,15 +117,17 @@ void main() {
     tester,
   ) async {
     final container = await _pumpToArchitect(tester, const Size(390, 844));
-    // §14/§28 — no separate versions sheet; the chat is the history.
+    // No separate versions sheet, and no Before/After competing with the
+    // conversation: the chat IS the history on every viewport.
     expect(find.text('Your visions'), findsNothing);
-    expect(find.byType(RevealHero), findsOneWidget);
+    expect(find.byType(RevealHero), findsNothing);
+    expect(find.byKey(const ValueKey('av7-chat-feed')), findsOneWidget);
     expect(find.text('Vision 1 · Ayden Signature'), findsOneWidget);
     expect(container.read(pwaControllerProvider).versions, hasLength(1));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Back to Studio returns to the HERO, preserving state (§26)', (
+  testWidgets('Back home returns to the dashboard, project saved (§26)', (
     tester,
   ) async {
     const size = Size(1440, 900);
@@ -132,15 +137,14 @@ void main() {
     await tester
         .pumpAndSettle(); // entry mounts, skips cinematic, lands on hero
     final s = container.read(pwaControllerProvider);
-    expect(s.phase, PwaPhase.entry); // back in the Studio entry
-    expect(s.hasSource, isTrue); // photo preserved
-    expect(s.versions, hasLength(1)); // version preserved
-    expect(s.returningToStudio, isFalse); // flag consumed
-    // §26 — it lands on the HERO (offset 0), NOT directly on the Fast Path.
-    final scrollable = tester.widget<Scrollable>(find.byType(Scrollable).first);
-    expect(scrollable.controller!.position.pixels, 0.0);
-    expect(find.text('Upload your room'), findsOneWidget); // hero CTA present
-    expect(find.text('Generate my vision'), findsNothing); // not the fast path
+    // Home is the dashboard: the generated project is saved and listed, while
+    // the in-memory creation session is dropped.
+    expect(s.phase, PwaPhase.home);
+    expect(s.hasSource, isFalse);
+    expect(s.versions, isEmpty);
+    expect(s.visibleProjects, isNotEmpty);
+    expect(find.byKey(const ValueKey('pwa-home')), findsOneWidget);
+    expect(find.text('Upload your room'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

@@ -41,6 +41,8 @@ Future<ProviderContainer> _pumpEntry(
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final container = _container();
   addTearDown(container.dispose);
+  // Create is a step now, not the landing page: open it explicitly.
+  container.read(pwaControllerProvider.notifier).newProject();
   if (withSource != null) {
     container
         .read(pwaControllerProvider.notifier)
@@ -61,8 +63,10 @@ Future<ProviderContainer> _pumpEntry(
   return container;
 }
 
+/// UX-A1 — Create sits directly under the slim bar from the first frame: there
+/// is no hero CTA to tap and nothing to scroll to. Kept as a named seam so each
+/// test still reads as "be on the Create workspace".
 Future<void> _enterWorkspace(WidgetTester tester) async {
-  await tester.tap(find.text('Upload your room'));
   await tester.pumpAndSettle();
 }
 
@@ -440,7 +444,9 @@ void main() {
     expect(rightArrow, findsOneWidget);
     await tester.tap(rightArrow);
     await tester.pumpAndSettle();
-    const extent = kPwaCardW + 12;
+    // The card footprint is responsive on the two-pane composition, so measure
+    // it instead of assuming the full-size constant.
+    final extent = tester.getSize(cardByTitle('Living Room')).width + 12;
     final offset = rowPixels(tester, 'room-optional');
     final max = tester
         .state<ScrollableState>(rowScroll('room-optional'))
@@ -462,24 +468,28 @@ void main() {
     await _enterWorkspace(tester);
     await tester.tap(find.text('More rooms'));
     await tester.pumpAndSettle();
-    // Scroll the optional row to its END (builds the last card), then step back
-    // in small increments until Driveway is MODERATELY clipped at the right edge
-    // (30..80px past, left well on-screen so its left half is tappable).
-    await tester.drag(rowScroll('room-optional'), const Offset(-4000, 0));
+    // Park the row at its END (builds the last card), then step back until
+    // Driveway is clipped at the right edge while its left half stays on-screen
+    // and tappable. Driven through the ScrollPosition rather than by small drags:
+    // increments below the touch slop move nothing, and the exact pixel geometry
+    // of the column is incidental to what this test proves.
+    final pos = tester
+        .state<ScrollableState>(rowScroll('room-optional'))
+        .position;
+    pos.jumpTo(pos.maxScrollExtent);
     await tester.pumpAndSettle();
     final view = tester.getRect(rowScroll('room-optional'));
     final card = cardByTitle('Driveway'); // last optional room card
     expect(card, findsOneWidget);
     var clipped = false;
-    for (var i = 0; i < 40 && !clipped; i++) {
+    for (var i = 0; i < 60 && !clipped; i++) {
       final r = tester.getRect(card);
-      if (r.right > view.right + 30 &&
-          r.right < view.right + 80 &&
-          r.left > view.left + 44) {
+      if (r.right > view.right + 20 && r.left > view.left + 44) {
         clipped = true;
         break;
       }
-      await tester.drag(rowScroll('room-optional'), const Offset(20, 0));
+      if (pos.pixels <= 0) break;
+      pos.jumpTo((pos.pixels - 24).clamp(0.0, pos.maxScrollExtent));
       await tester.pump();
     }
     expect(clipped, isTrue, reason: 'failed to clip Driveway moderately');
@@ -557,11 +567,13 @@ void main() {
     (tester) async {
       final c = await _pumpEntry(tester, size: const Size(1440, 900));
       await _enterWorkspace(tester);
-      // §4 — editorial intro + readiness indicators explaining the defaults.
+      // Editorial intro only — the readiness pills are gone in every state:
+      // the selection cards already show what is chosen.
       expect(find.text('CREATE YOUR FIRST VISION'), findsOneWidget);
       expect(find.text('Shape your space with Ayden.'), findsOneWidget);
-      expect(find.text('Photo ready'), findsOneWidget);
-      expect(find.text('Ayden Decide active'), findsOneWidget);
+      expect(find.text('Photo ready'), findsNothing);
+      expect(find.text('Ayden Decide active'), findsNothing);
+      expect(find.text('Ayden Signature selected'), findsNothing);
       // §6 — one-line selection summary above Generate.
       expect(
         find.textContaining('Ayden will create your first vision using'),
@@ -588,42 +600,114 @@ void main() {
   });
 
   test(
-    'generateFirstVision transitions entry → architect (offline mock)',
+    'generateFirstVision unveils the first vision, then opens architect',
     () async {
       final c = _container();
       addTearDown(c.dispose);
+      // The app now opens on the dashboard; Create is entered deliberately.
+      expect(c.read(pwaControllerProvider).phase, PwaPhase.home);
+      c.read(pwaControllerProvider.notifier).newProject();
       c
           .read(pwaControllerProvider.notifier)
           .setSource(_fake(), origin: PwaImageOrigin.userUpload);
       expect(c.read(pwaControllerProvider).phase, PwaPhase.entry);
       await c.read(pwaControllerProvider.notifier).generateFirstVision();
+      // Generate lands on the one-off unveiling, not straight in the chat.
+      expect(c.read(pwaControllerProvider).phase, PwaPhase.firstReveal);
+      c.read(pwaControllerProvider.notifier).continueToArchitect();
       expect(c.read(pwaControllerProvider).phase, PwaPhase.architect);
       expect(c.read(pwaControllerProvider).versions, hasLength(1));
     },
   );
 
-  // ── Before-upload + hero regression (§12.27–28) ─────────────────────────────
-  testWidgets('CTA scrolls to the workspace (no page swap)', (tester) async {
+  // ── UX-A1 — Create is immediate, and one skeleton serves both states ────────
+  testWidgets('Create is usable at the first frame — no scroll, no CTA', (
+    tester,
+  ) async {
     await _pumpEntry(tester, size: const Size(390, 844));
+    // The old viewport-tall hero forced a scroll before anything was reachable.
+    expect(find.text('Upload your room'), findsNothing);
+    expect(find.byKey(const ValueKey('pwa-slim-bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pwa-create')), findsOneWidget);
     expect(_pageOffset(tester), 0.0);
-    await tester.tap(find.text('Upload your room'));
-    await tester.pumpAndSettle();
-    expect(_pageOffset(tester), greaterThan(0.0));
     expect(find.byType(PwaEntryScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('upload screen (before-upload) copy unchanged', (tester) async {
+  testWidgets('before-upload copy follows the approved mockup', (tester) async {
     await _pumpEntry(tester, size: const Size(1440, 900), withSource: null);
     await _enterWorkspace(tester);
-    expect(find.text('YOUR SPACE'), findsOneWidget);
-    expect(find.text('Show Ayden\nyour room.'), findsOneWidget);
-    expect(find.text('One clear photo is enough.'), findsOneWidget);
-    expect(find.text('Drop your photo here'), findsOneWidget);
-    expect(find.text('JPG, PNG or HEIC'), findsOneWidget);
-    expect(find.text('Try an example'), findsOneWidget);
-    expect(find.text('First vision free'), findsOneWidget);
-    expect(find.text('THE STUDIO'), findsNothing);
+    // Same headline as after upload — one screen, one purpose.
+    expect(find.text('CREATE YOUR FIRST VISION'), findsOneWidget);
+    expect(find.text('Shape your space with Ayden.'), findsOneWidget);
+    // One instruction, one CTA — no redundant title above the button.
+    // ONE visible action; drag & drop is the stated alternative, not a rival
+    // control.
+    expect(find.text('Upload a photo'), findsOneWidget);
+    expect(find.text('or drag & drop it here'), findsOneWidget);
+    expect(find.text('Browse files'), findsNothing);
+    expect(find.text('Add your photo'), findsNothing);
+    // The bundled example rooms are offered alongside the drop zone.
+    expect(find.text('Or start with an example'), findsOneWidget);
+    expect(find.text('Living Room'), findsWidgets);
+    expect(find.text('Bedroom'), findsWidgets);
+    // The formats the staging bucket actually accepts (no HEIC — it is rejected
+    // by the bucket MIME allowlist).
+    expect(find.text('JPG, PNG or WebP · up to 10 MB'), findsOneWidget);
+    expect(find.text('JPG, PNG or HEIC'), findsNothing);
+    // Retired from the UI in this batch (absent from the mockup).
+    expect(find.text('Try an example'), findsNothing);
+    expect(
+      find.text('First vision free · No account required'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('before upload: choices are visible but genuinely inert', (
+    tester,
+  ) async {
+    await _pumpEntry(tester, size: const Size(1440, 900), withSource: null);
+    await _enterWorkspace(tester);
+    // Visible — the journey is legible before the photo exists.
+    expect(find.text('1. ROOM'), findsOneWidget);
+    expect(find.text('2. ATMOSPHERE'), findsOneWidget);
+    expect(cardByTitle('Ayden Decide'), findsOneWidget);
+    expect(cardByTitle('Ayden Signature'), findsOneWidget);
+    // …and preselected, so the default path is already expressed.
+    expect(
+      tester.widget<PwaSelectCard>(cardByTitle('Ayden Decide')).selected,
+      isTrue,
+    );
+    expect(
+      tester.widget<PwaSelectCard>(cardByTitle('Ayden Signature')).selected,
+      isTrue,
+    );
+    // Inert: no pointer, no focus traversal, and Generate cannot fire.
+    expect(find.byType(ExcludeFocus), findsWidgets);
+    final gen = tester.widget<InkWell>(
+      find.byKey(const ValueKey('pwa-generate')),
+    );
+    expect(gen.onTap, isNull, reason: 'Generate must be disabled pre-upload');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('after upload: same skeleton, choices and Generate live', (
+    tester,
+  ) async {
+    await _pumpEntry(tester, size: const Size(1440, 900));
+    await _enterWorkspace(tester);
+    expect(find.text('CREATE YOUR FIRST VISION'), findsOneWidget);
+    expect(find.text('Shape your space with Ayden.'), findsOneWidget);
+    // The photo replaced the drop zone in place — no screen swap.
+    expect(find.text('Add your photo'), findsNothing);
+    expect(find.text('Replace photo'), findsOneWidget);
+    expect(find.text('Remove photo'), findsOneWidget);
+    expect(find.byType(ExcludeFocus), findsNothing);
+    final gen = tester.widget<InkWell>(
+      find.byKey(const ValueKey('pwa-generate')),
+    );
+    expect(gen.onTap, isNotNull);
     expect(tester.takeException(), isNull);
   });
 
@@ -669,13 +753,15 @@ void main() {
   });
 
   testWidgets(
-    'non-web / reduced-motion hero falls straight to the final promise + CTA',
+    'non-web / reduced-motion: no overlay is mounted, Create owns the viewport',
     (tester) async {
       await _pumpEntry(tester, reduceMotion: false, withSource: null);
       await tester.pump();
-      expect(find.text('Your home.'), findsOneWidget);
-      expect(find.text('Reimagined.'), findsOneWidget);
-      expect(find.text('Upload your room'), findsOneWidget);
+      // The cinematic only autoplays on web with motion allowed. Off that path
+      // the overlay is never mounted at all — nothing to skip, nothing to scroll.
+      expect(find.text('Tap to skip'), findsNothing);
+      expect(find.byKey(const ValueKey('pwa-create')), findsOneWidget);
+      expect(find.text('Upload a photo'), findsOneWidget);
       expect(kHeroMp4, 'media/hero/ayden-cinematic-v1-desktop.mp4');
       expect(tester.takeException(), isNull);
     },
@@ -831,23 +917,24 @@ void main() {
       size: const Size(1440, 900),
     );
     await tester.pump();
-    expect(find.text('Your home.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('pwa-create')), findsOneWidget);
     // Resize desktop → narrow: same page instance, hero stays stable (no
     // restart, no exception, no duplicate).
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pump();
-    expect(find.text('Your home.'), findsOneWidget);
-    expect(find.text('Upload your room'), findsOneWidget);
+    // Same page instance across the breakpoint change: exactly one Create and
+    // one slim bar, no duplicate, no exception.
+    expect(find.byKey(const ValueKey('pwa-create')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pwa-slim-bar')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  // Mobile final hero composition — no overflow, CTA + copy present.
+  // UX-A1 — the Create composition itself must survive the mobile breakpoints
+  // (this used to assert the final hero composition, which no longer exists).
   for (final size in const [Size(390, 844), Size(430, 932), Size(768, 1024)]) {
     testWidgets(
-      'mobile hero final state has no overflow at ${size.width.toInt()}x${size.height.toInt()}',
+      'Create has no overflow at ${size.width.toInt()}x${size.height.toInt()}',
       (tester) async {
-        // reduceMotion:false + non-web (VM) → poster fallback = the final promise
-        // composition, which is what a mobile viewer sees while the video loads.
         await _pumpEntry(
           tester,
           reduceMotion: false,
@@ -855,11 +942,72 @@ void main() {
           size: size,
         );
         await tester.pump();
-        expect(find.text('Your home.'), findsOneWidget);
-        expect(find.text('Reimagined.'), findsOneWidget);
-        expect(find.text('Upload your room'), findsOneWidget);
+        expect(find.byKey(const ValueKey('pwa-create')), findsOneWidget);
+        expect(find.byKey(const ValueKey('pwa-slim-bar')), findsOneWidget);
+        expect(find.text('Upload a photo'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
   }
+
+  // ── The photo card follows the SOURCE ratio (no charcoal bands) ─────────────
+  group('photo card ratio', () {
+    const barH = 46.0;
+
+    test('a landscape source gets the height its ratio needs', () {
+      // 16:9 at 600px wide → ~338px of image, not the whole column.
+      final h = pwaPhotoImageHeight(width: 600, aspect: 16 / 9, available: 700);
+      expect(h, closeTo(600 / (16 / 9), 0.5));
+      expect(h, lessThan(700));
+    });
+
+    test('a portrait source is shown whole but stays bounded', () {
+      // 9:16 at 600px wide would want 1066px — capped, never unbounded.
+      final h = pwaPhotoImageHeight(width: 600, aspect: 9 / 16, available: 500);
+      expect(h, 500);
+      final unbounded = pwaPhotoImageHeight(
+        width: 600,
+        aspect: 9 / 16,
+        available: double.infinity,
+      );
+      expect(unbounded, lessThanOrEqualTo(620));
+    });
+
+    test('an undecoded source falls back to a sane landscape shape', () {
+      final h = pwaPhotoImageHeight(width: 600, aspect: null, available: 900);
+      expect(h, closeTo(600 / (4 / 3), 0.5));
+      // Degenerate values never produce a broken box.
+      expect(
+        pwaPhotoImageHeight(width: 600, aspect: 0, available: 900),
+        greaterThanOrEqualTo(180),
+      );
+    });
+
+    test('a very small pane still yields a usable card', () {
+      final h = pwaPhotoImageHeight(width: 200, aspect: 16 / 9, available: 60);
+      expect(h, 180); // the floor wins over a starved column
+    });
+
+    testWidgets('the actions bar stays inside the card at every breakpoint', (
+      tester,
+    ) async {
+      for (final size in const [
+        Size(390, 844),
+        Size(768, 1024),
+        Size(1440, 900),
+        Size(1920, 1080),
+      ]) {
+        await _pumpEntry(tester, size: size);
+        await _enterWorkspace(tester);
+        final card = tester.getRect(find.byKey(const ValueKey('pwaPhoto')));
+        final replace = tester.getRect(find.text('Replace photo'));
+        expect(
+          card.bottom - replace.center.dy,
+          lessThanOrEqualTo(barH),
+          reason: 'actions must sit on the card foot at $size',
+        );
+        expect(tester.takeException(), isNull);
+      }
+    });
+  });
 }

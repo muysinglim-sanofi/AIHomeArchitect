@@ -18,7 +18,6 @@
 /// (Image.asset), no service/network. Fully offline. Reduced-motion → final frame.
 library;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,13 +27,9 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/media/image_pipeline.dart';
 import '../../cards/card_catalog.dart';
 import '../application/pwa_controller.dart';
-import '../application/pwa_intro_gate.dart';
 import '../application/pwa_layout.dart';
 import '../domain/pwa_models.dart';
-import 'hero/pwa_hero_sequence.dart';
-import 'hero/pwa_hero_video.dart';
 import 'pwa_brand.dart';
-import 'pwa_section_nav.dart';
 import 'pwa_select_card.dart';
 import 'pwa_theme.dart';
 
@@ -86,6 +81,34 @@ const List<String> kPwaPopularAtmosphereIds = <String>[
 /// Collapsed sticky-header height: a slim brand bar, NOT a half-screen banner.
 double pwaCollapsedHeaderExtent(bool isMobile) => isMobile ? 72.0 : 92.0;
 
+/// Gap between two cards in a selection carousel.
+const double kPwaCardGap = 12;
+
+/// How many primary choices must read at a glance in a selection row.
+const int kPwaVisibleChoices = 5;
+
+/// The card width that lets [kPwaVisibleChoices] cards sit fully inside a row of
+/// [rowWidth]. The mandated desktop composition (45/55, padding 48, maxWidth
+/// 1440) yields a ~715px selection column, where the full-size 158px card only
+/// fits four — so the card scales down rather than the row clipping a choice.
+/// Clamped so cards never become unreadable, and never grow past their design
+/// footprint on very wide screens.
+double pwaCardWidthFor(double rowWidth) {
+  if (rowWidth <= 0) return kPwaCardW;
+  final fit =
+      (rowWidth - kPwaCardGap * (kPwaVisibleChoices - 1)) / kPwaVisibleChoices;
+  return fit.clamp(124.0, kPwaCardW);
+}
+
+/// Height a [PwaSelectCard] needs at [cardWidth].
+///
+/// Only the image scales with the width (it is an `AspectRatio(3/2)`); the
+/// caption block underneath keeps its intrinsic height. Scaling the whole card
+/// proportionally therefore starves the caption and overflows it — this keeps
+/// the caption allowance constant and lets only the image shrink.
+double pwaCardHeightFor(double cardWidth) =>
+    cardWidth / 1.5 + (kPwaCardH - kPwaCardW / 1.5);
+
 /// Pure: room/gold-line reveal fraction (0→1) for timeline position [t].
 double heroRoomReveal(double t) =>
     ((t - kHeroRoomInEnd) / (kHeroTransformEnd - kHeroRoomInEnd)).clamp(
@@ -118,21 +141,9 @@ class PwaEntryScreen extends ConsumerStatefulWidget {
   ConsumerState<PwaEntryScreen> createState() => _PwaEntryScreenState();
 }
 
-class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
-    with WidgetsBindingObserver {
-  final _scroll = ScrollController();
+class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen> {
   final _picker = ImagePicker();
   final _focus = FocusNode();
-  final _uploadKey = GlobalKey();
-  // P0 — anchors the REAL visible workspace composition (logo + copy + upload,
-  // or the fast-path block), NOT the outer viewport-height section, so the
-  // Hero-CTA scroll frames the actual content instead of an empty parent.
-  final _uploadVisualContentKey = GlobalKey(
-    debugLabel: 'upload-visual-content',
-  );
-  PwaHeroSequence? _seq;
-  PwaHeroMedia _heroMedia = kHeroMediaDesktop;
-  bool _seqStarted = false;
 
   @override
   void initState() {
@@ -141,163 +152,17 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
     // Reused app cards (RoomCard/AtmosphereHeroCard → AppTheme uses google_fonts):
     // keep the PWA fully offline — no runtime font fetch, ever.
     pwaDisableRemoteFonts();
-    WidgetsBinding.instance.addObserver(this);
-    // §26 — "Back to Studio" returns to the HERO / Home (offset 0), preserving
-    // all state, and does NOT replay the cinematic: skip straight to its final
-    // promise frame. The Hero CTA then re-enters the preserved Fast Path (if a
-    // photo exists) or the upload showroom.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final s = ref.read(pwaControllerProvider);
-      if (s.returningToStudio) {
-        ref.read(pwaControllerProvider.notifier).consumeReturnToStudio();
-        _seq?.skip(); // no replay — jump to the resting promise frame
-        // A RESTORED Draft (photo uploaded, no Vision) lands DIRECTLY on its
-        // Fast Path; every other return lands on the hero (offset 0).
-        if (s.hasSource && s.versions.isEmpty) {
-          _focusWorkspace(animate: false);
-        } else if (_scroll.hasClients) {
-          _scroll.jumpTo(0);
-        }
-      }
-    });
-  }
-
-  /// P0 — focus the REAL visible workspace composition (showroom OR fast path).
-  ///
-  /// Earlier attempts targeted the OUTER viewport-height section: on a
-  /// pinned-header viewport `getOffsetToReveal` already offsets by the header,
-  /// and the section ALSO reserved the header in its own padding, so the content
-  /// landed ~one-header too low (measured 204/216px instead of ~116). This
-  /// measures the actual content block and positions IT (centre when it fits,
-  /// top-align ~28px below the header when it nearly fills the viewport).
-  void _focusWorkspace({bool animate = true}) {
-    if (!mounted) return;
-    final isMobile = MediaQuery.sizeOf(context).width < 700;
-    pwaScrollToVisualContent(
-      _scroll,
-      _uploadVisualContentKey,
-      headerExtent: pwaCollapsedHeaderExtent(isMobile),
-      gap: 28,
-      animate: animate,
-    );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_seqStarted) return;
-    _seqStarted = true;
-    final mq = MediaQuery.of(context);
-    final reduce = mq.disableAnimations;
-    // The cinematic plays on EVERY viewport (desktop / tablet / mobile) — it no
-    // longer skips to the static poster just because the viewport is narrow.
-    // Media (paths + crop) is chosen once for this page instance by form factor.
-    final isMobile = mq.size.width < 700;
-    final media = pwaHeroMediaFor(isMobile);
-    _heroMedia = media;
-    // §7 — the cinematic autoplays ONCE per tab session. The intro gate (backed
-    // by sessionStorage on web) decides: a fresh tab autoplays and marks the
-    // session; an F5 / same-tab return finds the marker and skips straight to the
-    // resting promise frame (no replay, no mid-timeline resume). Explicit replay
-    // (the Replay-intro control) bypasses the gate — see [_replayIntro].
-    final wantVideo = pwaHeroUseVideo(isWeb: kIsWeb, reduceMotion: reduce);
-    final gate = ref.read(pwaIntroGateProvider);
-    final autoplay = wantVideo && gate.shouldAutoplay();
-    precacheImage(
-      const AssetImage(kAydenLogoHero),
-      context,
-      onError: (_, _) {},
-    );
-    if (autoplay) {
-      precacheImage(
-        NetworkImage(media.startPoster),
-        context,
-        onError: (_, _) {},
-      );
-    }
-    precacheImage(NetworkImage(media.endPoster), context, onError: (_, _) {});
-    _seq = _buildSequence(useVideo: autoplay);
-    // Mark BEFORE playback so an F5 mid-cinematic finds the marker and won't replay.
-    if (autoplay) {
-      gate.markStarted();
-    }
-  }
-
-  /// Build a fresh cinematic instance for [_heroMedia]. `useVideo:false` resolves
-  /// straight to the resting promise frame (no video created / no flash).
-  PwaHeroSequence _buildSequence({required bool useVideo}) {
-    final media = _heroMedia;
-    return PwaHeroSequence(
-      useVideo: useVideo,
-      createVideo: ({required onReady, required onEnded, required onError}) =>
-          createPwaHeroVideo(
-            mp4: media.mp4,
-            webm: media.webm,
-            poster: media.startPoster,
-            objectPosition: media.videoObjectPosition,
-            onReady: onReady,
-            onEnded: onEnded,
-            onError: onError,
-          ),
-    );
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _seq?.dispose();
-    _scroll.dispose();
     _focus.dispose();
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _seq?.onVisible();
-    } else {
-      _seq?.onHidden(); // hidden / paused / inactive → pause the video
-    }
-  }
-
-  void _skipCinematic() => _seq?.skip();
-
-  /// §7 — explicit "Replay intro": re-plays the cinematic from frame zero,
-  /// repeatable. It bypasses the once-per-tab gate WITHOUT clearing the marker
-  /// (the next boot still won't autoplay), stays on Home ('/'), touches no
-  /// project / session state, and resets ONLY the cinematic (a fresh sequence).
-  void _replayIntro() {
-    final useVideo = pwaHeroUseVideo(
-      isWeb: kIsWeb,
-      reduceMotion: MediaQuery.of(context).disableAnimations,
-    );
-    final old = _seq;
-    final next = _buildSequence(useVideo: useVideo);
-    setState(() => _seq = next);
-    old?.dispose();
-    if (_scroll.hasClients) _scroll.jumpTo(0); // bring the hero back into view
-  }
-
-  KeyEventResult _onKey(FocusNode _, KeyEvent e) {
-    if (e is KeyDownEvent &&
-        (e.logicalKey == LogicalKeyboardKey.enter ||
-            e.logicalKey == LogicalKeyboardKey.space ||
-            e.logicalKey == LogicalKeyboardKey.escape)) {
-      _skipCinematic();
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  // §4 — hero CTA → upload showroom, viewport-aware & header-aware.
-  Future<void> _scrollToUpload() async {
-    _skipCinematic();
-    _focusWorkspace(animate: true);
-  }
-
-  // §4 — global access to the My Projects library from the collapsed brand bar.
+  // §4 — global access to the My Projects library from the slim brand bar.
   void _openLibrary() => ref.read(pwaControllerProvider.notifier).openLibrary();
+  void _openHome() => ref.read(pwaControllerProvider.notifier).openHome();
 
   void _selectRoom(String? id) =>
       ref.read(pwaControllerProvider.notifier).selectRoom(id);
@@ -314,17 +179,18 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
     ref
         .read(pwaControllerProvider.notifier)
         .setSource(img, origin: PwaImageOrigin.userUpload);
-    _focusWorkspace(animate: true); // §5 — centre the post-upload fast path
+    // UX-A1 — the composition no longer swaps screens: the photo simply replaces
+    // the drop zone in place, so there is nothing to scroll to.
   }
 
-  Future<void> _useExample() async {
-    final img = await ImagePipeline.fromAsset(
-      'assets/examples/living_room.jpg',
-    );
+  /// Load one of the bundled example rooms as the local source. Same seam as a
+  /// real pick — no second selection path, no durable project, no upload.
+  Future<void> _useExample(String assetPath) async {
+    final img = await ImagePipeline.fromAsset(assetPath);
+    if (!mounted) return;
     ref
         .read(pwaControllerProvider.notifier)
         .setSource(img, origin: PwaImageOrigin.bundledExample);
-    _focusWorkspace(animate: true); // §5 — centre the post-upload fast path
   }
 
   void _remove() => ref.read(pwaControllerProvider.notifier).removeSource();
@@ -343,42 +209,26 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
       child: Focus(
         focusNode: _focus,
         autofocus: true,
-        onKeyEvent: _onKey,
         child: LayoutBuilder(
           builder: (context, c) {
             final ff = pwaFormFactorForWidth(c.maxWidth);
             final isMobile = ff == PwaFormFactor.mobile;
             final twoPane = ff == PwaFormFactor.desktop;
-            final vh = c.maxHeight;
-            final collapsed = pwaCollapsedHeaderExtent(isMobile);
 
-            return CustomScrollView(
-              controller: _scroll,
-              slivers: [
-                SliverPersistentHeader(
-                  pinned: true,
-                  delegate: _RoomHeaderDelegate(
-                    max: vh,
-                    min: collapsed,
-                    seq: _seq!,
-                    media: _heroMedia,
-                    userBytes: bytes,
-                    isMobile: isMobile,
-                    onUpload: _scrollToUpload,
-                    onSkip: _skipCinematic,
-                    onReplay: _replayIntro,
-                    onProjects: _openLibrary,
-                    hasSource: bytes != null,
-                  ),
+            // Create is a step, not the front door: the cinematic belongs to the
+            // Home dashboard, so nothing overlays this screen.
+            return Column(
+              children: [
+                _SlimBar(
+                  isMobile: isMobile,
+                  onHome: _openHome,
+                  onProjects: _openLibrary,
                 ),
-                SliverToBoxAdapter(
-                  child: _WorkspaceSection(
-                    key: _uploadKey,
-                    contentKey: _uploadVisualContentKey,
+                Expanded(
+                  child: _CreateWorkspace(
+                    key: const ValueKey('pwa-create'),
                     twoPane: twoPane,
                     isMobile: isMobile,
-                    viewportHeight: vh,
-                    collapsedHeader: collapsed,
                     bytes: bytes,
                     atmospheres: state.atmospheres,
                     selectedRoomId: state.selectedRoomId,
@@ -392,7 +242,6 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
                     onSelectAtmosphere: _selectAtmosphere,
                   ),
                 ),
-                const SliverToBoxAdapter(child: SizedBox(height: 40)),
               ],
             );
           },
@@ -402,373 +251,77 @@ class _PwaEntryScreenState extends ConsumerState<PwaEntryScreen>
   }
 }
 
-// ── Pinned hero → slim brand bar ──────────────────────────────────────────────
-
-class _RoomHeaderDelegate extends SliverPersistentHeaderDelegate {
-  _RoomHeaderDelegate({
-    required this.max,
-    required this.min,
-    required this.seq,
-    required this.media,
-    required this.userBytes,
+/// The permanent slim brand bar of the Create screen. Present from the first
+/// frame — Create sits directly beneath it and is never scrolled to. Carries the
+/// two global affordances: back to Home, and My Projects.
+class _SlimBar extends StatelessWidget {
+  const _SlimBar({
     required this.isMobile,
-    required this.onUpload,
-    required this.onSkip,
-    required this.onReplay,
+    required this.onHome,
     required this.onProjects,
-    required this.hasSource,
   });
-
-  final double max, min;
-  final PwaHeroSequence seq;
-  final PwaHeroMedia media;
-  final Uint8List? userBytes;
   final bool isMobile;
-  final VoidCallback onUpload;
-  final VoidCallback onSkip;
-  final VoidCallback onReplay;
+  final VoidCallback onHome;
   final VoidCallback onProjects;
-  final bool hasSource;
-
   @override
-  double get maxExtent => max;
-  @override
-  double get minExtent => min;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
-    final collapse = entryCollapse(shrinkOffset, max - min);
-    final heroOpacity =
-        1.0 - Curves.easeInCubic.transform((collapse / 0.68).clamp(0.0, 1.0));
-    final compactOpacity = Curves.easeOutCubic.transform(
-      ((collapse - 0.72) / 0.28).clamp(0.0, 1.0),
-    );
-
-    return ClipRect(
-      child: ColoredBox(
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('pwa-slim-bar'),
+      height: pwaCollapsedHeaderExtent(isMobile),
+      decoration: const BoxDecoration(
         color: pwaBlack,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (heroOpacity > 0.01)
-              Opacity(
-                opacity: heroOpacity,
-                child: IgnorePointer(
-                  ignoring: heroOpacity < 0.5,
-                  child: AnimatedBuilder(
-                    animation: seq,
-                    builder: (context, _) => _videoCinematic(
-                      context,
-                      seq,
-                      media,
-                      isMobile,
-                      userBytes,
-                      onUpload,
-                      onSkip,
-                      onReplay,
+        border: Border(bottom: BorderSide(color: Color(0x22FFFFFF), width: 1)),
+      ),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 18 : 36),
+      child: Row(
+        children: [
+          // Create is reached FROM Home, so it always offers the way back.
+          Semantics(
+            button: true,
+            label: 'Back home',
+            child: Tooltip(
+              message: 'Back home',
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+                child: InkWell(
+                  key: const ValueKey('pwa-create-home'),
+                  onTap: onHome,
+                  borderRadius: BorderRadius.circular(999),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(
+                      Icons.arrow_back_rounded,
+                      size: 20,
+                      color: pwaOnDark.withValues(alpha: 0.85),
                     ),
                   ),
                 ),
               ),
-            if (compactOpacity > 0.01)
-              IgnorePointer(
-                ignoring: compactOpacity < 0.5,
-                child: Opacity(
-                  opacity: compactOpacity,
-                  child: _CompactBar(
-                    hasSource: hasSource,
-                    isMobile: isMobile,
-                    onProjects: onProjects,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(covariant _RoomHeaderDelegate old) =>
-      old.max != max ||
-      old.min != min ||
-      old.userBytes != userBytes ||
-      old.isMobile != isMobile ||
-      old.hasSource != hasSource ||
-      old.media != media ||
-      old.seq != seq;
-}
-
-/// Cinematic hero — ONE full-bleed frame shared by poster / video / final
-/// poster (all BoxFit.cover, no layout shift). Zero-wait: the empty-room poster
-/// paints from frame 0, the logo fades in over it, and the native video
-/// cross-fades in on a real "playing" event. NO Flutter gold line over the
-/// video (the source already carries the transformation). Final state = the
-/// full designed room with the copy composed bottom-left.
-Widget _videoCinematic(
-  BuildContext context,
-  PwaHeroSequence seq,
-  PwaHeroMedia media,
-  bool isMobile,
-  Uint8List? userBytes,
-  VoidCallback onUpload,
-  VoidCallback onSkip,
-  VoidCallback onReplay,
-) {
-  final logoW = isMobile ? 210.0 : 300.0;
-  final phase = seq.phase;
-  final videoSupported = seq.video?.isSupported ?? false;
-  final showVideo = phase == PwaHeroPhase.transform && videoSupported;
-  final posterUrl = phase == PwaHeroPhase.promise
-      ? media.endPoster
-      : media.startPoster;
-
-  return GestureDetector(
-    behavior: HitTestBehavior.opaque,
-    onTap: onSkip,
-    child: Stack(
-      fit: StackFit.expand,
-      children: [
-        // 1) Full-bleed poster (user photo once uploaded, else room poster).
-        Positioned.fill(
-          child: userBytes != null
-              ? Image.memory(
-                  userBytes,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) =>
-                      const ColoredBox(color: pwaCharcoal),
-                )
-              : _HeroPoster(posterUrl, alignment: media.posterAlignment),
-        ),
-        // 2) Full-bleed native video, cross-faded in on a real playing frame.
-        if (userBytes == null && videoSupported)
-          Positioned.fill(
-            child: AnimatedOpacity(
-              opacity: showVideo ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 180),
-              child: seq.video!.buildView(),
             ),
           ),
-        // 3) Readability gradient (bottom-weighted for the copy).
-        Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.16),
-                    Colors.black.withValues(alpha: 0.0),
-                    Colors.black.withValues(alpha: 0.62),
-                  ],
-                  stops: const [0.0, 0.42, 1.0],
-                ),
+          const SizedBox(width: 6),
+          const PwaLogoBadge(size: 34),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              // Branding is stable across both Create states — selecting a photo
+              // is not yet a project, so the bar must not rename itself.
+              'Ayden Studio',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: pwaSans(
+                fontSize: 13.5,
+                color: pwaOnDark,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.4,
               ),
             ),
           ),
-        ),
-        // 4) Logo fades in OVER the room during intro; fades out as it plays.
-        if (userBytes == null)
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedOpacity(
-                opacity: phase == PwaHeroPhase.intro ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 350),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      PwaHeroLogo(reveal: 1.0, size: logoW),
-                      SizedBox(height: isMobile ? 12 : 18),
-                      Text(
-                        'Your Personal AI Architect',
-                        style: pwaSans(
-                          fontSize: isMobile ? 12.5 : 13.5,
-                          color: pwaOnDark.withValues(alpha: 0.85),
-                          letterSpacing: 1.6,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        // 5) Final composition — copy + CTA composed bottom-left over the room.
-        if (phase == PwaHeroPhase.promise)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _HeroPromise(isMobile: isMobile, onUpload: onUpload),
-          ),
-        // 6) Persistent Ayden Studio brand logo, top-left (present on every
-        // hero phase, including the final promise state).
-        if (userBytes == null)
-          Positioned(
-            top: 0,
-            left: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(isMobile ? 20 : 40, 20, 0, 0),
-                child: Image.asset(
-                  kAydenLogoHero,
-                  height: isMobile ? 30 : 42,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                ),
-              ),
-            ),
-          ),
-        // 7) Top-right affordance: "Tap to skip" during the cinematic; a discreet
-        //    "Replay intro" once it has settled on the final promise frame (§7).
-        if (userBytes == null)
-          Positioned(
-            top: 0,
-            right: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: phase == PwaHeroPhase.promise
-                    ? _ReplayIntroButton(onTap: onReplay)
-                    : Text(
-                        'Tap to skip',
-                        style: pwaSans(
-                          fontSize: 11.5,
-                          color: pwaOnDark.withValues(alpha: 0.5),
-                          letterSpacing: 0.6,
-                        ),
-                      ),
-              ),
-            ),
-          ),
-      ],
-    ),
-  );
-}
+          const SizedBox(width: 8),
 
-/// §7 — discreet, premium "Replay intro" affordance on the final hero. Secondary
-/// by design (low-opacity, brightens on hover); replays the cinematic from frame
-/// zero without leaving Home or touching any project / session state.
-class _ReplayIntroButton extends StatefulWidget {
-  const _ReplayIntroButton({required this.onTap});
-  final VoidCallback onTap;
-  @override
-  State<_ReplayIntroButton> createState() => _ReplayIntroButtonState();
-}
-
-class _ReplayIntroButtonState extends State<_ReplayIntroButton> {
-  bool _hover = false;
-  @override
-  Widget build(BuildContext context) {
-    final alpha = _hover ? 0.92 : 0.55;
-    final tint = pwaOnDark.withValues(alpha: alpha);
-    return Semantics(
-      button: true,
-      label: 'Replay intro',
-      child: Tooltip(
-        message: 'Replay intro',
-        child: MouseRegion(
-          onEnter: (_) => setState(() => _hover = true),
-          onExit: (_) => setState(() => _hover = false),
-          cursor: SystemMouseCursors.click,
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-            child: InkWell(
-              key: const ValueKey('pwa-replay-intro'),
-              onTap: widget.onTap,
-              borderRadius: BorderRadius.circular(999),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.replay, size: 15, color: tint),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Replay intro',
-                      style: pwaSans(
-                        fontSize: 11.5,
-                        color: tint,
-                        letterSpacing: 0.6,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Same-origin runtime poster (webp under /media/hero, served at /media/hero).
-/// Never a Flutter asset → stays out of the app-shell bundle. Full-bleed cover.
-class _HeroPoster extends StatelessWidget {
-  const _HeroPoster(this.url, {this.alignment = Alignment.center});
-  final String url;
-  final Alignment alignment;
-  @override
-  Widget build(BuildContext context) => Image.network(
-    url,
-    fit: BoxFit.cover,
-    alignment: alignment,
-    gaplessPlayback: true,
-    errorBuilder: (_, _, _) => const ColoredBox(color: pwaCharcoal),
-  );
-}
-
-class _CompactBar extends StatelessWidget {
-  const _CompactBar({
-    required this.hasSource,
-    required this.isMobile,
-    required this.onProjects,
-  });
-  final bool hasSource;
-  final bool isMobile;
-  final VoidCallback onProjects;
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: Container(
-        height: pwaCollapsedHeaderExtent(isMobile),
-        decoration: const BoxDecoration(
-          color: pwaBlack,
-          border: Border(
-            bottom: BorderSide(color: Color(0x22FFFFFF), width: 1),
-          ),
-        ),
-        padding: EdgeInsets.symmetric(horizontal: isMobile ? 18 : 36),
-        child: Row(
-          children: [
-            const PwaLogoBadge(size: 34),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                hasSource ? 'Your space' : 'Ayden Studio',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: pwaSans(
-                  fontSize: 13.5,
-                  color: pwaOnDark,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.4,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            _CompactProjectsButton(isMobile: isMobile, onTap: onProjects),
-          ],
-        ),
+          _CompactProjectsButton(isMobile: isMobile, onTap: onProjects),
+        ],
       ),
     );
   }
@@ -833,71 +386,29 @@ class _CompactProjectsButton extends StatelessWidget {
   }
 }
 
-class _HeroPromise extends StatelessWidget {
-  const _HeroPromise({required this.isMobile, required this.onUpload});
-  final bool isMobile;
-  final VoidCallback onUpload;
+// ── Shared chrome ─────────────────────────────────────────────────────────────
+
+// ── Create workspace: ONE composition, two states ─────────────────────────────
+
+/// Reassurance under the source pane — where the photo actually is.
+class _PrivacyNote extends StatelessWidget {
+  const _PrivacyNote();
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.fromLTRB(
-        isMobile ? 24 : 64,
-        0,
-        isMobile ? 24 : 64,
-        isMobile ? 34 : 52,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final muted = pwaOnDark.withValues(alpha: 0.45);
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Row(
         children: [
-          Text(
-            'Your home.',
-            style: pwaDisplay(
-              fontSize: isMobile ? 40 : 58,
-              color: pwaOnDark,
-              height: 1.02,
+          Icon(Icons.shield_outlined, size: 14, color: muted),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              'Your data is private and secure',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: pwaSans(fontSize: 12, color: muted),
             ),
-          ),
-          Text(
-            'Reimagined.',
-            style: pwaDisplay(
-              fontSize: isMobile ? 40 : 58,
-              color: pwaGold,
-              fontWeight: FontWeight.w400,
-              height: 1.02,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'One photo. Infinite possibilities.',
-            style: pwaSans(
-              fontSize: 15.5,
-              color: pwaOnDark.withValues(alpha: 0.82),
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-          const SizedBox(height: 24),
-          _HeroCta(onTap: onUpload),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 20,
-                color: pwaOnDark.withValues(alpha: 0.6),
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  'First vision free · No account required',
-                  style: pwaSans(
-                    fontSize: 12.5,
-                    color: pwaOnDark.withValues(alpha: 0.6),
-                  ),
-                ),
-              ),
-            ],
           ),
         ],
       ),
@@ -905,70 +416,84 @@ class _HeroPromise extends StatelessWidget {
   }
 }
 
-class _HeroCta extends StatelessWidget {
-  const _HeroCta({required this.onTap});
-  final VoidCallback onTap;
+/// The single commercial footnote, under the primary CTA.
+class _CreateFooter extends StatelessWidget {
+  const _CreateFooter({required this.isMobile});
+  final bool isMobile;
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.04),
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: pwaGold.withValues(alpha: 0.85),
-              width: 1.3,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  'Upload your room',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: pwaSans(
-                    fontSize: 14.5,
-                    color: pwaGoldSoft,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Icon(Icons.arrow_forward, size: 16, color: pwaGoldSoft),
-            ],
-          ),
-        ),
+    return Padding(
+      padding: EdgeInsets.only(top: isMobile ? 12 : 14),
+      child: Text(
+        'First vision free · No account required',
+        textAlign: TextAlign.center,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: pwaSans(fontSize: 12, color: pwaOnDark.withValues(alpha: 0.45)),
       ),
     );
   }
 }
 
-// ── Shared chrome ─────────────────────────────────────────────────────────────
+/// The bundled example rooms offered before any source is chosen. Assets are
+/// already shipped with the app — nothing is downloaded and no dependency added.
+const List<(String, String)> kPwaExamples = [
+  ('Living Room', 'assets/examples/living_room.jpg'),
+  ('Bedroom', 'assets/examples/bedroom.jpg'),
+  ('Kitchen', 'assets/examples/kitchen.jpg'),
+];
 
-class _Eyebrow extends StatelessWidget {
-  const _Eyebrow(this.label);
-  final String label;
+/// Compact horizontal strip of example rooms. Scrolls rather than wraps, so it
+/// never grows tall enough to push the drop zone off a short viewport.
+class _ExamplesStrip extends StatelessWidget {
+  const _ExamplesStrip({required this.onPick});
+  final ValueChanged<String> onPick;
+
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: 24, height: 1.4, color: pwaGold),
-        const SizedBox(width: 12),
-        Flexible(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: pwaEyebrow(color: pwaGold),
+        Text(
+          'Or start with an example',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: pwaSans(
+            fontSize: 12.5,
+            color: pwaOnDark.withValues(alpha: 0.55),
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 84,
+          child: ScrollConfiguration(
+            behavior: const MaterialScrollBehavior().copyWith(
+              dragDevices: {
+                PointerDeviceKind.touch,
+                PointerDeviceKind.mouse,
+                PointerDeviceKind.trackpad,
+                PointerDeviceKind.stylus,
+              },
+              scrollbars: false,
+            ),
+            child: ListView.separated(
+              key: const ValueKey('pwa-examples'),
+              scrollDirection: Axis.horizontal,
+              primary: false,
+              physics: const ClampingScrollPhysics(),
+              itemCount: kPwaExamples.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (context, i) {
+                final (label, asset) = kPwaExamples[i];
+                return _ExampleCard(
+                  label: label,
+                  asset: asset,
+                  onTap: () => onPick(asset),
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -976,213 +501,56 @@ class _Eyebrow extends StatelessWidget {
   }
 }
 
-/// Premium photo frame — warm neutral canvas, BoxFit.contain, never a black
-/// letterbox.
-/// Fills the box it is given (its parent picks the 16:10 size). Warm neutral
-/// canvas, BoxFit.contain — never a black letterbox.
-class _PhotoFrame extends StatelessWidget {
-  const _PhotoFrame({super.key, required this.bytes});
-  final Uint8List? bytes;
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(PwaGap.radius),
-      child: ColoredBox(
-        color: pwaCharcoalSoft,
-        child: bytes == null
-            ? const SizedBox.expand()
-            : Center(
-                child: Image.memory(
-                  bytes!,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) =>
-                      const ColoredBox(color: pwaCharcoalSoft),
-                ),
-              ),
-      ),
-    );
-  }
-}
-
-// ── Workspace: upload showroom  OR  fast path ─────────────────────────────────
-
-class _WorkspaceSection extends StatelessWidget {
-  const _WorkspaceSection({
-    super.key,
-    required this.contentKey,
-    required this.twoPane,
-    required this.isMobile,
-    required this.viewportHeight,
-    required this.collapsedHeader,
-    required this.bytes,
-    required this.atmospheres,
-    required this.selectedRoomId,
-    required this.selectedAtmosphereId,
-    required this.onPick,
-    required this.onExample,
-    required this.onRemove,
-    required this.onGenerate,
-    required this.onSelectRoom,
-    required this.onSelectAtmosphere,
+class _ExampleCard extends StatelessWidget {
+  const _ExampleCard({
+    required this.label,
+    required this.asset,
+    required this.onTap,
   });
-  final GlobalKey contentKey;
-  final bool twoPane;
-  final bool isMobile;
-  final double viewportHeight;
-  final double collapsedHeader;
-  final Uint8List? bytes;
-  final List<PwaAtmosphere> atmospheres;
-  final String? selectedRoomId;
-  final String selectedAtmosphereId;
-  final VoidCallback onPick;
-  final VoidCallback onExample;
-  final VoidCallback onRemove;
-  final VoidCallback onGenerate;
-  final ValueChanged<String?> onSelectRoom;
-  final ValueChanged<String> onSelectAtmosphere;
+  final String label;
+  final String asset;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: pwaCharcoalSoft,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 320),
-        switchInCurve: Curves.easeOut,
-        child: bytes == null
-            ? KeyedSubtree(
-                key: const ValueKey('upload'),
-                child: _UploadShowroom(
-                  contentKey: contentKey,
-                  twoPane: twoPane,
-                  viewportHeight: viewportHeight,
-                  collapsedHeader: collapsedHeader,
-                  onPick: onPick,
-                  onExample: onExample,
-                ),
-              )
-            : _FastPath(
-                key: const ValueKey('fast'),
-                contentKey: contentKey,
-                twoPane: twoPane,
-                isMobile: isMobile,
-                viewportHeight: viewportHeight,
-                collapsedHeader: collapsedHeader,
-                bytes: bytes!,
-                atmospheres: atmospheres,
-                selectedRoomId: selectedRoomId,
-                selectedAtmosphereId: selectedAtmosphereId,
-                onGenerate: onGenerate,
-                onSelectRoom: onSelectRoom,
-                onSelectAtmosphere: onSelectAtmosphere,
-                onReplace: onPick,
-                onRemove: onRemove,
-              ),
-      ),
-    );
-  }
-}
-
-/// SCREEN 1 — premium architectural upload showroom (faithful to
-/// REF-PWA-UPLOAD-FASTPATH-V3, Screen 1): header (official logo left + trust
-/// right), left editorial column (~38%), right premium upload zone (~62%).
-class _UploadShowroom extends StatelessWidget {
-  const _UploadShowroom({
-    required this.contentKey,
-    required this.twoPane,
-    required this.viewportHeight,
-    required this.collapsedHeader,
-    required this.onPick,
-    required this.onExample,
-  });
-  final GlobalKey contentKey;
-  final bool twoPane;
-  final double viewportHeight;
-  final double collapsedHeader;
-  final VoidCallback onPick;
-  final VoidCallback onExample;
-
-  Widget _header() => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      // Official Ayden Studio lockup (transparent → composites cleanly on the
-      // dark panel). Not redrawn / retyped / faked. §3 — enlarged ~1.6× so it
-      // reads clearly on a large monitor, without competing with the headline.
-      Image.asset(
-        kAydenLogoHero,
-        height: twoPane ? 88 : 64,
-        fit: BoxFit.contain,
-        errorBuilder: (_, _, _) => const SizedBox.shrink(),
-      ),
-      const Spacer(),
-      const _TrustBadge(),
-    ],
-  );
-
-  @override
-  Widget build(BuildContext context) {
-    final copy = _UploadCopy(twoPane: twoPane, onExample: onExample);
-    final canvas = _DropZone(onPick: onPick);
-
-    if (!twoPane) {
-      // Mobile — a CONTENT-SIZED block (no internal header reservation): the
-      // Hero-CTA scroll frames THIS block, so padding here is just breathing
-      // room, not a header offset.
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
-        child: KeyedSubtree(
-          key: contentKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _header(),
-              const SizedBox(height: 28),
-              copy,
-              const SizedBox(height: 26),
-              SizedBox(height: 320, child: canvas),
-            ],
-          ),
-        ),
-      );
-    }
-
-    // Desktop — a CONTENT-SIZED two-column composition (editorial left, dominant
-    // upload right). The upload frame gets a definite height near the available
-    // viewport, so the whole block reads as ONE balanced unit that the CTA
-    // scroll frames just below the header. No viewport-height wrapper, no
-    // internal header reservation, and NO vertical Center pushing the copy low —
-    // the editorial copy is centred against the upload frame (the approved
-    // two-column design), not against an empty full-viewport box.
-    // The upload frame fills most of the available viewport so the whole block
-    // reads as one tall balanced unit that top-aligns just below the header
-    // (minimal void above AND below) rather than floating in the lower half.
-    final canvasH = (viewportHeight - collapsedHeader - 150).clamp(
-      360.0,
-      900.0,
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 64),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1360),
-          child: KeyedSubtree(
-            key: contentKey,
+    return Semantics(
+      button: true,
+      label: 'Start with the $label example',
+      child: SizedBox(
+        width: 112,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _header(),
-                const SizedBox(height: 16),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(flex: 38, child: copy),
-                    const SizedBox(width: 56),
-                    Expanded(
-                      flex: 62,
-                      child: SizedBox(height: canvasH, child: canvas),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    height: 58,
+                    width: 112,
+                    child: Image.asset(
+                      asset,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) =>
+                          const ColoredBox(color: pwaCharcoal),
                     ),
-                  ],
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: pwaSans(
+                    fontSize: 11.5,
+                    color: pwaOnDark.withValues(alpha: 0.82),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
@@ -1193,104 +561,11 @@ class _UploadShowroom extends StatelessWidget {
   }
 }
 
-/// Left editorial column of SCREEN 1 (concise, no invented marketing).
-class _UploadCopy extends StatelessWidget {
-  const _UploadCopy({required this.twoPane, required this.onExample});
-  final bool twoPane;
-  final VoidCallback onExample;
-  @override
-  Widget build(BuildContext context) {
-    final hs = twoPane ? 50.0 : 34.0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const _Eyebrow('YOUR SPACE'),
-        SizedBox(height: twoPane ? 24 : 18),
-        // "Show Ayden / your room." — the second line gold (upright serif, as
-        // in the reference — no slant).
-        Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: 'Show Ayden\n',
-                style: pwaDisplay(fontSize: hs, color: pwaOnDark, height: 1.03),
-              ),
-              TextSpan(
-                text: 'your room.',
-                style: pwaDisplay(fontSize: hs, color: pwaGold, height: 1.03),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        Text(
-          'One clear photo is enough.',
-          style: pwaSans(
-            fontSize: 16.5,
-            color: pwaOnDark,
-            fontWeight: FontWeight.w500,
-            height: 1.4,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'Ayden will understand your space and\n'
-          'prepare your first design direction.',
-          style: pwaSans(
-            fontSize: 14.5,
-            color: pwaOnDark.withValues(alpha: 0.62),
-            height: 1.55,
-          ),
-        ),
-        SizedBox(height: twoPane ? 30 : 22),
-        _TryExampleCard(onTap: onExample),
-      ],
-    );
-  }
-}
-
-/// Compact trust badge (top-right of SCREEN 1) — a single, non-duplicated place.
-class _TrustBadge extends StatelessWidget {
-  const _TrustBadge();
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          Icons.verified_user_outlined,
-          size: 18,
-          color: pwaGold.withValues(alpha: 0.9),
-        ),
-        const SizedBox(width: 10),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'First vision free',
-              style: pwaSans(
-                fontSize: 13,
-                color: pwaOnDark,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Text(
-              'No account required',
-              style: pwaSans(
-                fontSize: 12,
-                color: pwaOnDark.withValues(alpha: 0.55),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
 /// Premium secondary action card — "Try an example / See how it works".
+///
+/// UX-A1 — no longer surfaced in Create (absent from the approved mockup). Kept
+/// with its loader ([_PwaEntryScreenState._useExample]) for the follow-up batch.
+// ignore: unused_element
 class _TryExampleCard extends StatelessWidget {
   const _TryExampleCard({required this.onTap});
   final VoidCallback onTap;
@@ -1395,86 +670,105 @@ class _DropZoneState extends State<_DropZone> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(PwaGap.radiusLg),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // Existing architectural interior asset, heavily dimmed for
-                // depth (never the uploaded user photo, which is absent here).
-                Image.asset(
-                  'assets/showcase/living_after.jpg',
-                  fit: BoxFit.cover,
-                  alignment: const Alignment(0, -0.1),
-                  errorBuilder: (_, _, _) =>
-                      const ColoredBox(color: pwaCharcoal),
-                ),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        pwaBlack.withValues(alpha: _hover ? 0.70 : 0.80),
-                        pwaBlack.withValues(alpha: _hover ? 0.82 : 0.90),
+            child: LayoutBuilder(
+              builder: (context, constraints) => Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Existing architectural interior asset, heavily dimmed for
+                  // depth (never the uploaded user photo, which is absent here).
+                  Image.asset(
+                    'assets/showcase/living_after.jpg',
+                    fit: BoxFit.cover,
+                    alignment: const Alignment(0, -0.1),
+                    errorBuilder: (_, _, _) =>
+                        const ColoredBox(color: pwaCharcoal),
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          pwaBlack.withValues(alpha: _hover ? 0.70 : 0.80),
+                          pwaBlack.withValues(alpha: _hover ? 0.82 : 0.90),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          width: 78,
+                          height: 78,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: pwaGold.withValues(
+                              alpha: _hover ? 0.18 : 0.10,
+                            ),
+                            border: Border.all(
+                              color: pwaGold.withValues(
+                                alpha: _hover ? 0.95 : 0.75,
+                              ),
+                              width: 1.4,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.file_upload_outlined,
+                            size: 34,
+                            color: pwaGold.withValues(alpha: 0.95),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        // ONE visible action. The whole zone is the button, and
+                        // drag & drop is stated as the alternative rather than
+                        // competing with a second control.
+                        Text(
+                          'Upload a photo',
+                          textAlign: TextAlign.center,
+                          style: pwaSans(
+                            fontSize: 19,
+                            color: pwaOnDark,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'or drag & drop it here',
+                          textAlign: TextAlign.center,
+                          style: pwaSans(
+                            fontSize: 14,
+                            color: pwaOnDark.withValues(alpha: 0.66),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        // Exactly what the staging bucket accepts (MIME allowlist
+                        // image/jpeg|png|webp, 10 MiB limit) — never a format the
+                        // upload would reject.
+                        Text(
+                          'JPG, PNG or WebP · up to 10 MB',
+                          style: pwaSans(
+                            fontSize: 12,
+                            color: pwaOnDark.withValues(alpha: 0.45),
+                            letterSpacing: 0.8,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                ),
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 160),
-                        width: 78,
-                        height: 78,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: pwaGold.withValues(
-                            alpha: _hover ? 0.18 : 0.10,
-                          ),
-                          border: Border.all(
-                            color: pwaGold.withValues(
-                              alpha: _hover ? 0.95 : 0.75,
-                            ),
-                            width: 1.4,
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.file_upload_outlined,
-                          size: 34,
-                          color: pwaGold.withValues(alpha: 0.95),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        'Drop your photo here',
-                        style: pwaSans(
-                          fontSize: 18,
-                          color: pwaOnDark,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'or browse from your device',
-                        style: pwaSans(
-                          fontSize: 14,
-                          color: pwaOnDark.withValues(alpha: 0.7),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        'JPG, PNG or HEIC',
-                        style: pwaSans(
-                          fontSize: 12,
-                          color: pwaOnDark.withValues(alpha: 0.45),
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                  // Quiet guidance, bottom-left — only where there is real room
+                  // for it (never on a short mobile canvas).
+                  if (constraints.maxHeight >= 380)
+                    const Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 16,
+                      child: _UploadTips(),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1483,46 +777,106 @@ class _DropZoneState extends State<_DropZone> {
   }
 }
 
+/// Quiet, non-blocking guidance inside the drop zone.
+class _UploadTips extends StatelessWidget {
+  const _UploadTips();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: pwaBlack.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.lightbulb_outline_rounded,
+            size: 16,
+            color: pwaGold.withValues(alpha: 0.9),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Tips for best results',
+                  style: pwaSans(
+                    fontSize: 12.5,
+                    color: pwaOnDark,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Use a clear, well-lit photo of the room you want to '
+                  'transform.',
+                  style: pwaSans(
+                    fontSize: 12,
+                    color: pwaOnDark.withValues(alpha: 0.6),
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── FAST PATH — photo + ROOM + ATMOSPHERE + Generate, one viewport ───────────
 
-class _FastPath extends StatefulWidget {
-  const _FastPath({
+/// UX-A1 — the SINGLE Create composition. The skeleton never changes between
+/// "no photo yet" and "photo ready": the left pane holds the drop zone or the
+/// photo, the right pane always holds ROOM → ATMOSPHERE → Generate. Before a
+/// photo exists the right pane is visible but genuinely inert (no pointer, no
+/// focus), so the journey is legible without ever being clickable too early.
+class _CreateWorkspace extends StatefulWidget {
+  const _CreateWorkspace({
     super.key,
-    required this.contentKey,
     required this.twoPane,
     required this.isMobile,
-    required this.viewportHeight,
-    required this.collapsedHeader,
     required this.bytes,
     required this.atmospheres,
     required this.selectedRoomId,
     required this.selectedAtmosphereId,
+    required this.onPick,
+    required this.onExample,
+    required this.onRemove,
     required this.onGenerate,
     required this.onSelectRoom,
     required this.onSelectAtmosphere,
-    required this.onReplace,
-    required this.onRemove,
   });
-  final GlobalKey contentKey;
   final bool twoPane;
   final bool isMobile;
-  final double viewportHeight;
-  final double collapsedHeader;
-  final Uint8List bytes;
+
+  /// null → the drop zone is shown; non-null → the photo takes its place.
+  final Uint8List? bytes;
   final List<PwaAtmosphere> atmospheres;
   final String? selectedRoomId;
   final String selectedAtmosphereId;
+  final VoidCallback onPick;
+
+  /// Loads one of the bundled example rooms as the local source.
+  final ValueChanged<String> onExample;
+  final VoidCallback onRemove;
   final VoidCallback onGenerate;
   final ValueChanged<String?> onSelectRoom;
   final ValueChanged<String> onSelectAtmosphere;
-  final VoidCallback onReplace;
-  final VoidCallback onRemove;
+
+  bool get hasPhoto => bytes != null;
 
   @override
-  State<_FastPath> createState() => _FastPathState();
+  State<_CreateWorkspace> createState() => _CreateWorkspaceState();
 }
 
-class _FastPathState extends State<_FastPath> {
+class _CreateWorkspaceState extends State<_CreateWorkspace> {
   bool _roomExpanded = false;
   bool _atmosExpanded = false;
   // §7: one dedicated ScrollController per horizontal row (popular + optional,
@@ -1553,12 +907,15 @@ class _FastPathState extends State<_FastPath> {
 
   /// Scroll a horizontal row the minimum amount so card [index] is FULLY
   /// visible — only when it is currently clipped at an edge. No-op otherwise.
+  /// Card footprint for the current row width — see [pwaCardWidthFor]. Derived
+  /// in build; every geometry helper below reads it instead of the constant.
+  double _cardW = kPwaCardW;
+
   void _revealIndexIfClipped(ScrollController c, int index) {
     if (!c.hasClients) return;
-    const gap = 12.0;
     final pos = c.position;
-    final start = index * (kPwaCardW + gap);
-    final end = start + kPwaCardW;
+    final start = index * (_cardW + kPwaCardGap);
+    final end = start + _cardW;
     final vpStart = c.offset;
     final vpEnd = c.offset + pos.viewportDimension;
     double? target;
@@ -1583,7 +940,7 @@ class _FastPathState extends State<_FastPath> {
     String subtitle,
     bool selected,
   ) => SizedBox(
-    width: kPwaCardW,
+    width: _cardW,
     child: PwaSelectCard(
       title: title,
       subtitle: subtitle,
@@ -1675,7 +1032,7 @@ class _FastPathState extends State<_FastPath> {
 
   // ── ATMOSPHERE ───────────────────────────────────────────────────────────
   Widget _atmosCard(PwaAtmosphere a, String sel) => SizedBox(
-    width: kPwaCardW,
+    width: _cardW,
     child: PwaSelectCard(
       title: a.name,
       subtitle: a.id == 'ayden_signature' ? 'Selected by Ayden' : '',
@@ -1751,7 +1108,22 @@ class _FastPathState extends State<_FastPath> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, c) {
+      // Derive the card footprint from the row that will actually hold it, so
+      // the five primary choices read at a glance instead of the last one being
+      // clipped by a fixed 158px card.
+      // Only the two-pane composition is constrained enough to need scaling:
+      // the single-column flow keeps the full design footprint and simply
+      // scrolls, so narrowing the cards there would cost readability for nothing.
+      _cardW = widget.twoPane
+          ? pwaCardWidthFor((c.maxWidth.clamp(0.0, 1440.0) - 96 - 44) * 0.55)
+          : kPwaCardW;
+      return _buildBody(context);
+    },
+  );
+
+  Widget _buildBody(BuildContext context) {
     final roomLevel = _SelectionLevel(
       rowKey: 'room',
       heading: '1. ROOM',
@@ -1762,7 +1134,8 @@ class _FastPathState extends State<_FastPath> {
       onToggle: _toggleRoom,
       popularController: _roomPopScroll,
       optionalController: _roomOptScroll,
-      cardHeight: kPwaCardH,
+      cardWidth: _cardW,
+      cardHeight: pwaCardHeightFor(_cardW),
       popularCards: _roomPopularCards(),
       optionalCards: _roomOptionalCards(),
       showArrows: widget.twoPane,
@@ -1778,14 +1151,19 @@ class _FastPathState extends State<_FastPath> {
       onToggle: _toggleAtmos,
       popularController: _atmosPopScroll,
       optionalController: _atmosOptScroll,
-      cardHeight: kPwaCardH,
+      cardWidth: _cardW,
+      cardHeight: pwaCardHeightFor(_cardW),
       popularCards: _atmosPopularCards(),
       optionalCards: _atmosOptionalCards(),
       showArrows: widget.twoPane,
     );
 
-    final generate = _GenerateArea(onGenerate: widget.onGenerate);
-    final intro = _FastPathIntro(
+    final enabled = widget.hasPhoto;
+    final generate = _GenerateArea(
+      onGenerate: enabled ? widget.onGenerate : null,
+    );
+    final intro = _CreateIntro(
+      hasPhoto: enabled,
       roomLabel: _roomLabel,
       roomIsAuto: _roomIsAuto,
       atmosphereName: _atmosphereName,
@@ -1798,111 +1176,148 @@ class _FastPathState extends State<_FastPath> {
       atmosphereName: _atmosphereName,
     );
 
+    // Visible in BOTH states, but genuinely inert until a photo exists: no
+    // pointer, no focus, no keyboard traversal — never a misleading affordance.
+    final selectors = _InertWhen(
+      inert: !enabled,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          roomLevel,
+          SizedBox(height: widget.twoPane ? 26 : 20),
+          atmosLevel,
+          SizedBox(height: widget.twoPane ? 16 : 20),
+          summary,
+        ],
+      ),
+    );
+
+    final sourcePane = widget.bytes == null
+        ? _DropZone(onPick: widget.onPick)
+        : _PhotoPanel(
+            bytes: widget.bytes!,
+            onReplace: widget.onPick,
+            onRemove: widget.onRemove,
+          );
+    // The bundled example rooms live with the drop zone and leave with it.
+    final examples = widget.bytes == null
+        ? _ExamplesStrip(onPick: widget.onExample)
+        : null;
+
     if (!widget.twoPane) {
-      // §4.2/§5 — a CONTENT-SIZED block (no internal header reservation): the
-      // CTA scroll frames THIS block, so padding here is breathing room only.
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-        child: KeyedSubtree(
-          key: widget.contentKey,
+      // Mobile / tablet — one natural vertical flow. No hero to scroll past:
+      // the composition starts directly under the slim bar.
+      return ColoredBox(
+        color: pwaCharcoalSoft,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               intro,
               const SizedBox(height: 22),
-              _PhotoPanel(
-                bytes: widget.bytes,
-                onReplace: widget.onReplace,
-                onRemove: widget.onRemove,
-              ),
+              // The drop zone has a fixed slot; the photo sizes to its ratio.
+              widget.bytes == null
+                  ? SizedBox(height: 300, child: sourcePane)
+                  : sourcePane,
+              if (examples != null) ...[const SizedBox(height: 14), examples],
+              const _PrivacyNote(),
               const SizedBox(height: 24),
-              roomLevel,
-              const SizedBox(height: 20),
-              atmosLevel,
-              const SizedBox(height: 20),
-              summary,
+              selectors,
               const SizedBox(height: 12),
               generate,
+              _CreateFooter(isMobile: widget.isMobile),
             ],
           ),
         ),
       );
     }
 
-    // Desktop (§3/§5) — a CONTENT-SIZED block that fills most of the available
-    // viewport below the header; the CTA scroll frames it just below the header
-    // (top-aligned). No viewport-height wrapper and no internal header
-    // reservation — the previous `collapsedHeader + …` paddings double-counted
-    // the header (measured intro at 216px instead of ~120).
-    final contentH = (widget.viewportHeight - widget.collapsedHeader - 56)
-        .clamp(360.0, 1000.0);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 64),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1500),
-          child: KeyedSubtree(
-            key: widget.contentKey,
-            child: SizedBox(
-              height: contentH,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  intro,
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          flex: 40,
-                          child: _PhotoPanel(
-                            bytes: widget.bytes,
-                            onReplace: widget.onReplace,
-                            onRemove: widget.onRemove,
-                            fillHeight: true,
-                          ),
-                        ),
-                        const SizedBox(width: 44),
-                        Expanded(
-                          flex: 60,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // Selectors + summary scroll together so only the
-                              // Generate button is a fixed footer — the scroll
-                              // area can never be starved into an overflow on a
-                              // short desktop window.
-                              Expanded(
-                                child: SingleChildScrollView(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      roomLevel,
-                                      const SizedBox(height: 26),
-                                      atmosLevel,
-                                      const SizedBox(height: 16),
-                                      summary,
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              generate,
+    // Desktop — the approved two-column composition, sized to the viewport that
+    // is left under the slim bar. Only the selectors scroll, so Generate and the
+    // footer stay anchored and no short window can overflow.
+    return ColoredBox(
+      color: pwaCharcoalSoft,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(48, 24, 48, 20),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1440),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        flex: 45,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // The drop zone fills the column; a photo takes the
+                            // height its own ratio needs (see _PhotoPanel).
+                            Expanded(
+                              child: widget.bytes == null
+                                  ? sourcePane
+                                  : Align(
+                                      alignment: Alignment.topCenter,
+                                      child: sourcePane,
+                                    ),
+                            ),
+                            if (examples != null) ...[
+                              const SizedBox(height: 14),
+                              examples,
                             ],
-                          ),
+                            const _PrivacyNote(),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 44),
+                      Expanded(
+                        flex: 55,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            intro,
+                            const SizedBox(height: 20),
+                            Expanded(
+                              child: SingleChildScrollView(child: selectors),
+                            ),
+                            const SizedBox(height: 12),
+                            generate,
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                _CreateFooter(isMobile: widget.isMobile),
+              ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Blocks pointer, focus and keyboard traversal, and dims what it wraps. Used
+/// for the pre-upload ROOM / ATMOSPHERE panes: present and legible, never
+/// interactive.
+class _InertWhen extends StatelessWidget {
+  const _InertWhen({required this.inert, required this.child});
+  final bool inert;
+  final Widget child;
+  @override
+  Widget build(BuildContext context) {
+    if (!inert) return child;
+    // Dimmed enough to read as "not yet", light enough to stay legible — the
+    // pre-upload state must explain the journey, not hide it.
+    return ExcludeFocus(
+      child: IgnorePointer(child: Opacity(opacity: 0.55, child: child)),
     );
   }
 }
@@ -1912,14 +1327,19 @@ class _FastPathState extends State<_FastPath> {
 const Color _fpGold = Color(0xFFD3B064);
 const Color _fpWhite = Color(0xFFFFFDFC);
 
-class _FastPathIntro extends StatelessWidget {
-  const _FastPathIntro({
+class _CreateIntro extends StatelessWidget {
+  const _CreateIntro({
+    required this.hasPhoto,
     required this.roomLabel,
     required this.roomIsAuto,
     required this.atmosphereName,
     required this.twoPane,
     required this.isMobile,
   });
+
+  /// Drives the one sentence that changes between the two states, and whether
+  /// the readiness pills are meaningful at all.
+  final bool hasPhoto;
   final String roomLabel;
   final bool roomIsAuto;
   final String atmosphereName;
@@ -1964,13 +1384,11 @@ class _FastPathIntro extends StatelessWidget {
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: Text(
-            // §4.2 — a tighter single sentence on phones so the intro stays
-            // compact and the photo remains in the upper third.
-            isMobile
-                ? 'Your photo is ready — let Ayden set the room and direction, '
-                      'or choose your own.'
-                : 'Your photo is ready. Let Ayden identify the room and choose a '
-                      'signature direction — or select your own.',
+            // One sentence, two states — the journey is explained before the
+            // photo exists, then hands over to the choices once it does.
+            hasPhoto
+                ? "Great! Now let's choose the room type\nand the atmosphere you love."
+                : "Add a photo to get started, then we'll help you\ndesign it your way.",
             maxLines: isMobile ? 2 : 3,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -1985,98 +1403,10 @@ class _FastPathIntro extends StatelessWidget {
       ],
     );
 
-    final indicators = <Widget>[
-      const _ReadinessIndicator(
-        icon: Icons.image_outlined,
-        label: 'Photo ready',
-      ),
-      _ReadinessIndicator(
-        icon: roomIsAuto ? Icons.auto_awesome : Icons.meeting_room_outlined,
-        label: roomIsAuto ? 'Ayden Decide active' : roomLabel,
-      ),
-      _ReadinessIndicator(
-        icon: Icons.palette_outlined,
-        label: '$atmosphereName selected',
-      ),
-    ];
-
-    if (twoPane) {
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: copy),
-          const SizedBox(width: 32),
-          Flexible(
-            child: Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              runSpacing: 8,
-              children: indicators,
-            ),
-          ),
-        ],
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        copy,
-        SizedBox(height: isMobile ? 12 : 16),
-        // Mobile: a single compact scroll row (never a tall wrapped block);
-        // tablet: a wrapped row.
-        if (isMobile)
-          SizedBox(
-            height: 34,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              physics: const ClampingScrollPhysics(),
-              itemCount: indicators.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (_, i) => indicators[i],
-            ),
-          )
-        else
-          Wrap(spacing: 8, runSpacing: 8, children: indicators),
-      ],
-    );
+    // The readiness pills are gone in every state: the selection cards already
+    // show what is chosen, and the pills only restated it.
+    return copy;
   }
-}
-
-/// §4.1 — a restrained readiness pill (explains an automatic default). Not an
-/// interactive Room/Atmosphere card; no green success colour, no checkbox.
-class _ReadinessIndicator extends StatelessWidget {
-  const _ReadinessIndicator({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
-  @override
-  Widget build(BuildContext context) => Container(
-    height: 34,
-    padding: const EdgeInsets.symmetric(horizontal: 12),
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.035),
-      borderRadius: BorderRadius.circular(999),
-      border: Border.all(color: _fpGold.withValues(alpha: 0.22)),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 15, color: _fpGold),
-        const SizedBox(width: 7),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: _fpWhite.withValues(alpha: 0.82),
-            decoration: TextDecoration.none,
-          ),
-        ),
-      ],
-    ),
-  );
 }
 
 /// §6 — one-line selection summary above Generate (Room/Atmosphere in gold).
@@ -2115,70 +1445,178 @@ class _FastPathSummary extends StatelessWidget {
   }
 }
 
-class _PhotoPanel extends StatelessWidget {
+/// Height a photo card needs for a source of [aspect] (width / height) laid out
+/// at [width], never exceeding [available].
+///
+/// Pure so the decision is testable without decoding an image: `contain` alone
+/// kept whatever height the column offered, which is what put a landscape photo
+/// between two large charcoal bands. A null [aspect] (not decoded yet) falls
+/// back to the common landscape shape so the first frame is never wildly wrong.
+double pwaPhotoImageHeight({
+  required double width,
+  required double? aspect,
+  required double available,
+}) {
+  const minImage = 180.0;
+  const maxImage = 620.0;
+  final a = (aspect == null || !aspect.isFinite || aspect <= 0)
+      ? 4 / 3
+      : aspect;
+  final cap = available.isFinite ? available : maxImage;
+  return (width / a).clamp(minImage, cap.clamp(minImage, maxImage));
+}
+
+/// The chosen photo, occupying the drop zone's place — at the ratio the source
+/// actually has.
+///
+/// `contain` alone was not enough: the card kept whatever height the column gave
+/// it, so a landscape photo sat in a tall box between two large charcoal bands.
+/// The card now measures the decoded image and asks for the height that ratio
+/// needs, clamped so a very tall portrait can never push the page off screen.
+/// Portraits are still shown whole on charcoal — never cropped, never on white.
+class _PhotoPanel extends StatefulWidget {
   const _PhotoPanel({
     required this.bytes,
     required this.onReplace,
     required this.onRemove,
-    this.fillHeight = false,
   });
   final Uint8List bytes;
   final VoidCallback onReplace;
   final VoidCallback onRemove;
 
-  /// Desktop — the photo is the hero of this screen and fills the column height.
-  final bool fillHeight;
+  @override
+  State<_PhotoPanel> createState() => _PhotoPanelState();
+}
+
+class _PhotoPanelState extends State<_PhotoPanel> {
+  /// width / height of the decoded source. Null until the first frame decodes.
+  double? _aspect;
+  ImageStream? _stream;
+  ImageStreamListener? _listener;
+
+  static const double _barHeight = 46;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PhotoPanel old) {
+    super.didUpdateWidget(old);
+    if (!identical(old.bytes, widget.bytes)) {
+      _aspect = null;
+      _resolve();
+    }
+  }
+
+  void _detach() {
+    if (_stream != null && _listener != null) {
+      _stream!.removeListener(_listener!);
+    }
+    _stream = null;
+    _listener = null;
+  }
+
+  void _resolve() {
+    _detach();
+    final stream = MemoryImage(
+      widget.bytes,
+    ).resolve(const ImageConfiguration());
+    final listener = ImageStreamListener((info, _) {
+      final a = info.image.width / info.image.height;
+      if (mounted && a.isFinite && a > 0 && a != _aspect) {
+        setState(() => _aspect = a);
+      }
+    }, onError: (_, _) {});
+    stream.addListener(listener);
+    _stream = stream;
+    _listener = listener;
+  }
+
+  @override
+  void dispose() {
+    _detach();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final actions = Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Wrap(
-        spacing: 18,
-        runSpacing: 6,
-        children: [
-          _MiniAction(
-            icon: Icons.sync,
-            label: 'Replace photo',
-            onTap: onReplace,
-          ),
-          _MiniAction(
-            icon: Icons.delete_outline,
-            label: 'Remove photo',
-            onTap: onRemove,
-          ),
-        ],
-      ),
-    );
-
-    if (fillHeight) {
-      // The frame fills all remaining vertical space (contain → the whole photo
-      // stays visible, aspect preserved); the actions sit compactly beneath.
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: _PhotoFrame(key: const ValueKey('pwaPhoto'), bytes: bytes),
-          ),
-          actions,
-        ],
-      );
-    }
-
     return LayoutBuilder(
       builder: (context, c) {
         final w = c.hasBoundedWidth ? c.maxWidth : 480.0;
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: w,
-              height: w * 3 / 4, // 4:3 — large, dominant on mobile
-              child: _PhotoFrame(key: const ValueKey('pwaPhoto'), bytes: bytes),
+        final imageH = pwaPhotoImageHeight(
+          width: w,
+          aspect: _aspect,
+          available: c.hasBoundedHeight && c.maxHeight.isFinite
+              ? c.maxHeight - _barHeight
+              : double.infinity,
+        );
+        return SizedBox(
+          height: imageH + _barHeight,
+          child: ClipRRect(
+            key: const ValueKey('pwaPhoto'),
+            borderRadius: BorderRadius.circular(PwaGap.radiusLg),
+            child: ColoredBox(
+              color: pwaCharcoal,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Center(
+                      child: Image.memory(
+                        widget.bytes,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) =>
+                            const ColoredBox(color: pwaCharcoal),
+                      ),
+                    ),
+                  ),
+                  Container(
+                    height: _barHeight,
+                    color: pwaBlack.withValues(alpha: 0.62),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    // Both actions stay whole on a narrow card: they share the
+                    // width and scale together rather than one being clipped.
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: _MiniAction(
+                                icon: Icons.sync,
+                                label: 'Replace photo',
+                                onTap: widget.onReplace,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: _MiniAction(
+                                icon: Icons.delete_outline,
+                                label: 'Remove photo',
+                                onTap: widget.onRemove,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-            actions,
-          ],
+          ),
         );
       },
     );
@@ -2245,6 +1683,7 @@ class _SelectionLevel extends StatelessWidget {
     required this.onToggle,
     required this.popularController,
     required this.optionalController,
+    required this.cardWidth,
     required this.cardHeight,
     required this.popularCards,
     required this.optionalCards,
@@ -2262,6 +1701,7 @@ class _SelectionLevel extends StatelessWidget {
   final VoidCallback onToggle;
   final ScrollController popularController;
   final ScrollController optionalController;
+  final double cardWidth;
   final double cardHeight;
   final List<Widget> popularCards;
   final List<Widget> optionalCards;
@@ -2302,6 +1742,7 @@ class _SelectionLevel extends StatelessWidget {
         _CarouselRow(
           key: ValueKey('$rowKey-popular'),
           controller: popularController,
+          cardWidth: cardWidth,
           cardHeight: cardHeight,
           cards: popularCards,
           showArrows: showArrows,
@@ -2332,6 +1773,7 @@ class _SelectionLevel extends StatelessWidget {
                       _CarouselRow(
                         key: ValueKey('$rowKey-optional'),
                         controller: optionalController,
+                        cardWidth: cardWidth,
                         cardHeight: cardHeight,
                         cards: optionalCards,
                         showArrows: showArrows,
@@ -2354,11 +1796,13 @@ class _CarouselRow extends StatefulWidget {
   const _CarouselRow({
     super.key,
     required this.controller,
+    required this.cardWidth,
     required this.cardHeight,
     required this.cards,
     required this.showArrows,
   });
   final ScrollController controller;
+  final double cardWidth;
   final double cardHeight;
   final List<Widget> cards;
   final bool showArrows;
@@ -2368,7 +1812,7 @@ class _CarouselRow extends StatefulWidget {
 }
 
 class _CarouselRowState extends State<_CarouselRow> {
-  static const double _extent = kPwaCardW + 12; // card width + gap
+  double get _extent => widget.cardWidth + kPwaCardGap;
 
   @override
   void initState() {
@@ -2602,57 +2046,59 @@ class _MoreButton extends StatelessWidget {
 
 // ── Generate ─────────────────────────────────────────────────────────────────
 
+/// The single primary CTA. A null [onGenerate] renders it visibly present but
+/// genuinely disabled — the pre-upload state shows where the journey ends
+/// without ever pretending to be clickable.
 class _GenerateArea extends StatelessWidget {
   const _GenerateArea({required this.onGenerate});
-  final VoidCallback onGenerate;
+  final VoidCallback? onGenerate;
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Material(
-          color: pwaGold,
+    final enabled = onGenerate != null;
+    final fg = enabled ? pwaBlack : pwaOnDark.withValues(alpha: 0.38);
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: 'Generate my vision',
+      child: Material(
+        color: enabled ? pwaGold : Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          key: const ValueKey('pwa-generate'),
           borderRadius: BorderRadius.circular(999),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(999),
-            onTap: onGenerate,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Flexible(
-                    child: Text(
-                      'Generate my vision',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: pwaSans(
-                        fontSize: 15.5,
-                        color: pwaBlack,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
-                      ),
+          onTap: onGenerate,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              border: enabled
+                  ? null
+                  : Border.all(color: Colors.white.withValues(alpha: 0.10)),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    'Generate my vision',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: pwaSans(
+                      fontSize: 15.5,
+                      color: fg,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.2,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  const Icon(Icons.auto_awesome, size: 18, color: pwaBlack),
-                ],
-              ),
+                ),
+                const SizedBox(width: 10),
+                Icon(Icons.auto_awesome, size: 18, color: fg),
+              ],
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        Text(
-          'First vision free · No account required',
-          textAlign: TextAlign.center,
-          style: pwaSans(
-            fontSize: 12.5,
-            color: pwaOnDark.withValues(alpha: 0.55),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

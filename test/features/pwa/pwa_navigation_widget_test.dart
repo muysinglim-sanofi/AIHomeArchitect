@@ -140,7 +140,7 @@ void main() {
       // Second Back must reach Home — not bounce back into the project.
       bridge.back();
       await tester.pump();
-      expect(container.read(pwaControllerProvider).phase, PwaPhase.entry);
+      expect(container.read(pwaControllerProvider).phase, PwaPhase.home);
       expect(bridge.current().path, '/');
     },
   );
@@ -179,13 +179,13 @@ void main() {
     },
   );
 
-  testWidgets('INTRO06: the final hero shows a "Replay intro" control', (
+  testWidgets('INTRO06: the dashboard offers a "See how it works" control', (
     tester,
   ) async {
     await _pump(tester);
     await tester.pump(const Duration(milliseconds: 400)); // settle opacity
     expect(find.byKey(_replayKey), findsOneWidget);
-    expect(find.text('Replay intro'), findsOneWidget);
+    expect(find.text('See how it works'), findsOneWidget);
   });
 
   testWidgets('INTRO07: tapping Replay stays on Home and keeps projects', (
@@ -197,7 +197,7 @@ void main() {
     await tester.tap(find.byKey(_replayKey));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
-    expect(container.read(pwaControllerProvider).phase, PwaPhase.entry);
+    expect(container.read(pwaControllerProvider).phase, PwaPhase.home);
     expect(container.read(pwaControllerProvider).library, hasLength(libBefore));
     expect(bridge.current().path, '/'); // never leaves Home
     // Repeatable — a second replay must not throw.

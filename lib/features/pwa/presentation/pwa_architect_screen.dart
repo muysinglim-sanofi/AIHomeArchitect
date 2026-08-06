@@ -10,20 +10,212 @@
 library;
 
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/pwa_controller.dart';
 import '../domain/pwa_models.dart';
+import '../domain/pwa_project.dart';
 import 'pwa_architect_tokens.dart';
 import 'pwa_brand.dart';
-import 'pwa_widgets.dart';
 
 // V7 responsive tiers (§4). Local to the Architect so the shared
 // `pwaFormFactorForWidth` (used by the frozen entry screen) stays untouched.
-bool _isDesktopW(double w) => w >= 1200;
 bool _isMobileW(double w) => w < 768;
+
+/// Maximum measure of the conversation column. Wide screens buy comfort, not a
+/// wider line of text.
+const double kPwaChatColumnMax = 880;
+
+/// Maximum width of the desktop chat workspace surface that holds the header,
+/// the thread and the composer together.
+const double kPwaChatShellMax = 1080;
+
+/// The desktop conversation plate: LIGHT warm glass — white-ivory, barely
+/// there. The room behind is the surface; the plate only warms and diffuses it.
+const Color kPwaGlassTop = Color(0xFFFFFBF7);
+const Color kPwaGlassBottom = Color(0xFFF6E8D8);
+
+/// The warm dark accent used on the NARROW-window layout, where the chat sits
+/// straight on the cream veil and the pills / composer bring their own contrast.
+/// Kept separate from the plate so lightening desktop cannot touch mobile.
+const Color kPwaWarmAccent = Color(0xFF211711);
+
+/// The desktop plate, in numbers. These are the whole fix: at 0.44 the plate
+/// was still a milky rectangle whatever the blur was set to, because opacity —
+/// not blur — is what hides a room. At 0.18/0.10 the sofa reads through the
+/// middle of the glass. Do not raise them to "improve contrast": legibility
+/// belongs to the bubbles, the Vision card and the input field, each of which
+/// carries its own surface.
+const double kPwaDesktopBackdropBlur = 4.5;
+const double kPwaDesktopBackdropVeilAlpha = 0.07;
+
+const double kPwaDesktopGlassBlur = 18.0;
+const double kPwaDesktopGlassTopAlpha = 0.18;
+const double kPwaDesktopGlassBottomAlpha = 0.10;
+const double kPwaDesktopGlassBorderAlpha = 0.34;
+
+/// How much the room behind the NARROW-window layout is softened. Desktop has
+/// its own blur above; this one is mobile's and must not follow it.
+const double kPwaBackdropBlur = 6;
+
+/// Gold used for the plate edge, the divider and the pill outlines.
+const Color kPwaGlassEdge = Color(0xFFD7B968);
+
+/// What Ayden says stays cream — the bubbles carry the legibility.
+const Color kPwaWarmBubble = Color(0xFFFFF7EC);
+
+/// Ink on the warm dark accents of the narrow-window layout.
+const Color kPwaOnGlass = Color(0xFFF3E9DC);
+const Color kPwaOnGlassSoft = Color(0xB3F3E9DC);
+
+/// Ink on the light desktop plate.
+const Color kPwaOnPlate = av7Ink;
+const Color kPwaOnPlateSoft = Color(0xC2201B17);
+
+/// A hairline on glass: white, barely there. A gold or dark rule reads as a
+/// drawn border and gives the plate back the "panel" look this pass removed.
+class _V7GlassDivider extends StatelessWidget {
+  const _V7GlassDivider();
+
+  @override
+  Widget build(BuildContext context) =>
+      Container(height: 1, color: Colors.white.withValues(alpha: 0.22));
+}
+
+/// The Warm Modern room, full-bleed, painted FIRST so the glass above it has
+/// something to refract. It is the bottom layer of the desktop Stack — nothing
+/// between it and the plate is allowed to paint a fill.
+class _DesktopWarmModernBackground extends StatelessWidget {
+  const _DesktopWarmModernBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      key: const ValueKey('av7-warm-modern-backdrop'),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // The scale hides the transparent fringe a blur leaves at the edges.
+          Transform.scale(
+            scale: 1.04,
+            child: ImageFiltered(
+              imageFilter: ui.ImageFilter.blur(
+                sigmaX: kPwaDesktopBackdropBlur,
+                sigmaY: kPwaDesktopBackdropBlur,
+              ),
+              child: Image.asset(
+                _kV7ChatBackdrop,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                filterQuality: FilterQuality.high,
+                errorBuilder: (_, _, _) => const ColoredBox(color: av7DarkBg),
+              ),
+            ),
+          ),
+          ColoredBox(
+            color: const Color(
+              0xFF160F0B,
+            ).withValues(alpha: kPwaDesktopBackdropVeilAlpha),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The desktop conversation plate — ONE layer of light glass, and nothing else.
+///
+/// This replaces the old brown panel outright rather than tinting it: a single
+/// leftover opaque fill anywhere between the photo and here cancels the whole
+/// effect, so the composition is deliberately flat — shadow, clip, backdrop
+/// filter, one translucent gradient, a transparent [Material] for the ink.
+class _DesktopLightGlassChatShell extends StatelessWidget {
+  const _DesktopLightGlassChatShell({required this.child});
+
+  final Widget child;
+
+  static const BorderRadius _radius = BorderRadius.all(Radius.circular(24));
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('av7-glass-chat-shell'),
+      decoration: BoxDecoration(
+        borderRadius: _radius,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.22),
+            blurRadius: 36,
+            offset: const Offset(0, 18),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: _radius,
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(
+            sigmaX: kPwaDesktopGlassBlur,
+            sigmaY: kPwaDesktopGlassBlur,
+          ),
+          blendMode: BlendMode.srcOver,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: _radius,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  kPwaGlassTop.withValues(alpha: kPwaDesktopGlassTopAlpha),
+                  kPwaGlassBottom.withValues(
+                    alpha: kPwaDesktopGlassBottomAlpha,
+                  ),
+                ],
+              ),
+              border: Border.all(
+                color: Colors.white.withValues(
+                  alpha: kPwaDesktopGlassBorderAlpha,
+                ),
+                width: 1,
+              ),
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              child: _V7OnLightGlass(child: child),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Marks the subtree that paints on the light desktop plate. The feed, the
+/// guidance, the pills and the composer are shared verbatim with the narrow
+/// window, so the surface tells them which ink to use instead of every private
+/// builder carrying a `light:` argument down the tree.
+class _V7OnLightGlass extends InheritedWidget {
+  const _V7OnLightGlass({required super.child});
+
+  static bool of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_V7OnLightGlass>() != null;
+
+  @override
+  bool updateShouldNotify(_V7OnLightGlass oldWidget) => false;
+}
+
+/// Left gutter of the conversation grid — the width of the Ayden avatar plus its
+/// gap. EVERY Ayden-side element starts here: bubbles, vision card, guidance and
+/// quick actions, so the thread reads on one axis instead of three.
+const double kPwaChatGutter = 42;
+
+/// The render IS the payoff of Generate: it takes nearly the whole conversation
+/// column. Capped in height so the actions, Ayden's reply and the composer still
+/// belong to the same screen.
+const double kPwaVisionMaxWidth = 820;
+const double kPwaVisionMaxHeight = 470;
 
 class PwaArchitectScreen extends ConsumerStatefulWidget {
   const PwaArchitectScreen({super.key});
@@ -34,14 +226,11 @@ class PwaArchitectScreen extends ConsumerStatefulWidget {
 
 class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
   final _chatScroll = ScrollController();
+  // Owned here so "Refine with Ayden" can hand the user a ready composer.
+  final _composerFocus = FocusNode();
   final Map<String, GlobalKey> _visionKeys = {};
-  // §13 — a stable target for the mobile/tablet Full Reveal so a Vision card can
-  // scroll the single feed back up to it.
-  final _mobileRevealKey = GlobalKey(debugLabel: 'mobile-full-reveal');
   String? _highlightVersionId;
   Timer? _highlightTimer;
-  bool _revealPulse = false; // §16 — temporary Full-Reveal focus emphasis
-  Timer? _revealPulseTimer;
 
   PwaController get _c => ref.read(pwaControllerProvider.notifier);
 
@@ -49,6 +238,20 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
     versionId,
     () => GlobalKey(debugLabel: versionId),
   );
+
+  @override
+  void initState() {
+    super.initState();
+    // Arriving from the Full Reveal ("Back to conversation" / "Open in
+    // conversation") carries the vision that was being explored: scroll its
+    // message into view and mark it, so the return lands ON that render instead
+    // of at the bottom of the thread.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final id = ref.read(pwaControllerProvider).previewVisionId;
+      if (id != null) _revealVision(id);
+    });
+  }
 
   void _scrollChatToBottom() {
     if (!_chatScroll.hasClients) return;
@@ -85,65 +288,13 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
     });
   }
 
-  /// §12/§13 — mobile/tablet: preview a Vision, then scroll the single feed back
-  /// up to the Full Reveal (it is the feed's first item) and pulse its frame.
-  /// Creates no version, changes no lineage.
-  Future<void> _openVisionInReveal(String versionId) async {
-    _c.previewVision(versionId);
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted || !_chatScroll.hasClients) return;
-    final reduce = MediaQuery.of(context).disableAnimations;
-    // Prefer the precise Full-Reveal target (below the sticky header); fall back
-    // to the top of the feed (the reveal is its first item).
-    final ctx = _mobileRevealKey.currentContext;
-    if (ctx != null && ctx.mounted) {
-      await Scrollable.ensureVisible(
-        ctx,
-        alignment: 0.0,
-        duration: reduce ? Duration.zero : Av7Motion.page,
-        curve: Av7Motion.curve,
-      );
-    } else if (reduce) {
-      _chatScroll.jumpTo(0);
-    } else {
-      await _chatScroll.animateTo(
-        0,
-        duration: Av7Motion.page,
-        curve: Av7Motion.curve,
-      );
-    }
-    _pulseReveal();
-  }
-
-  void _pulseReveal() {
-    if (!mounted) return;
-    final reduce = MediaQuery.of(context).disableAnimations;
-    _revealPulseTimer?.cancel();
-    setState(() => _revealPulse = true);
-    _revealPulseTimer = Timer(Duration(milliseconds: reduce ? 250 : 800), () {
-      if (mounted) setState(() => _revealPulse = false);
-    });
-  }
-
-  void _prevVision() {
-    _c.previewPrevious();
-    final id = ref.read(pwaControllerProvider).previewedVision?.versionId;
-    if (id != null) _revealVision(id);
-  }
-
-  void _nextVision() {
-    _c.previewNext();
-    final id = ref.read(pwaControllerProvider).previewedVision?.versionId;
-    if (id != null) _revealVision(id);
-  }
-
   void _onQuickAction(String action) => _c.sendUserText(action);
 
   @override
   void dispose() {
     _highlightTimer?.cancel();
-    _revealPulseTimer?.cancel();
     _chatScroll.dispose();
+    _composerFocus.dispose();
     super.dispose();
   }
 
@@ -152,171 +303,195 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
     ref.listen(pwaControllerProvider.select((s) => s.messages.length), (_, _) {
       _scrollChatToBottom();
     });
+    // Arriving with a refinement intent: put the caret where the user must type.
+    ref.listen(pwaControllerProvider.select((s) => s.refineContextVisionId), (
+      prev,
+      next,
+    ) {
+      if (next != null && next != prev) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _composerFocus.requestFocus();
+        });
+      }
+    });
     final state = ref.watch(pwaControllerProvider);
 
     return Scaffold(
-      backgroundColor: av7DarkBg,
+      // Transparent: the Warm Modern photo is the bottom layer, and no surface
+      // between it and the glass is allowed to paint over it.
+      backgroundColor: Colors.transparent,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, c) {
-            return _isDesktopW(c.maxWidth)
-                ? _desktop(context, state, c.maxWidth, c.maxHeight)
-                : _stacked(context, state, c.maxWidth, c.maxHeight);
+            return _chat(context, state, c.maxWidth, c.maxHeight);
           },
         ),
       ),
     );
   }
 
-  // ── Desktop — two-pane studio (§5–§13) ──────────────────────────────────────
+  // ── One screen, one purpose: the conversation ───────────────────────────────
 
-  Widget _desktop(BuildContext context, PwaState state, double w, double h) {
-    const headerH = 72.0;
-    final bodyH = h - headerH;
-    final chatW = (w * 0.335).clamp(440.0, 520.0);
-
-    return Column(
-      children: [
-        _V7GlobalHeader(
-          compact: false,
-          shownNumber: state.previewedIndex + 1,
-          total: state.versionCount,
-          hasPrev: state.hasPreviousVision,
-          hasNext: state.hasNextVision,
-          onBack: _c.returnToStudio,
-          onProjects: _c.openLibrary,
-          onPrev: _prevVision,
-          onNext: _nextVision,
-        ),
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // LEFT — dominant design canvas on warm charcoal.
-              Expanded(
-                child: _V7DesignCanvas(
-                  state: state,
-                  controller: _c,
-                  bodyHeight: bodyH,
-                ),
-              ),
-              // RIGHT — Ayden Architect conversation on warm ivory (§12).
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 16, 16, 16),
-                child: SizedBox(
-                  width: chatW,
-                  child: _V7ChatPanel(
-                    state: state,
-                    scroll: _chatScroll,
-                    shownNumber: state.previewedIndex + 1,
-                    total: state.versionCount,
-                    hasPrev: state.hasPreviousVision,
-                    hasNext: state.hasNextVision,
-                    onPrev: _prevVision,
-                    onNext: _nextVision,
-                    messages: _chatMessages(state, stacked: false),
-                    onSend: _c.sendUserText,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── Tablet + mobile — one chronological feed (§28–§29) ──────────────────────
-
-  Widget _stacked(BuildContext context, PwaState state, double w, double h) {
+  /// Chat-first. The Full Reveal, the atmosphere rail and the vision navigator
+  /// all live on `/reveal` now, so nothing here competes with the conversation.
+  ///
+  /// Desktop gets a real WORKSPACE: a bounded surface holding the project header,
+  /// the scrolling thread and the composer, floating on the warm backdrop. The
+  /// previous full-height column read as a gallery adrift in empty space.
+  Widget _chat(BuildContext context, PwaState state, double w, double h) {
     final mobile = _isMobileW(w);
-    return Column(
-      children: [
-        _V7GlobalHeader(
-          compact: true,
-          shownNumber: state.previewedIndex + 1,
-          total: state.versionCount,
-          hasPrev: state.hasPreviousVision,
-          hasNext: state.hasNextVision,
-          onBack: _c.returnToStudio,
-          onProjects: _c.openLibrary,
-          onPrev: _prevVision,
-          onNext: _nextVision,
+    final desktop = w >= 1200;
+    // ONE measure: the shell is the column plus its gutters, so the internal
+    // header, every message, the guidance and the composer share a single left
+    // edge instead of three.
+    const gutter = 40.0;
+    final columnW = desktop
+        ? (w.clamp(0.0, kPwaChatShellMax) - gutter * 2).clamp(
+            0.0,
+            kPwaChatColumnMax,
+          )
+        : w.clamp(0.0, kPwaChatColumnMax);
+
+    // Keep a floor under the render on very short windows, but let it be big:
+    // shrinking it to a third of the thread made the result look incidental.
+    final visionMaxH = (h - 300).clamp(300.0, kPwaVisionMaxHeight);
+
+    Widget feed() => ColoredBox(
+      key: const ValueKey('av7-chat-feed'),
+      color: Colors.transparent,
+      child: ListView(
+        controller: _chatScroll,
+        // The conversation is short; keep every message laid out so
+        // navigation / highlight never targets an unbuilt row.
+        cacheExtent: 4000,
+        padding: EdgeInsets.fromLTRB(
+          desktop ? 0 : (mobile ? 12 : 20),
+          16,
+          desktop ? 0 : (mobile ? 12 : 20),
+          // Breathing room: the last message is never under the composer.
+          24,
         ),
-        Expanded(
-          child: _V7ChatBackdrop(
-            child: ListView(
-              controller: _chatScroll,
-              cacheExtent: 4000,
-              padding: EdgeInsets.fromLTRB(
-                mobile ? 12 : 20,
-                12,
-                mobile ? 12 : 20,
-                16,
+        children: [
+          ..._chatMessages(state, visionMaxH),
+          SizedBox(height: MediaQuery.viewPaddingOf(context).bottom + 8),
+        ],
+      ),
+    );
+
+    // The composer and the refinement context it belongs to are one block.
+    Widget composer() {
+      final refine = state.refineContextVision;
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (refine != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: _V7RefineContextBar(
+                vision: refine,
+                onCancel: _c.clearRefineContext,
               ),
-              children: [
-                // The Full Reveal is the first rich visual item (§28) and the
-                // scroll target for Vision-card taps (§13).
-                _V7RevealFrame(
-                  key: _mobileRevealKey,
-                  highlighted: _revealPulse,
-                  child: PwaRevealCard(
-                    vision: state.previewedVision!,
-                    source: state.source,
-                    project: state.project,
-                    aspectRatio: mobile ? 4 / 3 : 16 / 10,
-                    onDark: true,
-                    showCaption: false,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                _V7Metadata(
-                  vision: state.previewedVision!,
-                  atmosphereName: _atmoNameOf(
-                    state,
-                    state.previewedVision!.atmosphereId,
-                  ),
-                ),
-                if (state.isPreviewingOther) ...[
-                  const SizedBox(height: 10),
-                  _V7PreviewActions(state: state, controller: _c),
-                ],
-                const SizedBox(height: 20),
-                _V7AtmosphereBlock(
-                  state: state,
-                  controller: _c,
-                  cardWidth: mobile ? 132 : 156,
-                ),
-                if (state.pendingAtmosphereId != null) ...[
-                  const SizedBox(height: 12),
-                  _V7PendingBar(state: state, controller: _c, inset: false),
-                ],
-                const SizedBox(height: 20),
-                const _V7FeedDivider(),
-                const SizedBox(height: 12),
-                ..._chatMessages(state, stacked: true),
-                // §17 — keep the last result clear of the fixed composer.
-                SizedBox(height: MediaQuery.viewPaddingOf(context).bottom + 20),
-              ],
+            ),
+          _V7Composer(
+            enabled: !state.generating,
+            focusNode: _composerFocus,
+            onSend: _c.sendUserText,
+          ),
+        ],
+      );
+    }
+
+    if (!desktop) {
+      // Mobile / tablet keep the single flowing column that already works.
+      return Column(
+        children: [
+          _V7GlobalHeader(
+            compact: mobile,
+            onBack: _c.openHome,
+            onProjects: _c.openLibrary,
+          ),
+          Expanded(
+            child: _V7ChatBackdrop(
+              child: Center(
+                child: SizedBox(width: columnW, child: feed()),
+              ),
             ),
           ),
+          Center(
+            child: SizedBox(width: columnW, child: composer()),
+          ),
+        ],
+      );
+    }
+
+    // The mandatory hierarchy: the room is painted into the SAME Stack, BELOW
+    // the plate, so the BackdropFilter has real pixels to sample. Nothing in
+    // between carries a fill.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const _DesktopWarmModernBackground(),
+        Column(
+          children: [
+            _V7GlobalHeader(
+              compact: false,
+              onBack: _c.openHome,
+              onProjects: _c.openLibrary,
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: kPwaChatShellMax,
+                    ),
+                    child: _DesktopLightGlassChatShell(
+                      child: Center(
+                        child: SizedBox(
+                          width: columnW,
+                          child: Column(
+                            children: [
+                              _V7ConversationHeader(state: state),
+                              const _V7GlassDivider(),
+                              Expanded(child: feed()),
+                              const _V7GlassDivider(),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: composer(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-        _V7Composer(enabled: !state.generating, onSend: _c.sendUserText),
       ],
     );
   }
 
   // ── Shared chat chronology builder ──────────────────────────────────────────
 
-  List<Widget> _chatMessages(PwaState state, {required bool stacked}) {
+  List<Widget> _chatMessages(PwaState state, double visionMaxH) {
     final out = <Widget>[];
     for (final m in state.messages) {
-      out.addAll(_messageWidgets(state, m, stacked));
+      out.addAll(_messageWidgets(state, m, visionMaxH));
     }
     return out;
   }
 
-  List<Widget> _messageWidgets(PwaState state, PwaMessage m, bool stacked) {
+  List<Widget> _messageWidgets(
+    PwaState state,
+    PwaMessage m,
+    double visionMaxH,
+  ) {
     switch (m.kind) {
       case PwaMessageKind.loading:
         return const [_V7ChatGap(), _V7InlineGenerating()];
@@ -344,35 +519,63 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
       case PwaMessageKind.reveal:
         final vision = _visionFor(state, m.visionId);
         if (vision == null) return const [];
-        final isWorkspace =
-            vision.versionId == state.previewedVision?.versionId;
         final isCurrentReveal =
             vision.versionId == state.currentVision?.versionId;
-        return [
-          const _V7ChatGap(),
-          // §18/§12/§19 — full-width rich vision result card. Tapping it previews
-          // the vision; on the stacked feed it also scrolls up to the Full Reveal
-          // and shows a "View in Full Reveal" affordance (desktop needs neither,
-          // the reveal is beside the chat).
-          _V7VisionCard(
-            key: _visionKey(vision.versionId),
-            vision: vision,
-            atmosphereName: _atmoNameOf(state, vision.atmosphereId),
-            inWorkspace: isWorkspace,
-            highlighted: _highlightVersionId == vision.versionId,
-            showRevealAffordance: stacked,
-            onTap: stacked
-                ? () => _openVisionInReveal(vision.versionId)
-                : () => _c.previewVision(vision.versionId),
-          ),
-          const SizedBox(height: 10),
-          // §19 — a short Ayden explanation follows the result.
-          _V7AydenBubble(text: m.text),
-          // §19/§20 — quick actions under the CURRENT vision's explanation.
+        final card = _V7VisionCard(
+          key: _visionKey(vision.versionId),
+          vision: vision,
+          atmosphereName: _atmoNameOf(state, vision.atmosphereId),
+          highlighted: _highlightVersionId == vision.versionId,
+          maxImageHeight: visionMaxH,
+          onOpenReveal: () => _c.openReveal(vision.versionId),
+          onRefine: () =>
+              _c.sendUserText('Refine Vision ${vision.visionNumber}'),
+          onTryAtmosphere: () => _c.openReveal(vision.versionId),
+        );
+        // Guidance: after a result nobody should wonder what to do next.
+        final guidance = <Widget>[
           if (isCurrentReveal && !state.generating) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
+            const _V7ChangePrompt(),
+            const SizedBox(height: 10),
             _V7QuickActions(chips: _defaultQuickActions, onTap: _onQuickAction),
           ],
+        ];
+
+        // The FIRST vision leads: the user has just generated an image, so the
+        // image is what greets them — Ayden's commentary follows it. This is a
+        // presentation order only; the stored chronology is untouched.
+        if (vision.visionNumber == 1) {
+          return [
+            const _V7ChatGap(),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                card,
+                if (m.text.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  _V7AydenGroup(children: [_V7AydenSpeech(text: m.text)]),
+                ],
+                ...guidance,
+              ],
+            ),
+          ];
+        }
+
+        // Later visions stay strictly chronological: Ayden answers, then shows.
+        return [
+          const _V7ChatGap(),
+          _V7AydenGroup(
+            children: [
+              if (m.text.isNotEmpty) ...[
+                _V7AydenSpeech(text: m.text),
+                const SizedBox(height: 10),
+              ],
+              card,
+              ...guidance,
+            ],
+          ),
         ];
     }
   }
@@ -410,79 +613,6 @@ IconData _chipIcon(String label) {
 // LEFT DESIGN CANVAS (§7–§11)
 // ════════════════════════════════════════════════════════════════════════════
 
-class _V7DesignCanvas extends StatelessWidget {
-  const _V7DesignCanvas({
-    required this.state,
-    required this.controller,
-    required this.bodyHeight,
-  });
-  final PwaState state;
-  final PwaController controller;
-  final double bodyHeight;
-
-  @override
-  Widget build(BuildContext context) {
-    final shown = state.previewedVision;
-    if (shown == null) return const SizedBox.shrink();
-    // §7/§8/§33 — reveal height ≈ 60vh, clamped so Atmospheres stay above fold.
-    final revealH = (bodyHeight * 0.66).clamp(470.0, 620.0);
-
-    return Column(
-      children: [
-        Expanded(
-          // §8 — the left canvas is its own vertical scroll; the Reveal stays
-          // dominant and the Atmosphere row is always reachable (never clipped),
-          // with a comfortable bottom padding after the last card labels.
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 16, 20, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                LayoutBuilder(
-                  builder: (context, c) {
-                    // Exact aspect so the RevealHero renders at ~revealH tall
-                    // regardless of the pane width (8px frame inset each side).
-                    final aspect = (c.maxWidth - 16) / revealH;
-                    return _V7RevealFrame(
-                      child: PwaRevealCard(
-                        vision: shown,
-                        source: state.source,
-                        project: state.project,
-                        aspectRatio: aspect,
-                        onDark: true,
-                        showCaption: false,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 10),
-                _V7Metadata(
-                  vision: shown,
-                  atmosphereName: _atmoNameOf(state, shown.atmosphereId),
-                ),
-                if (state.isPreviewingOther) ...[
-                  const SizedBox(height: 10),
-                  _V7PreviewActions(state: state, controller: controller),
-                ],
-                const SizedBox(height: 24),
-                _V7AtmosphereBlock(
-                  state: state,
-                  controller: controller,
-                  cardWidth: 156,
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        ),
-        // §11 — the atmosphere pending confirmation is a full-width footer bar.
-        if (state.pendingAtmosphereId != null)
-          _V7PendingBar(state: state, controller: controller, inset: true),
-      ],
-    );
-  }
-}
-
 String _atmoNameOf(PwaState state, String? id) {
   for (final a in state.atmospheres) {
     if (a.id == id) return a.name;
@@ -490,505 +620,7 @@ String _atmoNameOf(PwaState state, String? id) {
   return 'Ayden Signature';
 }
 
-/// §6.3/§8 — dark, gold-edged frame around the Full Reveal. When [highlighted]
-/// (arriving from a Vision-card tap, §16) the gold edge briefly intensifies.
-class _V7RevealFrame extends StatelessWidget {
-  const _V7RevealFrame({
-    super.key,
-    required this.child,
-    this.highlighted = false,
-  });
-  final Widget child;
-  final bool highlighted;
-  @override
-  Widget build(BuildContext context) {
-    // §16 — respect reduced motion: the highlight snaps (no fade) instead of
-    // animating the gold edge in and out.
-    final reduce = MediaQuery.of(context).disableAnimations;
-    return AnimatedContainer(
-      duration: reduce ? Duration.zero : Av7Motion.component,
-      curve: Av7Motion.curve,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: av7Reveal,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: av7Gold.withValues(alpha: highlighted ? 0.95 : 0.35),
-          width: highlighted ? 2 : 1,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x40000000),
-            blurRadius: 26,
-            offset: Offset(0, 12),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
-}
-
-/// §9 — one clean metadata strip beneath the reveal.
-class _V7Metadata extends StatelessWidget {
-  const _V7Metadata({required this.vision, required this.atmosphereName});
-  final PwaVision vision;
-  final String atmosphereName;
-  @override
-  Widget build(BuildContext context) {
-    Widget dot() => Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Text(
-        '•',
-        style: av7Sans(fontSize: 13, color: av7Gold.withValues(alpha: 0.75)),
-      ),
-    );
-    return Container(
-      height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: av7MetaBg,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          const PwaLogoBadge(size: 24),
-          const SizedBox(width: 10),
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Vision ${vision.visionNumber}',
-                    maxLines: 1,
-                    style: av7Sans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: av7Gold,
-                    ),
-                  ),
-                  dot(),
-                  Text(
-                    atmosphereName,
-                    maxLines: 1,
-                    style: av7Sans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: av7OnDarkSoft,
-                    ),
-                  ),
-                  dot(),
-                  Text(
-                    'Created just now',
-                    maxLines: 1,
-                    style: av7Sans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: av7OnDarkSoft,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Slim "previewing an older vision" affordance (§25) — Back to current.
-class _V7PreviewActions extends StatelessWidget {
-  const _V7PreviewActions({required this.state, required this.controller});
-  final PwaState state;
-  final PwaController controller;
-  @override
-  Widget build(BuildContext context) {
-    final v = state.previewedVision!;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 8, 10),
-      decoration: BoxDecoration(
-        color: av7RevealRaised.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: av7Gold.withValues(alpha: 0.28)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Previewing Vision ${v.visionNumber} · ${v.reasonLabel}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: av7Sans(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: av7OnDark,
-                  ),
-                ),
-              ),
-              TextButton(
-                onPressed: controller.clearPreview,
-                style: TextButton.styleFrom(foregroundColor: av7Gold),
-                child: const Text('Back to current'),
-              ),
-            ],
-          ),
-          // §25 — version actions for the previewed vision (existing semantics).
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _V7PreviewActionButton(
-                icon: Icons.check_circle_outline,
-                label: 'Set as current',
-                onTap: () => controller.setCurrentVision(v.versionId),
-              ),
-              _V7PreviewActionButton(
-                icon: Icons.alt_route_rounded,
-                label: 'Continue from this vision',
-                onTap: () => controller.continueFromVision(v.versionId),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _V7PreviewActionButton extends StatelessWidget {
-  const _V7PreviewActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, size: 15, color: av7OnDark),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: av7OnDark,
-        side: BorderSide(color: av7Gold.withValues(alpha: 0.4)),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-}
-
 // ── Atmosphere (§10) ─────────────────────────────────────────────────────────
-
-class _V7AtmosphereBlock extends StatelessWidget {
-  const _V7AtmosphereBlock({
-    required this.state,
-    required this.controller,
-    required this.cardWidth,
-  });
-  final PwaState state;
-  final PwaController controller;
-  final double cardWidth;
-  @override
-  Widget build(BuildContext context) {
-    // §9 — slightly shorter post-generation cards (156×106 image + ~64 text) so
-    // the Atmosphere row is never clipped in the scrollable left canvas.
-    final imgH = cardWidth * (106 / 156);
-    final rowH = imgH + 64;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('ATMOSPHERE', style: av7Eyebrow()),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: rowH,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            primary: false,
-            physics: const ClampingScrollPhysics(),
-            itemCount: state.atmospheres.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (context, i) {
-              final a = state.atmospheres[i];
-              // §10/§11 — the gold border + check follow the APPLIED atmosphere
-              // (the current vision's). A staged choice shows only in the
-              // pending bar, so tapping a card never relocates the check; the
-              // tapped card gets a lighter "pending" outline for feedback.
-              final appliedId =
-                  state.currentVision?.atmosphereId ??
-                  state.selectedAtmosphereId;
-              final selected = a.id == appliedId;
-              final pending = state.pendingAtmosphereId == a.id && !selected;
-              return _V7AtmosphereCard(
-                atmosphere: a,
-                selected: selected,
-                pending: pending,
-                width: cardWidth,
-                imageHeight: imgH,
-                enabled: !state.generating,
-                onTap: () => controller.stageAtmosphere(a.id),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _V7AtmosphereCard extends StatelessWidget {
-  const _V7AtmosphereCard({
-    required this.atmosphere,
-    required this.selected,
-    required this.pending,
-    required this.width,
-    required this.imageHeight,
-    required this.enabled,
-    required this.onTap,
-  });
-  final PwaAtmosphere atmosphere;
-  final bool selected;
-  final bool pending;
-  final double width;
-  final double imageHeight;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color borderColor = selected
-        ? av7Gold
-        : pending
-        ? av7Gold.withValues(alpha: 0.55)
-        : Colors.white.withValues(alpha: 0.08);
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: 'Select ${atmosphere.name} atmosphere',
-      child: GestureDetector(
-        onTap: enabled ? onTap : null,
-        child: Container(
-          width: width,
-          decoration: BoxDecoration(
-            color: av7CardDark,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: borderColor,
-              width: selected || pending ? 2 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(13),
-                    ),
-                    child: SizedBox(
-                      height: imageHeight,
-                      width: double.infinity,
-                      child: Image.asset(
-                        atmosphere.asset,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            const ColoredBox(color: av7RevealRaised),
-                      ),
-                    ),
-                  ),
-                  if (selected)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: const BoxDecoration(
-                          color: av7Surface,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.check_rounded,
-                          size: 18,
-                          color: av7Ink,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      atmosphere.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: av7Sans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: av7OnDark,
-                        height: 1.3,
-                      ),
-                    ),
-                    if (atmosphere.descriptor.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        atmosphere.descriptor,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: av7Sans(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w400,
-                          color: av7OnDark.withValues(alpha: 0.62),
-                          height: 1.3,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// §11 — atmosphere pending confirmation. Desktop: full-width canvas footer.
-class _V7PendingBar extends StatelessWidget {
-  const _V7PendingBar({
-    required this.state,
-    required this.controller,
-    required this.inset,
-  });
-  final PwaState state;
-  final PwaController controller;
-  final bool inset;
-  @override
-  Widget build(BuildContext context) {
-    final atmo = state.atmospheres.firstWhere(
-      (a) => a.id == state.pendingAtmosphereId,
-      orElse: () => state.atmospheres.first,
-    );
-    final nextN = state.versionCount + 1;
-    final busy = state.generating;
-
-    final info = Row(
-      children: [
-        const Icon(Icons.auto_awesome, size: 18, color: av7Gold),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            children: [
-              Text(
-                '${atmo.name} selected',
-                style: av7Sans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: av7OnDark,
-                ),
-              ),
-              Text(
-                '· Creates Vision $nextN',
-                style: av7Sans(fontSize: 13, color: av7OnDarkSoft),
-              ),
-              Text(
-                '· Uses 1 Space',
-                style: av7Sans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: av7Gold,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-
-    final cancel = TextButton(
-      onPressed: busy ? null : controller.cancelPendingAtmosphere,
-      style: TextButton.styleFrom(
-        foregroundColor: av7OnDarkSoft,
-        minimumSize: const Size(80, 40),
-      ),
-      child: const Text('Cancel'),
-    );
-    final create = FilledButton(
-      onPressed: busy ? null : controller.applyAtmosphere,
-      style: FilledButton.styleFrom(
-        backgroundColor: av7Gold,
-        foregroundColor: av7Ink,
-        minimumSize: const Size(120, 40),
-      ),
-      child: Text(
-        busy ? 'Creating…' : 'Create vision',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
-    );
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: av7PendingBg,
-        borderRadius: BorderRadius.circular(inset ? 0 : 14),
-        border: inset
-            ? const Border(top: BorderSide(color: Color(0x33D3B064)))
-            : Border.all(color: av7Gold.withValues(alpha: 0.34)),
-      ),
-      child: LayoutBuilder(
-        builder: (context, c) {
-          // Narrow (mobile stacked feed): stack the info above a full-width
-          // button row so two fixed buttons can't starve the label text.
-          if (c.maxWidth < 460) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                info,
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: cancel),
-                    const SizedBox(width: 8),
-                    Expanded(flex: 2, child: create),
-                  ],
-                ),
-              ],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(child: info),
-              const SizedBox(width: 12),
-              cancel,
-              const SizedBox(width: 8),
-              create,
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
 
 // ════════════════════════════════════════════════════════════════════════════
 // GLOBAL HEADER (§5)
@@ -997,24 +629,12 @@ class _V7PendingBar extends StatelessWidget {
 class _V7GlobalHeader extends StatelessWidget {
   const _V7GlobalHeader({
     required this.compact,
-    required this.shownNumber,
-    required this.total,
-    required this.hasPrev,
-    required this.hasNext,
     required this.onBack,
     required this.onProjects,
-    required this.onPrev,
-    required this.onNext,
   });
   final bool compact;
-  final int shownNumber;
-  final int total;
-  final bool hasPrev;
-  final bool hasNext;
   final VoidCallback onBack;
   final VoidCallback onProjects;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
 
   @override
   Widget build(BuildContext context) {
@@ -1059,16 +679,9 @@ class _V7GlobalHeader extends StatelessWidget {
               ],
             ),
           ),
-          _V7VisionNav(
-            shownNumber: shownNumber,
-            total: total,
-            hasPrev: hasPrev,
-            hasNext: hasNext,
-            onPrev: onPrev,
-            onNext: onNext,
-            arrowSize: compact ? 34 : 40,
-            onDark: true,
-          ),
+          // No vision navigator here: the chronology IS the navigation, and the
+          // prev/next stepper lives on the Full Reveal.
+          SizedBox(width: compact ? 36 : 96),
         ],
       ),
     );
@@ -1156,116 +769,6 @@ class _V7ProjectsButton extends StatelessWidget {
   }
 }
 
-/// "Vision N of M  ‹  ›" — global (arrows 40px, dark) and chat pill (30px, light).
-class _V7VisionNav extends StatelessWidget {
-  const _V7VisionNav({
-    required this.shownNumber,
-    required this.total,
-    required this.hasPrev,
-    required this.hasNext,
-    required this.onPrev,
-    required this.onNext,
-    required this.arrowSize,
-    required this.onDark,
-  });
-  final int shownNumber;
-  final int total;
-  final bool hasPrev;
-  final bool hasNext;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
-  final double arrowSize;
-  final bool onDark;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = total <= 0
-        ? 'Vision 0 of 0'
-        : 'Vision $shownNumber of $total';
-    final textColor = onDark ? av7OnDark : av7Ink;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: av7Sans(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: textColor,
-          ),
-        ),
-        const SizedBox(width: 10),
-        _NavArrow(
-          icon: Icons.chevron_left_rounded,
-          size: arrowSize,
-          enabled: hasPrev,
-          onTap: onPrev,
-          onDark: onDark,
-          semantic: 'Previous vision',
-        ),
-        const SizedBox(width: 8),
-        _NavArrow(
-          icon: Icons.chevron_right_rounded,
-          size: arrowSize,
-          enabled: hasNext,
-          onTap: onNext,
-          onDark: onDark,
-          semantic: 'Next vision',
-        ),
-      ],
-    );
-  }
-}
-
-class _NavArrow extends StatelessWidget {
-  const _NavArrow({
-    required this.icon,
-    required this.size,
-    required this.enabled,
-    required this.onTap,
-    required this.onDark,
-    required this.semantic,
-  });
-  final IconData icon;
-  final double size;
-  final bool enabled;
-  final VoidCallback onTap;
-  final bool onDark;
-  final String semantic;
-  @override
-  Widget build(BuildContext context) {
-    final active = enabled;
-    final border = onDark ? av7Gold.withValues(alpha: 0.5) : av7Line;
-    final iconColor = active
-        ? (onDark ? av7OnDark : av7Ink)
-        : (onDark ? av7OnDark.withValues(alpha: 0.28) : av7MutedSoft);
-    return Semantics(
-      button: true,
-      enabled: active,
-      label: semantic,
-      child: Material(
-        color: Colors.transparent,
-        shape: CircleBorder(
-          side: BorderSide(
-            color: active ? border : border.withValues(alpha: 0.4),
-          ),
-        ),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: active ? onTap : null,
-          child: SizedBox(
-            width: size,
-            height: size,
-            child: Icon(icon, size: size * 0.46, color: iconColor),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ════════════════════════════════════════════════════════════════════════════
 // CHAT PANEL (§12–§24)
 // ════════════════════════════════════════════════════════════════════════════
@@ -1290,15 +793,25 @@ class _V7ChatBackdrop extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Stack(
+      key: const ValueKey('av7-warm-modern-backdrop'),
       fit: StackFit.expand,
       children: [
-        // 1) Warm modern salon — cropped to cover, centred, softened by the veil.
+        // Softened, never erased: the room must still read as a room behind
+        // the glass — that is the whole point of the surface.
         Positioned.fill(
-          child: Image.asset(
-            _kV7ChatBackdrop,
-            fit: BoxFit.cover,
-            alignment: Alignment.center,
-            errorBuilder: (_, _, _) => const ColoredBox(color: av7Canvas),
+          child: ImageFiltered(
+            // Just enough to sit behind glass: the sofa, the lamps, the wood
+            // and the shelves all have to stay recognisable.
+            imageFilter: ui.ImageFilter.blur(
+              sigmaX: kPwaBackdropBlur,
+              sigmaY: kPwaBackdropBlur,
+            ),
+            child: Image.asset(
+              _kV7ChatBackdrop,
+              fit: BoxFit.cover,
+              alignment: Alignment.center,
+              errorBuilder: (_, _, _) => const ColoredBox(color: av7Canvas),
+            ),
           ),
         ),
         // 2) Warm-ivory veil (editorial paper). Keeps the surface light and the
@@ -1327,233 +840,76 @@ class _V7ChatBackdrop extends StatelessWidget {
   }
 }
 
-class _V7ChatPanel extends StatelessWidget {
-  const _V7ChatPanel({
-    required this.state,
-    required this.scroll,
-    required this.shownNumber,
-    required this.total,
-    required this.hasPrev,
-    required this.hasNext,
-    required this.onPrev,
-    required this.onNext,
-    required this.messages,
-    required this.onSend,
-  });
+/// The workspace header: which project, which direction, which vision. It reads
+/// only what the library snapshot already stores — nothing derived, nothing new.
+class _V7ConversationHeader extends StatelessWidget {
+  const _V7ConversationHeader({required this.state});
   final PwaState state;
-  final ScrollController scroll;
-  final int shownNumber;
-  final int total;
-  final bool hasPrev;
-  final bool hasNext;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
-  final List<Widget> messages;
-  final ValueChanged<String> onSend;
 
   @override
   Widget build(BuildContext context) {
+    PwaProjectSnapshot? snap;
+    for (final p in state.library) {
+      if (p.projectId == state.activeProjectId) snap = p;
+    }
+    final title =
+        state.activeTitleOverride ?? snap?.title ?? state.project.title;
+    final bits = <String>[
+      if ((snap?.roomLabel ?? '').isNotEmpty) snap!.roomLabel,
+      if ((snap?.atmosphereLabel ?? '').isNotEmpty) snap!.atmosphereLabel,
+      if (state.currentVision != null)
+        'Vision ${state.currentVision!.visionNumber}',
+    ];
     return Container(
-      key: const ValueKey('av7-chat-panel'),
+      key: const ValueKey('av7-conversation-header'),
+      padding: const EdgeInsets.fromLTRB(0, 16, 0, 14),
       decoration: BoxDecoration(
-        color: av7Canvas,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: av7GoldDeep.withValues(alpha: 0.18)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x14000000),
-            blurRadius: 20,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: _V7ChatBackdrop(
-        child: Column(
-          children: [
-            _V7ChatHeader(
-              shownNumber: shownNumber,
-              total: total,
-              hasPrev: hasPrev,
-              hasNext: hasNext,
-              onPrev: onPrev,
-              onNext: onNext,
-            ),
-            Expanded(
-              child: ListView(
-                controller: scroll,
-                // The conversation is short; keep every message laid out so
-                // navigation / highlight / find never target an unbuilt row.
-                cacheExtent: 4000,
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                children: messages,
-              ),
-            ),
-            _V7Composer(enabled: !state.generating, onSend: onSend),
-          ],
+        border: Border(
+          bottom: BorderSide(color: av7GoldDeep.withValues(alpha: 0.22)),
         ),
-      ),
-    );
-  }
-}
-
-class _V7ChatHeader extends StatelessWidget {
-  const _V7ChatHeader({
-    required this.shownNumber,
-    required this.total,
-    required this.hasPrev,
-    required this.hasNext,
-    required this.onPrev,
-    required this.onNext,
-  });
-  final int shownNumber;
-  final int total;
-  final bool hasPrev;
-  final bool hasNext;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 76,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: av7Line)),
       ),
       child: Row(
         children: [
-          const PwaLogoBadge(size: 40),
+          const PwaLogoBadge(size: 38),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
+                // Named first: the screen must announce a conversation, not
+                // read as a gallery caption.
                 Text(
                   'AYDEN ARCHITECT',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: av7Sans(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w600,
-                    color: av7Ink,
-                    letterSpacing: 0.6,
-                    height: 1.15,
-                  ),
+                  style: av7Eyebrow(fontSize: 10.5, letterSpacing: 2.2),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
-                  'Your design conversation',
+                  title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: av7Sans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w400,
-                    color: av7Muted,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w600,
+                    color: kPwaOnGlass,
                     height: 1.2,
                   ),
                 ),
+                if (bits.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    bits.join('  ·  '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: av7Sans(fontSize: 12.5, color: kPwaOnGlassSoft),
+                  ),
+                ],
               ],
             ),
           ),
-          _V7ChatNavPill(
-            shownNumber: shownNumber,
-            total: total,
-            hasPrev: hasPrev,
-            hasNext: hasNext,
-            onPrev: onPrev,
-            onNext: onNext,
-          ),
         ],
-      ),
-    );
-  }
-}
-
-/// §13 — compact "Vision N of M ‹ ›" pill inside the chat header.
-class _V7ChatNavPill extends StatelessWidget {
-  const _V7ChatNavPill({
-    required this.shownNumber,
-    required this.total,
-    required this.hasPrev,
-    required this.hasNext,
-    required this.onPrev,
-    required this.onNext,
-  });
-  final int shownNumber;
-  final int total;
-  final bool hasPrev;
-  final bool hasNext;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
-  @override
-  Widget build(BuildContext context) {
-    final label = total <= 0 ? '0 of 0' : '$shownNumber of $total';
-    return Container(
-      height: 38,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: av7Surface,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: av7Line),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _PillArrow(
-            icon: Icons.chevron_left_rounded,
-            enabled: hasPrev,
-            onTap: onPrev,
-            semantic: 'Previous vision',
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              'Vision $label',
-              style: av7Sans(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: av7Ink,
-              ),
-            ),
-          ),
-          _PillArrow(
-            icon: Icons.chevron_right_rounded,
-            enabled: hasNext,
-            onTap: onNext,
-            semantic: 'Next vision',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PillArrow extends StatelessWidget {
-  const _PillArrow({
-    required this.icon,
-    required this.enabled,
-    required this.onTap,
-    required this.semantic,
-  });
-  final IconData icon;
-  final bool enabled;
-  final VoidCallback onTap;
-  final String semantic;
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: semantic,
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: enabled ? onTap : null,
-        child: SizedBox(
-          width: 30,
-          height: 30,
-          child: Icon(icon, size: 18, color: enabled ? av7Ink : av7MutedSoft),
-        ),
       ),
     );
   }
@@ -1567,13 +923,6 @@ class _V7ChatGap extends StatelessWidget {
   Widget build(BuildContext context) => const SizedBox(height: 14);
 }
 
-class _V7FeedDivider extends StatelessWidget {
-  const _V7FeedDivider();
-  @override
-  Widget build(BuildContext context) =>
-      const Divider(height: 1, thickness: 1, color: av7Line);
-}
-
 class _V7Avatar extends StatelessWidget {
   const _V7Avatar();
   @override
@@ -1581,9 +930,13 @@ class _V7Avatar extends StatelessWidget {
 }
 
 /// §16 — Ayden message: avatar + ivory bubble, left aligned.
-class _V7AydenBubble extends StatelessWidget {
-  const _V7AydenBubble({required this.text});
-  final String text;
+/// One Ayden intervention: the avatar once, then everything he says or shows in
+/// a single indented column. Grouping is what makes a render read as part of the
+/// conversation instead of a picture that happens to sit above some text.
+class _V7AydenGroup extends StatelessWidget {
+  const _V7AydenGroup({required this.children});
+  final List<Widget> children;
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -1591,29 +944,56 @@ class _V7AydenBubble extends StatelessWidget {
       children: [
         const _V7Avatar(),
         const SizedBox(width: 10),
-        Flexible(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 460),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: av7Surface,
-              border: Border.all(color: av7Line),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(4),
-                topRight: Radius.circular(16),
-                bottomLeft: Radius.circular(16),
-                bottomRight: Radius.circular(16),
-              ),
-            ),
-            child: Text(
-              text,
-              style: av7Sans(fontSize: 15, height: 1.47, color: av7Ink),
-            ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: children,
           ),
         ),
       ],
     );
   }
+}
+
+/// What Ayden says — the bubble alone, already inside a group.
+class _V7AydenSpeech extends StatelessWidget {
+  const _V7AydenSpeech({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 520),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: kPwaWarmBubble.withValues(alpha: 0.94),
+          border: Border.all(color: av7Line),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(4),
+            topRight: Radius.circular(16),
+            bottomLeft: Radius.circular(16),
+            bottomRight: Radius.circular(16),
+          ),
+        ),
+        child: Text(
+          text,
+          style: av7Sans(fontSize: 15, height: 1.47, color: av7Ink),
+        ),
+      ),
+    );
+  }
+}
+
+/// A standalone Ayden line — a group holding a single bubble.
+class _V7AydenBubble extends StatelessWidget {
+  const _V7AydenBubble({required this.text});
+  final String text;
+  @override
+  Widget build(BuildContext context) =>
+      _V7AydenGroup(children: [_V7AydenSpeech(text: text)]);
 }
 
 /// §17 — user message: right-aligned dark bubble.
@@ -1629,9 +1009,9 @@ class _V7UserBubble extends StatelessWidget {
           child: Container(
             constraints: const BoxConstraints(maxWidth: 420),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: const BoxDecoration(
-              color: av7UserBubble,
-              borderRadius: BorderRadius.only(
+            decoration: BoxDecoration(
+              color: const Color(0xFF2B211C).withValues(alpha: 0.94),
+              borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
                 bottomLeft: Radius.circular(16),
@@ -1690,86 +1070,86 @@ class _V7InlineGenerating extends StatelessWidget {
   }
 }
 
-/// §18 — full-width vision result card (After image + "Currently in workspace").
+/// The vision result in the chronology: a large render plus the three actions
+/// that belong to it. Everything deeper — Before/After, atmospheres, vision
+/// navigation — happens on `/reveal`, so the card stays a card.
 class _V7VisionCard extends StatelessWidget {
   const _V7VisionCard({
     super.key,
     required this.vision,
     required this.atmosphereName,
-    required this.inWorkspace,
     required this.highlighted,
-    required this.showRevealAffordance,
-    required this.onTap,
+    required this.maxImageHeight,
+    required this.onOpenReveal,
+    required this.onRefine,
+    required this.onTryAtmosphere,
   });
   final PwaVision vision;
   final String atmosphereName;
-  final bool inWorkspace;
   final bool highlighted;
 
-  /// §14 — on the stacked feed the image shows a "View in Full Reveal" (or
-  /// "Currently in Full Reveal") affordance; on desktop the reveal is beside the
-  /// chat so none is needed.
-  final bool showRevealAffordance;
-  final VoidCallback onTap;
+  /// Ceiling for the render, derived from the space the thread actually has.
+  final double maxImageHeight;
+  final VoidCallback onOpenReveal;
+  final VoidCallback onRefine;
+  final VoidCallback onTryAtmosphere;
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = highlighted || inWorkspace ? av7Gold : av7Line;
-    final borderW = (highlighted || inWorkspace) ? 2.0 : 1.0;
-    return Semantics(
-      button: true,
-      label:
-          'Open Vision ${vision.visionNumber}, $atmosphereName, in the Full Reveal',
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: Av7Motion.component,
-            decoration: BoxDecoration(
-              color: av7Surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: borderColor, width: borderW),
+    return AnimatedContainer(
+      duration: Av7Motion.component,
+      decoration: BoxDecoration(
+        color: kPwaWarmBubble,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: highlighted ? av7Gold : av7Line,
+          width: highlighted ? 2 : 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+            child: Text(
+              'Vision ${vision.visionNumber} · $atmosphereName',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: av7Sans(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: av7Ink,
+              ),
             ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Header (§18) — title + the "Currently in workspace" badge only
-                // (no invented overflow control; version actions live in the
-                // preview-actions bar under the reveal — §25/§35).
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Vision ${vision.visionNumber} · $atmosphereName',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: av7Sans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: av7Ink,
-                          ),
-                        ),
-                      ),
-                      if (inWorkspace) const _WorkspaceBadge(),
-                    ],
-                  ),
-                ),
-                // 16:9 After image (§18 — capped at 250px tall on wide panels).
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 250),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Semantics(
-                          image: true,
-                          label:
-                              'After image, Vision ${vision.visionNumber}, $atmosphereName',
+          ),
+          // The render itself opens the Full Reveal — the obvious gesture — and
+          // an explicit expand control makes that possibility visible.
+          // Big and edge-to-edge in the column: `cover` fills the frame, so a
+          // landscape render is never boxed between two charcoal bands. The
+          // Full Reveal remains the place to see the image uncropped.
+          // Align first: the card's Column stretches its children, which gives a
+          // TIGHT width that a bare ConstrainedBox cannot shrink below.
+          Align(
+            alignment: Alignment.centerLeft,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: kPwaVisionMaxWidth,
+                maxHeight: maxImageHeight,
+              ),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Semantics(
+                      button: true,
+                      label:
+                          'Open Vision ${vision.visionNumber}, $atmosphereName, in the Full Reveal',
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: onOpenReveal,
                           child: Image.asset(
                             vision.afterAsset,
                             fit: BoxFit.cover,
@@ -1777,25 +1157,99 @@ class _V7VisionCard extends StatelessWidget {
                                 const ColoredBox(color: av7RevealRaised),
                           ),
                         ),
-                        if (showRevealAffordance)
-                          Positioned(
-                            bottom: 10,
-                            right: 10,
-                            child: _RevealAffordance(active: inWorkspace),
-                          ),
-                      ],
+                      ),
                     ),
-                  ),
+                    Positioned(
+                      top: 12,
+                      right: 12,
+                      child: _ExpandRevealButton(onTap: onOpenReveal),
+                    ),
+                  ],
                 ),
-                // Footer (§18) — a light timestamp, as in the reference.
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 9, 14, 10),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Just now',
-                      maxLines: 1,
-                      style: av7Sans(fontSize: 11.5, color: av7MutedSoft),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _VisionAction(
+                  icon: Icons.open_in_full_rounded,
+                  label: 'View full reveal',
+                  primary: true,
+                  onTap: onOpenReveal,
+                ),
+                _VisionAction(
+                  icon: Icons.tune_rounded,
+                  label: 'Refine this',
+                  onTap: onRefine,
+                ),
+                _VisionAction(
+                  icon: Icons.auto_awesome,
+                  label: 'Try another atmosphere',
+                  onTap: onTryAtmosphere,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One action attached to a vision card. The primary one is filled; the others
+/// are outlined, so the card reads as a result with a clear next step rather
+/// than a toolbar.
+class _VisionAction extends StatelessWidget {
+  const _VisionAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = primary ? av7Ink : av7InkSecondary;
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: primary ? av7Gold : av7Surface,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(999),
+              border: primary
+                  ? null
+                  : Border.all(color: av7GoldDeep.withValues(alpha: 0.34)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 14, color: primary ? av7Ink : av7GoldDeep),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: av7Sans(
+                      fontSize: 12,
+                      fontWeight: primary ? FontWeight.w700 : FontWeight.w500,
+                      color: fg,
                     ),
                   ),
                 ),
@@ -1808,81 +1262,131 @@ class _V7VisionCard extends StatelessWidget {
   }
 }
 
-/// §14 — the on-image affordance: "View in Full Reveal ↑" for a vision not in
-/// the workspace, "Currently in Full Reveal" (gold wash) for the shown one.
-class _RevealAffordance extends StatelessWidget {
-  const _RevealAffordance({required this.active});
-  final bool active;
+/// The explicit "make this bigger" affordance on a vision. Same destination as
+/// tapping the image and as "View full reveal" — one routing call, three doors.
+class _ExpandRevealButton extends StatefulWidget {
+  const _ExpandRevealButton({required this.onTap});
+  final VoidCallback onTap;
+  @override
+  State<_ExpandRevealButton> createState() => _ExpandRevealButtonState();
+}
+
+class _ExpandRevealButtonState extends State<_ExpandRevealButton> {
+  bool _hover = false;
   @override
   Widget build(BuildContext context) {
-    if (active) {
-      return Container(
-        height: 30,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: av7GoldWash,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          'Currently in Full Reveal',
-          maxLines: 1,
-          style: av7Sans(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: av7GoldDeep,
+    return Semantics(
+      button: true,
+      label: 'Open full reveal',
+      child: Tooltip(
+        message: 'Open full reveal',
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hover = true),
+          onExit: (_) => setState(() => _hover = false),
+          cursor: SystemMouseCursors.click,
+          child: Material(
+            color: const Color(
+              0xFF211914,
+            ).withValues(alpha: _hover ? 0.92 : 0.82),
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              key: const ValueKey('av7-vision-expand'),
+              onTap: widget.onTap,
+              // A comfortable 40px touch target on every viewport.
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: Icon(
+                  Icons.open_in_full_rounded,
+                  size: 21,
+                  color: _hover ? av7Gold : Colors.white,
+                ),
+              ),
+            ),
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
+}
+
+/// "Refining Vision N" — the discreet context carried back from the Full Reveal.
+/// It states what the next message is about; it sends nothing and can be
+/// dropped without touching the vision.
+class _V7RefineContextBar extends StatelessWidget {
+  const _V7RefineContextBar({required this.vision, required this.onCancel});
+  final PwaVision vision;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      key: const ValueKey('av7-refine-context'),
+      margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      padding: const EdgeInsets.fromLTRB(12, 6, 6, 6),
       decoration: BoxDecoration(
-        color: const Color(0xD1191511),
+        color: av7GoldWash,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        border: Border.all(color: av7GoldDeep.withValues(alpha: 0.35)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'View in Full Reveal',
-            maxLines: 1,
-            style: av7Sans(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: av7OnDark,
+          const Icon(Icons.tune_rounded, size: 14, color: av7GoldDeep),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              'Refining Vision ${vision.visionNumber}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: av7Sans(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: av7GoldDeep,
+              ),
             ),
           ),
           const SizedBox(width: 4),
-          const Icon(Icons.arrow_upward_rounded, size: 14, color: av7OnDark),
+          Semantics(
+            button: true,
+            label: 'Cancel refinement',
+            child: Tooltip(
+              message: 'Cancel refinement',
+              child: InkWell(
+                key: const ValueKey('av7-refine-context-cancel'),
+                customBorder: const CircleBorder(),
+                onTap: onCancel,
+                child: const SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: Icon(
+                    Icons.close_rounded,
+                    size: 15,
+                    color: av7GoldDeep,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _WorkspaceBadge extends StatelessWidget {
-  const _WorkspaceBadge();
+/// The single line that turns a result into a conversation.
+class _V7ChangePrompt extends StatelessWidget {
+  const _V7ChangePrompt();
   @override
-  Widget build(BuildContext context) => Container(
-    height: 24,
-    padding: const EdgeInsets.symmetric(horizontal: 10),
-    margin: const EdgeInsets.only(right: 4),
-    decoration: BoxDecoration(
-      color: av7GoldWash,
-      borderRadius: BorderRadius.circular(999),
-    ),
-    alignment: Alignment.center,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(left: 42),
     child: Text(
-      'Currently in workspace',
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
+      'What would you like to change?',
       style: av7Sans(
-        fontSize: 11,
+        fontSize: 13.5,
         fontWeight: FontWeight.w600,
-        color: av7GoldDeep,
+        color: kPwaOnGlass,
       ),
     ),
   );
@@ -1895,15 +1399,19 @@ class _V7QuickActions extends StatelessWidget {
   final ValueChanged<String> onTap;
   @override
   Widget build(BuildContext context) {
+    final light = _V7OnLightGlass.of(context);
+    final edge = light ? av7GoldDeep : kPwaGlassEdge;
     return Padding(
-      padding: const EdgeInsets.only(left: 42),
+      padding: EdgeInsets.zero,
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
           for (final c in chips)
             Material(
-              color: av7Surface,
+              color: light
+                  ? const Color(0xFFFFFBF8).withValues(alpha: 0.66)
+                  : kPwaWarmAccent.withValues(alpha: 0.46),
               borderRadius: BorderRadius.circular(999),
               child: InkWell(
                 borderRadius: BorderRadius.circular(999),
@@ -1913,23 +1421,21 @@ class _V7QuickActions extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: av7GoldDeep.withValues(alpha: 0.34),
-                    ),
+                    border: Border.all(color: edge.withValues(alpha: 0.40)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(_chipIcon(c), size: 14, color: av7GoldDeep),
+                      Icon(_chipIcon(c), size: 14, color: edge),
                       const SizedBox(width: 6),
                       Text(
                         c,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: av7Sans(
-                          fontSize: 12,
+                          fontSize: 12.5,
                           fontWeight: FontWeight.w500,
-                          color: av7InkSecondary,
+                          color: light ? kPwaOnPlate : kPwaOnGlass,
                         ),
                       ),
                     ],
@@ -1959,14 +1465,20 @@ class _V7RefineConfirmCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final nextN = state.versionCount + 1;
     final busy = state.generating;
+    final light = _V7OnLightGlass.of(context);
+    final ink = light ? kPwaOnPlate : kPwaOnGlass;
+    final soft = light ? kPwaOnPlateSoft : kPwaOnGlassSoft;
+    final edge = light ? av7GoldDeep : kPwaGlassEdge;
     return Padding(
-      padding: const EdgeInsets.only(left: 42),
+      padding: EdgeInsets.zero,
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: av7Surface,
+          color: light
+              ? const Color(0xFFFFFBF8).withValues(alpha: 0.72)
+              : kPwaWarmAccent.withValues(alpha: 0.55),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: av7GoldDeep.withValues(alpha: 0.38)),
+          border: Border.all(color: edge.withValues(alpha: 0.40)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1976,17 +1488,13 @@ class _V7RefineConfirmCard extends StatelessWidget {
               style: av7Sans(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: av7Ink,
+                color: ink,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               controller.refineSummaryText(instruction),
-              style: av7Sans(
-                fontSize: 13,
-                height: 1.46,
-                color: av7InkSecondary,
-              ),
+              style: av7Sans(fontSize: 13, height: 1.46, color: soft),
             ),
             const SizedBox(height: 10),
             Row(
@@ -1996,7 +1504,7 @@ class _V7RefineConfirmCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     'Creates Vision $nextN · Uses 1 Space',
-                    style: av7Sans(fontSize: 11.5, color: av7MutedSoft),
+                    style: av7Sans(fontSize: 11.5, color: soft),
                   ),
                 ),
               ],
@@ -2010,8 +1518,8 @@ class _V7RefineConfirmCard extends StatelessWidget {
                         ? null
                         : () => controller.dismissRefine(messageId),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: av7Ink,
-                      side: const BorderSide(color: av7Line),
+                      foregroundColor: ink,
+                      side: BorderSide(color: edge.withValues(alpha: 0.4)),
                     ),
                     child: const Text('Cancel'),
                   ),
@@ -2049,21 +1557,30 @@ class _V7RefineConfirmCard extends StatelessWidget {
 /// button + focused border). Deliberately its OWN widget so the frozen
 /// fast-path `PwaComposer` (which uses the muted #C8A86A) is untouched.
 class _V7Composer extends StatefulWidget {
-  const _V7Composer({required this.enabled, required this.onSend});
+  const _V7Composer({
+    required this.enabled,
+    required this.onSend,
+    this.focusNode,
+  });
   final bool enabled;
   final ValueChanged<String> onSend;
+
+  /// Supplied by the screen when it needs to hand focus to the composer.
+  final FocusNode? focusNode;
   @override
   State<_V7Composer> createState() => _V7ComposerState();
 }
 
 class _V7ComposerState extends State<_V7Composer> {
   final _controller = TextEditingController();
-  final _focus = FocusNode();
+  FocusNode? _own;
+
+  FocusNode get _focus => widget.focusNode ?? (_own ??= FocusNode());
 
   @override
   void dispose() {
     _controller.dispose();
-    _focus.dispose();
+    _own?.dispose();
     super.dispose();
   }
 
@@ -2076,69 +1593,82 @@ class _V7ComposerState extends State<_V7Composer> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      // Translucent so the warm backdrop reads continuously to the panel's
-      // foot; the input field keeps its own opaque fill, so the composer stays
-      // perfectly legible.
-      color: av7Canvas.withValues(alpha: 0.82),
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    minHeight: 48,
-                    maxHeight: 112,
-                  ),
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focus,
-                    enabled: widget.enabled,
-                    minLines: 1,
-                    maxLines: 4,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _send(),
-                    style: av7Sans(fontSize: 15, color: av7Ink, height: 1.4),
-                    cursorColor: av7GoldDeep,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      filled: true,
-                      fillColor: av7Surface,
-                      hintText: 'Ask Ayden anything…',
-                      hintStyle: av7Sans(fontSize: 15, color: av7Muted),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 13,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(999),
-                        borderSide: const BorderSide(color: av7Line),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(999),
-                        borderSide: const BorderSide(
-                          color: av7Gold,
-                          width: 1.5,
+    final light = _V7OnLightGlass.of(context);
+    // The FIELD carries its own light surface, so its ink is dark on desktop.
+    // The disclaimer sits bare on the plate, so it keeps the light ink.
+    final ink = light ? kPwaOnPlate : kPwaOnGlass;
+    final fieldSoft = light ? kPwaOnPlateSoft : kPwaOnGlassSoft;
+    return ColoredBox(
+      key: const ValueKey('av7-integrated-composer'),
+      // No fill of its own: the composer belongs to the glass plate, it is not
+      // a band painted across the foot of the window.
+      color: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minHeight: 48,
+                      maxHeight: 112,
+                    ),
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focus,
+                      enabled: widget.enabled,
+                      minLines: 1,
+                      maxLines: 4,
+                      textInputAction: TextInputAction.send,
+                      onSubmitted: (_) => _send(),
+                      style: av7Sans(fontSize: 15, color: ink, height: 1.4),
+                      cursorColor: light ? av7GoldDeep : av7Gold,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        filled: true,
+                        fillColor: light
+                            ? const Color(0xFFFFFBF8).withValues(alpha: 0.68)
+                            : kPwaWarmAccent.withValues(alpha: 0.48),
+                        hintText: 'Ask Ayden anything…',
+                        hintStyle: av7Sans(fontSize: 15, color: fieldSoft),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 15,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide(
+                            color: light
+                                ? Colors.white.withValues(alpha: 0.46)
+                                : kPwaGlassEdge.withValues(alpha: 0.34),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide(
+                            color: light ? av7GoldDeep : av7Gold,
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              _V7SendButton(enabled: widget.enabled, onTap: _send),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Ayden can make mistakes. Always review design details.',
-            style: av7Sans(fontSize: 10, color: av7MutedSoft),
-          ),
-        ],
+                const SizedBox(width: 10),
+                _V7SendButton(enabled: widget.enabled, onTap: _send),
+              ],
+            ),
+            const SizedBox(height: 7),
+            Text(
+              'Ayden can make mistakes. Always review design details.',
+              style: av7Sans(fontSize: 10.5, color: kPwaOnGlassSoft),
+            ),
+          ],
+        ),
       ),
     );
   }

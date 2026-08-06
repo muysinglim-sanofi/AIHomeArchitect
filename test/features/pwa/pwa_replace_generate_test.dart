@@ -175,6 +175,7 @@ void main() {
         final replaced = _src(const [7, 7, 7]);
         c.setSource(replaced);
         await c.generateFirstVision();
+        c.continueToArchitect();
         expect(c.state.phase, PwaPhase.architect);
         expect(c.state.activeProjectId, draftId);
         expect(c.state.previewedVision, isNotNull);

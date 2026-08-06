@@ -56,18 +56,22 @@ PwaController _controller() =>
 
 void main() {
   group('canonicalRoute (LIVE01-07)', () {
-    test('LIVE01: entry with no photo → Home (/)', () {
-      expect(_state(phase: PwaPhase.entry).canonicalRoute, PwaRoute.home);
+    test('LIVE01: an empty creation session → /create', () {
+      expect(_state(phase: PwaPhase.entry).canonicalRoute, PwaRoute.create);
+    });
+
+    test('LIVE01b: the dashboard → /', () {
+      expect(_state(phase: PwaPhase.home).canonicalRoute, PwaRoute.home);
     });
 
     test(
-      'LIVE02: entry with a photo, no vision → Home (Step 6A: a pre-Generate creation is NOT a durable Draft URL)',
+      'LIVE02: a photo without a vision stays on /create (Step 6A: a pre-Generate creation is NOT a durable Draft URL)',
       () {
         final r = _state(
           phase: PwaPhase.entry,
           source: _source(),
         ).canonicalRoute;
-        expect(r.page, PwaPage.home);
+        expect(r.page, PwaPage.create);
       },
     );
 
@@ -111,10 +115,10 @@ void main() {
     });
 
     test(
-      'LIVE07: first-vision loading stays on Home (no durable project URL until Architect settles)',
+      'LIVE07: first-vision loading stays on /create (no durable project URL until Architect settles)',
       () {
         final r = _state(phase: PwaPhase.loading).canonicalRoute;
-        expect(r.page, PwaPage.home);
+        expect(r.page, PwaPage.create);
       },
     );
   });
@@ -127,13 +131,21 @@ void main() {
       expect(c.state.canonicalRoute, PwaRoute.projects);
     });
 
-    test('LIVE09: applyRoute(home) resets to a clean Hero (canonical /)', () {
+    test('LIVE09: applyRoute(home) → the dashboard, session dropped', () {
       final c = _controller();
       c.openLibrary();
       c.applyRoute(PwaRoute.home);
-      expect(c.state.phase, PwaPhase.entry);
+      expect(c.state.phase, PwaPhase.home);
       expect(c.state.source, isNull);
       expect(c.state.canonicalRoute, PwaRoute.home);
+    });
+
+    test('LIVE09b: applyRoute(create) opens an EMPTY Create', () {
+      final c = _controller();
+      c.applyRoute(PwaRoute.create);
+      expect(c.state.phase, PwaPhase.entry);
+      expect(c.state.source, isNull);
+      expect(c.state.canonicalRoute, PwaRoute.create);
     });
 
     test('LIVE10: applyRoute(architect,id) opens THAT project', () {
