@@ -314,18 +314,41 @@ pendant que le menu restait en tofu.
 
 Sélecteur de langue ajouté dans **toutes** les barres (il n'était que sur Home).
 
-### Ce qui a été vu, et ce qui ne l'a pas été
+### Ce qui a été vu (mise à jour — génération réelle en khmer)
 
-**VU en navigateur** : Home KM/EN/FR (1400 px), Home KM et FR (390 px), Create
-en KM, le sélecteur, la persistance de la locale après rechargement complet.
+Une génération RÉELLE a été lancée en khmer sur le staging (1 vision gratuite
+consommée, enforcement billing exercé pour de vrai).
 
-**PAS VU faute d'un projet sous le guest courant** (localStorage vidé pendant
-l'enquête police → nouvel anonyme → bibliothèque vide) : **Architect, Full
-Reveal, My Projects, l'état de chargement et les états billing en KM et FR**.
-Ces surfaces ont été vues **en anglais** en début de session avec les nouvelles
-chaînes. Elles sont couvertes par `I18N05-10` et `I18N18`, mais **une revue
-visuelle KM/FR de ces quatre écrans reste à faire** — il suffit de créer un
-projet (1 génération gratuite) et de refaire la boucle.
+**VU en navigateur, en khmer** : Home · Create (vide ET avec photo) · **écran de
+chargement** · **First Reveal** (ដើម / ទស្សនៈ / បន្តជាមួយ Ayden) · **Architect**
+(chrome, 4 chips, placeholder, disclaimer) · **My Projects**.
+**VU en anglais et en français** : Home (1400 px et 390 px).
+**VU** : sélecteur de langue, persistance de la locale après rechargement.
+
+Deux défauts trouvés là et corrigés (commit `45adfa8`) : la phase de chargement
+plein écran était en anglais (`repo.loadingSteps()` — liste SÉPARÉE de celle de
+l'indicateur de l'architect), et **la première phrase d'Ayden** était en anglais
+(`firstVisionIntro`, UI-owned, ne passe pas par `localize_reply`).
+
+### ⚠️ RESTE À FAIRE — petit, mais réel
+
+1. **`PwaProjectSort` n'est pas traduit.** `pwa_project.dart:32` renvoie
+   « Recently updated » / « Newest » / « Oldest » / « Name A–Z » en dur, et le
+   contrôle de tri de My Projects les affiche tels quels. Les clés
+   `pwaSortNewest/Oldest/NameAz` existent déjà ; il manque
+   `pwaSortRecentlyUpdated` et le routage du `label` par `PwaL10n`. **Vu à
+   l'écran en khmer.**
+2. **Architect / Full Reveal / My Projects en FRANÇAIS** n'ont pas été
+   re-parcourus (le khmer l'a été). Risque faible — mêmes clés, français plus
+   court que le khmer — mais ce n'est pas une observation.
+3. **Chaînes PERSISTÉES** : titre de projet, `roomLabel` résolu et la phrase
+   d'intro d'Ayden sont écrits DANS le projet à la création. Un projet créé
+   avant un changement de langue garde sa langue d'origine. Corriger
+   reviendrait à réécrire une conversation stockée — délibérément non fait.
+4. **Tout l'app dépend de `gstatic.com`** pour Roboto ET le wasm CanvasKit, pas
+   seulement le khmer (le khmer, lui, est désormais local). Bloquer
+   `fonts.gstatic.com` rend TOUTE l'interface en tofu. C'est de l'infra, pas de
+   la localisation — à trancher avant un lancement Cambodge.
 
 ---
 
