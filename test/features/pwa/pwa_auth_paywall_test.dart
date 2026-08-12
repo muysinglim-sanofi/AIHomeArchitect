@@ -22,6 +22,7 @@
 library;
 
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:ai_home_architect/core/l10n/app_localizations.dart';
 import 'package:ai_home_architect/core/providers/locale_provider.dart';
@@ -37,6 +38,8 @@ import 'package:ai_home_architect/features/pwa/l10n/pwa_l10n.dart';
 import 'package:ai_home_architect/features/pwa/l10n/pwa_translations.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_account_sheet.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_paywall.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_theme.dart'
+    show pwaSurface;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -415,6 +418,65 @@ void main() {
       expect(find.text(l.accountChangeEmail), findsOneWidget);
     });
 
+    testWidgets(
+        'AUTH16 the primary action stays LEGIBLE once it is enabled',
+        (tester) async {
+      // Found by the Khmer visual review, and it is a whole class of bug: an
+      // explicit TextStyle beats a button's `foregroundColor`, and `pwaSans`
+      // carries `pwaInk` by default — so a label written the obvious way paints
+      // near-black on the black pill. The English review missed it because the
+      // button it photographed was DISABLED.
+      //
+      // Asserted as CONTRAST rather than as a specific colour, so it keeps
+      // holding when someone restyles the button.
+      final service = PwaAuthService.forTest(
+          _FakeAuth(), _FakeChannel(), _FakeChannel());
+      await tester.pumpWidget(_app(
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showPwaAccountSheet(context),
+            child: const Text('open'),
+          ),
+        ),
+        overrides: [pwaAuthServiceProvider.overrideWithValue(service)],
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      // Enabled only once the address looks usable.
+      await tester.enterText(find.byType(TextField).first, 'me@example.com');
+      await tester.pumpAndSettle();
+
+      double contrastOfPrimary({required bool disabled}) {
+        final button = tester.widget<FilledButton>(find.byType(FilledButton));
+        final label = tester.widget<Text>(find.descendant(
+            of: find.byType(FilledButton), matching: find.byType(Text)));
+        final states = disabled
+            ? <WidgetState>{WidgetState.disabled}
+            : <WidgetState>{};
+        // The disabled pill is translucent black over the sheet's ivory, so the
+        // comparison has to be against what is actually PAINTED, not against a
+        // colour with an alpha channel.
+        final raw = button.style!.backgroundColor!.resolve(states)!;
+        final bg = Color.alphaBlend(raw, pwaSurface);
+        final fg = label.style?.color
+            ?? button.style!.foregroundColor!.resolve(states)!;
+        return _contrast(bg, fg);
+      }
+
+      expect(contrastOfPrimary(disabled: false), greaterThanOrEqualTo(4.5),
+          reason: 'the ENABLED primary label must be readable on the black pill');
+
+      // And the other half, which the first version of this fix broke: a light
+      // label on the pale disabled pill is just as unreadable as a dark one on
+      // the black pill. One fixed colour cannot serve both states.
+      await tester.enterText(find.byType(TextField).first, 'nonsense');
+      await tester.pumpAndSettle();
+      expect(contrastOfPrimary(disabled: true), greaterThanOrEqualTo(4.5),
+          reason: 'the DISABLED primary label must be readable on the pale pill');
+    });
+
     testWidgets('AUTH15 with no auth service the sheet says so, honestly',
         (tester) async {
       await tester.pumpWidget(_app(
@@ -668,6 +730,17 @@ void main() {
       }
     });
   });
+}
+
+/// WCAG relative-luminance contrast ratio between two opaque colours.
+double _contrast(Color a, Color b) {
+  double lum(Color c) {
+    double ch(double v) =>
+        v <= 0.03928 ? v / 12.92 : math.pow((v + 0.055) / 1.055, 2.4).toDouble();
+    return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b);
+  }
+  final l1 = lum(a), l2 = lum(b);
+  return (math.max(l1, l2) + 0.05) / (math.min(l1, l2) + 0.05);
 }
 
 String _read(String relative) {

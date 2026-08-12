@@ -390,30 +390,45 @@ class _PrimaryButton extends StatelessWidget {
   final bool busy;
 
   @override
-  Widget build(BuildContext context) => FilledButton(
-        onPressed: busy ? null : onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: pwaBlack,
-          foregroundColor: pwaOnDark,
-          disabledBackgroundColor: pwaBlack.withValues(alpha: 0.35),
-          minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(PwaGap.radius),
-          ),
+  Widget build(BuildContext context) {
+    final enabled = !busy && onPressed != null;
+    return FilledButton(
+      onPressed: busy ? null : onPressed,
+      style: FilledButton.styleFrom(
+        backgroundColor: pwaBlack,
+        foregroundColor: pwaOnDark,
+        disabledBackgroundColor: pwaBlack.withValues(alpha: 0.35),
+        minimumSize: const Size.fromHeight(52),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(PwaGap.radius),
         ),
-        child: busy
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: pwaOnDark),
-              )
-            // Wraps rather than truncates: German-length French and Khmer both
-            // run long, and a clipped button label is a broken promise.
-            : Text(label,
-                textAlign: TextAlign.center,
-                style: pwaSans(fontSize: 15, fontWeight: FontWeight.w600)),
-      );
+      ),
+      child: busy
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child:
+                  CircularProgressIndicator(strokeWidth: 2, color: pwaOnDark),
+            )
+          // Wraps rather than truncates: French and Khmer both run long, and a
+          // clipped button label is a broken promise.
+          //
+          // The colour is passed EXPLICITLY and follows the ENABLED state,
+          // because two things are true at once: `pwaSans` defaults to `pwaInk`
+          // and an explicit TextStyle beats the button's `foregroundColor` — so
+          // omitting it paints near-black on the black pill — while the DISABLED
+          // pill is a pale grey on which light text vanishes just as badly.
+          // One fixed colour cannot serve both; the Khmer review showed the
+          // first half and the fix's own screenshot showed the second.
+          : Text(label,
+              textAlign: TextAlign.center,
+              style: pwaSans(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: enabled ? pwaOnDark : pwaInk,
+              )),
+    );
+  }
 }
 
 InputDecoration _fieldDecoration(String label, String hint) => InputDecoration(
