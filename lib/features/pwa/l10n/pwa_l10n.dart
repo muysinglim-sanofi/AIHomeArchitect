@@ -37,6 +37,7 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../../core/models/atmosphere_style.dart';
 import '../../../core/providers/locale_provider.dart';
 import 'pwa_translations.dart';
+import '../domain/pwa_project.dart' show PwaProjectSort;
 
 class PwaL10n {
   const PwaL10n(this.locale, this._mobile);
@@ -396,6 +397,7 @@ class PwaL10n {
   String get searchProjects => _get('pwaSearchProjects');
   String get clearSearch => _get('pwaClearSearch');
   String get sortProjects => _get('pwaSortProjects');
+  String get sortRecentlyUpdated => _get('pwaSortRecentlyUpdated');
   String get sortNewest => _get('pwaSortNewest');
   String get sortOldest => _get('pwaSortOldest');
   String get sortNameAz => _get('pwaSortNameAz');
@@ -420,6 +422,18 @@ class PwaL10n {
   String get untitledSpace => _get('pwaUntitledSpace');
   String get draftContinueSetup => _get('pwaDraftContinueSetup');
   String get continueSetup => _get('pwaContinueSetup');
+  /// The label of a sort order.
+  ///
+  /// `PwaProjectSort.label` stays as it is: it is the English fallback and it
+  /// sits next to the enum, where the SORTING semantics live. Nothing about the
+  /// enum values or the ordering changes — only what the control says.
+  String sortLabel(PwaProjectSort order) => switch (order) {
+        PwaProjectSort.recentlyUpdated => sortRecentlyUpdated,
+        PwaProjectSort.newest => sortNewest,
+        PwaProjectSort.oldest => sortOldest,
+        PwaProjectSort.nameAsc => sortNameAz,
+      };
+
   String nProjectsFoundFor(int n) =>
       _get('pwaNProjectsFoundFor').replaceAll('{n}', '$n');
   String deleteProjectBody(String title) =>

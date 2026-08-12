@@ -460,7 +460,7 @@ class _SortControl extends StatelessWidget {
             for (final o in PwaProjectSort.values)
               ListTile(
                 title: Text(
-                  o.label,
+                  context.pwaL10n.sortLabel(o),
                   style: av7Sans(
                     fontSize: 16,
                     color: o == sort ? av7Gold : av7OnDark,
@@ -494,7 +494,7 @@ class _SortControl extends StatelessWidget {
           const Icon(Icons.swap_vert_rounded, size: 18, color: av7Muted),
           const SizedBox(width: 8),
           Text(
-            sort.label,
+            context.pwaL10n.sortLabel(sort),
             style: av7Sans(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -533,7 +533,7 @@ class _SortControl extends StatelessWidget {
           PopupMenuItem<PwaProjectSort>(
             value: o,
             child: Text(
-              o.label,
+              context.pwaL10n.sortLabel(o),
               style: av7Sans(
                 fontSize: 14,
                 color: o == sort ? av7Gold : av7OnDark,
@@ -1264,7 +1264,11 @@ class _DraftProjectCardState extends State<_DraftProjectCard> {
   Widget build(BuildContext context) {
     final d = widget.draft;
     final lifted = _hover && !widget.mobile;
-    final roomLabel = pwaRoomById(d.roomId)?.label ?? 'Ayden Decide';
+    // Display only — the draft's routed room id is untouched.
+    final card0 = pwaRoomById(d.roomId);
+    final roomLabel = card0 == null
+        ? context.pwaL10n.uplAiDecide
+        : context.pwaL10n.roomCardLabel(card0.id, card0.label);
     final bytes = d.source?.bytes;
 
     final card = AnimatedContainer(
