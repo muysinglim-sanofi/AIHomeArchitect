@@ -18,6 +18,7 @@ import 'pwa_brand.dart';
 import 'pwa_entry_screen.dart' show pwaRoomById;
 import 'pwa_widgets.dart';
 import '../l10n/pwa_l10n.dart';
+import 'pwa_account_chip.dart';
 import 'pwa_language_switcher.dart';
 
 class PwaProjectsScreen extends ConsumerWidget {
@@ -174,6 +175,7 @@ class _ProjectsHeader extends StatelessWidget {
           // person who lands on a deep link, or who is mid-project, must be
           // able to change language without first navigating away.
           const PwaLanguageSwitcher(onDark: true, compact: true),
+          const PwaAccountChip(onDark: true),
           const SizedBox(width: 10),
           _NewProjectButton(compact: mobile, onTap: onNew),
         ],

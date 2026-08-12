@@ -27,6 +27,9 @@ import 'features/pwa/application/pwa_controller.dart';
 import 'features/pwa/application/pwa_intro_gate.dart';
 import 'features/pwa/application/pwa_route.dart';
 import 'features/pwa/application/pwa_url_bridge.dart';
+import 'features/pwa/auth/pwa_auth_controller.dart';
+import 'features/pwa/auth/pwa_auth_service.dart';
+import 'features/pwa/billing/pwa_entitlement_controller.dart';
 import 'features/pwa/config/pwa_environment.dart';
 import 'features/pwa/data/mock_pwa_experience_repository.dart';
 import 'features/pwa/data/pwa_generation_api.dart';
@@ -116,6 +119,10 @@ void _bootPwaMock(PwaUrlBridge bridge, PwaRoute bootRoute) {
       overrides: [
         pwaRepositoryProvider.overrideWithValue(repo),
         pwaBootRestoreProvider.overrideWithValue(restore),
+        // Left at their defaults (null) on purpose: mock has no backend, so
+        // entitlement reads as `unavailable` (fails open, the demo generates)
+        // and the account sheet says accounts are not available in this build.
+        // Inventing either would make the prototype claim something untrue.
         ..._webNavOverrides(bridge),
       ],
       child: const PwaUrlSyncScope(child: PwaMockApp()),
@@ -174,15 +181,21 @@ Future<void> _bootPwaStaging(
   // The real engine. The URL was validated against the exact-origin allowlist by
   // PwaEnvironment.parse; the token is read fresh per call so a session renewed
   // mid-session is used, and it is never stored in this closure.
-  final generation = PwaStagingGenerationService(
-    PwaGenerationApi(
-      baseUrl: env.stagingBackendUrl!,
-      tokenProvider: () async {
-        await client.ensureSession();
-        return client.client.auth.currentSession?.accessToken;
-      },
-    ),
+  final api = PwaGenerationApi(
+    baseUrl: env.stagingBackendUrl!,
+    tokenProvider: () async {
+      await client.ensureSession();
+      return client.client.auth.currentSession?.accessToken;
+    },
   );
+  final generation = PwaStagingGenerationService(api);
+
+  // Identity and money, built HERE for the same reason as the engine: one
+  // instance, wired to the one isolated staging client, and no widget able to
+  // construct its own. Both are null in mock builds, where there is no backend
+  // to be honest with — and an auth UI that pretended otherwise would be a lie
+  // the demo tells.
+  final auth = PwaAuthService(auth: client.client.auth);
 
   // Private images are rendered through short-lived signed URLs minted from the
   // durable path. The path is what is stored; this is only how a pixel arrives.
@@ -214,6 +227,9 @@ Future<void> _bootPwaStaging(
         pwaImageUrlResolverProvider.overrideWithValue(resolver),
         pwaPendingGenerationStoreProvider.overrideWithValue(pendingStore),
         pwaBootRestoreProvider.overrideWithValue(restore),
+        // The paywall reads THIS and never a local counter (§9).
+        pwaEntitlementReaderProvider.overrideWithValue(api.entitlement),
+        pwaAuthServiceProvider.overrideWithValue(auth),
         ..._webNavOverrides(bridge),
       ],
       child: const PwaUrlSyncScope(child: PwaMockApp()),

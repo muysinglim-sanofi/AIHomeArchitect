@@ -37,6 +37,7 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../../core/models/atmosphere_style.dart';
 import '../../../core/providers/locale_provider.dart';
 import 'pwa_translations.dart';
+import '../auth/pwa_verification_channel.dart' show PwaVerificationFailure;
 import '../domain/pwa_project.dart' show PwaProjectSort;
 
 class PwaL10n {
@@ -562,6 +563,79 @@ class PwaL10n {
         return billingUnavailable;
       default:
         return errUnknown;
+    }
+  }
+
+  // ── Paywall ────────────────────────────────────────────────────────────────
+  String get paywallTitle => _get('pwaPaywallTitle');
+  String get paywallFreeUsedTitle => _get('pwaPaywallFreeUsedTitle');
+  String get paywallFreeUsedBody => _get('pwaPaywallFreeUsedBody');
+  String get paywallPassExhaustedTitle => _get('pwaPaywallPassExhaustedTitle');
+  String get paywallPassExhaustedBody => _get('pwaPaywallPassExhaustedBody');
+  String get paywallPassRequiredTitle => _get('pwaPaywallPassRequiredTitle');
+  String get paywallPassRequiredBody => _get('pwaPaywallPassRequiredBody');
+  String get paywallLoading => _get('pwaPaywallLoading');
+  String get paywallErrorTitle => _get('pwaPaywallErrorTitle');
+  String get paywallErrorBody => _get('pwaPaywallErrorBody');
+  String get paywallActiveTitle => _get('pwaPaywallActiveTitle');
+  String get paywallActiveBody => _get('pwaPaywallActiveBody');
+  String paywallSpaces(int n) =>
+      _get('pwaPaywallSpaces').replaceAll('{n}', '$n');
+  String paywallDays(int n) => _get('pwaPaywallDays').replaceAll('{n}', '$n');
+  String get paywallUnavailableTitle => _get('pwaPaywallUnavailableTitle');
+  String get paywallUnavailableBody => _get('pwaPaywallUnavailableBody');
+  String get paywallStoreOnly => _get('pwaPaywallStoreOnly');
+  String get paywallRestore => _get('pwaPaywallRestore');
+  String get paywallClose => _get('pwaPaywallClose');
+  String get paywallSecureNote => _get('pwaPaywallSecureNote');
+
+  // ── Account / verification ─────────────────────────────────────────────────
+  String get accountTitle => _get('pwaAccountTitle');
+  String get accountBody => _get('pwaAccountBody');
+  String get accountEmailLabel => _get('pwaAccountEmailLabel');
+  String get accountEmailHint => _get('pwaAccountEmailHint');
+  String get accountSend => _get('pwaAccountSend');
+  String get accountCodeTitle => _get('pwaAccountCodeTitle');
+  String accountCodeBody(String email) =>
+      _get('pwaAccountCodeBody').replaceAll('{email}', email);
+  String get accountCodeLabel => _get('pwaAccountCodeLabel');
+  String get accountVerify => _get('pwaAccountVerify');
+  String get accountResend => _get('pwaAccountResend');
+  String get accountChangeEmail => _get('pwaAccountChangeEmail');
+  String accountSignedInAs(String email) =>
+      _get('pwaAccountSignedInAs').replaceAll('{email}', email);
+  String get accountSignOut => _get('pwaAccountSignOut');
+  String get accountGuestLabel => _get('pwaAccountGuestLabel');
+  String get accountLinkedTitle => _get('pwaAccountLinkedTitle');
+  String get accountLinkedBody => _get('pwaAccountLinkedBody');
+  String get accountSwitchedTitle => _get('pwaAccountSwitchedTitle');
+  String get accountSwitchedBody => _get('pwaAccountSwitchedBody');
+  String get accountExistsTitle => _get('pwaAccountExistsTitle');
+  String get accountExistsBody => _get('pwaAccountExistsBody');
+  String get accountSignInInstead => _get('pwaAccountSignInInstead');
+  String get accountSignInTitle => _get('pwaAccountSignInTitle');
+  String get accountSignInBody => _get('pwaAccountSignInBody');
+  String get accountBackToLink => _get('pwaAccountBackToLink');
+  String get authUnavailable => _get('pwaAuthUnavailable');
+
+  /// A verification failure -> the sentence a person reads.
+  ///
+  /// `destinationAlreadyRegistered` is deliberately ABSENT: it is not an error
+  /// message, it is a fork in the journey, and the sheet renders a whole screen
+  /// for it. Anything that fell through to here would be mislabelled.
+  String verificationFailure(PwaVerificationFailure f) {
+    switch (f) {
+      case PwaVerificationFailure.invalidDestination:
+        return _get('pwaAuthErrInvalidEmail');
+      case PwaVerificationFailure.invalidCode:
+        return _get('pwaAuthErrInvalidCode');
+      case PwaVerificationFailure.rateLimited:
+        return _get('pwaAuthErrRateLimited');
+      case PwaVerificationFailure.unavailable:
+        return _get('pwaAuthErrUnavailable');
+      case PwaVerificationFailure.destinationAlreadyRegistered:
+      case PwaVerificationFailure.unknown:
+        return _get('pwaAuthErrUnknown');
     }
   }
 }

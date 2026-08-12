@@ -28,6 +28,7 @@ import 'hero/pwa_hero_sequence.dart';
 import 'hero/pwa_hero_video.dart';
 import 'pwa_architect_tokens.dart';
 import 'pwa_brand.dart';
+import 'pwa_account_chip.dart';
 import 'pwa_language_switcher.dart';
 import 'pwa_stored_image.dart';
 import 'pwa_theme.dart';
@@ -268,6 +269,7 @@ class _HomeBar extends StatelessWidget {
             ),
           ),
           const PwaLanguageSwitcher(onDark: true, compact: true),
+          const PwaAccountChip(onDark: true),
           const SizedBox(width: 10),
           _BarAction(
             icon: Icons.grid_view_rounded,

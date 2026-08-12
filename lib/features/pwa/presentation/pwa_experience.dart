@@ -16,6 +16,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../application/pwa_controller.dart';
+import '../billing/pwa_entitlement_controller.dart';
+import 'pwa_paywall.dart';
 import 'pwa_architect_screen.dart';
 import 'pwa_entry_screen.dart';
 import 'pwa_home_screen.dart';
@@ -50,8 +52,72 @@ class PwaExperience extends ConsumerWidget {
           right: 0,
           child: SafeArea(child: _PwaGenerationErrorBar()),
         ),
+        const _PwaBillingWatcher(),
       ],
     );
+  }
+}
+
+/// Turns billing EVENTS into the paywall, in one place.
+///
+/// It listens rather than renders (it occupies no space) because the paywall is
+/// a response to something that happened — a refusal, a settled generation —
+/// and every screen would otherwise have to remember to handle it. Two rules
+/// live here and nowhere else:
+///
+///   * only a refusal the BILLING ENGINE issued opens the paywall. A timeout, an
+///     unreachable backend or a failed upload must never look like a sale;
+///   * a generation that SUCCEEDED spent a credit, so entitlement is re-read
+///     from the server instead of decremented locally.
+class _PwaBillingWatcher extends ConsumerStatefulWidget {
+  const _PwaBillingWatcher();
+
+  @override
+  ConsumerState<_PwaBillingWatcher> createState() => _PwaBillingWatcherState();
+}
+
+class _PwaBillingWatcherState extends ConsumerState<_PwaBillingWatcher> {
+  /// The refusal already shown. Without it, every rebuild while the state still
+  /// carries a refusal would push a second sheet.
+  String _shown = '';
+  bool _wasGenerating = false;
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<String>(
+      pwaControllerProvider.select((s) => s.billingRefusal),
+      (_, refusal) {
+        if (refusal.isEmpty) {
+          _shown = '';
+          return;
+        }
+        if (refusal == _shown) return;
+        _shown = refusal;
+        // After the frame: this fires from a state change, and pushing a route
+        // during a build is how you get a "setState during build" crash.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          showPwaPaywall(context, ref, refusal: refusal);
+        });
+      },
+    );
+
+    ref.listen<bool>(
+      pwaControllerProvider.select((s) => s.generating),
+      (_, generating) {
+        final finished = _wasGenerating && !generating;
+        _wasGenerating = generating;
+        if (!finished) return;
+        // Only a generation that produced something spent a credit; a failure
+        // released its hold, and the server will say so on the next read.
+        final failed = ref.read(pwaControllerProvider).generationError != null;
+        if (!failed) {
+          ref.read(pwaEntitlementProvider.notifier).onGenerationSettled();
+        }
+      },
+    );
+
+    return const SizedBox.shrink();
   }
 }
 
@@ -66,6 +132,13 @@ class _PwaGenerationErrorBar extends ConsumerWidget {
       pwaControllerProvider.select((s) => s.generationError),
     );
     if (fallback == null) return const SizedBox.shrink();
+    // A refusal for money is not an error banner. It has a whole sheet, opened
+    // by `_PwaBillingWatcher`, and showing both would say the same thing twice —
+    // once as a failure, which it is not.
+    final billing = ref.watch(
+      pwaControllerProvider.select((s) => s.billingRefusal),
+    );
+    if (billing.isNotEmpty) return const SizedBox.shrink();
     // The CODE is what is rendered; the English sentence the controller wrote
     // is the fallback for a code this build does not know. Translating here
     // rather than where the failure happened is what lets the banner follow a

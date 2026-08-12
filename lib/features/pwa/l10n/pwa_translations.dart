@@ -232,6 +232,77 @@ const Map<String, String> pwaEnTranslations = {
       "We're finishing an update. Please try again in a moment.",
   'pwaPassSpacesLeft': '{n} spaces left',
 
+  // -- Paywall + account (Auth/Paywall foundation) ---------------------------
+  'pwaPaywallTitle': 'Keep designing',
+  'pwaPaywallFreeUsedTitle': 'Your free vision is used',
+  'pwaPaywallFreeUsedBody':
+      'You have seen what Ayden can do with your space. Unlock more visions to '
+      'keep refining it.',
+  'pwaPaywallPassExhaustedTitle': 'No spaces left',
+  'pwaPaywallPassExhaustedBody':
+      'Your pass has been fully used. Add more spaces to continue.',
+  'pwaPaywallPassRequiredTitle': 'Restore your access',
+  'pwaPaywallPassRequiredBody':
+      'Your account has Premium, but no active pass was found. Restore your '
+      'purchase to keep designing.',
+  'pwaPaywallLoading': 'Checking your account...',
+  'pwaPaywallErrorTitle': "We couldn't check your account",
+  'pwaPaywallErrorBody':
+      'Your access could not be confirmed just now. You can try again.',
+  'pwaPaywallActiveTitle': 'Your pass is active',
+  'pwaPaywallActiveBody': 'No watermark. Design as much as you like.',
+  'pwaPaywallSpaces': '{n} spaces',
+  'pwaPaywallDays': '{n} days',
+  'pwaPaywallUnavailableTitle': 'Payments are not open yet',
+  'pwaPaywallUnavailableBody':
+      'Buying on the web is coming to Cambodia soon. Your work is saved and '
+      'will be waiting for you.',
+  'pwaPaywallStoreOnly': 'Available in the mobile app',
+  'pwaPaywallRestore': 'I already paid',
+  'pwaPaywallClose': 'Not now',
+  'pwaPaywallSecureNote': 'Payment is handled by Ayden. Never in your browser.',
+
+  // -- Account / verification ------------------------------------------------
+  'pwaAccountTitle': 'Save your work',
+  'pwaAccountBody':
+      'Add an email so your projects follow you to any device. Everything you '
+      'have made stays exactly where it is.',
+  'pwaAccountEmailLabel': 'Email address',
+  'pwaAccountEmailHint': 'you@example.com',
+  'pwaAccountSend': 'Send code',
+  'pwaAccountCodeTitle': 'Enter your code',
+  'pwaAccountCodeBody': 'We sent a 6-digit code to {email}.',
+  'pwaAccountCodeLabel': 'Verification code',
+  'pwaAccountVerify': 'Verify',
+  'pwaAccountResend': 'Send it again',
+  'pwaAccountChangeEmail': 'Use a different address',
+  'pwaAccountSignedInAs': 'Signed in as {email}',
+  'pwaAccountSignOut': 'Sign out',
+  'pwaAccountGuestLabel': 'Guest',
+  'pwaAccountLinkedTitle': 'Your work is saved',
+  'pwaAccountLinkedBody':
+      'Everything you made is on your account. Sign in from any device to find '
+      'it again.',
+  'pwaAccountSwitchedTitle': "You're signed in",
+  'pwaAccountSwitchedBody':
+      'This account keeps its own projects and its own access. Anything you '
+      'made as a guest stays on this browser.',
+  'pwaAccountExistsTitle': 'This email already has an account',
+  'pwaAccountExistsBody':
+      'Sign in to it instead. Your guest work stays on this browser and does '
+      'not move across.',
+  'pwaAccountSignInInstead': 'Sign in to that account',
+  'pwaAccountSignInTitle': 'Sign in',
+  'pwaAccountSignInBody': 'We will send a code to your email address.',
+  'pwaAccountBackToLink': 'Create a new account instead',
+  'pwaAuthErrInvalidEmail': 'That email address does not look right.',
+  'pwaAuthErrInvalidCode': 'That code is wrong or has expired.',
+  'pwaAuthErrRateLimited':
+      'Too many codes have been sent. Please wait a few minutes and try again.',
+  'pwaAuthErrUnavailable': "We couldn't reach the verification service.",
+  'pwaAuthErrUnknown': 'Something went wrong. Please try again.',
+  'pwaAuthUnavailable': 'Accounts are not available in this build.',
+
   // ── Errors ─────────────────────────────────────────────────────────────────
   'pwaErrSessionExpired': 'Your session expired. Reload the page to continue.',
   'pwaErrBackendUnreachable': 'This build cannot reach a generation backend.',
@@ -455,6 +526,78 @@ const Map<String, String> pwaKmTranslations = {
   'pwaBillingUnavailable':
       'យើង​កំពុង​បញ្ចប់​ការ​ធ្វើ​បច្ចុប្បន្នភាព។ សូម​ព្យាយាម​ម្ដង​ទៀត​ក្នុង​ពេល​ឆាប់ៗ។',
   'pwaPassSpacesLeft': 'នៅ​សល់ {n} Spaces',
+
+  // -- Paywall + account (Auth/Paywall foundation) ---------------------------
+  'pwaPaywallTitle': 'បន្ត​រចនា​ត​ទៅ​ទៀត',
+  'pwaPaywallFreeUsedTitle': 'ទស្សនៈ​ឥត​គិត​ថ្លៃ​របស់​អ្នក​ត្រូវ​បាន​ប្រើ​អស់​ហើយ',
+  'pwaPaywallFreeUsedBody':
+      'អ្នក​បាន​ឃើញ​ហើយ​ថា Ayden អាច​ធ្វើ​អ្វី​ខ្លះ​ជាមួយ​ទីកន្លែង​របស់​អ្នក។ '
+      'ដោះ​សោ​ទស្សនៈ​បន្ថែម ដើម្បី​បន្ត​កែ​លម្អ​វា។',
+  'pwaPaywallPassExhaustedTitle': 'គ្មាន Spaces នៅ​សល់​ទេ',
+  'pwaPaywallPassExhaustedBody':
+      'Pass របស់​អ្នក​ត្រូវ​បាន​ប្រើ​អស់​ហើយ។ បន្ថែម Spaces ដើម្បី​បន្ត។',
+  'pwaPaywallPassRequiredTitle': 'ស្ដារ​សិទ្ធិ​ចូល​ប្រើ​របស់​អ្នក',
+  'pwaPaywallPassRequiredBody':
+      'គណនី​របស់​អ្នក​មាន Premium ប៉ុន្តែ​រក​មិន​ឃើញ Pass សកម្ម​ទេ។ '
+      'សូម​ស្ដារ​ការ​ទិញ​របស់​អ្នក ដើម្បី​បន្ត​រចនា។',
+  'pwaPaywallLoading': 'កំពុង​ពិនិត្យ​គណនី​របស់​អ្នក...',
+  'pwaPaywallErrorTitle': 'យើង​មិន​អាច​ពិនិត្យ​គណនី​របស់​អ្នក​បាន​ទេ',
+  'pwaPaywallErrorBody':
+      'សិទ្ធិ​ចូល​ប្រើ​របស់​អ្នក​មិន​អាច​បញ្ជាក់​បាន​ឥឡូវ​នេះ​ទេ។ អ្នក​អាច​ព្យាយាម​ម្ដង​ទៀត។',
+  'pwaPaywallActiveTitle': 'Pass របស់​អ្នក​កំពុង​សកម្ម',
+  'pwaPaywallActiveBody': 'គ្មាន​ហត្ថលេខា​ទឹក។ រចនា​បាន​តាម​ចិត្ត។',
+  'pwaPaywallSpaces': '{n} Spaces',
+  'pwaPaywallDays': '{n} ថ្ងៃ',
+  'pwaPaywallUnavailableTitle': 'ការ​ទូទាត់​មិន​ទាន់​បើក​នៅ​ឡើយ​ទេ',
+  'pwaPaywallUnavailableBody':
+      'ការ​ទិញ​តាម​គេហទំព័រ​នឹង​មក​ដល់​កម្ពុជា​ក្នុង​ពេល​ឆាប់ៗ។ '
+      'ការងារ​របស់​អ្នក​ត្រូវ​បាន​រក្សា​ទុក ហើយ​នឹង​នៅ​រង់ចាំ​អ្នក។',
+  'pwaPaywallStoreOnly': 'មាន​នៅ​ក្នុង​កម្មវិធី​ទូរស័ព្ទ',
+  'pwaPaywallRestore': 'ខ្ញុំ​បាន​ទូទាត់​រួច​ហើយ',
+  'pwaPaywallClose': 'មិន​ទាន់​ទេ',
+  'pwaPaywallSecureNote':
+      'ការ​ទូទាត់​ត្រូវ​បាន​គ្រប់គ្រង​ដោយ Ayden មិន​មែន​ក្នុង​កម្មវិធី​រុករក​របស់​អ្នក​ទេ។',
+
+  // -- Account / verification ------------------------------------------------
+  'pwaAccountTitle': 'រក្សា​ទុក​ការងារ​របស់​អ្នក',
+  'pwaAccountBody':
+      'បន្ថែម​អ៊ីមែល ដើម្បី​ឲ្យ​គម្រោង​របស់​អ្នក​តាម​អ្នក​ទៅ​គ្រប់​ឧបករណ៍។ '
+      'អ្វី​គ្រប់​យ៉ាង​ដែល​អ្នក​បាន​បង្កើត​នៅ​ដដែល។',
+  'pwaAccountEmailLabel': 'អាសយដ្ឋាន​អ៊ីមែល',
+  'pwaAccountEmailHint': 'you@example.com',
+  'pwaAccountSend': 'ផ្ញើ​លេខ​កូដ',
+  'pwaAccountCodeTitle': 'បញ្ចូល​លេខ​កូដ​របស់​អ្នក',
+  'pwaAccountCodeBody': 'យើង​បាន​ផ្ញើ​លេខ​កូដ ៦ ខ្ទង់​ទៅ {email}។',
+  'pwaAccountCodeLabel': 'លេខ​កូដ​ផ្ទៀងផ្ទាត់',
+  'pwaAccountVerify': 'ផ្ទៀងផ្ទាត់',
+  'pwaAccountResend': 'ផ្ញើ​ម្ដង​ទៀត',
+  'pwaAccountChangeEmail': 'ប្រើ​អាសយដ្ឋាន​ផ្សេង',
+  'pwaAccountSignedInAs': 'បាន​ចូល​ជា {email}',
+  'pwaAccountSignOut': 'ចេញ​ពី​គណនី',
+  'pwaAccountGuestLabel': 'ភ្ញៀវ',
+  'pwaAccountLinkedTitle': 'ការងារ​របស់​អ្នក​ត្រូវ​បាន​រក្សា​ទុក',
+  'pwaAccountLinkedBody':
+      'អ្វី​គ្រប់​យ៉ាង​ដែល​អ្នក​បាន​បង្កើត​នៅ​ក្នុង​គណនី​របស់​អ្នក។ '
+      'ចូល​ពី​ឧបករណ៍​ណា​ក៏​បាន ដើម្បី​រក​វា​ឃើញ​ម្ដង​ទៀត។',
+  'pwaAccountSwitchedTitle': 'អ្នក​បាន​ចូល​ហើយ',
+  'pwaAccountSwitchedBody':
+      'គណនី​នេះ​មាន​គម្រោង​ផ្ទាល់​ខ្លួន និង​សិទ្ធិ​ចូល​ប្រើ​ផ្ទាល់​ខ្លួន។ '
+      'អ្វី​ដែល​អ្នក​បាន​បង្កើត​ជា​ភ្ញៀវ​នៅ​តែ​លើ​កម្មវិធី​រុករក​នេះ។',
+  'pwaAccountExistsTitle': 'អ៊ីមែល​នេះ​មាន​គណនី​រួច​ហើយ',
+  'pwaAccountExistsBody':
+      'សូម​ចូល​ទៅ​គណនី​នោះ​ជំនួស​វិញ។ ការងារ​ជា​ភ្ញៀវ​របស់​អ្នក​នៅ​តែ​លើ​កម្មវិធី​រុករក​នេះ '
+      'ហើយ​មិន​ផ្លាស់​ទី​ទៅ​តាម​ទេ។',
+  'pwaAccountSignInInstead': 'ចូល​ទៅ​គណនី​នោះ',
+  'pwaAccountSignInTitle': 'ចូល​គណនី',
+  'pwaAccountSignInBody': 'យើង​នឹង​ផ្ញើ​លេខ​កូដ​ទៅ​អាសយដ្ឋាន​អ៊ីមែល​របស់​អ្នក។',
+  'pwaAccountBackToLink': 'បង្កើត​គណនី​ថ្មី​ជំនួស​វិញ',
+  'pwaAuthErrInvalidEmail': 'អាសយដ្ឋាន​អ៊ីមែល​នោះ​មើល​ទៅ​មិន​ត្រឹមត្រូវ​ទេ។',
+  'pwaAuthErrInvalidCode': 'លេខ​កូដ​នោះ​មិន​ត្រឹមត្រូវ ឬ​ផុត​កំណត់​ហើយ។',
+  'pwaAuthErrRateLimited':
+      'លេខ​កូដ​ត្រូវ​បាន​ផ្ញើ​ច្រើន​ដង​ពេក។ សូម​រង់ចាំ​ពីរ​បី​នាទី រួច​ព្យាយាម​ម្ដង​ទៀត។',
+  'pwaAuthErrUnavailable': 'យើង​មិន​អាច​ភ្ជាប់​ទៅ​សេវា​ផ្ទៀងផ្ទាត់​បាន​ទេ។',
+  'pwaAuthErrUnknown': 'មាន​អ្វី​មួយ​មិន​ប្រក្រតី។ សូម​ព្យាយាម​ម្ដង​ទៀត។',
+  'pwaAuthUnavailable': 'គណនី​មិន​មាន​នៅ​ក្នុង​កំណែ​នេះ​ទេ។',
 
   // ── Errors ─────────────────────────────────────────────────────────────────
   'pwaErrSessionExpired': 'វគ្គ​របស់​អ្នក​ផុត​កំណត់។ សូម​ផ្ទុក​ទំព័រ​ឡើង​វិញ​ដើម្បី​បន្ត។',
@@ -680,6 +823,80 @@ const Map<String, String> pwaFrTranslations = {
   'pwaBillingUnavailable':
       'Nous terminons une mise à jour. Veuillez réessayer dans un instant.',
   'pwaPassSpacesLeft': '{n} Spaces restants',
+
+  // -- Paywall + account (Auth/Paywall foundation) ---------------------------
+  'pwaPaywallTitle': 'Continuer à créer',
+  'pwaPaywallFreeUsedTitle': 'Votre vision gratuite est utilisée',
+  'pwaPaywallFreeUsedBody':
+      "Vous avez vu ce qu'Ayden peut faire de votre espace. Débloquez plus de "
+      "visions pour continuer à l'affiner.",
+  'pwaPaywallPassExhaustedTitle': 'Plus aucun Space',
+  'pwaPaywallPassExhaustedBody':
+      'Votre pass a été entièrement utilisé. Ajoutez des Spaces pour continuer.',
+  'pwaPaywallPassRequiredTitle': 'Restaurez votre accès',
+  'pwaPaywallPassRequiredBody':
+      "Votre compte est Premium, mais aucun pass actif n'a été trouvé. "
+      'Restaurez votre achat pour continuer à créer.',
+  'pwaPaywallLoading': 'Vérification de votre compte...',
+  'pwaPaywallErrorTitle': 'Impossible de vérifier votre compte',
+  'pwaPaywallErrorBody':
+      "Votre accès n'a pas pu être confirmé pour le moment. Vous pouvez "
+      'réessayer.',
+  'pwaPaywallActiveTitle': 'Votre pass est actif',
+  'pwaPaywallActiveBody': 'Sans filigrane. Créez autant que vous voulez.',
+  'pwaPaywallSpaces': '{n} Spaces',
+  'pwaPaywallDays': '{n} jours',
+  'pwaPaywallUnavailableTitle': 'Les paiements ne sont pas encore ouverts',
+  'pwaPaywallUnavailableBody':
+      "L'achat sur le web arrive bientôt au Cambodge. Votre travail est "
+      'enregistré et vous attendra.',
+  'pwaPaywallStoreOnly': "Disponible dans l'application mobile",
+  'pwaPaywallRestore': "J'ai déjà payé",
+  'pwaPaywallClose': 'Pas maintenant',
+  'pwaPaywallSecureNote':
+      'Le paiement est géré par Ayden. Jamais dans votre navigateur.',
+
+  // -- Account / verification ------------------------------------------------
+  'pwaAccountTitle': 'Enregistrez votre travail',
+  'pwaAccountBody':
+      'Ajoutez un e-mail pour que vos projets vous suivent sur tous vos '
+      'appareils. Tout ce que vous avez créé reste exactement où il est.',
+  'pwaAccountEmailLabel': 'Adresse e-mail',
+  'pwaAccountEmailHint': 'vous@exemple.com',
+  'pwaAccountSend': 'Envoyer le code',
+  'pwaAccountCodeTitle': 'Saisissez votre code',
+  'pwaAccountCodeBody': 'Nous avons envoyé un code à 6 chiffres à {email}.',
+  'pwaAccountCodeLabel': 'Code de vérification',
+  'pwaAccountVerify': 'Vérifier',
+  'pwaAccountResend': 'Renvoyer le code',
+  'pwaAccountChangeEmail': 'Utiliser une autre adresse',
+  'pwaAccountSignedInAs': 'Connecté en tant que {email}',
+  'pwaAccountSignOut': 'Se déconnecter',
+  'pwaAccountGuestLabel': 'Invité',
+  'pwaAccountLinkedTitle': 'Votre travail est enregistré',
+  'pwaAccountLinkedBody':
+      'Tout ce que vous avez créé est sur votre compte. Connectez-vous depuis '
+      "n'importe quel appareil pour le retrouver.",
+  'pwaAccountSwitchedTitle': 'Vous êtes connecté',
+  'pwaAccountSwitchedBody':
+      'Ce compte conserve ses propres projets et son propre accès. Ce que vous '
+      "avez créé en tant qu'invité reste sur ce navigateur.",
+  'pwaAccountExistsTitle': 'Cet e-mail a déjà un compte',
+  'pwaAccountExistsBody':
+      "Connectez-vous à ce compte. Votre travail d'invité reste sur ce "
+      'navigateur et ne sera pas transféré.',
+  'pwaAccountSignInInstead': 'Se connecter à ce compte',
+  'pwaAccountSignInTitle': 'Connexion',
+  'pwaAccountSignInBody': 'Nous enverrons un code à votre adresse e-mail.',
+  'pwaAccountBackToLink': 'Créer un nouveau compte',
+  'pwaAuthErrInvalidEmail': 'Cette adresse e-mail ne semble pas valide.',
+  'pwaAuthErrInvalidCode': 'Ce code est incorrect ou a expiré.',
+  'pwaAuthErrRateLimited':
+      'Trop de codes ont été envoyés. Patientez quelques minutes et réessayez.',
+  'pwaAuthErrUnavailable': 'Impossible de joindre le service de vérification.',
+  'pwaAuthErrUnknown': "Une erreur s'est produite. Veuillez réessayer.",
+  'pwaAuthUnavailable':
+      'Les comptes ne sont pas disponibles dans cette version.',
 
   // ── Errors ─────────────────────────────────────────────────────────────────
   'pwaErrSessionExpired':

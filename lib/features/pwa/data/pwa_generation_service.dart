@@ -127,11 +127,23 @@ class PwaGenerationFailure implements Exception {
     required this.code,
     required this.userMessage,
     required this.retryable,
+    this.billingState = '',
   });
 
   final String code;
   final String userMessage;
   final bool retryable;
+
+  /// `FREE_EXHAUSTED` | `PASS_EXHAUSTED` | `PASS_REQUIRED` when the backend
+  /// refused for MONEY, and empty otherwise. Carried all the way to the UI so
+  /// the paywall opens on the state the Billing Engine named — never on a guess
+  /// the client made from a counter it kept itself.
+  final String billingState;
+
+  /// Whether this failure is the one thing allowed to open a paywall. A timeout
+  /// or an unreachable backend must never look like a sale.
+  bool get isBillingRefusal =>
+      code == 'QUOTA_EXHAUSTED' || billingState.isNotEmpty;
 
   @override
   String toString() => 'PwaGenerationFailure($code, retryable: $retryable)';
@@ -279,6 +291,7 @@ class PwaStagingGenerationService implements PwaGenerationService {
         code: e.code,
         userMessage: e.userMessage,
         retryable: e.retryable,
+        billingState: e.billingState,
       );
     }
   }

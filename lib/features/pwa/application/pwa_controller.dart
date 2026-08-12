@@ -327,6 +327,7 @@ class PwaState {
     this.generationError,
     this.generationErrorCode,
     this.generationRetryable = false,
+    this.billingRefusal = '',
   });
 
   final PwaPhase phase;
@@ -398,6 +399,14 @@ class PwaState {
   /// Whether that failure is worth retrying (a timeout, an unreachable backend)
   /// as opposed to terminal (an expired session, a forbidden project).
   final bool generationRetryable;
+
+  /// The billing state named by the LAST refusal, or empty.
+  ///
+  /// Separate from [generationErrorCode] because it answers a different
+  /// question: the code says a generation failed, this says WHICH paywall the
+  /// Billing Engine's refusal calls for. Only the backend ever writes it — the
+  /// browser keeps no counter of its own, so it cannot invent a paywall (§9).
+  final String billingRefusal;
 
   /// The vision behind [refineContextVisionId], if it still exists.
   PwaVision? get refineContextVision => _byId(refineContextVisionId);
@@ -579,6 +588,7 @@ class PwaState {
     String? generationError,
     String? generationErrorCode,
     bool? generationRetryable,
+    String? billingRefusal,
     bool clearGenerationError = false,
   }) {
     return PwaState(
@@ -624,6 +634,9 @@ class PwaState {
       generationRetryable: clearGenerationError
           ? false
           : (generationRetryable ?? this.generationRetryable),
+      billingRefusal: clearGenerationError
+          ? ''
+          : (billingRefusal ?? this.billingRefusal),
     );
   }
 }
@@ -1227,6 +1240,11 @@ class PwaController extends StateNotifier<PwaState> {
       generationError: f.userMessage,
       generationErrorCode: f.code,
       generationRetryable: f.retryable,
+      // Only a refusal for money sets this, so nothing but the Billing Engine
+      // can put a paywall on screen.
+      billingRefusal: f.isBillingRefusal
+          ? (f.billingState.isEmpty ? 'FREE_EXHAUSTED' : f.billingState)
+          : '',
     );
     final p = await _pending.read();
     if (p != null && !p.failed) await _pending.write(p.asFailed());

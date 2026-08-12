@@ -23,6 +23,7 @@ import 'pwa_brand.dart';
 import 'pwa_stored_image.dart';
 import 'pwa_working_indicator.dart';
 import '../l10n/pwa_l10n.dart';
+import 'pwa_account_chip.dart';
 import 'pwa_language_switcher.dart';
 
 // V7 responsive tiers (§4). Local to the Architect so the shared
@@ -690,6 +691,7 @@ class _V7GlobalHeader extends StatelessWidget {
           // person who lands on a deep link, or who is mid-project, must be
           // able to change language without first navigating away.
           const PwaLanguageSwitcher(onDark: true, compact: true),
+          const PwaAccountChip(onDark: true),
           const SizedBox(width: 10),
           _V7ProjectsButton(onTap: onProjects),
           Expanded(

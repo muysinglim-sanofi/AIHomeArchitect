@@ -29,11 +29,25 @@ class PwaGenerationApiError implements Exception {
     required this.code,
     required this.userMessage,
     required this.retryable,
+    this.billingState = '',
+    this.paywall = false,
   });
 
   final String code;
   final String userMessage;
   final bool retryable;
+
+  /// The finer billing semantic behind a `QUOTA_EXHAUSTED`: `FREE_EXHAUSTED`,
+  /// `PASS_EXHAUSTED`, `PASS_REQUIRED`. Empty for every other error.
+  ///
+  /// Carried separately from [code] because the two answer different questions:
+  /// `code` says what happened, `billingState` says which paywall to show. The
+  /// UI translates both — neither string is ever rendered as-is.
+  final String billingState;
+
+  /// True when the backend refused for MONEY reasons. The one signal allowed to
+  /// open the paywall, so a network blip can never be mistaken for a sale.
+  final bool paywall;
 
   @override
   String toString() => 'PwaGenerationApiError($code, retryable: $retryable)';
@@ -518,6 +532,7 @@ class PwaGenerationApi {
     final code = payload?['error_code'];
     final message = payload?['user_message'];
     final retryable = payload?['retryable'];
+    final billing = payload?['billing_state'];
     return PwaGenerationApiError(
       code: code is String && code.isNotEmpty ? code : 'HTTP_$status',
       userMessage: message is String && message.isNotEmpty
@@ -525,6 +540,38 @@ class PwaGenerationApi {
           : 'Something went wrong creating your vision. Try again.',
       // A 5xx with no explicit verdict is worth retrying; a 4xx is not.
       retryable: retryable is bool ? retryable : status >= 500,
+      billingState: billing is String ? billing : '',
+      // 402 is the billing seam's own status, and `paywall` is the field the
+      // backend sets when it refuses for money. Both are required: no other
+      // failure may open a paywall.
+      paywall: status == 402 && payload?['paywall'] != null,
     );
+  }
+
+  /// What this user may do, according to the BILLING ENGINE. A read.
+  ///
+  /// The paywall is driven by this and never by a local counter: the browser
+  /// does not know what a free generation costs, whether a pass is active, or
+  /// what a purchase granted — the ledger does. Returns null when the answer is
+  /// unknown (offline, session gone), which the UI renders as "loading", not as
+  /// "blocked" and not as "allowed".
+  Future<Map<String, Object?>?> entitlement() async {
+    if (_disposed) return null;
+    final token = await _tokenProvider();
+    if (token == null || token.isEmpty) return null;
+    try {
+      final res = await _dio.get<Object?>(
+        '/pwa/staging/entitlement',
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          receiveTimeout: const Duration(seconds: 20),
+        ),
+      );
+      final code = res.statusCode ?? 0;
+      if (code < 200 || code >= 300 || res.data is! Map) return null;
+      return (res.data! as Map).cast<String, Object?>();
+    } catch (_) {
+      return null;
+    }
   }
 }
