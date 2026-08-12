@@ -249,9 +249,22 @@ changer aussi. Aucune décision billing ne dépend de la locale.
    avoir regardé.**
 4. **Écrans Billing côté UI** : les états `billing_state` sont traduits mais
    aucun écran ne les affiche encore (pas de paywall — c'est la phase suivante).
-5. `flutter build web --release -t lib/main_pwa.dart --dart-define-from-file=.env.pwa-staging.json`
+5. ~~`flutter build web`~~ — **FAIT, vert** : `√ Built build/web` en 145 s,
+   bundle 3,68 Mo (contre 3,15 Mo avant : les ~530 Ko de plus sont les trois
+   dictionnaires). Toujours avec
+   `--release -t lib/main_pwa.dart --dart-define-from-file=.env.pwa-staging.json`
    — **jamais** un `flutter build web` nu (il construirait l'entrypoint mobile
    par-dessus le bundle PWA).
+
+   ⚠️ **Piège de vérification** (m'a fait crier au loup une fois) : chercher
+   `ភPHASA` ou `Retour à l'accueil` dans `main.dart.js` renvoie **0**. dart2js
+   échappe tout le non-ASCII (`\xe9`, `\u1797`) — les glyphes bruts n'existent
+   pas dans le bundle. Les vrais compteurs, mesurés :
+   `\xe9` → 434 · `\u17` → 14 424 · `\u1797` → 92. Les trois dictionnaires
+   sont bien embarqués. **Chercher la forme échappée, pas le glyphe.**
+
+   Cela ne dit RIEN de la police : que les chaînes soient dans le bundle ne
+   prouve pas que CanvasKit sache les dessiner. Le point 3 reste ouvert.
 
 ---
 
