@@ -268,6 +268,67 @@ changer aussi. Aucune décision billing ne dépend de la locale.
 
 ---
 
+## 3bis — REVUE VISUELLE FAITE (2026-08-12) — police + 3 langues
+
+**Rien de ce qui suit n'a été trouvé par un test.** C'est le point de la revue.
+
+### Police khmère — RÉSOLU, mais pas comme prévu
+
+Le renderer est **CanvasKit** (vérifié : un seul `<canvas>` dans le shadow root
+de `flt-glass-pane`, `flt-scene-host`, aucun `flt-paragraph`). Il n'utilise pas
+les polices système. Flutter télécharge un fallback Noto depuis
+`fonts.gstatic.com` — observé pour `notosanssymbols` et `roboto`.
+
+Ça marche, et ça marche **trop tard** : le menu de langue a d'abord peint
+ភាសាខ្មែរ en **neuf tofus**, puis s'est corrigé une fois le téléchargement
+arrivé. Sur un CDN bloqué ou lent, il ne se corrige jamais.
+
+⚠️ **Piège qui m'a fait crier au loup deux fois** :
+1. la 1ʳᵉ capture montrait des tofus — c'était la frame AVANT le download ;
+2. bloquer `fonts.gstatic.com` en entier casse **aussi le latin**, parce que
+   **Roboto (la police primaire de Flutter Web) vient du même CDN**. Ne jamais
+   conclure « le khmer est cassé » depuis ce test-là.
+
+**Fix** : `web/fonts/NotoSansKhmer-Regular.ttf` (114 Ko, SIL OFL 1.1, licence
+dans la table `name` de la police), chargé par `FontLoader` avant `runApp`,
+enregistré en **fallback** (jamais en famille primaire → latin inchangé).
+`web/` n'entre JAMAIS dans le bundle iOS/Android et `pubspec.yaml` n'est pas
+touché — c'est tout l'intérêt, le dépôt est partagé avec le mobile gelé.
+
+Le fallback devait aussi être posé **au niveau du thème** : `PopupMenuItem`,
+dialogs et autres surfaces en overlay installent leur PROPRE `DefaultTextStyle`
+depuis `theme.textTheme`, qui **remplace** l'ambiant. La page était correcte
+pendant que le menu restait en tofu.
+
+### Trois autres défauts trouvés à l'œil
+
+* **Noms de pièces en anglais** en khmer et en français. Corrigé : affichage via
+  le vocabulaire mobile approuvé, **valeur ROUTÉE inchangée** (label EN
+  canonique — la DNA par pièce est keyée dessus). En anglais la carte lit
+  maintenant « Master Bedroom » (mot mobile) au lieu de « Bedroom ».
+* **Letter-spacing 2.1-2.4 sur les eyebrows** : élégant en latin, il **écarte
+  les clusters khmers**. Collapse à 0 en khmer (`pwaTracking`).
+* **Dates relatives anglaises** dans une UI française (« 2 days ago ») : elles
+  étaient pré-rendues à la désérialisation. Formatées depuis `updatedAt` au
+  moment de l'affichage.
+
+Sélecteur de langue ajouté dans **toutes** les barres (il n'était que sur Home).
+
+### Ce qui a été vu, et ce qui ne l'a pas été
+
+**VU en navigateur** : Home KM/EN/FR (1400 px), Home KM et FR (390 px), Create
+en KM, le sélecteur, la persistance de la locale après rechargement complet.
+
+**PAS VU faute d'un projet sous le guest courant** (localStorage vidé pendant
+l'enquête police → nouvel anonyme → bibliothèque vide) : **Architect, Full
+Reveal, My Projects, l'état de chargement et les états billing en KM et FR**.
+Ces surfaces ont été vues **en anglais** en début de session avec les nouvelles
+chaînes. Elles sont couvertes par `I18N05-10` et `I18N18`, mais **une revue
+visuelle KM/FR de ces quatre écrans reste à faire** — il suffit de créer un
+projet (1 génération gratuite) et de refaire la boucle.
+
+---
+
 ## 4 — INVARIANTS À NE PAS CASSER
 
 * **Mobile `frontend/` reste à `f3a6fa2`** — 0 fichier modifié.
