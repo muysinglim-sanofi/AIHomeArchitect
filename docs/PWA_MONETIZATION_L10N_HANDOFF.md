@@ -544,15 +544,67 @@ mesurer la troisième.
 | `flutter analyze lib` | **No issues found** |
 | `flutter build web --release` (staging) | **vert** |
 
+### 5.8bis REVUE VISUELLE — ce qui a VRAIMENT été vu dans un navigateur
+
+Dit précisément, parce que « revue faite » sans périmètre ne vaut rien.
+
+**Vu, capturé, dans le vrai build staging servi sur `127.0.0.1:8104` :**
+
+* **EN / desktop 1400×1000 — feuille compte** : titre, corps, champ e-mail,
+  « Send code » (désactivé tant que l'adresse est vide, ce qui est correct),
+  et « Sign in to that account ». Rien de coupé, rien qui déborde.
+* **EN / desktop — PAYWALL, avec de vraies données** : « Your free vision is
+  used », l'encart « Payments are not open yet », le catalogue canonique
+  (10/25/50/100 spaces à $1.99/$3.99/$6.99/$11.99), le weekly pass à $7.99
+  marqué « Available in the mobile app », **et aucun bouton d'achat**.
+* **KM / desktop — écran d'accueil complet en khmer** : barre supérieure,
+  héros, CTA, carte projet, dates relatives. **Aucun tofu.** La police
+  embarquée fait son travail hors ligne.
+
+**Défaut trouvé et corrigé pendant cette revue** : le serveur trie le
+catalogue par prix, ce qui plaçait le pass mobile-only à $7.99 ENTRE les packs
+web à $6.99 et $11.99 — une échelle de prix avec un trou dedans.
+`productsForDisplay` groupe désormais « ce que le web peut vendre » avant
+« ce qu'il ne peut pas ». Test : PAY08.
+
+**NON obtenu en navigateur** : les captures KM/FR des DEUX nouvelles feuilles.
+Le pilotage par coordonnées a fini par dériver (Chrome accumule les overrides
+`setDeviceMetricsOverride` et finit par composer des tuiles répétées), et la
+position de la puce compte change avec la locale parce que les libellés
+voisins n'ont pas la même largeur. **Ce n'est pas un défaut du produit ; c'est
+la limite de l'outillage de cette session.** Ce qui couvre malgré tout les
+trois langues sur ces surfaces :
+
+* **PAY10** monte le vrai `PwaPaywallSheet` en km / en / fr et vérifie les
+  chaînes exactes (titre d'état, encart paiement, prix) **et** l'absence de
+  bouton d'achat ;
+* **PAY11** vérifie que les trois dictionnaires portent tout le vocabulaire
+  paywall + compte ;
+* **I18N01-18** (phase B, déjà fermée) verrouille la complétude structurelle
+  et l'absence d'anglais résiduel dans les surfaces auditées.
+
+Pour finir la revue à l'œil en KM/FR : redémarrer Chrome (override propre),
+`localStorage.setItem('flutter.ui_locale', '"km"')`, recharger, puis cliquer
+la puce compte à la main. C'est cinq minutes de souris, pas du code.
+
 ### 5.9 Piloter le navigateur : deux pièges mesurés
 
 En plus du piège rAF déjà documenté (onglet non redimensionné ⇒ pas de repaint) :
 
+0. **Chrome dérive.** Après beaucoup d'`Emulation.setDeviceMetricsOverride`
+   successifs, le compositeur finit par renvoyer des captures en tuiles
+   répétées et une largeur qui n'est plus celle demandée. Symptôme : la capture
+   ne ressemble à AUCUN état de l'app. Remède : `clearDeviceMetricsOverride`,
+   ou un onglet neuf. Ne pas conclure « bug de layout » sur une telle image.
 1. **Il n'y a pas de DOM adressable.** Flutter ne construit l'arbre sémantique
    qu'après un geste qu'il accepte comme signal d'accessibilité ; un `.click()`
    synthétique sur le `flt-semantics-placeholder` (1×1, hors écran) n'en est pas
    un. La revue clique donc des **coordonnées mesurées** et vérifie par capture.
-2. **Le premier appui après une navigation ne touche aucun widget** — il est
+2. **La position d'un contrôle dépend de la LOCALE** : la barre supérieure est
+   alignée à droite, donc la puce compte se déplace selon la largeur des
+   libellés khmers ou français. Une coordonnée codée en dur ne marche que pour
+   la langue où elle a été mesurée.
+3. **Le premier appui après une navigation ne touche aucun widget** — il est
    consommé par la prise de focus du canvas. Toute interaction doit être envoyée
    **deux fois**, la capture suivant la seconde.
 
