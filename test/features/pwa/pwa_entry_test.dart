@@ -13,6 +13,7 @@ import 'package:ai_home_architect/features/pwa/presentation/pwa_entry_screen.dar
 import 'package:ai_home_architect/features/pwa/presentation/pwa_experience.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_select_card.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_theme.dart';
+import 'package:ai_home_architect/features/pwa/l10n/pwa_l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -545,9 +546,15 @@ void main() {
     await _enterWorkspace(tester);
     // Bring each card into view first (the editorial intro can push the
     // selectors into their scroll area; selection behaviour is unchanged).
-    await tester.ensureVisible(find.text('Bedroom'));
+    // The DISPLAYED label is the mobile dictionary's ("Master Bedroom"); the
+    // ROUTED id is unchanged and is asserted a few lines down.
+    final bedroom = pwaL10nFor(const Locale('en')).roomCardLabel(
+      'masterBedroom',
+      'Bedroom',
+    );
+    await tester.ensureVisible(find.text(bedroom));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Bedroom'));
+    await tester.tap(find.text(bedroom));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Warm Modern'));
     await tester.pumpAndSettle();
@@ -649,8 +656,9 @@ void main() {
     expect(find.text('Add your photo'), findsNothing);
     // The bundled example rooms are offered alongside the drop zone.
     expect(find.text('Or start with an example'), findsOneWidget);
-    expect(find.text('Living Room'), findsWidgets);
-    expect(find.text('Bedroom'), findsWidgets);
+    final l = pwaL10nFor(const Locale('en'));
+    expect(find.text(l.roomCardLabel('livingRoom', 'Living Room')), findsWidgets);
+    expect(find.text(l.roomCardLabel('masterBedroom', 'Bedroom')), findsWidgets);
     // The formats the staging bucket actually accepts (no HEIC — it is rejected
     // by the bucket MIME allowlist).
     expect(find.text('JPG, PNG or WebP · up to 10 MB'), findsOneWidget);

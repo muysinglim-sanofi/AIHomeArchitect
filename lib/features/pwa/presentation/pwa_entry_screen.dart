@@ -493,7 +493,15 @@ class _ExamplesStrip extends StatelessWidget {
               itemBuilder: (context, i) {
                 final (label, asset) = kPwaExamples[i];
                 return _ExampleCard(
-                  label: label,
+                  // Displayed localized, keyed by the EN catalog label. The
+                  // tuple's label stays English because it is also the room
+                  // the example stands for.
+                  label: switch (label) {
+                    'Living Room' => context.pwaL10n.roomLabel('living_room'),
+                    'Bedroom' => context.pwaL10n.roomLabel('master_bedroom'),
+                    'Kitchen' => context.pwaL10n.roomLabel('kitchen'),
+                    _ => label,
+                  },
                   asset: asset,
                   onTap: () => onPick(asset),
                 );
@@ -964,18 +972,20 @@ class _CreateWorkspaceState extends State<_CreateWorkspace> {
     final cards = <Widget>[
       _roomCard(
         null,
-        'Ayden Decide',
+        context.pwaL10n.uplAiDecide,
         'assets/cards/rooms/ayden_decide.png',
         context.pwaL10n.autoDetect,
         sel == null,
       ),
     ];
     for (final r in pwaPopularRooms()) {
-      cards.add(_roomCard(r.id, r.label, r.asset, '', r.id == sel));
+      cards.add(_roomCard(r.id, context.pwaL10n.roomCardLabel(r.id, r.label),
+          r.asset, '', r.id == sel));
     }
     if (!_roomExpanded && sel != null && !kPwaPopularRoomIds.contains(sel)) {
       final r = pwaRoomById(sel)!;
-      cards.add(_roomCard(r.id, r.label, r.asset, '', true));
+      cards.add(_roomCard(r.id, context.pwaL10n.roomCardLabel(r.id, r.label),
+          r.asset, '', true));
     }
     return cards;
   }
@@ -984,7 +994,8 @@ class _CreateWorkspaceState extends State<_CreateWorkspace> {
     final sel = widget.selectedRoomId;
     return [
       for (final r in pwaOptionalRooms())
-        _roomCard(r.id, r.label, r.asset, '', r.id == sel),
+        _roomCard(r.id, context.pwaL10n.roomCardLabel(r.id, r.label),
+            r.asset, '', r.id == sel),
     ];
   }
 
@@ -1364,7 +1375,9 @@ class _CreateIntro extends StatelessWidget {
           style: TextStyle(
             fontSize: isMobile ? 10 : 11,
             fontWeight: FontWeight.w600,
-            letterSpacing: 2.2,
+            // Raw TextStyle rather than `pwaEyebrow`, so it needs the same
+            // guard: 2.2 of tracking pulls Khmer clusters apart.
+            letterSpacing: pwaTracking(2.2),
             color: _fpGold,
             height: 1.3,
             decoration: TextDecoration.none,

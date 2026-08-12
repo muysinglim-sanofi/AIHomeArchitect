@@ -10,6 +10,7 @@
 library;
 
 import 'package:flutter/widgets.dart';
+import 'pwa_theme.dart' show pwaTextFallback, pwaTracking;
 
 // ── Warm charcoal design surfaces ────────────────────────────────────────────
 const Color av7HeaderBlack = Color(0xFF080806); // global header bar
@@ -49,6 +50,10 @@ abstract final class Av7Motion {
 }
 
 // ── Type helpers (platform family; offline — no runtime font fetch) ───────────
+//
+// Every helper ends its fallback chain with the bundled Khmer family: CanvasKit
+// has no system fonts to fall back on, so without it Khmer paints as tofu until
+// a remote Noto download lands. See `web/fonts/README.md`.
 
 /// Functional / conversational copy.
 TextStyle av7Sans({
@@ -63,6 +68,7 @@ TextStyle av7Sans({
   color: color,
   height: height,
   letterSpacing: letterSpacing,
+  fontFamilyFallback: pwaTextFallback,
   decoration: TextDecoration.none,
 );
 
@@ -76,6 +82,8 @@ TextStyle av7Eyebrow({
   fontSize: fontSize,
   fontWeight: fontWeight,
   color: color,
-  letterSpacing: letterSpacing,
+  // Khmer clusters must not be pulled apart — see `pwaTracking`.
+  letterSpacing: pwaTracking(letterSpacing),
+  fontFamilyFallback: pwaTextFallback,
   decoration: TextDecoration.none,
 );

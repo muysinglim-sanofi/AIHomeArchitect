@@ -18,6 +18,7 @@ import 'pwa_brand.dart';
 import 'pwa_entry_screen.dart' show pwaRoomById;
 import 'pwa_widgets.dart';
 import '../l10n/pwa_l10n.dart';
+import 'pwa_language_switcher.dart';
 
 class PwaProjectsScreen extends ConsumerWidget {
   const PwaProjectsScreen({super.key});
@@ -169,6 +170,11 @@ class _ProjectsHeader extends StatelessWidget {
               ],
             ),
           ),
+          // The selector belongs in EVERY chrome bar, not only on Home: a
+          // person who lands on a deep link, or who is mid-project, must be
+          // able to change language without first navigating away.
+          const PwaLanguageSwitcher(onDark: true, compact: true),
+          const SizedBox(width: 10),
           _NewProjectButton(compact: mobile, onTap: onNew),
         ],
       ),
@@ -721,7 +727,8 @@ class _ProjectCardState extends ConsumerState<_ProjectCard> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${context.pwaL10n.visionCount(p.visionCount)} · ${p.updatedLabel}',
+                  '${context.pwaL10n.visionCount(p.visionCount)} · '
+                  '${context.pwaL10n.updatedLabelFor(p.updatedAt, p.updatedLabel)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: av7Sans(fontSize: 12.5, color: av7Muted),

@@ -783,7 +783,13 @@ class _ProjectCard extends StatelessWidget {
                       if (project.updatedLabel.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
-                          project.updatedLabel,
+                          // Rendered from the TIMESTAMP, not from the label
+                          // baked in at deserialisation — that one is English
+                          // whatever the reader's language is.
+                          context.pwaL10n.updatedLabelFor(
+                            project.updatedAt,
+                            project.updatedLabel,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: av7Sans(fontSize: 11.5, color: av7MutedSoft),

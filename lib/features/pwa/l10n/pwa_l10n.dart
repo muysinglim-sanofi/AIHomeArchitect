@@ -159,6 +159,39 @@ class PwaL10n {
     }
   }
 
+  /// The label of a ROOM CARD, from the card-catalog id.
+  ///
+  /// The catalog is keyed camelCase (`livingRoom`) while the engine's canonical
+  /// ids are snake_case (`living_room`), so this bridges the two and then
+  /// reuses the APPROVED mobile wording.
+  ///
+  /// DISPLAY ONLY. What is SENT to the backend stays `RoomCardData.label`, the
+  /// English canonical label — the Room Type i18n contract is that the frontend
+  /// routes the EN label and never the localized one, because the per-room DNA
+  /// block is keyed on it. Localising the routed value would silently drop the
+  /// room's DNA; localising the displayed value is simply correct.
+  String roomCardLabel(String cardId, String fallback) {
+    const toCanonical = {
+      'livingRoom': 'living_room',
+      'masterBedroom': 'master_bedroom',
+      'kitchen': 'kitchen',
+      'bathroom': 'bathroom',
+      'terrace': 'terrace',
+      'diningRoom': 'dining_room',
+      'homeOffice': 'home_office',
+      'balcony': 'balcony',
+      'entranceHall': 'entrance_hall',
+      'poolArea': 'pool_area',
+      'garden': 'garden',
+      'houseFacade': 'house_facade',
+      'driveway': 'driveway',
+    };
+    final canonical = toCanonical[cardId];
+    if (canonical == null) return fallback;
+    final label = roomLabel(canonical);
+    return label.isEmpty ? fallback : label;
+  }
+
   /// ATMOSPHERE names are BRAND names and stay English on every platform —
   /// "Warm Modern", "Soft Luxury", "Japandi Calm". Mobile made that choice
   /// deliberately (`app_localizations.dart`: "names stay English brand; tagline
@@ -385,6 +418,43 @@ class PwaL10n {
       _get('pwaDeleteProjectBody').replaceAll('{title}', title);
   String updatedDaysAgo(int n) =>
       _get('pwaUpdatedDaysAgo').replaceAll('{n}', '$n');
+
+  /// The freshness of a project, rendered in the CURRENT language.
+  ///
+  /// Deliberately a function of the TIMESTAMP rather than a translation of a
+  /// pre-rendered English string: `updatedLabel` is baked in when a row is
+  /// deserialised, long before anyone knows what language it will be read in,
+  /// which is exactly why the project cards showed "2 days ago" inside a French
+  /// UI. `updatedAt` is documented as the authority for freshness — so it is
+  /// what gets formatted, at the moment of display.
+  ///
+  /// The bucket boundaries mirror `pwaRelativeUpdatedLabel` so the two never
+  /// disagree; calendar days, not 24-hour windows, because something touched
+  /// last night reads as "yesterday" to a person.
+  String updatedRelative(DateTime updatedAt, {DateTime? now}) {
+    final ref = (now ?? DateTime.now()).toUtc();
+    final then = updatedAt.toUtc();
+    final delta = ref.difference(then);
+    if (delta.isNegative || delta.inMinutes < 1) return _get('pwaUpdatedJustNow');
+    if (delta.inMinutes < 60) {
+      return _get('pwaUpdatedMinutesAgo')
+          .replaceAll('{n}', '${delta.inMinutes}');
+    }
+    final days = DateTime.utc(ref.year, ref.month, ref.day)
+        .difference(DateTime.utc(then.year, then.month, then.day))
+        .inDays;
+    if (days == 0) return updatedToday;
+    if (days == 1) return _get('pwaUpdatedYesterday');
+    if (days < 7) return updatedDaysAgo(days);
+    if (days < 14) return _get('pwaUpdatedLastWeek');
+    if (days < 31) return _get('pwaUpdatedWeeksAgo').replaceAll('{n}', '${days ~/ 7}');
+    return _get('pwaUpdatedMonthsAgo').replaceAll('{n}', '${days ~/ 30}');
+  }
+
+  /// [updatedRelative] when the timestamp is known, the stored English label
+  /// otherwise. Callers pass both and never have to branch.
+  String updatedLabelFor(DateTime? updatedAt, String fallback) =>
+      updatedAt == null ? fallback : updatedRelative(updatedAt);
 
   // Billing access states (Phase A). The BACKEND sends a code; this translates
   // it. No billing decision depends on the locale.

@@ -14,11 +14,33 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_colors.dart';
 
-/// A safe system-serif fallback stack for editorial headings. No font file is
-/// bundled (adding one needs approval), so this is best-effort: platforms that
-/// expose these families render a true serif; on CanvasKit web it may fall back
-/// to the embedded sans — a documented limitation, never an underline.
-const List<String> pwaSerifFallback = ['Georgia', 'Times New Roman', 'serif'];
+/// The bundled Khmer family, registered at boot by `pwa_khmer_font.dart`.
+///
+/// It is only ever a FALLBACK, never a primary family: Latin text keeps exactly
+/// the typography it had, and only code points no other font covers reach it.
+/// The name must match the `FontLoader` family used at registration.
+const String kPwaKhmerFamily = 'NotoSansKhmer';
+
+/// Every fallback chain in the PWA ends with Khmer.
+///
+/// CanvasKit does not use the browser's system fonts, so a script with no
+/// loaded font renders as tofu until Flutter has fetched a Noto fallback over
+/// the network. Putting the bundled family at the end of each chain means Khmer
+/// is right on the FIRST frame and stays right offline — see
+/// `web/fonts/README.md` for the measurement that motivated it.
+const List<String> pwaTextFallback = [kPwaKhmerFamily];
+
+/// A safe system-serif fallback stack for editorial headings.
+///
+/// Khmer is appended: without it, a Khmer heading would consult Georgia and
+/// Times (neither of which has the script) and then fall through to the remote
+/// Noto download this bundling exists to avoid.
+const List<String> pwaSerifFallback = [
+  'Georgia',
+  'Times New Roman',
+  'serif',
+  kPwaKhmerFamily,
+];
 
 // ── Colour system ────────────────────────────────────────────────────────────
 // Cinematic / design-authority states = deep black + charcoal; product states =
@@ -84,8 +106,28 @@ TextStyle pwaSans({
   color: color,
   height: height,
   letterSpacing: letterSpacing,
+  fontFamilyFallback: pwaTextFallback,
   decoration: TextDecoration.none, // never underlined
 );
+
+/// Whether the UI is currently rendering Khmer.
+///
+/// Set once per frame by the app root. A mutable global is not how business
+/// state is handled anywhere else in this codebase, and deliberately so — but
+/// TRACKING is a rendering property of the script, the two eyebrow helpers are
+/// plain functions with no BuildContext, and threading a context through every
+/// call site to answer "is this Khmer" would be a much larger change for the
+/// same result.
+///
+/// WHY IT MATTERS: the eyebrows apply 2.1-2.4 of letter-spacing, which reads as
+/// luxury in Latin. Khmer is a cluster script — a base consonant carries
+/// subscripts and vowel signs that must sit tight against it — so the same
+/// tracking pushes a single syllable apart into what looks like several. It is
+/// legibility, not taste: "បន្ទប់" spaced out stops reading as one word.
+bool pwaKhmerTypography = false;
+
+/// Letter-spacing that collapses to zero for Khmer.
+double pwaTracking(double base) => pwaKhmerTypography ? 0 : base;
 
 /// Small uppercase label (section eyebrows: "AYDEN DECIDE", "AYDEN SIGNATURE").
 TextStyle pwaEyebrow({Color color = pwaGold, double fontSize = 11}) =>
@@ -93,7 +135,8 @@ TextStyle pwaEyebrow({Color color = pwaGold, double fontSize = 11}) =>
       fontSize: fontSize,
       fontWeight: FontWeight.w700,
       color: color,
-      letterSpacing: 2.4,
+      letterSpacing: pwaTracking(2.4),
+      fontFamilyFallback: pwaTextFallback,
       decoration: TextDecoration.none, // never underlined
     );
 
@@ -121,6 +164,18 @@ void pwaHardenDebugPaints() {
 ThemeData pwaTheme() {
   final base = ThemeData.light(useMaterial3: true);
   return base.copyWith(
+    // THE Khmer fallback at THEME level, not only as an ambient
+    // DefaultTextStyle.
+    //
+    // Material surfaces that render in an overlay — PopupMenuItem, dialogs,
+    // snackbars, menus — install their OWN DefaultTextStyle from
+    // `theme.textTheme`, which REPLACES the ambient one instead of merging with
+    // it. Measured: with only the ambient fallback in place, the language menu
+    // still painted ភាសាខ្មែរ as tofu while the page behind it was correct.
+    // Applying the fallback to the text themes is what reaches those surfaces.
+    textTheme: base.textTheme.apply(fontFamilyFallback: pwaTextFallback),
+    primaryTextTheme:
+        base.primaryTextTheme.apply(fontFamilyFallback: pwaTextFallback),
     colorScheme: const ColorScheme.light(
       primary: pwaInk,
       secondary: pwaGold,

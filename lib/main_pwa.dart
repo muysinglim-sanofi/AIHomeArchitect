@@ -35,6 +35,7 @@ import 'features/pwa/data/pwa_image_url_resolver.dart';
 import 'features/pwa/data/pwa_pending_generation.dart';
 import 'features/pwa/data/pwa_staging_supabase_client.dart';
 import 'features/pwa/data/pwa_web_navigation.dart';
+import 'features/pwa/data/pwa_khmer_font.dart';
 import 'features/pwa/data/supabase_pwa_persistence_repository.dart';
 import 'features/pwa/domain/pwa_project.dart';
 import 'features/pwa/presentation/pwa_mock_app.dart';
@@ -42,6 +43,14 @@ import 'features/pwa/presentation/pwa_url_sync_scope.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Khmer BEFORE the first frame. CanvasKit has no system fonts to fall back
+  // on, and Flutter's own remote Noto fetch arrives after the first paint —
+  // measured: the language menu showed nine tofu boxes, then corrected itself.
+  // A Cambodia-first product cannot open on tofu. Awaited because it is a
+  // local file (~114 KB, no network), and non-fatal by construction: if it
+  // fails the app still boots and the remote fallback still applies.
+  await loadPwaKhmerFont();
 
   // Single environment authority for the web app. Fails CLOSED on production /
   // misconfigured staging BEFORE anything else runs (no remote side effects).

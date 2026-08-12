@@ -36,6 +36,9 @@ class PwaMockApp extends ConsumerWidget {
     pwaHardenDebugPaints();
 
     final locale = ref.watch(localeProvider);
+    // Kept in sync here, before the tree builds, so the eyebrow helpers can
+    // answer "is this Khmer" without a BuildContext. See `pwaKhmerTypography`.
+    pwaKhmerTypography = locale.languageCode == 'km';
 
     return MaterialApp(
       // Browser tab title (§9/§11) — a constant "Ayden Studio". Flutter web's
@@ -53,6 +56,17 @@ class PwaMockApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      // THE app-wide Khmer safety net.
+      //
+      // The typography helpers carry the fallback, but the screens also build
+      // raw `TextStyle(...)`s. `Text` merges its style OVER the ambient
+      // DefaultTextStyle, and a style that leaves `fontFamilyFallback` null
+      // keeps the inherited value — so declaring it once here reaches every
+      // Text in the tree, including the ones that never touch a helper.
+      builder: (context, child) => DefaultTextStyle.merge(
+        style: const TextStyle(fontFamilyFallback: pwaTextFallback),
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: const PwaExperience(),
     );
   }

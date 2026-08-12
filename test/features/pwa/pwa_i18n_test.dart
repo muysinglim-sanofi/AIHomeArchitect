@@ -524,6 +524,10 @@ void main() {
       'center 35%',
       'Georgia',               // font family names
       'Times New Roman',
+      'NotoSansKhmer',         // the bundled Khmer family — a FONT id, and it
+                               // must match the FontLoader registration
+                               // byte-for-byte, so translating it would
+                               // silently disable Khmer rendering
       'Living Room',           // example-asset labels routed as EN room labels
       'Bedroom',
       'Kitchen',

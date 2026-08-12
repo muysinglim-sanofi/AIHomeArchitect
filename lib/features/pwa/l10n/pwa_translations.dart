@@ -210,6 +210,12 @@ const Map<String, String> pwaEnTranslations = {
   'pwaContinueSetup': 'Continue setup',
   'pwaUpdatedToday': 'Updated today',
   'pwaUpdatedDaysAgo': 'Updated {n} days ago',
+  'pwaUpdatedJustNow': 'Updated just now',
+  'pwaUpdatedMinutesAgo': 'Updated {n} min ago',
+  'pwaUpdatedYesterday': 'Yesterday',
+  'pwaUpdatedLastWeek': 'Last week',
+  'pwaUpdatedWeeksAgo': '{n} weeks ago',
+  'pwaUpdatedMonthsAgo': '{n} months ago',
 
   // ── Billing access states ──────────────────────────────────────────────────
   'pwaFreeVisionAvailable': '1 free vision',
@@ -425,6 +431,12 @@ const Map<String, String> pwaKmTranslations = {
   'pwaContinueSetup': 'បន្ត​ការ​រៀបចំ',
   'pwaUpdatedToday': 'ធ្វើ​បច្ចុប្បន្នភាព​ថ្ងៃ​នេះ',
   'pwaUpdatedDaysAgo': 'ធ្វើ​បច្ចុប្បន្នភាព {n} ថ្ងៃ​មុន',
+  'pwaUpdatedJustNow': 'ធ្វើ​បច្ចុប្បន្នភាព​អម្បាញ់​មិញ',
+  'pwaUpdatedMinutesAgo': 'ធ្វើ​បច្ចុប្បន្នភាព {n} នាទី​មុន',
+  'pwaUpdatedYesterday': 'ម្សិល​មិញ',
+  'pwaUpdatedLastWeek': 'សប្ដាហ៍​មុន',
+  'pwaUpdatedWeeksAgo': '{n} សប្ដាហ៍​មុន',
+  'pwaUpdatedMonthsAgo': '{n} ខែ​មុន',
 
   // ── Billing access states ──────────────────────────────────────────────────
   'pwaFreeVisionAvailable': 'ទស្សនៈ​ឥត​គិត​ថ្លៃ 1',
@@ -641,6 +653,12 @@ const Map<String, String> pwaFrTranslations = {
   'pwaContinueSetup': 'Continuer la configuration',
   'pwaUpdatedToday': "Mis à jour aujourd'hui",
   'pwaUpdatedDaysAgo': 'Mis à jour il y a {n} jours',
+  'pwaUpdatedJustNow': "Mis à jour à l'instant",
+  'pwaUpdatedMinutesAgo': 'Mis à jour il y a {n} min',
+  'pwaUpdatedYesterday': 'Hier',
+  'pwaUpdatedLastWeek': 'La semaine dernière',
+  'pwaUpdatedWeeksAgo': 'Il y a {n} semaines',
+  'pwaUpdatedMonthsAgo': 'Il y a {n} mois',
 
   // ── Billing access states ──────────────────────────────────────────────────
   'pwaFreeVisionAvailable': '1 vision gratuite',

@@ -21,6 +21,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers/locale_provider.dart';
 import '../l10n/pwa_l10n.dart';
+import 'pwa_theme.dart' show pwaTextFallback;
 
 class PwaLanguageSwitcher extends ConsumerWidget {
   const PwaLanguageSwitcher({
@@ -73,6 +74,14 @@ class PwaLanguageSwitcher extends ConsumerWidget {
                       child: Text(
                         pwaLanguageEndonym(candidate.languageCode),
                         overflow: TextOverflow.ellipsis,
+                        // Explicit, and not merely trusting the theme: this is
+                        // the ONE label that MUST render in a script the
+                        // current UI may not be using, and it is the control a
+                        // person reaches for precisely when they cannot read
+                        // the rest of the screen. It gets its own guarantee.
+                        style: const TextStyle(
+                          fontFamilyFallback: pwaTextFallback,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),

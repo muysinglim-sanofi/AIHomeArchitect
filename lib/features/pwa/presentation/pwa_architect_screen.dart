@@ -23,6 +23,7 @@ import 'pwa_brand.dart';
 import 'pwa_stored_image.dart';
 import 'pwa_working_indicator.dart';
 import '../l10n/pwa_l10n.dart';
+import 'pwa_language_switcher.dart';
 
 // V7 responsive tiers (§4). Local to the Architect so the shared
 // `pwaFormFactorForWidth` (used by the frozen entry screen) stays untouched.
@@ -685,6 +686,11 @@ class _V7GlobalHeader extends StatelessWidget {
       child: Row(
         children: [
           _V7BackButton(compact: compact, onTap: onBack),
+          // The selector belongs in EVERY chrome bar, not only on Home: a
+          // person who lands on a deep link, or who is mid-project, must be
+          // able to change language without first navigating away.
+          const PwaLanguageSwitcher(onDark: true, compact: true),
+          const SizedBox(width: 10),
           _V7ProjectsButton(onTap: onProjects),
           Expanded(
             child: Column(
