@@ -166,3 +166,95 @@ platforms. Two are worth knowing before anyone reports a "bug":
 not a PWA divergence and must not be "fixed" locally: doing so would re-introduce exactly the
 kind of local brain this work removed. If the product wants it to generate, the change
 belongs in `prompt_engine/intent_classifier.py` and changes mobile too.
+
+---
+
+# PHASE SUIVANTE — Billing Engine server-side (handoff 2026-08-12)
+
+**Base** : `acdb1a7`. Branche `pwa-monetization` à créer **depuis `4e3921a`** au
+premier commit de code (pas encore créée : rien que des docs jusqu'ici).
+
+**Décisions déjà prises — ne pas rouvrir.** D1 (free = qualité pleine +
+watermark, OTP à l'upgrade, pas de fingerprint), D2 (upgrade-in-place via
+`linkIdentity`), autorité = Billing Engine canonique. Voir
+`PWA_MONETIZATION_AUDIT.md` §6bis. **U4 n'est plus bloquant.**
+
+**Moteur créatif GELÉ** : aucun changement composer / Refine / Switch / Stage /
+Structure. L'intégration billing se branche autour de `_generate_claimed`, pas
+dedans.
+
+## Ce qui est déjà établi (§8 de l'audit — ne pas re-dériver)
+
+- `public` du projet staging est **vide** (0 table, 0 RPC).
+- Les FK vers `public.sessions` sont **NULLABLE** → le Web écrit
+  `session_id = NULL`, aucune session mobile à répliquer. Seule la DDL exige que
+  la table existe → **shell minimal**, migrations canoniques non modifiées.
+- **`usage_log` est hors périmètre** : la vérité du compteur gratuit est le
+  **bucket free du `ledger_entries`** (`billing._free_bucket_available`), pas le
+  legacy 5.17b. `resolve_generation_access` ne sert qu'au **TIER**.
+- Périmètre minimal à installer : §8.5.
+
+## Étape A — installer le chemin canonique dans le staging
+
+Assembler UN fichier `supabase/staging/pwa/0006_billing_canonical.sql` qui, dans
+l'ordre : (1) `public.sessions` shell minimal, (2) `user_roles`, (3)
+`promo_codes` + RPC `get_promo_access`, (4) `20260630_generation_intent_v1_pr0`,
+(5) `20260701_billing_engine_pr0`, (6) `20260708` + `20260709` + `20260710`.
+
+Contraintes : mêmes gardes GUC que 0004/0005 (`app.ayden_allow_staging_migrations`,
+`app.ayden_env`), idempotent, un seul `begin/commit`, rapport final qui échoue si
+un objet manque. Appliquer avec `python pwa_staging_migrate.py <file>`, puis
+`notify pgrst, 'reload schema'`.
+
+⚠️ `public.sessions` n'est créée par aucune migration du dépôt — sa définition
+minimale est à écrire (id uuid pk, owner, created_at suffisent pour la FK).
+
+## Étape B — brancher les 4 chemins PWA sur le contrat canonique
+
+Dans `pwa_staging_api.py`, autour de `_generate_claimed`, **pour `initial`,
+`switch_atmosphere`, `refine` ET structural** (le structural passe par `refine`) :
+
+```
+resolve_generation_access(user_id)        # TIER seulement
+        ↓
+billing.reserve_decision(...)             # indicatif
+        ↓
+generation_intents  ← une ligne canonique, intent_id déterministe
+        ↓                                   dérivé de body.idempotency_key,
+billing.try_hold(user_id, intent_id, tier)  session_id = NULL
+        ↓  refusé → 402 structuré (voir C)
+   [rendu existant, INCHANGÉ]
+        ↓
+observe_intent_end → apply_billing_for_intent_transition  # commit / release
+```
+
+`pwa_generation_claims` **reste** (single-flight du rendu).
+`generation_intents` porte l'idempotence de la **facturation**. Intent ≠ Job.
+
+## Étape C — Free Web
+
+- tier `free` → rendu **qualité pleine** + **watermark** (le seul endroit où
+  `_reencode_jpeg` est touché ; ne PAS dégrader résolution/quality).
+- free épuisé et pas de pass → **refus AVANT tout appel OpenAI**, payload typé
+  suffisamment structuré pour que l'UI déclenche le Paywall
+  (`error_code: 'QUOTA_EXHAUSTED'`, `retryable: false`, + solde/tier).
+
+## Étape D — tests exigés (avant tout Paywall)
+
+free dispo → autorisé · free consommé → refusé · **appel API direct → refusé**
+· pass/premium → autorisé · hold atomique · succès → commit · échec pré-render →
+release · F5/retry → pas de double débit · 2 requêtes concurrentes → 1 seule
+consommation · Switch **et** Refine passent par billing · moteur créatif
+inchangé (garde de non-régression).
+
+## Étape E — `VerificationChannel` (contrat seulement, pas d'OTP encore)
+
+Abstraction à deux implémentations : **email OTP** (staging, `external.email:
+true` aujourd'hui) et **phone OTP** (cible production, **`external.phone: false`
+et aucun fournisseur SMS contracté**). Le Paywall ne doit jamais nommer Twilio,
+ni « phone ».
+
+## Chemins critiques commerciaux en parallèle (hors code)
+
+ABA (récurrent ou unitaire ? entité KH ? biens numériques ?) · fournisseur SMS ·
+U4 sur device.
