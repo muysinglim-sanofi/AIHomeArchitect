@@ -566,6 +566,10 @@ from version_state import (
 )
 
 from generation_profiles import get_active_profile, list_profiles
+# THE shared post-payment save policy. The PWA staging adapter calls the same
+# module: the render is paid for the moment OpenAI answers, and one unlucky
+# socket must not throw it away on either path. See generation_resilience.py.
+from generation_resilience import PaidResultLost, save_paid_result
 from retry_classifier import classify_for_retry, RetryVerdict
 from push_service import send_push  # Phase B — FCM push on completion
 
@@ -4860,21 +4864,43 @@ async def generate(
     path = f"{session_id}/{ts}_{uuid.uuid4().hex[:8]}.jpg"
     log.info("--- uploading to Supabase (generated/%s) ---", path)
     _t_upload = time.monotonic()
-    try:
+
+    async def _do_upload() -> str:
+        # Byte-identical to the previous inline body. Kept blocking (not moved
+        # to a thread) so the success path executes exactly as it did before;
+        # the ONLY change is that a transport blip now gets another try.
         supa.storage.from_("generated").upload(
             path=path,
             file=generated_bytes,
             file_options={"content-type": "image/jpeg"},
         )
-        public_url = supa.storage.from_("generated").get_public_url(path)
+        return supa.storage.from_("generated").get_public_url(path)
+
+    try:
+        # Shared with the PWA adapter. Retries TRANSPORT failures only: a
+        # StorageApiError (403, 409, quota) still fails on the first attempt,
+        # exactly as before, because retrying it would only waste the user's
+        # time. This closes the hole that lost a paid render on 2026-08-06.
+        public_url = await save_paid_result(
+            upload=_do_upload,
+            retry_on=(httpx.TransportError,),
+        )
         _upload_s = time.monotonic() - _t_upload
         _timer.record("supabase_upload", _upload_s, size_bytes=len(generated_bytes))
         log.info("  upload OK  url: %s", public_url)
         log.info("[PERF] stage=supabase_upload  duration_ms=%.0f  size_bytes=%d",
                  _upload_s * 1000, len(generated_bytes))
     except Exception as exc:
-        log.error("  Supabase upload FAILED: %s: %s", type(exc).__name__, exc)
-        log.error(traceback.format_exc())
+        # PaidResultLost means the shared layer already spent every attempt; any
+        # other exception failed on the first, as it always did. Both land on
+        # the SAME STORAGE_FAILED contract — the error code, message, status and
+        # refund guard below are unchanged.
+        if isinstance(exc, PaidResultLost):
+            log.error("  Supabase upload FAILED after retries: stage=%s cause=%s",
+                      exc.stage, type(exc.cause).__name__)
+        else:
+            log.error("  Supabase upload FAILED: %s: %s", type(exc).__name__, exc)
+            log.error(traceback.format_exc())
         # Wave 5.17b — STORAGE_FAILED occurs AFTER the OpenAI cost was
         # incurred and AFTER confirm_generation was called at the `break`,
         # so _reservation_id is normally None here. This guard is defensive :

@@ -75,6 +75,20 @@ def main() -> None:
     for k, v in values.items():
         os.environ[k] = v
 
+    # 1b) THE ENGINE'S OWN FLAGS — the same fourteen `run.sh` pins for mobile.
+    #
+    # They are not cosmetic: they decide whether Ayden Decide looks at the photo,
+    # which prompt blocks are emitted, and the per-edit-mode quality and fidelity.
+    # Running staging without them is running a different engine, and it showed —
+    # the missing-television report of 2026-08-10 is the exact failure `run.sh`
+    # already documents for a restart without AYDEN_DECIDE_FURNISH.
+    #
+    # Read from run.sh, never copied here: one list, one place to change it.
+    sys.path.insert(0, str(HERE))
+    from engine_flags import apply_canonical_flags  # noqa: PLC0415
+
+    apply_canonical_flags(log=lambda m: print(f'[pwa-staging] {m}'))
+
     # 2) Make the staging file the ONLY file load_dotenv can read. `main.py`
     #    does `from dotenv import load_dotenv` at ITS import time, so patching
     #    the module attribute here — before importing main — is what it binds.
@@ -96,6 +110,15 @@ def main() -> None:
     sys.path.insert(0, str(HERE))
     os.chdir(HERE)
     import main as canonical  # noqa: PLC0415
+
+    # Say WHICH engine this process actually runs. COMPOSER_VERSION is read at
+    # import time, and the line main.py logs for it is emitted before the file
+    # handler exists — so its absence from backend.log proved nothing and cost a
+    # round of doubt. An operator should be able to read the answer, not infer it.
+    print('[pwa-staging] composer   : '
+          + canonical.compose_generation_prompt.__module__)
+    print('[pwa-staging] APP_ENV    : ' + os.environ.get('APP_ENV', '(unset)')
+          + '   COMPOSER_VERSION: ' + os.environ.get('COMPOSER_VERSION', '(unset)'))
 
     # 4) Re-assert on the RESOLVED environment, after every import-time load.
     _assert_staging(os.environ.get('SUPABASE_URL', ''), 'resolved environment')
