@@ -52,6 +52,42 @@ class PwaMockGenerationService implements PwaGenerationService {
     return made;
   }
 
+  /// Offline there is no canonical brain to ask, and inventing one here is the
+  /// exact heuristic this architecture forbids. The offline build therefore
+  /// keeps its prototype behaviour — every typed line is treated as an edit —
+  /// which is honest because nothing offline can be billed. The STAGING service
+  /// is the only one that talks to a backend, and it is the only one that gates.
+  @override
+  Future<PwaChatTurn> chat({
+    required String projectId,
+    required String message,
+    String uiLocale = 'en',
+  }) async => const PwaChatTurn(aiMessage: '', shouldGenerate: true);
+
+  /// Offline there is no durable lifecycle to consult — the render never left
+  /// this process, so the map above IS the record. Reporting COMPLETED for a
+  /// key it holds keeps the controller's attach path identical in both
+  /// environments; anything else is UNKNOWN, never an invented failure.
+  @override
+  Future<PwaGenerationLifecycle> status(String idempotencyKey) async {
+    final prior = _byIdempotencyKey[idempotencyKey];
+    return prior == null
+        ? const PwaGenerationLifecycle(state: 'UNKNOWN')
+        : PwaGenerationLifecycle(state: 'COMPLETED', vision: prior);
+  }
+
+  /// The verify second call is a real provider look at two real images. Offline
+  /// there are neither, and inventing a verdict would be exactly the kind of
+  /// fixture-as-a-result this module refuses. Silence is the honest answer, and
+  /// silence is also what `verified` and `unavailable` produce on staging.
+  @override
+  Future<PwaRefineVerification?> verify({
+    required String projectId,
+    required String beforePath,
+    required String afterPath,
+    required List<Map<String, Object?>> changes,
+  }) async => null;
+
   String _assetForAtmosphere(String id) {
     final all = _repo.atmospheres();
     for (final a in all) {

@@ -15,6 +15,13 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 
+import 'pwa_generation_service.dart'
+    show
+        PwaAdvisoryRaised,
+        PwaAnswerRaised,
+        PwaGenerationAdvisory,
+        PwaGenerationProcessing;
+
 /// A failure the UI can act on. Carries the backend's user-facing message when
 /// there is one, so the screen never has to invent copy for a real error.
 class PwaGenerationApiError implements Exception {
@@ -47,6 +54,7 @@ class PwaGenerationRequest {
     this.userInstruction = '',
     this.visionNumber = 1,
     this.uiLocale = 'en',
+    this.confirm = false,
   });
 
   final String projectId;
@@ -68,6 +76,10 @@ class PwaGenerationRequest {
   final int visionNumber;
   final String uiLocale;
 
+  /// Skips the canonical advisor: the user read its objection and chose to
+  /// continue. Same field, same meaning, as mobile's POST /refine.
+  final bool confirm;
+
   Map<String, dynamic> toJson() => {
     'project_id': projectId,
     'room_id': roomId,
@@ -81,6 +93,7 @@ class PwaGenerationRequest {
     'user_instruction': userInstruction,
     'vision_number': visionNumber,
     'ui_locale': uiLocale,
+    'confirm': confirm,
   };
 }
 
@@ -92,12 +105,37 @@ class PwaGenerationResult {
     required this.visionNumber,
     required this.imagePath,
     required this.replayed,
+    this.resolvedRoomType = '',
+    this.resolvedAtmosphereId = '',
+    this.resolvedAtmosphereLabel = '',
+    this.lineageCustomized = false,
+    this.changes = const [],
   });
 
   final String visionId;
   final int visionNumber;
   final String imagePath;
   final bool replayed;
+
+  /// What the ENGINE decided, handed back so the browser adopts it instead of
+  /// deciding anything itself.
+  ///
+  /// "Your space" and "Ayden Signature" are the two ways of saying "you
+  /// choose"; one gpt-4o look at the photo turns them into a real room and a
+  /// real atmosphere, and everything downstream — the advisor, the next refine,
+  /// the next switch — has to hear that answer. Mobile returns the same three
+  /// facts on every /generate and its client adopts them the same way.
+  final String resolvedRoomType;
+  final String resolvedAtmosphereId;
+  final String resolvedAtmosphereLabel;
+
+  /// Whether THIS branch now counts as customised. Cumulative along the branch,
+  /// computed by the backend when the row is written.
+  final bool lineageCustomized;
+
+  /// The refine plan that was actually executed, echoed for the stateless
+  /// verify second call. Mobile carries the identical echo.
+  final List<Map<String, Object?>> changes;
 
   static PwaGenerationResult parse(Object? body) {
     if (body is! Map) {
@@ -106,6 +144,31 @@ class PwaGenerationResult {
         userMessage: 'Something went wrong creating your vision. Try again.',
         retryable: true,
       );
+    }
+    // The canonical advisor answered instead of rendering. This is checked
+    // FIRST: an advisory has no vision_id, and reading it as a malformed
+    // result would turn Ayden's objection into an error message.
+    // Ayden answered instead of rendering: the line asked something rather
+    // than instructing a change. Not a failure, and not a vision.
+    if (body['status'] == 'answer') {
+      throw PwaAnswerRaised((body['message'] as String?) ?? '');
+    }
+    if (body['status'] == 'advisory') {
+      throw PwaAdvisoryRaised(
+        PwaGenerationAdvisory(
+          verdict: body['verdict'] as String? ?? 'yellow',
+          message: (body['message'] as String? ?? '').trim(),
+          flagged: [
+            for (final f in (body['flagged'] as List? ?? const []))
+              if (f is Map) f.cast<String, Object?>(),
+          ],
+        ),
+      );
+    }
+    // A durable claim is held elsewhere and the render is still running. Not
+    // a result and not an error: the only correct response is to keep waiting.
+    if (body['status'] == 'processing') {
+      throw PwaGenerationProcessing(body['idempotency_key'] as String? ?? '');
     }
     final id = body['vision_id'];
     final path = body['image_path'];
@@ -121,6 +184,108 @@ class PwaGenerationResult {
       visionNumber: (body['vision_number'] as num?)?.toInt() ?? 1,
       imagePath: path,
       replayed: body['replayed'] == true,
+      resolvedRoomType: (body['resolved_room_type'] as String?) ?? '',
+      resolvedAtmosphereId: (body['resolved_atmosphere_id'] as String?) ?? '',
+      resolvedAtmosphereLabel:
+          (body['resolved_atmosphere_label'] as String?) ?? '',
+      lineageCustomized: body['lineage_customized'] == true,
+      changes: [
+        for (final c in (body['changes'] as List? ?? const []))
+          if (c is Map) c.cast<String, Object?>(),
+      ],
+    );
+  }
+}
+
+/// What the canonical conversational turn answered.
+///
+/// [shouldGenerate] is the ONLY thing in the app permitted to authorise a paid
+/// render from a typed line. It is not derived, inferred or second-guessed here:
+/// it is the value the same `/chat` brain gives mobile.
+class PwaChatTurn {
+  const PwaChatTurn({
+    required this.aiMessage,
+    required this.shouldGenerate,
+    this.suggestions = const [],
+    this.intent = '',
+  });
+
+  /// Nothing was decided — answer with silence and, above all, do NOT generate.
+  const PwaChatTurn.silent()
+    : aiMessage = '',
+      shouldGenerate = false,
+      suggestions = const [],
+      intent = 'unavailable';
+
+  final String aiMessage;
+  final bool shouldGenerate;
+  final List<String> suggestions;
+  final String intent;
+
+  static PwaChatTurn parse(Map<String, Object?> body) => PwaChatTurn(
+    aiMessage: ((body['ai_message'] as String?) ?? '').trim(),
+    // `== true` and never a truthy cast: an absent or malformed field must read
+    // as "do not spend", not as "spend".
+    shouldGenerate: body['should_generate'] == true,
+    suggestions: [
+      for (final s in (body['suggestions'] as List? ?? const []))
+        if (s is String && s.trim().isNotEmpty) s.trim(),
+    ],
+    intent: (body['intent'] as String?) ?? '',
+  );
+}
+
+/// Where one logical generation has got to, read from the durable lifecycle.
+///
+/// PROCESSING is the state that used to be shown as a failure. It means the
+/// backend holds the claim and is rendering — started by this tab, an earlier
+/// one, or another worker — so the only correct response is to keep waiting.
+class PwaGenerationStatus {
+  const PwaGenerationStatus({
+    required this.state,
+    this.result,
+    this.errorCode = '',
+  });
+
+  /// `COMPLETED` | `PROCESSING` | `FAILED` | `UNKNOWN`.
+  ///
+  /// UNKNOWN is deliberately distinct from FAILED: it means the backend has no
+  /// record either way (nothing was ever claimed, or the durable lifecycle was
+  /// unavailable and it failed open). Treating that as a failure would invent
+  /// one.
+  final String state;
+
+  /// Present only on COMPLETED — the vision the winning caller produced.
+  final PwaGenerationResult? result;
+
+  final String errorCode;
+
+  bool get isTerminal => state == 'COMPLETED' || state == 'FAILED';
+
+  static PwaGenerationStatus parse(Object? body) {
+    if (body is! Map) return const PwaGenerationStatus(state: 'UNKNOWN');
+    final state = (body['state'] as String?) ?? 'UNKNOWN';
+    if (state != 'COMPLETED') {
+      return PwaGenerationStatus(
+        state: state,
+        errorCode: (body['error_code'] as String?) ?? '',
+      );
+    }
+    return PwaGenerationStatus(
+      state: state,
+      result: PwaGenerationResult(
+        visionId: (body['vision_id'] as String?) ?? '',
+        visionNumber: (body['vision_number'] as num?)?.toInt() ?? 1,
+        imagePath: (body['image_path'] as String?) ?? '',
+        // It was NOT made by this call — that is exactly what makes it safe to
+        // adopt without paying for a second one.
+        replayed: true,
+        resolvedRoomType: (body['resolved_room_type'] as String?) ?? '',
+        resolvedAtmosphereId: (body['resolved_atmosphere_id'] as String?) ?? '',
+        resolvedAtmosphereLabel:
+            (body['resolved_atmosphere_label'] as String?) ?? '',
+        lineageCustomized: body['lineage_customized'] == true,
+      ),
     );
   }
 }
@@ -232,6 +397,112 @@ class PwaGenerationApi {
       };
     } finally {
       _inFlight.remove(cancel);
+    }
+  }
+
+  /// Where a generation has got to. A pure READ — no advisor, no parse, no
+  /// provider — so it is safe to call every few seconds for as long as a render
+  /// takes. Re-POSTing /generate would do the same job and re-run the refine
+  /// parser, a real provider call, on every tick.
+  ///
+  /// Never throws: a poll that fails is "we don't know yet", and the caller's
+  /// own deadline decides when to stop. Turning a dropped packet into a failure
+  /// is precisely the bug this method exists to end.
+  Future<PwaGenerationStatus> status(String idempotencyKey) async {
+    if (_disposed) return const PwaGenerationStatus(state: 'UNKNOWN');
+    final token = await _tokenProvider();
+    if (token == null || token.isEmpty) {
+      return const PwaGenerationStatus(state: 'UNKNOWN');
+    }
+    try {
+      final res = await _dio.get<Object?>(
+        '/pwa/staging/generation/${Uri.encodeComponent(idempotencyKey)}',
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          receiveTimeout: const Duration(seconds: 20),
+        ),
+      );
+      final code = res.statusCode ?? 0;
+      if (code < 200 || code >= 300) {
+        return const PwaGenerationStatus(state: 'UNKNOWN');
+      }
+      return PwaGenerationStatus.parse(res.data);
+    } catch (_) {
+      return const PwaGenerationStatus(state: 'UNKNOWN');
+    }
+  }
+
+  /// The conversational turn. Free (no image), and the ONLY thing allowed to
+  /// decide that a typed line is worth a render.
+  ///
+  /// Fails CLOSED: an unreachable backend answers `shouldGenerate == false`, so
+  /// a dropped packet costs a sentence rather than a generation.
+  Future<PwaChatTurn> chat({
+    required String projectId,
+    required String message,
+    String uiLocale = 'en',
+  }) async {
+    if (_disposed) return const PwaChatTurn.silent();
+    final token = await _tokenProvider();
+    if (token == null || token.isEmpty) return const PwaChatTurn.silent();
+    try {
+      final res = await _dio.post<Object?>(
+        '/pwa/staging/chat',
+        data: {
+          'project_id': projectId,
+          'message': message,
+          'ui_locale': uiLocale,
+        },
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          receiveTimeout: const Duration(seconds: 90),
+        ),
+      );
+      final code = res.statusCode ?? 0;
+      if (code < 200 || code >= 300 || res.data is! Map) {
+        return const PwaChatTurn.silent();
+      }
+      return PwaChatTurn.parse((res.data! as Map).cast<String, Object?>());
+    } catch (_) {
+      return const PwaChatTurn.silent();
+    }
+  }
+
+  /// The stateless verify SECOND call — free, and never on the critical path.
+  ///
+  /// Mobile fires it after the image is already on screen and shows a report
+  /// only when the verdict is `incomplete`. Every failure degrades to
+  /// `unavailable`, which the UI renders as silence.
+  Future<Map<String, Object?>> verifyRefine({
+    required String projectId,
+    required String beforePath,
+    required String afterPath,
+    required List<Map<String, Object?>> changes,
+  }) async {
+    const silent = <String, Object?>{'verification': 'unavailable'};
+    if (_disposed || changes.isEmpty) return silent;
+    final token = await _tokenProvider();
+    if (token == null || token.isEmpty) return silent;
+    try {
+      final res = await _dio.post<Object?>(
+        '/pwa/staging/refine/verify',
+        data: {
+          'project_id': projectId,
+          'before_path': beforePath,
+          'after_path': afterPath,
+          'changes': changes,
+        },
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          receiveTimeout: const Duration(seconds: 90),
+        ),
+      );
+      final code = res.statusCode ?? 0;
+      if (code < 200 || code >= 300 || res.data is! Map) return silent;
+      return (res.data! as Map).cast<String, Object?>();
+    } catch (_) {
+      // The verify never blocks the image already shown (fail-open, honest).
+      return silent;
     }
   }
 

@@ -12,6 +12,11 @@ library;
 
 import 'pwa_generation_api.dart';
 
+// The conversational verdict is part of THIS seam's contract — every caller of
+// the service needs the type, and none of them should have to reach past it into
+// the HTTP client to get it.
+export 'pwa_generation_api.dart' show PwaChatTurn;
+
 /// What a generation produced: a Storage PATH, never a signed URL.
 ///
 /// The path is the durable source of truth; a signed URL is minted from it at
@@ -23,6 +28,11 @@ class PwaGeneratedVision {
     required this.visionNumber,
     required this.replayed,
     this.backendVisionId,
+    this.resolvedRoomType = '',
+    this.resolvedAtmosphereId = '',
+    this.resolvedAtmosphereLabel = '',
+    this.lineageCustomized = false,
+    this.changes = const [],
   });
 
   final String imagePath;
@@ -35,6 +45,80 @@ class PwaGeneratedVision {
   /// The id the backend persisted. Kept so a resumed session can be reconciled
   /// against the server's row rather than guessed at.
   final String? backendVisionId;
+
+  /// What the ENGINE resolved. A delegated room and "Ayden Signature" are
+  /// answered once, by one look at the photo, and the app adopts that answer
+  /// rather than continuing to describe the space as "Your space".
+  final String resolvedRoomType;
+  final String resolvedAtmosphereId;
+  final String resolvedAtmosphereLabel;
+
+  /// Whether this branch now carries real user customisations.
+  final bool lineageCustomized;
+
+  /// The executed refine plan, carried for the stateless verify second call.
+  final List<Map<String, Object?>> changes;
+}
+
+/// The canonical advisor answered INSTEAD of generating.
+///
+/// Not a failure and not a result: Ayden objecting, decided by the same
+/// `refine.advisor` mobile uses. Nothing was rendered, nothing was charged, and
+/// the user chooses to rephrase or continue anyway.
+///
+/// It is a distinct type so the two outcomes cannot be confused. Before it, the
+/// PWA decided locally whether to ask a question — and asked one while a
+/// generation was already running underneath.
+class PwaGenerationAdvisory {
+  const PwaGenerationAdvisory({
+    required this.verdict,
+    required this.message,
+    this.flagged = const [],
+  });
+
+  /// `yellow` (ambiguous — "try anyway?") or `red` (advised against).
+  final String verdict;
+
+  /// Ayden's words, built by the canonical advisor. Never composed here.
+  final String message;
+
+  /// The individual changes that were flagged.
+  final List<Map<String, Object?>> flagged;
+}
+
+/// Raised when the backend answered with an advisory. Carried as an exception
+/// so a caller that only knows how to await a vision cannot silently mistake an
+/// objection for a result.
+/// Ayden replied in words. The line was a question, so nothing was rendered
+/// and nothing was billed — the conversation simply continues.
+class PwaAnswerRaised implements Exception {
+  const PwaAnswerRaised(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'PwaAnswerRaised';
+}
+
+class PwaAdvisoryRaised implements Exception {
+  const PwaAdvisoryRaised(this.advisory);
+  final PwaGenerationAdvisory advisory;
+
+  @override
+  String toString() => 'PwaAdvisoryRaised(${advisory.verdict})';
+}
+
+/// The backend holds a durable claim for this operation and is still rendering
+/// it — started by this tab, an earlier tab, or another worker.
+///
+/// It is NOT a failure: nothing is wrong, and starting a second render would
+/// pay twice for one request. The caller keeps waiting.
+class PwaGenerationProcessing implements Exception {
+  const PwaGenerationProcessing(this.idempotencyKey);
+  final String idempotencyKey;
+
+  @override
+  String toString() => 'PwaGenerationProcessing($idempotencyKey)';
 }
 
 /// A generation failure the UI can present and act on.
@@ -67,6 +151,7 @@ class PwaGenerationIntent {
     this.actionType = 'initial',
     this.parentVisionId = '',
     this.userInstruction = '',
+    this.confirm = false,
   });
 
   final String projectId;
@@ -80,6 +165,10 @@ class PwaGenerationIntent {
   final String actionType;
   final String parentVisionId;
   final String userInstruction;
+
+  /// The user has read the advisor's objection and asked to proceed anyway.
+  /// Mirrors mobile's `confirm` on POST /refine.
+  final bool confirm;
 }
 
 abstract class PwaGenerationService {
@@ -87,7 +176,63 @@ abstract class PwaGenerationService {
   /// failure — it never returns a placeholder result.
   Future<PwaGeneratedVision> generate(PwaGenerationIntent intent);
 
+  /// Ask the canonical conversational brain what this line is.
+  ///
+  /// This is the gate in front of every typed message and every chip. Nothing in
+  /// the app may decide that a sentence deserves a paid render — only the answer
+  /// returned here. Never throws: an unreachable backend answers
+  /// `shouldGenerate == false`.
+  Future<PwaChatTurn> chat({
+    required String projectId,
+    required String message,
+    String uiLocale = 'en',
+  });
+
+  /// Where a generation this app already started has got to. Free, read-only,
+  /// and never throwing: an unreachable backend answers `UNKNOWN`, which means
+  /// "ask again", not "it failed".
+  Future<PwaGenerationLifecycle> status(String idempotencyKey);
+
+  /// The verify SECOND call. Free, non-blocking, and silent unless the verdict
+  /// is `incomplete`. Returns `null` when there is nothing to say.
+  Future<PwaRefineVerification?> verify({
+    required String projectId,
+    required String beforePath,
+    required String afterPath,
+    required List<Map<String, Object?>> changes,
+  });
+
   void dispose();
+}
+
+/// The durable lifecycle's answer about one logical generation.
+class PwaGenerationLifecycle {
+  const PwaGenerationLifecycle({
+    required this.state,
+    this.vision,
+    this.errorCode = '',
+  });
+
+  /// `COMPLETED` | `PROCESSING` | `FAILED` | `UNKNOWN`.
+  final String state;
+
+  /// The winner's result — present only on COMPLETED.
+  final PwaGeneratedVision? vision;
+
+  final String errorCode;
+}
+
+/// What the free second look concluded. Only ever surfaced when [incomplete].
+class PwaRefineVerification {
+  const PwaRefineVerification({
+    required this.report,
+    required this.missing,
+  });
+
+  final String report;
+
+  /// The instructions that did NOT land, for a targeted retry.
+  final List<String> missing;
 }
 
 /// The staging runtime implementation: a thin translation onto the typed API
@@ -113,14 +258,10 @@ class PwaStagingGenerationService implements PwaGenerationService {
           parentVisionId: intent.parentVisionId,
           userInstruction: intent.userInstruction,
           visionNumber: intent.visionNumber,
+          confirm: intent.confirm,
         ),
       );
-      return PwaGeneratedVision(
-        imagePath: r.imagePath,
-        visionNumber: r.visionNumber,
-        replayed: r.replayed,
-        backendVisionId: r.visionId,
-      );
+      return _vision(r);
     } on PwaGenerationApiError catch (e) {
       // Mapped, not swallowed: the UI shows a real error and offers Retry.
       throw PwaGenerationFailure(
@@ -129,6 +270,68 @@ class PwaStagingGenerationService implements PwaGenerationService {
         retryable: e.retryable,
       );
     }
+  }
+
+  static PwaGeneratedVision _vision(PwaGenerationResult r) => PwaGeneratedVision(
+    imagePath: r.imagePath,
+    visionNumber: r.visionNumber,
+    replayed: r.replayed,
+    backendVisionId: r.visionId,
+    resolvedRoomType: r.resolvedRoomType,
+    resolvedAtmosphereId: r.resolvedAtmosphereId,
+    resolvedAtmosphereLabel: r.resolvedAtmosphereLabel,
+    lineageCustomized: r.lineageCustomized,
+    changes: r.changes,
+  );
+
+  @override
+  Future<PwaChatTurn> chat({
+    required String projectId,
+    required String message,
+    String uiLocale = 'en',
+  }) => _api.chat(projectId: projectId, message: message, uiLocale: uiLocale);
+
+  @override
+  Future<PwaGenerationLifecycle> status(String idempotencyKey) async {
+    final s = await _api.status(idempotencyKey);
+    final r = s.result;
+    return PwaGenerationLifecycle(
+      state: s.state,
+      vision: r == null || r.imagePath.isEmpty ? null : _vision(r),
+      errorCode: s.errorCode,
+    );
+  }
+
+  @override
+  Future<PwaRefineVerification?> verify({
+    required String projectId,
+    required String beforePath,
+    required String afterPath,
+    required List<Map<String, Object?>> changes,
+  }) async {
+    final res = await _api.verifyRefine(
+      projectId: projectId,
+      beforePath: beforePath,
+      afterPath: afterPath,
+      changes: changes,
+    );
+    // SILENCE except `incomplete` — mobile's rule, verbatim. It is the only
+    // verdict where what is missing is actually known, so the only one where a
+    // report and a targeted retry are legitimate. `verified` shows the image
+    // alone; `unavailable` shows nothing at all.
+    if (res['verification'] != 'incomplete') return null;
+    final report = ((res['report'] as String?) ?? '').trim();
+    if (report.isEmpty) return null;
+    final seen = <String>{};
+    final missing = <String>[];
+    for (final m in (res['missing'] as List? ?? const [])) {
+      if (m is! Map) continue;
+      final raw = ((m['raw'] as String?)?.trim().isNotEmpty ?? false)
+          ? (m['raw'] as String).trim()
+          : ((m['normalized'] as String?)?.trim() ?? '');
+      if (raw.isNotEmpty && seen.add(raw)) missing.add(raw);
+    }
+    return PwaRefineVerification(report: report, missing: missing);
   }
 
   @override
@@ -147,15 +350,84 @@ class PwaFakeGenerationService implements PwaGenerationService {
   /// Mutable so a test can succeed first and then fail, which is the sequence
   /// that matters: a failure AFTER a real vision must not disturb it.
   PwaGenerationFailure? failure;
-  final Duration delay;
+  Duration delay;
+
+  /// When set, the NEXT non-confirmed call answers with this advisory instead
+  /// of rendering — the canonical advisor's behaviour, faked at the seam.
+  PwaGenerationAdvisory? advisory;
+
+  /// What the engine "resolved". Lets a test prove the app ADOPTS the backend's
+  /// answer rather than keeping its own placeholder.
+  String resolvedRoomType = '';
+  String resolvedAtmosphereId = '';
+  String resolvedAtmosphereLabel = '';
+
+  /// Scripted lifecycle answers, consumed one per [status] call. When it runs
+  /// out, the recorded generation (if any) is reported COMPLETED — which is
+  /// what really happens once the winner's row lands.
+  final List<PwaGenerationLifecycle> lifecycle = <PwaGenerationLifecycle>[];
+  int statusCalls = 0;
+
+  /// The verify verdict to hand back, or null for silence (the common case).
+  PwaRefineVerification? verification;
+  int verifyCalls = 0;
+
+  /// What the canonical conversational turn answers.
+  ///
+  /// Defaults to "generate", because that is what the real brain says for the
+  /// edit sentences the generation tests are actually about ("make the sofa
+  /// darker", "open the wall"). A test about a CONVERSATION sets it to false
+  /// explicitly, which is also the honest shape: whether a line generates is a
+  /// backend verdict, so a test must state which verdict it is exercising.
+  ///
+  /// The product's fail-closed behaviour does NOT live here — it lives in
+  /// `PwaChatTurn.silent()` and in the `== true` parse, both separately guarded.
+  PwaChatTurn chatTurn = const PwaChatTurn(
+    aiMessage: '',
+    shouldGenerate: true,
+  );
+  final List<String> chatCalls = <String>[];
 
   final List<PwaGenerationIntent> calls = <PwaGenerationIntent>[];
   final Map<String, PwaGeneratedVision> _byIdempotencyKey = {};
 
   @override
+  Future<PwaChatTurn> chat({
+    required String projectId,
+    required String message,
+    String uiLocale = 'en',
+  }) async {
+    chatCalls.add(message);
+    return chatTurn;
+  }
+
+  @override
+  Future<PwaGenerationLifecycle> status(String idempotencyKey) async {
+    statusCalls++;
+    if (lifecycle.isNotEmpty) return lifecycle.removeAt(0);
+    final prior = _byIdempotencyKey[idempotencyKey];
+    return prior == null
+        ? const PwaGenerationLifecycle(state: 'UNKNOWN')
+        : PwaGenerationLifecycle(state: 'COMPLETED', vision: prior);
+  }
+
+  @override
+  Future<PwaRefineVerification?> verify({
+    required String projectId,
+    required String beforePath,
+    required String afterPath,
+    required List<Map<String, Object?>> changes,
+  }) async {
+    verifyCalls++;
+    return verification;
+  }
+
+  @override
   Future<PwaGeneratedVision> generate(PwaGenerationIntent intent) async {
     calls.add(intent);
     if (delay > Duration.zero) await Future<void>.delayed(delay);
+    final a = advisory;
+    if (a != null && !intent.confirm) throw PwaAdvisoryRaised(a);
     final f = failure;
     if (f != null) throw f;
     // Mirrors the backend's contract: the same key never generates twice.
@@ -175,6 +447,20 @@ class PwaFakeGenerationService implements PwaGenerationService {
       visionNumber: intent.visionNumber,
       replayed: false,
       backendVisionId: id,
+      resolvedRoomType: resolvedRoomType,
+      resolvedAtmosphereId: resolvedAtmosphereId,
+      resolvedAtmosphereLabel: resolvedAtmosphereLabel,
+      changes: intent.actionType == 'refine' && intent.userInstruction.isNotEmpty
+          ? [
+              {
+                'type': 'modify',
+                'object': '',
+                'detail': '',
+                'raw': intent.userInstruction,
+                'normalized': intent.userInstruction,
+              },
+            ]
+          : const [],
     );
     _byIdempotencyKey[intent.idempotencyKey] = made;
     return made;

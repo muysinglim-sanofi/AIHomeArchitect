@@ -99,6 +99,7 @@ class _PwaVersionsSheet extends ConsumerWidget {
                     vision: v,
                     source: state.source,
                     project: state.project,
+                    versions: state.versions,
                   ),
                   onContinue: () {
                     controller.continueFromVision(v.versionId);

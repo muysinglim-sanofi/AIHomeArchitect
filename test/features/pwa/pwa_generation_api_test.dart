@@ -254,6 +254,77 @@ void main() {
       anon.dispose();
     });
 
+    test(
+      'a save failure is reported as a save failure, not as a bad connection',
+      () async {
+        // The 2026-08-06 incident: the render succeeded and was billed, the
+        // upload to Storage could not open a socket, and the handler died
+        // without answering — so the app told the user to check their
+        // connection for a problem that had nothing to do with it.
+        //
+        // The backend answers now. This pins both halves of that answer: a 502
+        // is NOT read as an unreachable backend, and the message shown is the
+        // one the backend chose.
+        backend.status = 502;
+        backend.body = const {
+          'detail': {
+            'error_code': 'RESULT_SAVE_FAILED',
+            'user_message':
+                'Your vision was created but could not be saved. Try again.',
+            'retryable': true,
+          },
+        };
+        final e =
+            await api
+                    .generate(_req())
+                    .then<Object?>((v) => v, onError: (Object e) => e)
+                as PwaGenerationApiError;
+
+        expect(e.code, 'RESULT_SAVE_FAILED');
+        expect(e.code, isNot('BACKEND_UNREACHABLE'));
+        expect(e.userMessage, contains('could not be saved'));
+        expect(
+          e.userMessage.toLowerCase(),
+          isNot(contains('connection')),
+          reason: 'a storage outage is not a connectivity problem',
+        );
+        expect(e.retryable, isTrue);
+      },
+    );
+
+    test('the failure kinds stay distinguishable', () async {
+      // One message per cause, so "can't reach Ayden" means exactly that.
+      final seen = <String, String>{};
+      for (final kind in const [
+        ('UPSTREAM_UNAVAILABLE', 'Ayden could not reach its storage.'),
+        ('SOURCE_FETCH_FAILED', "Couldn't load your photo. Try again."),
+        ('PERSIST_FAILED', 'Your vision could not be saved. Try again.'),
+        ('SESSION_EXPIRED', 'Your session expired. Reload to continue.'),
+      ]) {
+        backend.status = kind.$1 == 'SESSION_EXPIRED' ? 401 : 502;
+        backend.body = {
+          'detail': {
+            'error_code': kind.$1,
+            'user_message': kind.$2,
+            'retryable': kind.$1 != 'SESSION_EXPIRED',
+          },
+        };
+        final e =
+            await api
+                    .generate(_req())
+                    .then<Object?>((v) => v, onError: (Object e) => e)
+                as PwaGenerationApiError;
+        expect(e.code, kind.$1);
+        seen[e.code] = e.userMessage;
+      }
+      expect(seen, hasLength(4));
+      expect(
+        seen.values.toSet(),
+        hasLength(4),
+        reason: 'four causes must not collapse into one message',
+      );
+    });
+
     test('no error message ever carries the session token', () async {
       backend.status = 500;
       backend.body = const {};

@@ -218,7 +218,10 @@ void main() {
       final c = await _pumpArchitect(tester, const Size(1440, 900));
       c.read(pwaControllerProvider.notifier).sendUserText('Move the sofa left');
       await tester.pump();
-      await tester.pumpAndSettle();
+      // Bounded pumps rather than pumpAndSettle: while a generation runs the
+      // working indicator animates continuously by design, so there is never a
+      // settled frame to wait for.
+      await tester.pump(const Duration(seconds: 3));
       final user = find.text('Move the sofa left');
       await _reveal(tester, user);
       final feed = tester.getRect(find.byKey(_feedKey));
@@ -270,21 +273,26 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('advice stays text-only; refine offers a confirmation', (
+    testWidgets('a typed instruction executes — no local confirmation step', (
       tester,
     ) async {
+      // The browser no longer decides advice-vs-refine, and no longer composes
+      // "Want me to apply it?". A line goes to the canonical pipeline, and the
+      // verdict (execute or object) comes back from it.
       final c = await _pumpArchitect(tester, const Size(1440, 900));
       final ctl = c.read(pwaControllerProvider.notifier);
-      ctl.sendUserText('What do you think?');
-      await tester.pumpAndSettle();
-      expect(c.read(pwaControllerProvider).versions, hasLength(1));
-      expect(find.text('Apply this change?'), findsNothing);
 
       ctl.sendUserText('Make the sofa darker');
       await tester.pumpAndSettle();
-      await _reveal(tester, find.text('Apply this change?'));
-      expect(find.text('Apply this change?'), findsOneWidget);
-      expect(c.read(pwaControllerProvider).versions, hasLength(1));
+      await tester.pump(const Duration(seconds: 3));
+
+      expect(
+        c.read(pwaControllerProvider).versions,
+        hasLength(2),
+        reason: 'the instruction ran',
+      );
+      expect(find.text('Apply this change?'), findsNothing);
+      expect(find.textContaining('Want me to apply'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -699,11 +707,10 @@ void main() {
     testWidgets('a refinement never re-opens the unveiling', (tester) async {
       final c = await _pumpArchitect(tester, const Size(1440, 900));
       final ctl = c.read(pwaControllerProvider.notifier);
+      // Executes straight away now: the confirmation card belonged to the local
+      // decision that the canonical advisor has taken over.
       ctl.sendUserText('Make the sofa darker');
       await tester.pumpAndSettle();
-      await _reveal(tester, find.text('Apply this change?'));
-      await tester.tap(find.text('Create vision'));
-      await tester.pump();
       await tester.pump(const Duration(seconds: 3));
       expect(c.read(pwaControllerProvider).phase, PwaPhase.architect);
       expect(c.read(pwaControllerProvider).versions, hasLength(2));

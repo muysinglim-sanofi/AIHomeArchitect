@@ -20,6 +20,15 @@
 /// still cost a second render, because there is no job row to look at. That
 /// limit belongs to the backend's synchronous shape, and inventing a fake poll
 /// here would only hide it.
+///
+/// A record therefore has TWO meanings, and they must not be confused. "The
+/// answer is unknown" is what makes an automatic replay free and correct. "The
+/// answer is known, and it was a failure" is not: the person has already been
+/// told, and re-running it without being asked spends their money on a render
+/// they did not request — once per reload, for as long as the failure lasts.
+/// `failed` is what separates the two. A settled record is kept, because an
+/// explicit Retry must reuse the same idempotency key; it is simply never
+/// replayed on its own.
 library;
 
 import 'dart:convert';
@@ -41,6 +50,9 @@ class PwaPendingGeneration {
     required this.visionNumber,
     this.parentVisionId = '',
     this.userInstruction = '',
+    this.confirm = false,
+    this.failed = false,
+    this.startedAtMs = 0,
   });
 
   final String projectId;
@@ -55,6 +67,70 @@ class PwaPendingGeneration {
   final String parentVisionId;
   final String userInstruction;
 
+  /// The user read the advisor's objection and chose to continue. Persisted so
+  /// a replay after a reload does not re-ask a question already answered.
+  final bool confirm;
+
+  /// This attempt came back with a definitive failure, and the person has seen
+  /// it. Only an explicit Retry may run it again — never a boot.
+  final bool failed;
+
+  /// When the request left, epoch ms. 0 means "written before this field
+  /// existed", which is the same thing as old.
+  final int startedAtMs;
+
+  /// How long a record can still describe something that might be running.
+  ///
+  /// This is not a comfort margin, it is the point past which replaying stops
+  /// being free. `pwa_staging.claim_generation` releases a PROCESSING claim
+  /// after fifteen minutes; up to then a replay is answered by the backend with
+  /// the vision it already made, and beyond it the claim is re-taken and a
+  /// second image is really rendered and really paid for. So the client stops
+  /// replaying exactly where the backend stops protecting it.
+  static const Duration replayWindow = Duration(minutes: 15);
+
+  /// Could this still be a generation that is genuinely in flight?
+  ///
+  /// A record is written before the request and cleared after it, so a live one
+  /// is at most a couple of minutes old. One from yesterday describes something
+  /// that finished, failed or died long ago — replaying it on a page load buys
+  /// a render nobody asked for. That is what happened on 2026-08-08: a record
+  /// left by a failure the previous evening started a fresh paid render the
+  /// moment the site was reopened.
+  bool isReplayableAt(DateTime now) {
+    if (failed || startedAtMs <= 0) return false;
+    final age = now.millisecondsSinceEpoch - startedAtMs;
+    return age >= 0 && age < replayWindow.inMilliseconds;
+  }
+
+  /// Same operation, now settled. Kept (not cleared) so Retry reuses the key.
+  PwaPendingGeneration asFailed() => _copy(failed: true);
+
+  /// Same operation, taken back up by a deliberate retry.
+  PwaPendingGeneration asActive() => _copy(failed: false);
+
+  /// Same operation, restamped as leaving now.
+  PwaPendingGeneration startingAt(DateTime now) =>
+      _copy(failed: false, startedAtMs: now.millisecondsSinceEpoch);
+
+  PwaPendingGeneration _copy({required bool failed, int? startedAtMs}) =>
+      PwaPendingGeneration(
+    projectId: projectId,
+    idempotencyKey: idempotencyKey,
+    actionType: actionType,
+    roomId: roomId,
+    roomLabel: roomLabel,
+    atmosphereId: atmosphereId,
+    atmosphereLabel: atmosphereLabel,
+    originalStoragePath: originalStoragePath,
+    visionNumber: visionNumber,
+    parentVisionId: parentVisionId,
+    userInstruction: userInstruction,
+    confirm: confirm,
+    failed: failed,
+    startedAtMs: startedAtMs ?? this.startedAtMs,
+  );
+
   Map<String, dynamic> toJson() => {
     'project_id': projectId,
     'idempotency_key': idempotencyKey,
@@ -67,6 +143,9 @@ class PwaPendingGeneration {
     'vision_number': visionNumber,
     'parent_vision_id': parentVisionId,
     'user_instruction': userInstruction,
+    'confirm': confirm,
+    'failed': failed,
+    'started_at_ms': startedAtMs,
   };
 
   /// Null rather than throwing on anything malformed: a record we cannot read
@@ -91,6 +170,9 @@ class PwaPendingGeneration {
       visionNumber: (raw['vision_number'] as num?)?.toInt() ?? 1,
       parentVisionId: s('parent_vision_id'),
       userInstruction: s('user_instruction'),
+      confirm: raw['confirm'] == true,
+      failed: raw['failed'] == true,
+      startedAtMs: (raw['started_at_ms'] as num?)?.toInt() ?? 0,
     );
   }
 }

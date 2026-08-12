@@ -66,14 +66,53 @@ Widget _imgFallback(BuildContext _, Object _, StackTrace? _) =>
 /// them (the common case — upload, and hydration on open/boot), otherwise the
 /// durable original resolved from Storage. Still an asset for a bundled
 /// original, which [PwaStoredImage] handles without a round-trip.
-Widget pwaBeforeImage(AydenImageSource? source, PwaProject project) =>
-    source != null
-    ? Image.memory(source.bytes, fit: BoxFit.cover, errorBuilder: _imgFallback)
-    : PwaStoredImage(
-        key: ValueKey('before-${project.projectId}'),
-        reference: project.originalAsset,
-        placeholderColor: AppColors.surfaceVariant,
-      );
+/// What "Before" means for [vision].
+///
+/// Not the uploaded photo — the image this vision was made FROM. Reported
+/// 2026-08-10: the Full Reveal of a second vision still showed the original
+/// room, so the comparison answered a question nobody asked ("what did the
+/// empty room look like?") instead of the one on screen ("what did this change
+/// do?"). A first vision has no parent, and there the photo IS the before.
+///
+/// Falls back to the photo whenever the parent cannot be resolved: showing the
+/// upload is merely less useful, showing nothing is broken.
+String pwaBeforeReference(
+  PwaVision vision,
+  List<PwaVision> versions,
+  PwaProject project,
+) {
+  final parentId = vision.parentVersionId;
+  if (parentId != null && parentId.isNotEmpty) {
+    for (final v in versions) {
+      if (v.versionId == parentId && v.afterAsset.isNotEmpty) return v.afterAsset;
+    }
+  }
+  return project.originalAsset;
+}
+
+/// The Before image itself. [source] is the freshly-picked photo held in memory
+/// and is only the right answer for a vision with no parent — using it for a
+/// child would put the empty room opposite a refinement of a furnished one.
+Widget pwaBeforeImage(
+  AydenImageSource? source,
+  PwaProject project, {
+  PwaVision? vision,
+  List<PwaVision> versions = const [],
+}) {
+  final reference = vision == null
+      ? project.originalAsset
+      : pwaBeforeReference(vision, versions, project);
+  final isOriginal = reference == project.originalAsset;
+  if (source != null && isOriginal) {
+    return Image.memory(source.bytes, fit: BoxFit.cover,
+        errorBuilder: _imgFallback);
+  }
+  return PwaStoredImage(
+    key: ValueKey('before-${project.projectId}-$reference'),
+    reference: reference,
+    placeholderColor: AppColors.surfaceVariant,
+  );
+}
 
 /// The generated image of [vision]. Its reference is a private Storage path in
 /// the real runtime, so it goes through [PwaStoredImage] — which signs it, and
@@ -91,6 +130,7 @@ class PwaRevealCard extends StatelessWidget {
     super.key,
     required this.vision,
     required this.source,
+    this.versions = const [],
     required this.project,
     this.aspectRatio = 4 / 3,
     this.onDark = false,
@@ -99,6 +139,9 @@ class PwaRevealCard extends StatelessWidget {
 
   final PwaVision vision;
   final AydenImageSource? source;
+
+  /// The lineage, so "Before" can be resolved to this vision's parent.
+  final List<PwaVision> versions;
   final PwaProject project;
   final double aspectRatio;
 
@@ -123,7 +166,8 @@ class PwaRevealCard extends StatelessWidget {
               RevealHero(
                 key: ValueKey('reveal-${vision.versionId}'),
                 afterImage: pwaAfterImage(vision),
-                beforeImage: pwaBeforeImage(source, project),
+                beforeImage: pwaBeforeImage(source, project,
+                    vision: vision, versions: versions),
                 initialFraction: 0.32,
                 autoSweep: true,
                 aspectRatio: aspectRatio,
@@ -143,6 +187,7 @@ class PwaRevealCard extends StatelessWidget {
                     vision: vision,
                     source: source,
                     project: project,
+                    versions: versions,
                   ),
                 ),
               ),
@@ -220,6 +265,7 @@ Future<void> showPwaFullscreenReveal(
   required PwaVision vision,
   required AydenImageSource? source,
   required PwaProject project,
+  List<PwaVision> versions = const [],
 }) {
   return showDialog<void>(
     context: context,
@@ -239,7 +285,8 @@ Future<void> showPwaFullscreenReveal(
               Center(
                 child: RevealHero(
                   afterImage: pwaAfterImage(vision),
-                  beforeImage: pwaBeforeImage(source, project),
+                  beforeImage: pwaBeforeImage(source, project,
+                    vision: vision, versions: versions),
                   initialFraction: 0.32,
                   autoSweep: true,
                   beforeLabel: 'Before',

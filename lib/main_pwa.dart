@@ -157,14 +157,9 @@ Future<void> _bootPwaStaging(
   // restore so the controller can replay it with the SAME key on the first
   // frame — the backend then returns the vision it already made, if it made one.
   final pending = await pendingStore.read();
-  final restore = PwaBootRestore(
-    library: base.library,
-    active: base.active,
-    activeSource: base.activeSource,
-    route: base.route,
-    legacyHidden: base.legacyHidden,
-    pending: pending,
-  );
+  final restore = pending == null
+      ? base
+      : await pwaRestoreWithPending(persistence, base, pending);
 
   bridge.replace(restore.route?.location ?? PwaRoute.home.location);
   runApp(

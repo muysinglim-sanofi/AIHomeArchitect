@@ -128,6 +128,47 @@ int _reqInt(Map<String, dynamic> r, String k) {
   throw PwaRepositoryError.serialization('Missing/invalid required int "$k".');
 }
 
+/// A human freshness label for [updatedAt], relative to [now].
+///
+/// The domain keeps display freshness as a PRE-RENDERED string so the library
+/// sorts and renders deterministically in tests (see [PwaProjectSnapshot]). The
+/// clock therefore lives here, at the record→domain seam, and is injectable.
+///
+/// This exists because the read side asked for an `updated_label` COLUMN that
+/// the write side never produced and the schema never had — so every project
+/// restored from staging rendered the bare word "Updated", with no date, no
+/// matter how recently it had been touched.
+String pwaRelativeUpdatedLabel(DateTime updatedAt, {DateTime? now}) {
+  final ref = (now ?? DateTime.now()).toUtc();
+  final then = updatedAt.toUtc();
+  final delta = ref.difference(then);
+  if (delta.isNegative || delta.inMinutes < 1) return 'Updated just now';
+  if (delta.inMinutes < 60) {
+    final m = delta.inMinutes;
+    return 'Updated $m ${m == 1 ? "minute" : "minutes"} ago';
+  }
+  // Calendar days, not 24-hour buckets: something touched last night reads as
+  // "Yesterday", which is what a person means by it.
+  final days = DateTime.utc(
+    ref.year,
+    ref.month,
+    ref.day,
+  ).difference(DateTime.utc(then.year, then.month, then.day)).inDays;
+  if (days == 0) return 'Updated today';
+  if (days == 1) return 'Yesterday';
+  if (days < 7) return '$days days ago';
+  if (days < 14) return 'Last week';
+  if (days < 31) return '${days ~/ 7} weeks ago';
+  final months = days ~/ 30;
+  return '$months ${months == 1 ? "month" : "months"} ago';
+}
+
+/// Parse a DB timestamp, or null when absent/unreadable.
+DateTime? pwaParseTimestamp(Object? raw) {
+  if (raw is! String || raw.isEmpty) return null;
+  return DateTime.tryParse(raw);
+}
+
 /// Chronological rank of a vision row.
 ///
 /// `client_order` is a CLIENT sequence: it exists on rows this app wrote, and is
@@ -352,6 +393,7 @@ PwaProjectSnapshot pwaSnapshotFromRecords({
   required Map<String, dynamic> project,
   required List<Map<String, dynamic>> visions,
   required List<Map<String, dynamic>> messages,
+  DateTime? now,
 }) {
   _checkSchema(project);
   final projectId = _reqStr(project, 'id');
@@ -410,6 +452,8 @@ PwaProjectSnapshot pwaSnapshotFromRecords({
       }(),
   ];
 
+  final updatedAt = pwaParseTimestamp(project['updated_at']);
+
   return PwaProjectSnapshot(
     projectId: projectId,
     title: _reqStr(project, 'title'),
@@ -428,7 +472,14 @@ PwaProjectSnapshot pwaSnapshotFromRecords({
     coverVisionId: _optStr(project, 'cover_vision_id'),
     createdOrder: _reqInt(project, 'client_created_order'),
     updatedOrder: _reqInt(project, 'client_updated_order'),
-    updatedLabel: _optStr(project, 'updated_label') ?? 'Updated',
+    // `updated_at` is written by the DATABASE on every write, so it is the one
+    // freshness value that is always true. The previous code read an
+    // `updated_label` column that no writer produced and the schema never had,
+    // so every restored project rendered the bare word "Updated".
+    updatedAt: updatedAt,
+    updatedLabel: updatedAt != null
+        ? pwaRelativeUpdatedLabel(updatedAt, now: now)
+        : (_optStr(project, 'updated_label') ?? 'Updated'),
     status: pwaStatusFromDb(_reqStr(project, 'status')),
   );
 }

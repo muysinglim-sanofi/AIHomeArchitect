@@ -460,10 +460,15 @@ void main() {
         final fake = _FakePersistence();
         final c = await _generated(persistence: fake);
         fake.failNextSave = true;
-        c.openLibrary(); // triggers _syncActiveProject → saveProject (fails once)
+        // A REAL change is the trigger. `openLibrary` was used here before, but
+        // navigating no longer writes: an UPDATE carrying identical values still
+        // re-stamped the row's `updated_at`, so merely opening a project moved
+        // it to the top of "Recently updated". The intent of this test — a
+        // failure is surfaced, and the next save still runs — is unchanged.
+        c.sendUserText('make it warmer');
         await pumpEventQueue();
         expect(c.state.saveState, PwaSaveState.error);
-        c.openLibrary(); // next save still runs
+        c.sendUserText('and softer lighting'); // next save still runs
         await pumpEventQueue();
         expect(c.state.saveState, PwaSaveState.saved);
       },

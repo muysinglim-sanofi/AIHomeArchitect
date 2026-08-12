@@ -69,6 +69,7 @@ class PwaFirstRevealScreen extends ConsumerWidget {
                       child: PwaRevealCard(
                         vision: vision,
                         source: state.source,
+                        versions: state.versions,
                         project: state.project,
                         aspectRatio: revealW / revealH,
                         onDark: true,

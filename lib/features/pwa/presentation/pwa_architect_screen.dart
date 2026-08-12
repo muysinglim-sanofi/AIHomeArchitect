@@ -21,6 +21,7 @@ import '../domain/pwa_project.dart';
 import 'pwa_architect_tokens.dart';
 import 'pwa_brand.dart';
 import 'pwa_stored_image.dart';
+import 'pwa_working_indicator.dart';
 
 // V7 responsive tiers (§4). Local to the Architect so the shared
 // `pwaFormFactorForWidth` (used by the frozen entry screen) stays untouched.
@@ -495,7 +496,15 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
   ) {
     switch (m.kind) {
       case PwaMessageKind.loading:
-        return const [_V7ChatGap(), _V7InlineGenerating()];
+        // The message says WHAT is running; the words for it live here, beside
+        // the indicator, so there is one phase system and the controller carries
+        // no copy.
+        return [
+          const _V7ChatGap(),
+          _V7InlineGenerating(
+            phases: pwaWorkingPhasesFor(m.workingKind, m.workingSubject),
+          ),
+        ];
       case PwaMessageKind.text:
         if (m.role == PwaRole.user) {
           return [const _V7ChatGap(), _V7UserBubble(text: m.text)];
@@ -511,6 +520,7 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
               controller: _c,
               messageId: m.id,
               instruction: m.pendingRefine!,
+              advisoryVerdict: m.advisoryVerdict,
             ),
           ] else if (m.chips.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -529,8 +539,14 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
           highlighted: _highlightVersionId == vision.versionId,
           maxImageHeight: visionMaxH,
           onOpenReveal: () => _c.openReveal(vision.versionId),
-          onRefine: () =>
-              _c.sendUserText('Refine Vision ${vision.visionNumber}'),
+          // A button label is not a design instruction. Sending "Refine
+          // Vision 2" as the message made the parser read it as a change and
+          // the engine act on it. Mobile has no such button: refining is what
+          // the composer is for, so this focuses it on that vision.
+          onRefine: () {
+            _c.continueFromVision(vision.versionId);
+            _composerFocus.requestFocus();
+          },
           onTryAtmosphere: () => _c.openReveal(vision.versionId),
         );
         // Guidance: after a result nobody should wonder what to do next.
@@ -589,8 +605,14 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
   }
 }
 
-/// §19 — the four canned quick actions under the current vision. The first is an
-/// opinion ask (→ advice, text only); the rest are change requests (→ refine).
+/// §19 — the four canned quick actions under the current vision.
+///
+/// They are TEXT, nothing more. Tapping one is identical to typing it: both go
+/// through `sendUserText` to the canonical conversational turn, which decides
+/// whether a line is an opinion ask or a change request. Nothing here routes.
+/// An earlier version of this comment claimed the first chip was advice-only
+/// and the rest were refines — believing that is how "What do you think?" ended
+/// up buying an image.
 const List<String> _defaultQuickActions = [
   'What do you think?',
   'Make it warmer',
@@ -1032,7 +1054,11 @@ class _V7UserBubble extends StatelessWidget {
 
 /// §23 — inline generation state (no full-screen route).
 class _V7InlineGenerating extends StatelessWidget {
-  const _V7InlineGenerating();
+  const _V7InlineGenerating({this.phases = kPwaRefinePhases});
+
+  /// What Ayden is doing, decided by the turn that started the work.
+  final List<String> phases;
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -1040,30 +1066,26 @@ class _V7InlineGenerating extends StatelessWidget {
       children: [
         const _V7Avatar(),
         const SizedBox(width: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: av7Surface,
-            border: Border.all(color: av7Line),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: av7Gold,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                'Ayden is creating your next vision…',
-                style: av7Sans(fontSize: 14, color: av7Muted),
-              ),
-            ],
+        Flexible(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: av7Surface,
+              border: Border.all(color: av7Line),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            // A render takes about two minutes. One frozen line for all of it
+            // read as a hung page, so the state moves through qualitative
+            // phases — none of which can end the generation. Only the backend's
+            // answer removes this message from the conversation.
+            //
+            // The ink is the SAME one `_V7AydenBubble` uses. Passing "on dark"
+            // here painted white text onto this near-white bubble, so the copy
+            // and the ellipsis vanished and the bubble showed one gold dot.
+            child: PwaWorkingIndicator(
+              phases: phases,
+              foreground: const Color(0xFF2B211C),
+            ),
           ),
         ),
       ],
@@ -1456,15 +1478,28 @@ class _V7RefineConfirmCard extends StatelessWidget {
     required this.controller,
     required this.messageId,
     required this.instruction,
+    this.advisoryVerdict,
   });
   final PwaState state;
   final PwaController controller;
   final String messageId;
   final String instruction;
+
+  /// The advisor's verdict, when this card follows an objection.
+  final String? advisoryVerdict;
+
   @override
   Widget build(BuildContext context) {
     final nextN = state.versionCount + 1;
     final busy = state.generating;
+    // RED is a refusal, not a warning. Mobile's contract is explicit — "YELLOW →
+    // [Try anyway] + [Edit request] ; RED → [Edit request] SEULEMENT (jamais
+    // forçable, aucun confirm=true possible depuis une carte RED)" — and its
+    // handler refuses one anyway (chat_screen.dart:1811). This card offered
+    // "Create vision" on every verdict, which let a person pay for a render the
+    // engine had already judged wrong. On red the override is not disabled, it
+    // is absent: a greyed button still says "this is available to you".
+    final isRed = advisoryVerdict == 'red';
     final light = _V7OnLightGlass.of(context);
     final ink = light ? kPwaOnPlate : kPwaOnGlass;
     final soft = light ? kPwaOnPlateSoft : kPwaOnGlassSoft;
@@ -1493,22 +1528,27 @@ class _V7RefineConfirmCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              controller.refineSummaryText(instruction),
+              // The user's own words, quoted back. Ayden's opinion on this
+              // change belongs to the canonical advisor, which answers on the
+              // backend — never to a template composed here.
+              '“$instruction”',
               style: av7Sans(fontSize: 13, height: 1.46, color: soft),
             ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                const Icon(Icons.auto_awesome, size: 14, color: av7GoldDeep),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Creates Vision $nextN · Uses 1 Space',
-                    style: av7Sans(fontSize: 11.5, color: soft),
+            if (!isRed) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Icon(Icons.auto_awesome, size: 14, color: av7GoldDeep),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Creates Vision $nextN · Uses 1 Space',
+                      style: av7Sans(fontSize: 11.5, color: soft),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
             Row(
               children: [
@@ -1521,9 +1561,12 @@ class _V7RefineConfirmCard extends StatelessWidget {
                       foregroundColor: ink,
                       side: BorderSide(color: edge.withValues(alpha: 0.4)),
                     ),
-                    child: const Text('Cancel'),
+                    // On a refusal the only action left is to rephrase, so the
+                    // button says that rather than "Cancel".
+                    child: Text(isRed ? 'Edit request' : 'Cancel'),
                   ),
                 ),
+                if (!isRed) ...[
                 const SizedBox(width: 10),
                 Expanded(
                   flex: 2,
@@ -1535,7 +1578,12 @@ class _V7RefineConfirmCard extends StatelessWidget {
                         ? null
                         : () {
                             controller.dismissRefine(messageId);
-                            controller.applyRefine(instruction);
+                            // The person read the objection and chose to go on:
+                            // that is exactly what confirm carries. Without it
+                            // the advisor simply objects again and the button
+                            // does nothing — mobile sends refineConfirm:true
+                            // here (chat_screen.dart:1813-1817).
+                            controller.applyRefine(instruction, confirm: true);
                           },
                     style: FilledButton.styleFrom(
                       backgroundColor: av7Gold,
@@ -1544,6 +1592,7 @@ class _V7RefineConfirmCard extends StatelessWidget {
                     child: Text(busy ? 'Creating…' : 'Create vision'),
                   ),
                 ),
+                ],
               ],
             ),
           ],

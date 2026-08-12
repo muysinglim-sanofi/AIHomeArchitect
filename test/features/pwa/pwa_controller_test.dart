@@ -7,9 +7,9 @@ import 'package:ai_home_architect/core/media/ayden_image_source.dart';
 import 'package:ai_home_architect/features/pwa/application/pwa_controller.dart';
 import 'package:ai_home_architect/features/pwa/application/pwa_route.dart';
 import 'package:ai_home_architect/features/pwa/data/mock_pwa_experience_repository.dart';
+import 'package:ai_home_architect/features/pwa/data/pwa_generation_service.dart';
 import 'package:ai_home_architect/features/pwa/data/pwa_mock_generation_service.dart';
 import 'package:ai_home_architect/features/pwa/data/pwa_pending_generation.dart';
-import 'package:ai_home_architect/features/pwa/domain/pwa_intent.dart';
 import 'package:ai_home_architect/features/pwa/domain/pwa_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -27,6 +27,29 @@ AydenImageSource fakeSource() => AydenImageSource(
   filename: 'r.jpg',
 );
 
+/// A controller whose generation seam can answer with an advisory, standing in
+/// for what the canonical backend advisor would return.
+class _AdvisoryRig {
+  _AdvisoryRig()
+    : generation = PwaFakeGenerationService(),
+      _repo = MockPwaExperienceRepository(
+        workDelay: Duration.zero,
+        seedLibrary: false,
+      ) {
+    controller = PwaController(
+      _repo,
+      generation: generation,
+      pending: PwaMemoryPendingGenerationStore(),
+    );
+  }
+
+  final PwaFakeGenerationService generation;
+  final MockPwaExperienceRepository _repo;
+  late final PwaController controller;
+}
+
+_AdvisoryRig _advisoryRig() => _AdvisoryRig();
+
 Future<PwaController> generated() async {
   final c = makeController();
   c.setSource(fakeSource());
@@ -35,13 +58,43 @@ Future<PwaController> generated() async {
 }
 
 void main() {
-  group('classifyTextIntent', () {
-    test('opinion questions → advice', () {
-      expect(classifyTextIntent('What do you think?'), PwaIntent.advice);
+  group('a typed line is not classified locally', () {
+    // Replaces the old `classifyTextIntent` unit tests. That heuristic decided
+    // advice-vs-refine from a keyword list in the browser, and it is gone: the
+    // canonical `refine.parser` + `refine.advisor` decide on the backend, as
+    // they already do for mobile. What is asserted now is the DELEGATION.
+    test('every typed line reaches the canonical pipeline', () async {
+      final c = await generated();
+      c.continueToArchitect();
+      final before = c.state.versions.length;
+
+      c.sendUserText('What do you think about opening this wall?');
+      await pumpEventQueue();
+
+      // The user's words are in the conversation…
+      expect(
+        c.state.messages.any(
+          (m) => m.role == PwaRole.user && m.text.contains('opening this wall'),
+        ),
+        isTrue,
+      );
+      // …and the outcome came from the pipeline, not from a local verdict:
+      // exactly one new vision, and no invented "Want me to apply it?" copy.
+      expect(c.state.versions.length, before + 1);
+      expect(
+        c.state.messages.any((m) => m.text.contains('Want me to apply')),
+        isFalse,
+        reason: 'the PWA must not compose Ayden advice',
+      );
     });
-    test('instructions → refine', () {
-      expect(classifyTextIntent('Make it warmer'), PwaIntent.refine);
-      expect(classifyTextIntent('Open the kitchen'), PwaIntent.refine);
+
+    test('an empty line does nothing at all', () async {
+      final c = await generated();
+      c.continueToArchitect();
+      final before = c.state.messages.length;
+      c.sendUserText('   ');
+      await pumpEventQueue();
+      expect(c.state.messages, hasLength(before));
     });
   });
 
@@ -74,50 +127,127 @@ void main() {
     });
   });
 
-  group('Advice (§14–16)', () {
-    test('advice = text only, no version, reveal unchanged', () async {
-      final c = await generated();
-      final beforeVer = c.state.versions.length;
-      final beforeReveal = c.state.currentVision!.versionId;
-      c.sendUserText('What do you think?');
-      expect(c.state.versions.length, beforeVer);
-      expect(c.state.currentVision!.versionId, beforeReveal);
-      expect(c.state.messages.last.kind, PwaMessageKind.text);
-      expect(c.state.messages.last.role, PwaRole.ayden);
-      expect(c.state.messages.last.pendingRefine, isNull);
+  group('Advice — decided by the canonical advisor', () {
+    // The verdict is the BACKEND's. These tests configure the seam to answer
+    // the way the canonical advisor would, and assert how the controller
+    // presents it: an objection is an answer, never a vision and never an error.
+    test(
+      'an advisory creates no version and shows the advisor words',
+      () async {
+        final rig = _advisoryRig();
+        final c = rig.controller;
+        c.setSource(fakeSource());
+        await c.generateFirstVision();
+        c.continueToArchitect();
+        final beforeVer = c.state.versions.length;
+        final beforeReveal = c.state.currentVision!.versionId;
+
+        rig.generation.advisory = const PwaGenerationAdvisory(
+          verdict: 'yellow',
+          message: 'Which wall do you mean — the left or the right one?',
+        );
+        c.sendUserText('open the wall');
+        await pumpEventQueue();
+
+        expect(c.state.versions.length, beforeVer, reason: 'no vision');
+        expect(c.state.currentVision!.versionId, beforeReveal);
+        expect(c.state.generating, isFalse);
+        expect(c.state.generationError, isNull, reason: 'not a failure');
+
+        final last = c.state.messages.last;
+        expect(last.kind, PwaMessageKind.text);
+        expect(last.role, PwaRole.ayden);
+        expect(last.text, contains('Which wall do you mean'));
+        expect(last.pendingRefine, 'open the wall');
+        expect(last.chips, contains('Continue anyway'));
+        // No placeholder is left behind.
+        expect(
+          c.state.messages.where((m) => m.kind == PwaMessageKind.loading),
+          isEmpty,
+        );
+      },
+    );
+
+    test('Continue anyway resends the SAME instruction with confirm', () async {
+      final rig = _advisoryRig();
+      final c = rig.controller;
+      c.setSource(fakeSource());
+      await c.generateFirstVision();
+      c.continueToArchitect();
+
+      rig.generation.advisory = const PwaGenerationAdvisory(
+        verdict: 'red',
+        message: 'I would not recommend that.',
+      );
+      c.sendUserText('add a bathtub');
+      await pumpEventQueue();
+      expect(c.state.versions, hasLength(1));
+
+      await c.applyRefine('add a bathtub', confirm: true);
+      await pumpEventQueue();
+
+      final last = rig.generation.calls.last;
+      expect(last.confirm, isTrue);
+      expect(last.userInstruction, 'add a bathtub');
+      expect(c.state.versions, hasLength(2), reason: 'the user overrode it');
     });
   });
 
   group('Refine confirm (§17–24)', () {
-    test('refine offers Apply — NO immediate generation, no version', () async {
+    test('a green instruction EXECUTES — no "Apply this change" step', () async {
+      // The old contract asked the user to confirm every instruction, using
+      // copy composed in the browser. The canonical contract executes what the
+      // advisor passes, and only objects when the advisor objects.
       final c = await generated();
+      final parent = c.state.currentVision!;
       c.sendUserText('Make it warmer');
-      final offer = c.state.messages.last;
-      expect(offer.pendingRefine, 'Make it warmer');
-      expect(c.state.versions, hasLength(1)); // nothing generated yet
-      expect(c.state.generating, isFalse);
+      await pumpEventQueue();
+
+      expect(c.state.versions, hasLength(2), reason: 'it ran');
+      final child = c.state.currentVision!;
+      expect(child.actionType, PwaActionType.refine);
+      expect(child.parentVersionId, parent.versionId);
+      expect(c.state.messages.last.kind, PwaMessageKind.reveal);
+      expect(
+        c.state.messages.any((m) => m.text.contains('Want me to apply')),
+        isFalse,
+      );
     });
 
     test('Cancel (dismissRefine) creates no version', () async {
-      final c = await generated();
-      c.sendUserText('Make it warmer');
+      // Still reachable: an advisory offers "Continue anyway", and dismissing
+      // it must leave the project untouched.
+      final rig = _advisoryRig();
+      final c = rig.controller;
+      c.setSource(fakeSource());
+      await c.generateFirstVision();
+      c.continueToArchitect();
+      rig.generation.advisory = const PwaGenerationAdvisory(
+        verdict: 'yellow',
+        message: 'Which wall?',
+      );
+      c.sendUserText('open the wall');
+      await pumpEventQueue();
+
       final offer = c.state.messages.last;
       c.dismissRefine(offer.id);
       expect(c.state.versions, hasLength(1));
       expect(c.state.messages.every((m) => m.pendingRefine == null), isTrue);
     });
 
-    test('Confirm creates exactly ONE child; parent = source vision', () async {
-      final c = await generated();
-      final parent = c.state.currentVision!;
-      c.sendUserText('Make it warmer');
-      await c.applyRefine('Make it warmer');
-      expect(c.state.versions, hasLength(2));
-      final child = c.state.currentVision!;
-      expect(child.actionType, PwaActionType.refine);
-      expect(child.parentVersionId, parent.versionId);
-      expect(c.state.messages.last.kind, PwaMessageKind.reveal);
-    });
+    test(
+      'applyRefine creates exactly ONE child; parent = source vision',
+      () async {
+        final c = await generated();
+        final parent = c.state.currentVision!;
+        await c.applyRefine('Make it warmer');
+        expect(c.state.versions, hasLength(2));
+        final child = c.state.currentVision!;
+        expect(child.actionType, PwaActionType.refine);
+        expect(child.parentVersionId, parent.versionId);
+        expect(c.state.messages.last.kind, PwaMessageKind.reveal);
+      },
+    );
   });
 
   group('Atmosphere switch confirm (§25–30)', () {
@@ -347,7 +477,6 @@ void main() {
       'refine double-apply while generating cannot duplicate (§22.22)',
       () async {
         final c = await generated();
-        c.sendUserText('Make it warmer');
         final f1 = c.applyRefine('Make it warmer');
         await c.applyRefine('Make it warmer'); // no-op while generating
         await f1;
@@ -361,7 +490,9 @@ void main() {
       await c.applyAtmosphere();
       final child = c.state.currentVision!;
       expect(child.parentVersionId, isNotNull);
-      expect(child.reasonLabel, contains('japandi_calm'));
+      // The NAME, not the canonical id. `japandi_calm` is what the engine
+      // speaks; it was being shown to the person verbatim.
+      expect(child.reasonLabel, 'Atmosphere · Japandi Calm');
     });
   });
 }

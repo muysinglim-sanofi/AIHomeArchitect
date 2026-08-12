@@ -55,6 +55,7 @@ class PwaProjectSnapshot {
     required this.status,
     this.source,
     this.coverVisionId,
+    this.updatedAt,
   });
 
   final String projectId;
@@ -93,6 +94,16 @@ class PwaProjectSnapshot {
   /// Cover thumbnail vision (defaults to the current vision).
   final String? coverVisionId;
 
+  /// The DATABASE's own last-write timestamp, when this snapshot came from a
+  /// durable record. Null for purely in-memory sessions (mock, a draft that has
+  /// never been saved), which is why ordering still falls back to
+  /// [updatedOrder] — the deterministic counter the tests rely on.
+  ///
+  /// This is the authority for freshness: [updatedLabel] is rendered from it,
+  /// and it sorts the library ahead of the client counter, which is only
+  /// monotonic within one browser session.
+  final DateTime? updatedAt;
+
   int get visionCount => visions.length;
 
   PwaVision? _byId(String? id) {
@@ -125,6 +136,7 @@ class PwaProjectSnapshot {
     PwaProjectStatus? status,
     AydenImageSource? source,
     String? coverVisionId,
+    DateTime? updatedAt,
   }) => PwaProjectSnapshot(
     projectId: projectId,
     title: title ?? this.title,
@@ -142,6 +154,7 @@ class PwaProjectSnapshot {
     status: status ?? this.status,
     source: source ?? this.source,
     coverVisionId: coverVisionId ?? this.coverVisionId,
+    updatedAt: updatedAt ?? this.updatedAt,
   );
 
   /// Pure library ordering (deterministic — no wall clock).
@@ -152,7 +165,16 @@ class PwaProjectSnapshot {
     final list = [...items];
     switch (order) {
       case PwaProjectSort.recentlyUpdated:
-        list.sort((a, b) => b.updatedOrder.compareTo(a.updatedOrder));
+        // The database timestamp wins when both sides have one: the client
+        // counter only means anything within a single browser session, so two
+        // projects created in different sessions would otherwise interleave
+        // arbitrarily. Falls back to the counter for in-memory sessions.
+        list.sort((a, b) {
+          final ua = a.updatedAt;
+          final ub = b.updatedAt;
+          if (ua != null && ub != null) return ub.compareTo(ua);
+          return b.updatedOrder.compareTo(a.updatedOrder);
+        });
       case PwaProjectSort.newest:
         list.sort((a, b) => b.createdOrder.compareTo(a.createdOrder));
       case PwaProjectSort.oldest:

@@ -134,6 +134,7 @@ class _PwaRevealScreenState extends ConsumerState<PwaRevealScreen> {
                       child: PwaRevealCard(
                         vision: vision,
                         source: state.source,
+                        versions: state.versions,
                         project: state.project,
                         aspectRatio: (c.maxWidth - 16) / h,
                         onDark: true,
@@ -187,6 +188,7 @@ class _PwaRevealScreenState extends ConsumerState<PwaRevealScreen> {
             child: PwaRevealCard(
               vision: vision,
               source: state.source,
+                        versions: state.versions,
               project: state.project,
               aspectRatio: mobile ? 4 / 3 : 16 / 10,
               onDark: true,

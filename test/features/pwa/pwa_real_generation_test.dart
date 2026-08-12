@@ -23,6 +23,7 @@ import 'package:ai_home_architect/features/pwa/data/pwa_repository_error.dart';
 import 'package:ai_home_architect/features/pwa/domain/pwa_models.dart';
 import 'package:ai_home_architect/features/pwa/domain/pwa_project.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_stored_image.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -160,6 +161,23 @@ Future<_Rig> _generated() async {
 }
 
 bool _isStoragePath(String p) => pwaIsStoragePath(p);
+
+PwaProjectSnapshot _emptyProject(String id) => PwaProjectSnapshot(
+  projectId: id,
+  title: 'Open-plan Living Space',
+  originalImageAsset: 'users/u1/projects/$id/original/o1.jpg',
+  roomId: null,
+  roomLabel: 'Your space',
+  selectedAtmosphereId: 'ayden_signature',
+  atmosphereLabel: 'Ayden Signature',
+  visions: const [],
+  messages: const [],
+  currentVisionId: null,
+  createdOrder: 1,
+  updatedOrder: 1,
+  updatedLabel: '',
+  status: PwaProjectStatus.draft,
+);
 
 void main() {
   // ── injection ─────────────────────────────────────────────────────────────
@@ -430,6 +448,85 @@ void main() {
     });
   });
 
+  // ── "Before" is the image this vision was made FROM ───────────────────────
+  group('full reveal lineage', () {
+    PwaVision mkVision(String id, {String? parent, int n = 1}) => PwaVision(
+      versionId: id,
+      projectId: 'p1',
+      visionNumber: n,
+      order: n,
+      title: 'v$n',
+      atmosphereId: 'warm_modern',
+      afterAsset: 'users/u1/projects/p1/generated/$id.jpg',
+      actionType: n == 1 ? PwaActionType.signature : PwaActionType.refine,
+      parentVersionId: parent,
+    );
+
+    const project = PwaProject(
+      projectId: 'p1',
+      title: 'Open-plan Living Space',
+      originalAsset: 'users/u1/projects/p1/original/photo.jpg',
+    );
+
+    test('REVEAL01: a first vision compares against the uploaded photo', () {
+      final v1 = mkVision('v1');
+      expect(pwaBeforeReference(v1, [v1], project), project.originalAsset);
+    });
+
+    test('REVEAL02: a refine compares against the vision it refined', () {
+      // Reported 2026-08-10: the Full Reveal of a second vision still showed
+      // the original empty room, so the slider answered "what did the room look
+      // like before you started?" instead of "what did this change do?".
+      final v1 = mkVision('v1');
+      final v2 = mkVision('v2', parent: 'v1', n: 2);
+      expect(pwaBeforeReference(v2, [v1, v2], project), v1.afterAsset);
+    });
+
+    test('REVEAL03: a third vision compares against the second, not the first',
+        () {
+      final v1 = mkVision('v1');
+      final v2 = mkVision('v2', parent: 'v1', n: 2);
+      final v3 = mkVision('v3', parent: 'v2', n: 3);
+      expect(pwaBeforeReference(v3, [v1, v2, v3], project), v2.afterAsset);
+    });
+
+    test('REVEAL04: a branch compares against ITS parent, not the latest', () {
+      // Two children of v1: each must face v1, whichever was made last.
+      final v1 = mkVision('v1');
+      final v2 = mkVision('v2', parent: 'v1', n: 2);
+      final v3 = mkVision('v3', parent: 'v1', n: 3);
+      expect(pwaBeforeReference(v3, [v1, v2, v3], project), v1.afterAsset);
+    });
+
+    test('REVEAL05: an unresolvable parent falls back to the photo, never to '
+        'nothing', () {
+      final orphan = mkVision('v9', parent: 'gone', n: 2);
+      expect(pwaBeforeReference(orphan, [orphan], project), project.originalAsset);
+    });
+
+    test('REVEAL06: the in-memory photo is only used where the photo IS the '
+        'before', () {
+      // The freshly-picked bytes are the original. Putting them opposite a
+      // refinement would show the empty room again — the very bug.
+      final src = File('lib/features/pwa/presentation/pwa_widgets.dart')
+          .readAsStringSync();
+      expect(src.contains('final isOriginal = reference == project.originalAsset;'),
+          isTrue);
+      expect(src.contains('if (source != null && isOriginal)'), isTrue);
+    });
+
+    test('REVEAL07: every reveal surface is given the lineage', () {
+      for (final path in [
+        'lib/features/pwa/presentation/pwa_reveal_screen.dart',
+        'lib/features/pwa/presentation/pwa_first_reveal_screen.dart',
+        'lib/features/pwa/presentation/pwa_versions_sheet.dart',
+      ]) {
+        expect(File(path).readAsStringSync().contains('versions: state.versions'),
+            isTrue, reason: path);
+      }
+    });
+  });
+
   // ── reload / resume ───────────────────────────────────────────────────────
   group('resume after reload', () {
     test('GEN40: the intent is recorded BEFORE the request', () async {
@@ -497,6 +594,9 @@ void main() {
               atmosphereLabel: 'Ayden Signature',
               originalStoragePath: originalPath,
               visionNumber: 1,
+              // Seconds old — the tab was refreshed while the render ran, which
+              // is the only situation a boot may replay on its own.
+              startedAtMs: DateTime.now().millisecondsSinceEpoch,
             ),
           ),
         );
@@ -586,6 +686,443 @@ void main() {
       expect(snap.visions.every((v) => v.remotePersisted), isTrue);
     });
 
+    test(
+      'GEN47: a pending record REACHES the controller even for a 0-vision project',
+      () async {
+        // Observed after the 2026-08-06 incident: the failed generation left a
+        // project with no vision. pwaResolveBootRestore hides those (Step 6A),
+        // so it could never become the active session, the replay guard refused
+        // every time, and the paid retry was unreachable from a reloaded tab.
+        final store = _FakeStore();
+        final failed = PwaProjectSnapshot(
+          projectId: 'p-failed',
+          title: 'Open-plan Living Space',
+          originalImageAsset: 'users/u1/projects/p-failed/original/o1.jpg',
+          roomId: null,
+          roomLabel: 'Your space',
+          selectedAtmosphereId: 'ayden_signature',
+          atmosphereLabel: 'Ayden Signature',
+          visions: const [],
+          messages: const [],
+          currentVisionId: null,
+          createdOrder: 1,
+          updatedOrder: 1,
+          updatedLabel: '',
+          status: PwaProjectStatus.draft,
+        );
+        store.rows['p-failed'] = failed;
+
+        final pending = PwaPendingGeneration(
+          projectId: 'p-failed',
+          idempotencyKey: 'the-original-key',
+          actionType: 'initial',
+          roomId: '',
+          roomLabel: 'Your space',
+          atmosphereId: 'ayden_signature',
+          atmosphereLabel: 'Ayden Signature',
+          originalStoragePath: 'users/u1/projects/p-failed/original/o1.jpg',
+          visionNumber: 1,
+          startedAtMs: DateTime.now().millisecondsSinceEpoch,
+        );
+
+        // The boot the app actually performs: the library hides the row…
+        final base = await pwaResolveBootRestore(store);
+        expect(base.active, isNull, reason: 'Step 6A hides a 0-vision project');
+
+        // …and folding the pending record in is what makes it reachable.
+        final restore = await pwaRestoreWithPending(store, base, pending);
+        expect(restore.active?.projectId, 'p-failed');
+        expect(restore.pending?.idempotencyKey, 'the-original-key');
+
+        final rig = _Rig(restore: restore);
+        await pumpEventQueue();
+        expect(rig.generation.calls, hasLength(1));
+        expect(rig.generation.calls.single.idempotencyKey, 'the-original-key');
+        expect(
+          rig.generation.calls.single.originalImagePath,
+          'users/u1/projects/p-failed/original/o1.jpg',
+          reason: 'the original is reused, never re-uploaded',
+        );
+        expect(rig.state.versions, hasLength(1));
+        expect(rig.state.activeProjectId, 'p-failed');
+        expect(await rig.pending.read(), isNull);
+      },
+    );
+
+    test(
+      'GEN48: a pending record naming a vanished project is not replayed',
+      () async {
+        final store = _FakeStore();
+        const orphan = PwaPendingGeneration(
+          projectId: 'gone',
+          idempotencyKey: 'k',
+          actionType: 'initial',
+          roomId: '',
+          roomLabel: '',
+          atmosphereId: 'ayden_signature',
+          atmosphereLabel: 'Ayden Signature',
+          originalStoragePath: 'users/u1/projects/gone/original/o.jpg',
+          visionNumber: 1,
+        );
+        final base = await pwaResolveBootRestore(store);
+        final restore = await pwaRestoreWithPending(store, base, orphan);
+        expect(restore.pending, isNull, reason: 'nothing to replay');
+
+        final rig = _Rig(restore: restore);
+        await pumpEventQueue();
+        expect(rig.generation.calls, isEmpty);
+      },
+    );
+
+    // ── a settled failure must never re-render by itself ────────────────────
+    //
+    // Found by the 2026-08-07 real staging smoke. The initial generation failed;
+    // the record was kept so Retry could reuse the key — and the boot replay,
+    // which cannot tell "unknown" from "already answered", restarted a real
+    // ~2-minute paid render on the next page load. Nobody asked for it, and it
+    // would have happened again on every reload for as long as the failure did.
+    test(
+      'GEN70: a failed generation SETTLES the record instead of leaving it live',
+      () async {
+        final rig = _Rig(
+          failure: const PwaGenerationFailure(
+            code: 'ENGINE_NO_RESPONSE',
+            userMessage: 'nope',
+            retryable: true,
+          ),
+        );
+        rig.controller.setSource(_source());
+        await rig.controller.generateFirstVision();
+        final left = await rig.pending.read();
+        expect(left, isNotNull, reason: 'Retry still needs the same key');
+        expect(left!.failed, isTrue);
+      },
+    );
+
+    test('GEN71: a boot with a SETTLED record renders nothing', () async {
+      final store = _FakeStore();
+      store.rows['p-failed'] = PwaProjectSnapshot(
+        projectId: 'p-failed',
+        title: 'Open-plan Living Space',
+        originalImageAsset: 'users/u1/projects/p-failed/original/o1.jpg',
+        roomId: null,
+        roomLabel: 'Your space',
+        selectedAtmosphereId: 'ayden_signature',
+        atmosphereLabel: 'Ayden Signature',
+        visions: const [],
+        messages: const [],
+        currentVisionId: null,
+        createdOrder: 1,
+        updatedOrder: 1,
+        updatedLabel: '',
+        status: PwaProjectStatus.draft,
+      );
+      const settled = PwaPendingGeneration(
+        projectId: 'p-failed',
+        idempotencyKey: 'the-original-key',
+        actionType: 'initial',
+        roomId: '',
+        roomLabel: 'Your space',
+        atmosphereId: 'ayden_signature',
+        atmosphereLabel: 'Ayden Signature',
+        originalStoragePath: 'users/u1/projects/p-failed/original/o1.jpg',
+        visionNumber: 1,
+        failed: true,
+      );
+      final base = await pwaResolveBootRestore(store);
+      final restore = await pwaRestoreWithPending(store, base, settled);
+      final rig = _Rig(restore: restore);
+      await pumpEventQueue();
+
+      expect(
+        rig.generation.calls,
+        isEmpty,
+        reason: 'a reload must not buy a render the user did not ask for',
+      );
+      expect(rig.state.versions, isEmpty);
+      // …but the person is told where they stand, and can act.
+      expect(rig.state.generationError, isNotNull);
+      expect(rig.state.generationRetryable, isTrue);
+      expect(rig.state.generating, isFalse);
+    });
+
+    test('GEN72: reloading twice still renders nothing', () async {
+      final store = _FakeStore();
+      store.rows['p-failed'] = PwaProjectSnapshot(
+        projectId: 'p-failed',
+        title: 'Open-plan Living Space',
+        originalImageAsset: 'users/u1/projects/p-failed/original/o1.jpg',
+        roomId: null,
+        roomLabel: 'Your space',
+        selectedAtmosphereId: 'ayden_signature',
+        atmosphereLabel: 'Ayden Signature',
+        visions: const [],
+        messages: const [],
+        currentVisionId: null,
+        createdOrder: 1,
+        updatedOrder: 1,
+        updatedLabel: '',
+        status: PwaProjectStatus.draft,
+      );
+      const settled = PwaPendingGeneration(
+        projectId: 'p-failed',
+        idempotencyKey: 'k',
+        actionType: 'initial',
+        roomId: '',
+        roomLabel: 'Your space',
+        atmosphereId: 'ayden_signature',
+        atmosphereLabel: 'Ayden Signature',
+        originalStoragePath: 'users/u1/projects/p-failed/original/o1.jpg',
+        visionNumber: 1,
+        failed: true,
+      );
+      final base = await pwaResolveBootRestore(store);
+      for (var reload = 0; reload < 2; reload++) {
+        final restore = await pwaRestoreWithPending(store, base, settled);
+        final rig = _Rig(restore: restore);
+        await pumpEventQueue();
+        expect(rig.generation.calls, isEmpty, reason: 'reload #$reload');
+      }
+    });
+
+    test(
+      'GEN73: Retry — an explicit act — DOES run the settled record again',
+      () async {
+        final rig = _Rig(
+          failure: const PwaGenerationFailure(
+            code: 'ENGINE_NO_RESPONSE',
+            userMessage: 'nope',
+            retryable: true,
+          ),
+        );
+        rig.controller.setSource(_source());
+        await rig.controller.generateFirstVision();
+        final key = rig.generation.calls.single.idempotencyKey;
+        expect((await rig.pending.read())!.failed, isTrue);
+
+        rig.generation.failure = null; // the engine is reachable again
+        await rig.controller.retryGeneration();
+
+        expect(rig.generation.calls, hasLength(2));
+        expect(
+          rig.generation.calls.last.idempotencyKey,
+          key,
+          reason: 'one operation, one possible charge',
+        );
+        expect(rig.state.versions, hasLength(1));
+        expect(await rig.pending.read(), isNull);
+      },
+    );
+
+    test('GEN74: a retry in flight is live again, not settled', () async {
+      final rig = _Rig(
+        failure: const PwaGenerationFailure(
+          code: 'ENGINE_NO_RESPONSE',
+          userMessage: 'nope',
+          retryable: true,
+        ),
+      );
+      rig.controller.setSource(_source());
+      await rig.controller.generateFirstVision();
+      rig.generation.failure = null;
+      await rig.controller.retryGeneration();
+      // The record written when the retry STARTED is the one a tab closed
+      // mid-render would come back to: it must be replayable, not settled.
+      expect(rig.pending.writes.last.failed, isFalse);
+    });
+
+    test(
+      'GEN75: a settled record does not hijack a project the URL named',
+      () async {
+        final store = _FakeStore();
+        // Where the person actually is: a project with a vision, deep-linked.
+        store.rows['p-open'] = PwaProjectSnapshot(
+          projectId: 'p-open',
+          title: 'Open-plan Living Space',
+          originalImageAsset: 'users/u1/projects/p-open/original/o.jpg',
+          roomId: null,
+          roomLabel: 'Your space',
+          selectedAtmosphereId: 'japandi_calm',
+          atmosphereLabel: 'Japandi Calm',
+          visions: [
+            const PwaVision(
+              versionId: 'v1',
+              projectId: 'p-open',
+              visionNumber: 1,
+              order: 1,
+              title: 'Japandi Calm',
+              atmosphereId: 'japandi_calm',
+              afterAsset: 'users/u1/projects/p-open/generated/v1.jpg',
+              actionType: PwaActionType.signature,
+              isCurrent: true,
+              remotePersisted: true,
+            ),
+          ],
+          messages: const [],
+          currentVisionId: 'v1',
+          createdOrder: 1,
+          updatedOrder: 1,
+          updatedLabel: '',
+          status: PwaProjectStatus.active,
+        );
+        // …and an old failure on a DIFFERENT project, settled long ago.
+        store.rows['p-failed'] = PwaProjectSnapshot(
+          projectId: 'p-failed',
+          title: 'Open-plan Living Space',
+          originalImageAsset: 'users/u1/projects/p-failed/original/o.jpg',
+          roomId: null,
+          roomLabel: 'Your space',
+          selectedAtmosphereId: 'ayden_signature',
+          atmosphereLabel: 'Ayden Signature',
+          visions: const [],
+          messages: const [],
+          currentVisionId: null,
+          createdOrder: 2,
+          updatedOrder: 2,
+          updatedLabel: '',
+          status: PwaProjectStatus.draft,
+        );
+        const settled = PwaPendingGeneration(
+          projectId: 'p-failed',
+          idempotencyKey: 'k',
+          actionType: 'initial',
+          roomId: '',
+          roomLabel: 'Your space',
+          atmosphereId: 'ayden_signature',
+          atmosphereLabel: 'Ayden Signature',
+          originalStoragePath: 'users/u1/projects/p-failed/original/o.jpg',
+          visionNumber: 1,
+          failed: true,
+        );
+
+        final base = await pwaResolveBootRestore(store);
+        expect(base.active?.projectId, 'p-open');
+        final restore = await pwaRestoreWithPending(store, base, settled);
+        expect(
+          restore.active?.projectId,
+          'p-open',
+          reason: 'an F5 must land where the URL said, not on an old failure',
+        );
+        expect(restore.pending, isNull);
+
+        final rig = _Rig(restore: restore);
+        await pumpEventQueue();
+        expect(rig.generation.calls, isEmpty);
+        expect(rig.state.activeProjectId, 'p-open');
+      },
+    );
+
+    // ── a record too old to be running must not render either ───────────────
+    //
+    // Reported 2026-08-08: reopening the site started a generation immediately.
+    // The record had been left behind by a failure the PREVIOUS EVENING and was
+    // written before `failed` existed, so it read as live and the boot bought a
+    // fresh ~100 s render nobody asked for. Age is the second half of the
+    // answer: a live record is minutes old, never a day.
+    test('GEN76: a record older than the replay window is not replayed', () async {
+      final store = _FakeStore();
+      store.rows['p-old'] = _emptyProject('p-old');
+      final stale = PwaPendingGeneration(
+        projectId: 'p-old',
+        idempotencyKey: 'k',
+        actionType: 'initial',
+        roomId: '',
+        roomLabel: 'Your space',
+        atmosphereId: 'ayden_signature',
+        atmosphereLabel: 'Ayden Signature',
+        originalStoragePath: 'users/u1/projects/p-old/original/o1.jpg',
+        visionNumber: 1,
+        startedAtMs: DateTime.now()
+            .subtract(const Duration(hours: 20))
+            .millisecondsSinceEpoch,
+      );
+      final base = await pwaResolveBootRestore(store);
+      final restore = await pwaRestoreWithPending(store, base, stale);
+      final rig = _Rig(restore: restore);
+      await pumpEventQueue();
+
+      expect(rig.generation.calls, isEmpty);
+      expect(rig.state.generationError, isNotNull);
+      expect(rig.state.generationRetryable, isTrue);
+    });
+
+    test('GEN77: a record with NO timestamp is treated as old', () async {
+      // Everything written before this field existed. Indistinguishable from a
+      // live one by content — and it is exactly what caused the incident.
+      final store = _FakeStore();
+      store.rows['p-legacy'] = _emptyProject('p-legacy');
+      const legacy = PwaPendingGeneration(
+        projectId: 'p-legacy',
+        idempotencyKey: 'k',
+        actionType: 'initial',
+        roomId: '',
+        roomLabel: 'Your space',
+        atmosphereId: 'ayden_signature',
+        atmosphereLabel: 'Ayden Signature',
+        originalStoragePath: 'users/u1/projects/p-legacy/original/o1.jpg',
+        visionNumber: 1,
+      );
+      expect(legacy.startedAtMs, 0);
+      final base = await pwaResolveBootRestore(store);
+      final restore = await pwaRestoreWithPending(store, base, legacy);
+      final rig = _Rig(restore: restore);
+      await pumpEventQueue();
+      expect(rig.generation.calls, isEmpty);
+    });
+
+    test('GEN78: a record from a minute ago IS replayed — free, by design', () async {
+      final store = _FakeStore();
+      store.rows['p-live'] = _emptyProject('p-live');
+      final live = PwaPendingGeneration(
+        projectId: 'p-live',
+        idempotencyKey: 'still-running',
+        actionType: 'initial',
+        roomId: '',
+        roomLabel: 'Your space',
+        atmosphereId: 'ayden_signature',
+        atmosphereLabel: 'Ayden Signature',
+        originalStoragePath: 'users/u1/projects/p-live/original/o1.jpg',
+        visionNumber: 1,
+        startedAtMs: DateTime.now()
+            .subtract(const Duration(minutes: 1))
+            .millisecondsSinceEpoch,
+      );
+      final base = await pwaResolveBootRestore(store);
+      final restore = await pwaRestoreWithPending(store, base, live);
+      final rig = _Rig(restore: restore);
+      await pumpEventQueue();
+
+      expect(rig.generation.calls, hasLength(1));
+      expect(rig.generation.calls.single.idempotencyKey, 'still-running');
+      expect(rig.state.versions, hasLength(1));
+    });
+
+    test('GEN79: the window is where the backend stops protecting a replay', () {
+      // Not a taste: `claim_generation` releases a PROCESSING claim after
+      // fifteen minutes, and past that a replay is charged for real.
+      expect(PwaPendingGeneration.replayWindow, const Duration(minutes: 15));
+      final now = DateTime.now();
+      PwaPendingGeneration at(Duration ago) => PwaPendingGeneration(
+        projectId: 'p',
+        idempotencyKey: 'k',
+        actionType: 'initial',
+        roomId: '',
+        roomLabel: '',
+        atmosphereId: 'ayden_signature',
+        atmosphereLabel: 'Ayden Signature',
+        originalStoragePath: 'users/u1/projects/p/original/o.jpg',
+        visionNumber: 1,
+        startedAtMs: now.subtract(ago).millisecondsSinceEpoch,
+      );
+      expect(at(const Duration(minutes: 14)).isReplayableAt(now), isTrue);
+      expect(at(const Duration(minutes: 16)).isReplayableAt(now), isFalse);
+      // A failure inside the window is still off limits: age is a second gate,
+      // never a way around the first.
+      expect(at(const Duration(minutes: 1)).asFailed().isReplayableAt(now), isFalse);
+      // And a clock that jumped backwards must not resurrect anything.
+      expect(at(const Duration(minutes: -5)).isReplayableAt(now), isFalse);
+    });
+
     test('GEN45: a pending record round-trips through its serialization', () {
       const p = PwaPendingGeneration(
         projectId: 'p1',
@@ -607,6 +1144,10 @@ void main() {
       expect(back.parentVisionId, 'v2');
       expect(back.userInstruction, 'warmer');
       expect(back.visionNumber, 3);
+      expect(back.failed, isFalse);
+      expect(PwaPendingGeneration.tryParse(p.asFailed().toJson())!.failed, isTrue);
+      expect(p.asFailed().asActive().failed, isFalse);
+      expect(p.asFailed().idempotencyKey, p.idempotencyKey);
       // A record we cannot describe is a record we must not replay.
       expect(PwaPendingGeneration.tryParse({'project_id': 'p1'}), isNull);
       expect(PwaPendingGeneration.tryParse('nonsense'), isNull);
