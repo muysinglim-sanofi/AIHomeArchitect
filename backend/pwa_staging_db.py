@@ -130,10 +130,28 @@ def prove_target() -> dict:
         cur.execute("select exists (select 1 from pg_namespace where nspname = 'pwa_staging')")
         facts["pwa_staging_schema"] = cur.fetchone()[0]
         # And production's own tables must NOT be here.
+        #
+        # 2026-08-12 — the marker set CHANGED, and the reason matters. It used to
+        # be ('generation_intents', 'wallets', 'passes'), which was a correct
+        # negative marker for exactly as long as the staging project had no
+        # Billing Engine. Migration 0006 installs those three BY DESIGN (one
+        # billing brain, canonical names — PWA_MONETIZATION_AUDIT §8.5), so the
+        # old set would have started refusing every later migration and, worse,
+        # would have read "this is production" about the project we had just
+        # provisioned on purpose.
+        #
+        # The replacements are the tables production owns that this project is
+        # committed NEVER to have (§8.5 "hors périmètre" + mobile-only chat and
+        # push): `usage_log` (legacy free-quota ledger, superseded by the ledger
+        # free bucket), `messages` (mobile chat), `account_state` (identity /
+        # account-mode) and `device_tokens` (mobile push). None of them can
+        # appear here without someone having pointed this tooling at the wrong
+        # database — which is precisely what the check is for.
         cur.execute("""
             select count(*) from information_schema.tables
              where table_schema = 'public'
-               and table_name in ('generation_intents', 'wallets', 'passes')
+               and table_name in ('usage_log', 'messages',
+                                  'account_state', 'device_tokens')
         """)
         facts["production_tables_present"] = cur.fetchone()[0]
     return facts

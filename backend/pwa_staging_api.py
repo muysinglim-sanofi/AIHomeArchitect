@@ -48,6 +48,11 @@ from generation_resilience import (
     with_transport_retries,
 )
 
+# The BILLING SEAM. Same relationship as `generation_resilience`: it is where
+# the canonical Billing Engine is called from, and no balance, ledger row or
+# entitlement rule is decided in this file.
+import pwa_staging_billing as pwa_billing
+
 log = logging.getLogger("aih")
 
 # Tunables kept as module attributes so a test can shorten the backoff without
@@ -635,7 +640,8 @@ async def _refine_advisory(body: "PwaGenerateRequest", room_label: str = "") -> 
 
 
 async def _run_canonical_refine(*, image_bytes: bytes, mime: str,
-                                user_instruction: str, changes=None) -> tuple:
+                                user_instruction: str, changes=None,
+                                watermark: bool = False) -> tuple:
     """THE canonical REFINE engine — the same modules mobile `POST /refine` uses.
 
     Why this branch has to exist
@@ -684,7 +690,8 @@ async def _run_canonical_refine(*, image_bytes: bytes, mime: str,
     # The ORDERED plan is returned, not the raw parse: it is what was actually
     # executed, so it is what the stateless verify must be asked about. Mobile
     # echoes exactly this (`prepared.ordered_changes`, main.py:5489).
-    return _reencode_jpeg(result.image), list(prepared.ordered_changes)
+    return (_reencode_jpeg(result.image, watermark=watermark),
+            list(prepared.ordered_changes))
 
 
 # ── the recipe is the MODEL's, not the profile's ─────────────────────────────
@@ -1022,6 +1029,7 @@ async def _run_canonical_engine(*, image_bytes: bytes, room_label: str,
                                 prev_atmosphere_id: str = "",
                                 lineage_customized: bool | None = None,
                                 history: list | None = None,
+                                watermark: bool = False,
                                 ) -> tuple[bytes, "_Decided"]:
     """THE canonical engine. Every symbol below is imported from the modules the
     mobile `/generate` already uses — same composer, same DNA, same provider,
@@ -1137,17 +1145,26 @@ async def _run_canonical_engine(*, image_bytes: bytes, room_label: str,
                     "user_message": "The engine returned no image. Try again.",
                     "retryable": True},
         )
-    return _reencode_jpeg(base64.b64decode(b64)), decided
+    return _reencode_jpeg(base64.b64decode(b64), watermark=watermark), decided
 
 
-def _reencode_jpeg(raw: bytes) -> bytes:
+def _reencode_jpeg(raw: bytes, *, watermark: bool = False) -> bytes:
     """The canonical Step-6b output pipeline: gpt-image-* returns 2-3 MB of PNG,
     which is a poor thing to push through Storage and back down to a browser.
     Same recipe as the mobile path — q=85, optimize, progressive, alpha flattened
     onto white — so the PWA serves the same bytes-per-render the mobile app does.
 
-    Deliberately NOT watermarked: the free-tier mark is a monetisation decision
-    owned by the mobile billing path, and staging has no wallet to consult."""
+    `watermark` is the ONLY thing the free tier changes about an image. Quality,
+    resolution, model, prompt, atmosphere and source rules are identical for a
+    free render and a paid one (D1: the first render is the WOW moment; only the
+    mark distinguishes it). The mark itself is `watermark.apply_watermark` — the
+    canonical AYDEN compass, the same function mobile's free tier calls at
+    main.py:4836 — never a second implementation.
+
+    It is applied BEFORE the JPEG encode and therefore before upload, so the
+    stored and served bytes carry it: there is no clean copy of a free render
+    anywhere, and the public URL cannot be used to obtain one.
+    """
     from PIL import Image as PilImage
 
     try:
@@ -1159,17 +1176,36 @@ def _reencode_jpeg(raw: bytes) -> bytes:
                 src = flat
             elif src.mode != "RGB":
                 src = src.convert("RGB")
+            if watermark:
+                from watermark import apply_watermark  # noqa: PLC0415 — canonical
+                src = apply_watermark(src)
             buf = io.BytesIO()
             src.save(buf, format="JPEG", quality=85, optimize=True, progressive=True)
             out = buf.getvalue()
-        log.info("[pwa-staging] re-encoded %d -> %d bytes (%.2fx, JPEG q=85)",
-                 len(raw), len(out), len(raw) / max(len(out), 1))
+        log.info("[pwa-staging] re-encoded %d -> %d bytes (%.2fx, JPEG q=85, "
+                 "watermark=%s)", len(raw), len(out), len(raw) / max(len(out), 1),
+                 "APPLIED (free tier)" if watermark else "skipped")
         return out
     except Exception as exc:  # noqa: BLE001
         # A re-encode failure must not lose a paid-for render: ship the original
-        # bytes rather than failing the generation.
+        # bytes rather than failing the generation. The one case where that is
+        # NOT acceptable is a free render, which would then be served clean —
+        # so the mark is retried on its own before giving up.
         log.warning("[pwa-staging] JPEG re-encode failed (%s) — storing raw bytes",
                     type(exc).__name__)
+        if watermark:
+            try:
+                from watermark import apply_watermark  # noqa: PLC0415
+                with PilImage.open(io.BytesIO(raw)) as src:
+                    marked = apply_watermark(src)
+                    buf = io.BytesIO()
+                    marked.save(buf, format="JPEG", quality=85)
+                    log.warning("[pwa-staging] watermark re-applied on the "
+                                "fallback path — a free render is never clean")
+                    return buf.getvalue()
+            except Exception:  # noqa: BLE001
+                log.error("[pwa-staging] free render could NOT be watermarked "
+                          "(%s) — shipping raw bytes", type(exc).__name__)
         return raw
 
 
@@ -1623,6 +1659,15 @@ async def _generate(
                             "retryable": False},
                 )
 
+        # ── Money, before anything is spent ──────────────────────────────────
+        # READ-ONLY. Placed here, above the advisor, because the advisor is
+        # itself a paid gpt-4o call: a visitor with no entitlement must be
+        # refused before ANY provider request, not just before the render
+        # (PWA_MONETIZATION_AUDIT, Étape C). Nothing is written — the credit is
+        # reserved further down, only by the caller that WON the durable claim.
+        billing_ctx = await pwa_billing.open_gate(
+            user_id=user_id, idempotency_key=body.idempotency_key)
+
         # Only a refine is parsed and judged; every other action reaches the
         # engine with nothing pre-read.
         parsed_changes = None
@@ -1678,11 +1723,36 @@ async def _generate(
                     "idempotency_key": body.idempotency_key,
                     "render_started": True}
 
-        # From here the claim is HELD. Anything that goes wrong must release it,
-        # or this operation can never be retried.
+        # ── Reserve the CREDIT, now that ownership is established ────────────
+        # Mobile's rule verbatim: "aucune réservation avant ownership". The
+        # winner — and only the winner — writes the canonical `generation_intents`
+        # row and takes the atomic HOLD. A refusal here is a 402 raised BEFORE
+        # the provider call, so it costs nothing; the claim is settled first so
+        # a paywalled attempt does not wedge the key.
         try:
-            return await _generate_claimed(client, token, body, project,
-                                           user_id, parsed_changes)
+            await pwa_billing.reserve(
+                billing_ctx,
+                iteration=body.vision_number,
+                action_type=body.action_type,
+                idempotency_key=body.idempotency_key,
+            )
+        except HTTPException as billing_exc:
+            detail = (billing_exc.detail
+                      if isinstance(billing_exc.detail, dict) else {})
+            await _settle_claim(
+                client, token, body.idempotency_key,
+                error_code=str(detail.get("error_code") or "QUOTA_EXHAUSTED"),
+                render_started=False,
+            )
+            raise
+
+        # From here the claim is HELD and a credit is reserved. Anything that
+        # goes wrong must release BOTH, or this operation can never be retried
+        # and the person is left a credit short for an image they never saw.
+        try:
+            result = await _generate_claimed(client, token, body, project,
+                                             user_id, parsed_changes,
+                                             billing_ctx)
         except HTTPException as http_exc:
             detail = http_exc.detail if isinstance(http_exc.detail, dict) else {}
             await _settle_claim(
@@ -1690,13 +1760,37 @@ async def _generate(
                 error_code=str(detail.get("error_code") or "UNKNOWN_FAILURE"),
                 render_started=bool(detail.get("render_started")),
             )
+            await pwa_billing.settle(
+                billing_ctx, succeeded=False,
+                error={"error_code": str(detail.get("error_code") or "UNKNOWN_FAILURE")})
             raise
-        except BaseException:
+        except BaseException as exc:
             # Includes cancellation: a client that disconnects must not leave a
-            # claim wedged for the next attempt.
+            # claim wedged — or a credit held — for the next attempt.
             await _settle_claim(client, token, body.idempotency_key,
                                 error_code="UNKNOWN_FAILURE", render_started=True)
+            await pwa_billing.settle(
+                billing_ctx, succeeded=False,
+                error={"error_code": "UNKNOWN_FAILURE",
+                       "type": type(exc).__name__})
             raise
+
+        # COMMIT. The rule is "did the person get their image", not "did every
+        # row land": `_generate_claimed` answers `completed` with
+        # `persisted:false` when Storage has the render but the row insert
+        # failed, and that person HAS their vision — mobile bills it the same
+        # way (main.py:5113-5131 answers 200 and settles SUCCEEDED). Anything
+        # else — `processing`, a lost race with no winner row — leaves the HOLD
+        # open for the caller that actually finishes.
+        if str(result.get("status")) == "completed":
+            await pwa_billing.settle(
+                billing_ctx, succeeded=True,
+                result_ref={"vision_id": result.get("vision_id"),
+                            "image_path": result.get("image_path"),
+                            "persisted": result.get("persisted", True),
+                            "surface": "pwa"})
+            result["billing"] = billing_ctx.public_state
+        return result
 
 
 # ── which image the engine actually edits, and what came before it ───────────
@@ -1970,8 +2064,19 @@ async def _generate_claimed(
     project: dict,
     user_id: str,
     changes=None,
+    billing_ctx=None,
 ) -> dict:
-    """The paid half, with the durable claim already held by this caller."""
+    """The paid half, with the durable claim already held by this caller.
+
+    `billing_ctx` reaches this function for EXACTLY ONE reason: whether the
+    output bytes carry the free-tier mark. It is read once, at the two render
+    call sites, and touches nothing else — no branch below chooses a different
+    model, quality, size, source, prompt, atmosphere or lineage because of it.
+    A free vision and a paid vision are the same render; only the last step of
+    the byte pipeline differs. `None` means "no billing context" (the offline
+    adapter tests) and behaves exactly as before: unmarked.
+    """
+    _mark = bool(billing_ctx is not None and billing_ctx.watermark)
     if True:
         lineage = await _load_lineage(client, token, body, user_id)
         original = await _download_original(client, token, lineage.source_path)
@@ -1993,6 +2098,7 @@ async def _generate_claimed(
                 mime="image/jpeg",
                 user_instruction=body.user_instruction,
                 changes=changes,
+                watermark=_mark,
             )
         else:
             generated, decided = await _run_canonical_engine(
@@ -2005,6 +2111,7 @@ async def _generate_claimed(
                 prev_atmosphere_id=lineage.prev_atmosphere_id,
                 lineage_customized=lineage.customized,
                 history=lineage.history,
+                watermark=_mark,
             )
 
         # What the ENGINE used, as a label. A room Ayden READ comes back as a

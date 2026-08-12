@@ -89,6 +89,32 @@ def main() -> None:
 
     apply_canonical_flags(log=lambda m: print(f'[pwa-staging] {m}'))
 
+    # 1c) THE FREE TIER IS ONE, and this is the canonical lever that says so.
+    #
+    # D1 (PWA_MONETIZATION_AUDIT §6bis): one free vision per anonymous Web
+    # guest, full quality, watermarked. `ACCOUNT_SYSTEM_ENABLED` is the SERVER
+    # authority for the trial amount — `billing.effective_trial_credits()`
+    # returns 1 in ON-mode and 3 in OFF-mode, and passes it to the RPC as
+    # `p_trial_credits`. Setting it here rather than inventing a PWA-only
+    # constant is what keeps one billing brain: the same function answers for
+    # both platforms, it just answers differently per deployment.
+    #
+    # ON is also what the Web IS, semantically: D2 chose upgrade-in-place
+    # (anonymous -> linkIdentity, same user_id), which is account-mode with a
+    # different upgrade mechanism, not a third identity model.
+    #
+    # Blast radius, checked rather than assumed: `account_system_enabled()` is
+    # read in exactly two places — `effective_trial_credits()` (what we want)
+    # and `identity._require_account_system_enabled`, which stops returning 404
+    # for the /identity/* routes. Those routes read `account_state`, a table
+    # this project deliberately does not have, and no PWA client calls them.
+    # The flag is set AFTER the staging secrets so an operator can still
+    # override it in `.env.pwa-staging.local` for a deliberate experiment.
+    os.environ.setdefault('ACCOUNT_SYSTEM_ENABLED', 'true')
+    print('[pwa-staging] ACCOUNT_SYSTEM_ENABLED='
+          + os.environ['ACCOUNT_SYSTEM_ENABLED']
+          + '  (Web free tier = 1 generation, D1)')
+
     # 2) Make the staging file the ONLY file load_dotenv can read. `main.py`
     #    does `from dotenv import load_dotenv` at ITS import time, so patching
     #    the module attribute here — before importing main — is what it binds.
