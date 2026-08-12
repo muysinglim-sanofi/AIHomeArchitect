@@ -2679,6 +2679,64 @@ def test_the_conversational_turn_is_mobiles_own(api) -> None:
                                        "_run_canonical_refine")))
 
 
+
+# ── billing: stubbed HERE, measured elsewhere ────────────────────────────────
+#
+# `_generate` now consults the canonical Billing Engine, which needs a
+# service-role Supabase client on `main.supa` — something this deliberately
+# offline suite does not have and must not acquire. These 278 assertions are
+# about the ADAPTER: tenancy, single-flight, lineage, the advisor gate, the
+# claim lifecycle. Billing has its own suite, `pwa_staging_billing_test.py`,
+# which runs against the REAL ledger precisely because a stub could not prove
+# anything about money.
+#
+# So the seam is replaced by a permissive one: it grants, it records, and it
+# never touches a database. If a future change made the adapter depend on the
+# billing decision for anything other than the watermark, THIS stub would let
+# it through — which is why the billing suite also pins the render kwargs.
+def _install_billing_stub(api):
+    calls = {"gate": 0, "reserve": 0, "settle": []}
+
+    class _Ctx:
+        def __init__(self):
+            self.user_id = UID
+            self.intent_id = "stub-intent"
+            self.tier = "free"
+            self.is_free = True
+            self.watermark = False   # the adapter tests assert on CLEAN bytes
+            self.free_credits = 1
+            self.pass_credits = 0
+            self.total_credits = 1
+            self.has_active_pass = False
+            self.access_source = "free"
+
+        @property
+        def public_state(self):
+            return {"tier": "free", "access_source": "free",
+                    "watermarked": False, "credits_available": 1}
+
+    class _Stub:
+        @staticmethod
+        async def open_gate(*, user_id, idempotency_key):
+            calls["gate"] += 1
+            return _Ctx()
+
+        @staticmethod
+        async def reserve(ctx, *, iteration, action_type, idempotency_key):
+            calls["reserve"] += 1
+
+        @staticmethod
+        async def settle(ctx, *, succeeded, result_ref=None, error=None):
+            calls["settle"].append(succeeded)
+
+        @staticmethod
+        def intent_id_for(user_id, key):
+            return f"stub:{user_id}:{key}"
+
+    api.pwa_billing = _Stub()
+    return calls
+
+
 def main() -> int:
     record = _RECORD
     _install_canonical_stubs(record)
@@ -2686,6 +2744,8 @@ def main() -> int:
     os.environ.setdefault("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test_only")
 
     import pwa_staging_api as api
+
+    _install_billing_stub(api)
 
     # Kept before the endpoint tests replace it, so test 6 can exercise the real
     # one rather than a leftover stub.
