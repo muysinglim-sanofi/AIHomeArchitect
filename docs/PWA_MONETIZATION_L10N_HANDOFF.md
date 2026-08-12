@@ -466,9 +466,15 @@ Lu, pas inventé (`GET /pwa/staging/entitlement` sur staging réel) :
 
 **Découverte à ne pas perdre** : `orders_provider_check` et
 `payments_provider_check` n'autorisent que `('revenuecat', 'khqr')`. **Il n'y a
-pas d'`aba`.** Brancher un provider web n'est donc pas « un adaptateur » : c'est
-**une migration + un adaptateur**. Le schéma canonique a un avis sur qui peut
-encaisser.
+pas d'`aba`.**
+
+> ⚠️ **CORRECTION (audit du 2026-08-12, §6).** J'ai d'abord conclu de ce fait
+> que brancher un provider web exigeait « une migration + un adaptateur », et
+> que « le schéma a un avis sur qui peut encaisser ». **Le fait est exact ; la
+> conclusion était une sur-lecture.** L'audit de sémantique (§6) montre que
+> `provider` désigne un **canal d'acquisition**, pas une contrepartie
+> commerciale — et qu'aucune migration n'est nécessaire pour encaisser sur le
+> rail KHQR. Lire §6 avant de toucher à quoi que ce soit ici.
 
 Aucun code ABA n'a été écrit (§11) : `PwaPaymentProvider` est une interface, et
 la seule implémentation, `PwaUnconfiguredPaymentProvider`, répond honnêtement
@@ -619,3 +625,136 @@ En plus du piège rAF déjà documenté (onglet non redimensionné ⇒ pas de re
 3. **PHONE OTP** — `PwaVerificationChannel` existe pour ça ; le Cambodge le
    voudra. Écrire un second adaptateur, ne toucher à aucune vue.
 4. `20260707_grants_hardening` reste **non appliqué en production**.
+
+---
+
+## 6 — SÉMANTIQUE DE `orders.provider` (audit READ-ONLY, 2026-08-12)
+
+**Question** : `provider` désigne-t-il le **rail/canal de paiement**
+(`revenuecat` = le rail app-store, `khqr` = le rail QR cambodgien) ou la
+**passerelle commerciale concrète** (auquel cas `khqr` serait un abus de langage
+qu'il faudrait un jour remplacer par `aba_payway`) ?
+
+**Méthode** : sept lectures indépendantes du dépôt (spec, schéma+historique,
+chemin `billing_grant_purchase`, adaptateur RevenueCat, toute trace
+KHQR/Bakong, catalogue produit, tests), chacune attaquée par un sceptique
+chargé de la réfuter, puis une synthèse qui rouvre elle-même les fichiers
+décisifs. **Aucun fichier n'a été modifié.**
+
+### 6.1 Verdict
+
+**`PROVIDER SEMANTICS = KHQR_CANONICAL`** (rail / canal) — confiance
+**modérée**. `GATEWAY_SPECIFIC` n'a **aucun** appui explicite : aucune des sept
+lectures ne l'a retenu.
+
+L'axe exact que le dépôt encode est « **canal / adaptateur d'acquisition
+entrant** » — `20260701_billing_engine_pr0_schema.sql:16` : « orders/payments =
+flux d'acquisition entrant ». C'est le rail, pas l'acquéreur.
+
+### 6.2 Les trois preuves qui portent le verdict
+
+**(a) `docs/BILLING_ENGINE_SPEC.md:43-47`** — une table plateforme → fournisseur
+autorisé :
+
+> `| iOS (app) | Apple IAP via RevenueCat |` · `| Android (app) | Google Play
+> Billing via RevenueCat |` · `| Web / parcours hors-app | KHQR / Bakong (ABA) |`
+
+Décisif : **un seul jeton `revenuecat` recouvre deux contreparties commerciales
+distinctes** — Apple et Google, qui sont celles qui encaissent réellement
+(`:65` « prélèvent 15-30 % »). Une colonne « acquéreur concret » aurait `apple`
+et `google`, pas un agrégateur unique. Et côté web c'est **le rail qui est
+nommé** ; la passerelle (ABA) est entre parenthèses.
+
+**(b) Le vocabulaire de canal, quatre fois** :
+`SPEC:49` « le parcours web/KHQR est **un canal séparé**, postérieur, qui
+alimente le même Billing Engine » · `SPEC:299` « `khqr_enabled` — **autorisé sur
+le canal web** » · `SPEC:425` « produits filtrés par plateforme (**mobile →
+IAP ; web → KHQR**) » · `SPEC:603` « **KHQR web** (canal hors-app +
+`/v1/webhooks/khqr`) — Différé ».
+Corroboré par le seul lecteur applicatif de la colonne sœur :
+`backend/pwa_staging_billing.py` `"web_enabled": bool(khqr_enabled) and not
+store_only`. Dans ce système, **`khqr` ≡ canal web**.
+
+**(c) Le monde réel confirme l'inclusion** : `docs/PWA_MONETIZATION_AUDIT.md:189`
+« ABA PayWay, **passerelle** d'ABA Bank ; elle couvre carte, ABA Pay, **KHQR**,
+WeChat Pay, Alipay » — KHQR est **contenu dans** la passerelle. Un jeton ne peut
+pas dénoter à la fois le contenant et le contenu ; `'khqr'` dénote le contenu,
+c'est-à-dire le rail.
+
+### 6.3 La preuve contraire, et pourquoi elle ne renverse pas
+
+C'est **ma propre phrase** de §5.4 : « le schéma a un avis sur qui peut
+encaisser ». Elle ne tient pas :
+
+1. Le **fait** rapporté est exact (`20260701_..._pr0_schema.sql:90,118` : pas
+   d'`aba`), mais « qui peut encaisser » est une **glose**, pas une définition.
+   Le dépôt n'a **aucun** `COMMENT ON COLUMN` sur `provider` (vérifié : 0), et
+   `SPEC:311/322` **énumère sans définir**.
+2. Un enum fermé est **orthogonal** à l'axe qu'il énumère. Constater qu'il faut
+   une migration pour ajouter *une* valeur ne dit pas si les valeurs existantes
+   sont des rails ou des contreparties.
+3. Le même chantier **fait** l'inverse quatre minutes plus tôt :
+   `backend/pwa_staging_seed_pass.py` « books under `'khqr'`, **the Cambodia
+   rail already sanctioned** », et `PWA_MONETIZATION_AUDIT.md:250-256` :
+   « **Aucune modification de la fonction n'est nécessaire pour brancher ABA** ;
+   il faut seulement mapper le produit web dans `_resolve_product`. »
+
+### 6.4 `'khqr'` était-il une réservation délibérée ? **OUI, établi**
+
+`SPEC:49` « canal séparé, **postérieur**, qui alimente le même Engine » ·
+`SPEC:603` « KHQR web … **Différé** » · `SPEC:435` la route
+`/v1/webhooks/khqr` **déjà spécifiée** · `pr0_schema.sql:8-9` « **ADDITIF +
+DORMANT** … AUCUN code applicatif ne les lit/écrit encore ».
+
+La valeur est présente dans la **toute première** version de la contrainte
+(2026-07-01), jamais ajoutée après coup, jamais altérée : aucun
+`alter … constraint` sur `provider` dans `supabase/`.
+
+### 6.5 Conséquence pratique — ce qu'il faut vraiment pour brancher ABA
+
+**Aucun changement de schéma** pour encaisser sur le rail KHQR via ABA PayWay
+(`payment_option = abapay_khqr`) : l'adaptateur appelle
+`billing_grant_purchase(user_id, 'khqr', tran_id, …)`.
+
+**Rien ne lit la valeur.** Vérifié : zéro `provider ==`, zéro `where provider`,
+zéro occurrence dans les vues d'observabilité. Ses deux seuls rôles sont
+`v_order_key := 'order:' || p_provider || ':' || p_provider_transaction_id`
+et `unique (provider, provider_transaction_id)`. C'est un **préfixe de clé
+d'idempotence et un scope d'unicité** — pas une clé de dispatch.
+
+Une migration devient nécessaire dans **deux cas précis, et seulement ceux-là** :
+
+1. vendre sur le web via une option **non-KHQR** de la même passerelle (carte,
+   ABA Pay, WeChat, Alipay) — aucune valeur légale n'existe pour ça ;
+2. **deux passerelles sur le même rail** (ABA + Wing) partageant
+   `UNIQUE('khqr', tran_id)` alors que l'unicité du `tran_id` est imposée par
+   ABA → collision avalée par `on conflict do nothing`. **Ce risque se traite
+   par un préfixe dans `provider_transaction_id`, pas par une valeur de
+   `provider` supplémentaire.**
+
+### 6.6 La limite honnête de ce verdict
+
+Aucun adaptateur n'a **jamais** écrit `'khqr'` en production : la valeur
+n'apparaît que dans du seed et des tests (`pwa_staging_seed_pass.py`,
+`pwa_staging_billing_test.py`, `pwa_staging_billing_contract_test.py`). Il n'y a
+donc **aucune preuve comportementale**, seulement documentaire et structurelle —
+d'où « confiance modérée » et non « établi ».
+
+Ce qui renverserait la réponse : un adaptateur livré écrivant `provider='aba'` ;
+une migration élargissant le CHECK avec un nom de passerelle ; ou un contrat ABA
+établissant que le `tran_id` est frappé par la **passerelle** et non dérivé de
+Bakong, **couplé** à un second acquéreur KHQR prévu (l'unicité
+`(provider, tx)` imposerait alors un scope passerelle).
+
+**Ce que le dépôt devrait acquérir pour clore la question pour de bon** : un
+`COMMENT ON COLUMN public.orders.provider` disant l'axe. Son absence est
+exactement ce qui a produit la contradiction du 2026-08-12.
+
+### 6.7 Décisions prises ici
+
+* **`ORDERS PROVIDER SCHEMA MODIFIED = NO`** — la contrainte est intacte.
+* **`ABA IMPLEMENTED = NO`** — rien n'a été écrit, ni requête, ni callback.
+* **Aucun nom de provider futur n'a été inventé.**
+* Le blocage reste : **attendre le contrat/sandbox commercial ABA**. Ce qu'on
+  sait maintenant, c'est que cette attente ne bloque **pas** le schéma — elle
+  bloque l'adaptateur.
