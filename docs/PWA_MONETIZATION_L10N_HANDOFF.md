@@ -814,14 +814,24 @@ peut pas ». Vu correct en KM desktop, FR desktop et FR mobile.
 | accueil + barre supérieure | ✅ | ✅ | ✅ | ✅ |
 | menu compte (2 entrées) | ✅ | ✅ | ✅ | ✅ |
 | feuille compte, vide | ✅ | — | ✅ | ✅ |
-| validation (adresse malformée → action désactivée) | ✅ | — | ✅ | — |
+| validation CLIENT (adresse malformée → action désactivée) | ✅ | — | ✅ | — |
 | adresse valide saisie → action activée | ✅ | — | ✅ | — |
+| erreur SERVEUR « adresse non valide » | — | — | ✅ | — |
 | bifurcation « e-mail déjà pris » | ✅ | — | — | — |
-| erreur « trop de codes envoyés » (429 réel) | ✅ | — | — | — |
+| erreur « trop de codes envoyés » (429 réel) | ✅ | — | ✅ | — |
 | paywall complet + défilé | ✅ | ✅ | ✅ | ✅ |
 | provider indisponible (« pas encore ouverts ») | ✅ | ✅ | ✅ | ✅ |
 | cartes produit + traitement mobile-only | ✅ | ✅ | ✅ | ✅ |
 | sélecteur de langue | ✅ | ✅ | ✅ | ✅ |
+
+Deux cases gagnées par accident, et l'accident vaut d'être noté : le
+`clearField()` du harnais a échoué, l'ancienne saisie s'est concaténée à la
+nouvelle, et le résultat a franchi `looksValid` (un `@`, un point dans le
+domaine) avant d'être refusé par GoTrue. C'est exactement le partage voulu — le
+client est permissif **par conception** (une regex qui « sait » à quoi ressemble
+une adresse valide en rejette des vraies), le serveur tranche — et l'écran a
+affiché « Cette adresse e-mail ne semble pas valide. » Le message de refus
+serveur est donc vérifié en français, gratuitement.
 
 Points spécifiquement vérifiés :
 
@@ -852,7 +862,10 @@ que l'écran de code s'affiche après un envoi réussi.
 
 **Quelques cases du tableau ci-dessus sont vides** (feuille compte en FR desktop,
 tout le KM mobile). Ce ne sont pas des défauts produit : ce sont des scènes où le
-pilotage n'a pas armé l'arbre sémantique à temps. **Ce que ces cases testeraient
+pilotage n'a pas armé l'arbre sémantique à temps — et, pour le KM mobile, où la
+locale n'a pas basculé (piège n° 4 ci-dessous), si bien que les captures
+produites étaient du FRANÇAIS sous un nom de fichier khmer. **Elles ont été
+supprimées** : une capture mal étiquetée est pire que pas de capture. **Ce que ces cases testeraient
 est couvert ailleurs** — le français dans la même feuille à 430 px, le khmer dans
 la même feuille à 1386 px — c'est-à-dire la langue ET la largeur, séparément.
 
