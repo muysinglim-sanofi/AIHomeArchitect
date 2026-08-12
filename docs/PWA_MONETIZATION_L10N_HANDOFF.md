@@ -330,25 +330,41 @@ plein écran était en anglais (`repo.loadingSteps()` — liste SÉPARÉE de cel
 l'indicateur de l'architect), et **la première phrase d'Ayden** était en anglais
 (`firstVisionIntro`, UI-owned, ne passe pas par `localize_reply`).
 
-### ⚠️ RESTE À FAIRE — petit, mais réel
+### ✅ FERMÉ — revue EN et FR faite (2026-08-12, 2ᵉ passe)
 
-1. **`PwaProjectSort` n'est pas traduit.** `pwa_project.dart:32` renvoie
-   « Recently updated » / « Newest » / « Oldest » / « Name A–Z » en dur, et le
-   contrôle de tri de My Projects les affiche tels quels. Les clés
-   `pwaSortNewest/Oldest/NameAz` existent déjà ; il manque
-   `pwaSortRecentlyUpdated` et le routage du `label` par `PwaL10n`. **Vu à
-   l'écran en khmer.**
-2. **Architect / Full Reveal / My Projects en FRANÇAIS** n'ont pas été
-   re-parcourus (le khmer l'a été). Risque faible — mêmes clés, français plus
-   court que le khmer — mais ce n'est pas une observation.
-3. **Chaînes PERSISTÉES** : titre de projet, `roomLabel` résolu et la phrase
-   d'intro d'Ayden sont écrits DANS le projet à la création. Un projet créé
-   avant un changement de langue garde sa langue d'origine. Corriger
-   reviendrait à réécrire une conversation stockée — délibérément non fait.
-4. **Tout l'app dépend de `gstatic.com`** pour Roboto ET le wasm CanvasKit, pas
-   seulement le khmer (le khmer, lui, est désormais local). Bloquer
-   `fonts.gstatic.com` rend TOUTE l'interface en tofu. C'est de l'infra, pas de
-   la localisation — à trancher avant un lancement Cambodge.
+`PwaProjectSort` est corrigé : les quatre libellés passent par
+`PwaL10n.sortLabel`, la clé manquante `pwaSortRecentlyUpdated` est ajoutée en
+km/en/fr. `PwaProjectSort.label` reste à côté de l'enum comme repli anglais —
+**les valeurs de l'enum et la sémantique de tri ne changent pas**. Vérifié à
+l'écran : FR « Récemment mis à jour », EN « Recently updated ».
+
+**Parcouru en navigateur** : My Projects et Architect en **anglais** et en
+**français** (1400 px), Architect FR en **390 px** (les libellés longs
+« Voir la révélation complète » / « Essayer une autre ambiance » tiennent, les
+chips passent sur deux lignes, aucun débordement). Le khmer avait été parcouru
+à la passe précédente sur une génération réelle. Aucune image payante
+supplémentaire n'a été consommée.
+
+Les dates relatives sont localisées partout (« Mis à jour il y a 58 min »,
+« Updated 56 min ago », « ធ្វើបច្ចុប្បន្នភាព 14 នាទីមុន »).
+
+### CE QUI RESTE ANGLAIS, ET POURQUOI C'EST VOULU
+
+1. **Données PERSISTÉES** : titre de projet, `roomLabel` résolu, et la phrase
+   d'intro d'Ayden sont écrits DANS le projet à sa création. Un projet créé
+   avant un changement de langue garde sa langue d'origine. Réécrire une
+   conversation stockée parce que la locale change serait pire.
+2. **Noms d'atmosphère** (Warm Modern, Soft Luxury…) : décision produit mobile,
+   anglais sur toutes les plateformes.
+
+### ⚠️ ITEM INFRA PRÉ-PRODUCTION (hors périmètre i18n)
+
+**Toute l'app dépend de `gstatic.com`** — Roboto ET le wasm CanvasKit — pas
+seulement le khmer (le khmer est désormais local). Bloquer `fonts.gstatic.com`
+met TOUTE l'interface en tofu, latin compris. À trancher avant un lancement
+Cambodge. **Ce n'est pas un bloquant pour Auth/Paywall.**
+
+Rappel : `20260707_grants_hardening` reste **non appliqué en production**.
 
 ---
 
