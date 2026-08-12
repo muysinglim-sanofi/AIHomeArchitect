@@ -25,6 +25,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ai_home_architect/features/pwa/l10n/pwa_l10n.dart';
 
 AydenImageSource _fake() => AydenImageSource(
   bytes: Uint8List.fromList(const [1, 2, 3, 4]),
@@ -340,8 +341,13 @@ void main() {
       expect(find.byKey(_revealHeaderKey), findsOneWidget);
       expect(find.byType(PwaRevealCard), findsOneWidget);
       expect(find.byType(RevealHero), findsOneWidget);
-      expect(find.text('Before'), findsOneWidget);
-      expect(find.text('After'), findsOneWidget);
+      // The before/after labels are now the APPROVED MOBILE wording
+      // ("Original" / "Vision"), reused rather than re-invented — which is why
+      // this asserts against the dictionary instead of a literal. The rule is
+      // the same: the Full Reveal names both sides.
+      final l = pwaL10nFor(const Locale('en'));
+      expect(find.text(l.beforeLabel), findsOneWidget);
+      expect(find.text(l.afterLabel), findsOneWidget);
       expect(find.text('VISION DETAILS'), findsOneWidget);
       expect(find.text('ATMOSPHERES'), findsOneWidget);
       expect(find.textContaining('Vision 1 of'), findsOneWidget);

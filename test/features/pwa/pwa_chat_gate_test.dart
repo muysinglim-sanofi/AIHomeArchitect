@@ -300,10 +300,16 @@ void main() {
       // The override is inside the `if (!isRed)` branch — absent on a refusal,
       // rather than present-but-greyed, which still reads as "available to you".
       final actions = card.substring(card.indexOf('final isRed ='));
+      // The label is now a dictionary lookup (`PwaL10n.createVision`) rather
+      // than a literal — the RULE being pinned is unchanged: the override sits
+      // INSIDE the `if (!isRed)` branch, so a refusal has no override at all
+      // rather than a greyed one, which still reads as "available to you".
       expect(
         actions.indexOf('if (!isRed) ...['),
-        lessThan(actions.indexOf('Create vision')),
+        lessThan(actions.indexOf('createVision')),
       );
+      expect(actions.contains('createVision'), isTrue,
+          reason: 'the override label must still be rendered on non-red');
     });
 
     test('a RED verdict still carries the advisor words and the instruction',

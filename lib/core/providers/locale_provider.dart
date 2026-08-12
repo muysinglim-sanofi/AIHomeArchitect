@@ -30,8 +30,18 @@ class LocaleNotifier extends StateNotifier<Locale> {
   final String? _deviceLocale;
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final code = prefs.getString(_kLocaleKey);
+    String? code;
+    try {
+      code = (await SharedPreferences.getInstance()).getString(_kLocaleKey);
+    } catch (_) {
+      // Storage is unavailable — a browser with site data blocked, a private
+      // window with a strict policy, or a widget test that never installed the
+      // plugin. None of those is a reason to fail: the language simply falls
+      // back to the device hint and then to English, and the next successful
+      // write persists it. Reading a PREFERENCE must never be able to take the
+      // app down.
+      code = null;
+    }
     if (code != null && _kSupportedLanguageCodes.contains(code)) {
       state = Locale(code);
       return;
@@ -48,9 +58,17 @@ class LocaleNotifier extends StateNotifier<Locale> {
   /// Set + persist the UI locale. Ignored for unsupported codes.
   Future<void> setLocale(Locale locale) async {
     if (!_kSupportedLanguageCodes.contains(locale.languageCode)) return;
+    // The UI changes FIRST and unconditionally; persistence is best-effort.
+    // A visitor who cannot write storage should still be able to read the
+    // product in their language for the length of the session.
     state = locale;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kLocaleKey, locale.languageCode);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kLocaleKey, locale.languageCode);
+    } catch (_) {
+      // Nothing to do: the choice holds for this session and is retried the
+      // next time the person picks a language.
+    }
   }
 }
 
