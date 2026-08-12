@@ -116,6 +116,8 @@ const Map<String, String> pwaEnTranslations = {
   'pwaAydenDisclaimer': 'Ayden can make mistakes. Always review design details.',
   'pwaSendMessage': 'Send message',
   'pwaCreatingYourVision': 'Creating your vision…',
+  'pwaFirstVisionIntro':
+      'I created your first vision. I kept the room’s architecture and introduced warmer materials, softer lighting and a more refined balance — my signature direction. Explore the atmospheres below, or tell me what you’d like to change.',
   'pwaSwitchTo': 'Switch to {name}',
   'pwaNoChangeUnderstood':
       "I didn't catch a change to make there — tell me what you'd like "
@@ -337,6 +339,8 @@ const Map<String, String> pwaKmTranslations = {
       'Ayden អាច​មាន​កំហុស។ សូម​ពិនិត្យ​ព័ត៌មាន​លម្អិត​នៃ​ការ​រចនា​ជានិច្ច។',
   'pwaSendMessage': 'ផ្ញើ​សារ',
   'pwaCreatingYourVision': 'កំពុង​បង្កើត​ទស្សនៈ​របស់​អ្នក…',
+  'pwaFirstVisionIntro':
+      'ខ្ញុំ​បាន​បង្កើត​ទស្សនៈ​ដំបូង​របស់​អ្នក។ ខ្ញុំ​បាន​រក្សា​ស្ថាបត្យកម្ម​នៃ​បន្ទប់ ហើយ​បាន​បន្ថែម​សម្ភារៈ​ក្ដៅ​ជាង ពន្លឺ​ទន់​ភ្លន់ និង​តុល្យភាព​ដ៏​ប្រណីត — ទិសដៅ​ហត្ថលេខា​របស់​ខ្ញុំ។ ស្វែងរក​បរិយាកាស​ខាង​ក្រោម ឬ​ប្រាប់​ខ្ញុំ​ថា​អ្នក​ចង់​ផ្លាស់ប្ដូរ​អ្វី។',
   'pwaSwitchTo': 'ប្ដូរ​ទៅ {name}',
   'pwaNoChangeUnderstood':
       'ខ្ញុំ​មិន​យល់​ច្បាស់​ពី​ការ​ផ្លាស់ប្ដូរ​ទេ — សូម​ប្រាប់​ខ្ញុំ​ថា​អ្នក​ចង់​បាន​អ្វី​ខុស​ពី​នេះ '
@@ -559,6 +563,8 @@ const Map<String, String> pwaFrTranslations = {
       'Ayden peut se tromper. Vérifiez toujours les détails du design.',
   'pwaSendMessage': 'Envoyer le message',
   'pwaCreatingYourVision': 'Création de votre vision…',
+  'pwaFirstVisionIntro':
+      "J'ai créé votre première vision. J'ai conservé l'architecture de la pièce et introduit des matières plus chaleureuses, une lumière plus douce et un équilibre plus raffiné — ma direction signature. Explorez les ambiances ci-dessous, ou dites-moi ce que vous souhaitez changer.",
   'pwaSwitchTo': 'Passer à {name}',
   'pwaNoChangeUnderstood':
       "Je n'ai pas saisi le changement à faire — dites-moi ce que vous "

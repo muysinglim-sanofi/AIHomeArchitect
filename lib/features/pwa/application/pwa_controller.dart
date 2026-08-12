@@ -1311,7 +1311,7 @@ class PwaController extends StateNotifier<PwaState> {
       role: PwaRole.ayden,
       kind: PwaMessageKind.reveal,
       text: switch (action) {
-        PwaActionType.signature => _repo.firstVisionIntro(),
+        PwaActionType.signature => _l10n.firstVisionIntro,
         PwaActionType.refine => _repo.refineApplied(p.userInstruction),
         PwaActionType.switchAtmosphere => _repo.switchIntro(
           _atmosphere(p.atmosphereId),
@@ -1460,7 +1460,7 @@ class PwaController extends StateNotifier<PwaState> {
       id: _nextId('m'),
       role: PwaRole.ayden,
       kind: PwaMessageKind.reveal,
-      text: _repo.firstVisionIntro(),
+      text: _l10n.firstVisionIntro,
       visionId: v1.versionId,
       chips: [
         _l10n.chipWhatDoYouThink,

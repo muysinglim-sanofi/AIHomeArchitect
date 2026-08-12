@@ -76,7 +76,17 @@ class _PwaLoadingScreenState extends ConsumerState<PwaLoadingScreen>
 
   @override
   Widget build(BuildContext context) {
-    final steps = ref.read(pwaRepositoryProvider).loadingSteps();
+    // The repository's steps are English constants describing the four stages.
+    // The dictionary carries the SAME four, translated, so the localized list
+    // is used whenever it matches in length — and the repository stays the
+    // authority on how many stages there are and what they mean.
+    //
+    // Found by looking: this screen has its own step list, separate from the
+    // architect's working indicator, so localizing that one left "Preparing
+    // your photo" in English under a Khmer subtitle.
+    final repoSteps = ref.read(pwaRepositoryProvider).loadingSteps();
+    final localized = context.pwaL10n.workInitialPhases;
+    final steps = localized.length == repoSteps.length ? localized : repoSteps;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Center(

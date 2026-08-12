@@ -302,6 +302,14 @@ class PwaL10n {
   String get creatingYourVision => _get('pwaCreatingYourVision');
   String get noChangeUnderstood => _get('pwaNoChangeUnderstood');
 
+  /// Ayden's opening line after the first vision.
+  ///
+  /// UI-OWNED, not a canonical chat turn: the controller reads it from the
+  /// repository, so it never passes through `localize_reply` and stayed English
+  /// for every reader. It is the FIRST thing Ayden says — measured in the
+  /// browser sitting in English under a fully Khmer interface.
+  String get firstVisionIntro => _get('pwaFirstVisionIntro');
+
   String visionN(int n) => _get('pwaVisionN').replaceAll('{n}', '$n');
   String visionNWithAtmosphere(int n, String name) => _get(
         'pwaVisionNWithAtmosphere',
