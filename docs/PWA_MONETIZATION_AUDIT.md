@@ -360,3 +360,97 @@ Honnêtement listé, pour ne pas être pris pour acquis :
 - Les conditions marchand réelles d'ABA (§4.1 est une liste de questions, pas de
   réponses).
 - Le statut juridique/fiscal d'Ayden Studio au Cambodge, qui conditionne §4.1.1.
+
+---
+
+## 8 — Audit des dépendances SQL Billing pour le staging PWA (2026-08-12)
+
+> Étape 1 de la phase `pwa-monetization`. **Aucune migration rejouée en aveugle.**
+
+### 8.1 — État de départ : le schéma `public` du projet staging est VIDE
+
+Interrogé directement : **0 table**, **0 RPC**. Tout le Billing Engine est absent
+du projet staging. La PWA génère aujourd'hui sans aucun droit à vérifier.
+
+### 8.2 — Dépendances RÉELLES du code (relevées dans le code, pas dans les migrations)
+
+| Module | Lit |
+|---|---|
+| `quota.py` (`fetch_roles_flags`, quota free legacy) | `user_roles`, `usage_log` |
+| `promo.py` (`resolve_generation_access`) | RPC `get_promo_access`, `promo_codes` |
+| `billing.py` (reserve / hold / commit / acquisition) | `ledger_entries`, `passes`, `products`, `generation_intents`, `rc_pass_transfers` ; RPC `billing_try_hold`, `billing_reproject_wallet`, `billing_grant_purchase`, `is_user_anonymous`, `claim_guest_and_bonus`, `billing_reparent_pass` |
+| `identity.py` (optionnel, `include_identity=True`) | `account_state`, `identity_merge_tickets`, `identity_merges` |
+
+Écrits indirectement par les RPC : `wallets`, `orders`, `payments`.
+
+### 8.3 — LE point dur, et sa résolution
+
+`usage_log` et `generation_intents` référencent tous deux `public.sessions` — la
+table de **session de chat mobile**, qui n'existe pas dans le projet staging et
+dont le concept ne se transpose pas (l'équivalent Web est
+`pwa_staging.pwa_projects`).
+
+**Résolution — la contrainte est plus faible qu'elle n'en a l'air :**
+
+```sql
+session_id uuid references public.sessions(id) on delete set null
+```
+
+La colonne est **NULLABLE**. Un `generation_intent` Web peut donc être inséré
+avec `session_id = NULL` : le lien vers le projet reste porté par
+`pwa_staging`, et **aucune notion de session mobile n'est répliquée sur le Web**.
+
+Il reste que la **DDL** exige que `public.sessions` existe pour créer la
+contrainte. Deux voies :
+
+| | Voie | Conséquence |
+|---|---|---|
+| **A** | Créer un `public.sessions` **minimal** (id + owner), jamais écrit depuis le Web, pour que la DDL canonique s'applique **verbatim** | migrations canoniques non modifiées ; une table vide dormante |
+| **B** | Appliquer au staging une variante sans cette FK | divergence de schéma entre prod et staging → deux vérités |
+
+**Retenu : A.** Le principe de tout ce chantier est « une seule vérité » ; une
+table vide est un prix dérisoire face à un schéma qui diverge. `public.sessions`
+n'est créée par aucune migration du dépôt (elle préexiste), il faudra donc en
+écrire une définition minimale **compatible**.
+
+### 8.4 — Deux modèles de quota gratuit coexistent — il faut choisir
+
+C'est la seconde découverte, et elle est structurante :
+
+| Modèle | Source de vérité | Utilisé par |
+|---|---|---|
+| **Legacy** (Wave 5.17b) | comptage de `usage_log` | `resolve_generation_access` → `decide_quota` |
+| **Billing Engine** | bucket free du **`ledger_entries`** | `billing.try_hold` (`_free_bucket_available`) |
+
+`BILLING_ENGINE_SPEC` déclare **superséder** le modèle legacy. Pour le Web, la
+vérité du compteur gratuit doit donc être le **ledger**, et
+`resolve_generation_access` n'est utilisé que pour le **TIER** (admin / premium /
+promo / free / blocked), pas pour le solde.
+
+**Conséquence pratique : `usage_log` n'est PAS nécessaire au Free Web.** Ce qui
+retire du périmètre la migration `wave_5_17b` et l'une des deux FK `sessions`.
+
+### 8.5 — Périmètre minimal retenu pour le staging PWA
+
+À installer dans `public` du projet staging, **noms canoniques inchangés** :
+
+1. `public.sessions` — shell minimal (§8.3 voie A), jamais écrit depuis le Web.
+2. `user_roles` — tier admin/premium (aucune FK problématique).
+3. `promo_codes` + RPC `get_promo_access` — requis par `resolve_generation_access`.
+4. `20260630_generation_intent_v1_pr0_schema` — `generation_intents` (`session_id` NULL côté Web).
+5. `20260701_billing_engine_pr0_schema` — `products`, `orders`, `payments`, `passes`, `ledger_entries`, `wallets`, garde d'immuabilité du ledger.
+6. `20260708` + `20260709` + `20260710` — RPC `billing_grant_purchase`, `billing_reproject_wallet`, `billing_try_hold`, projection wallet.
+
+**Hors périmètre pour cette phase** : `usage_log` (§8.4), les vues
+d'observabilité, `rc_pass_transfers` / `billing_reparent_pass` /
+`claim_guest_and_bonus` (mode compte, pas encore actif sur le Web),
+`account_state` (identité, phase Auth).
+
+### 8.6 — Ce que la PWA devra écrire
+
+- **un `generation_intents` canonique par génération logique** (`intent_id`
+  déterministe dérivé de l'`idempotency_key` existant, `session_id = NULL`).
+  La table `pwa_generation_claims` **reste** et garde son rôle : single-flight du
+  *rendu*. `generation_intents` porte l'idempotence de la *facturation*. C'est
+  exactement la séparation Intent ≠ Job du mobile, pas une duplication.
+- **rien d'autre** : ni wallet, ni pass, ni ledger PWA.
