@@ -66,6 +66,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from dataclasses import dataclass
 from typing import Optional
 
@@ -368,3 +369,81 @@ async def settle(ctx: PwaBillingContext, *, succeeded: bool,
     except Exception as exc:  # noqa: BLE001
         log.warning("[pwa-billing] settle failed (swallowed) intent=%s status=%s "
                     "err=%s", ctx.intent_id, status, type(exc).__name__)
+
+
+# ── the catalogue, and the payment seam that is deliberately empty ───────────
+
+
+def billing_state_for(reason: Optional[str]) -> str:
+    """The client-facing code for a refusal reason. One mapping, one place."""
+    return _BILLING_STATE.get(reason or "", "FREE_EXHAUSTED")
+
+
+async def catalogue() -> list:
+    """The purchasable products, READ from the canonical `products` table.
+
+    Never a constant in the client: `credits_granted` is what the Billing Engine
+    will actually grant, and a Web build that disagreed with it would show a
+    price for something else.
+
+    HONEST NOTE, surfaced rather than hidden: the rows currently configured are
+    the MOBILE store products (`apple_product_id` / `revenuecat_product_id` are
+    set, `khqr_enabled` is true but no web provider exists yet). They are
+    returned with `store_only: true` so the Paywall can say "not purchasable on
+    the Web yet" instead of implying a Web checkout that does not exist. When
+    ABA is wired, a web-purchasable product is a row in this table — not a new
+    constant in Dart.
+    """
+    import asyncio  # noqa: PLC0415
+
+    from main import supa  # noqa: PLC0415
+
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("products")
+            .select("sku, type, credits_granted, duration_days, price_usd, "
+                    "currency, khqr_enabled, apple_product_id, revenuecat_product_id")
+            .eq("active", True).order("price_usd").execute()
+        )
+        rows = getattr(res, "data", None) or []
+    except Exception as exc:  # noqa: BLE001 — a catalogue read must never 500 the screen
+        log.warning("[pwa-billing] catalogue read failed: %s", type(exc).__name__)
+        return []
+
+    out = []
+    for r in rows:
+        store_only = bool(r.get("apple_product_id") or r.get("revenuecat_product_id"))
+        out.append({
+            "sku": r.get("sku"),
+            "type": r.get("type"),
+            "credits": r.get("credits_granted"),
+            "duration_days": r.get("duration_days"),
+            "price_usd": float(r["price_usd"]) if r.get("price_usd") is not None else None,
+            "currency": r.get("currency") or "USD",
+            # True when this row exists to be bought in an app store. The Web
+            # cannot sell it until a web provider is configured for it.
+            "store_only": store_only,
+            "web_enabled": bool(r.get("khqr_enabled")) and not store_only,
+        })
+    return out
+
+
+def payment_provider_id() -> str:
+    """Which payment adapter this deployment would use. `none` today.
+
+    Deliberately a value the SERVER owns. ABA is not implemented, no ABA config
+    exists, and no client may assume otherwise — the Paywall renders whatever
+    this says, so wiring a provider later is a server change plus an adapter,
+    not a hunt through widgets.
+    """
+    return os.environ.get("PWA_PAYMENT_PROVIDER", "none").strip().lower() or "none"
+
+
+def payment_provider_configured() -> bool:
+    """Whether that adapter can actually take money right now.
+
+    False in staging, and it must STAY false until a real provider is wired:
+    a Paywall that offers a purchase it cannot complete is worse than one that
+    says so.
+    """
+    return payment_provider_id() not in ("", "none")

@@ -1209,6 +1209,56 @@ def _reencode_jpeg(raw: bytes, *, watermark: bool = False) -> bytes:
         return raw
 
 
+# ── what this visitor may do, and what they could buy ────────────────────────
+#
+# THE Paywall's only source of truth. It exists because the alternative is a
+# Flutter counter, and a Flutter counter is a lie the moment a second tab, a
+# reinstall or a devtools console gets involved. Everything here is READ from
+# the canonical Billing Engine — the same `resolve_generation_access` +
+# `reserve_decision` pair `/generate` gates on — so the screen and the gate can
+# never disagree.
+#
+# Free, read-only, idempotent: no claim, no hold, no provider call. A client may
+# poll it after an upgrade or after a Pass is granted.
+@router.get("/entitlement")
+async def pwa_entitlement(
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Entitlement + the catalogue, as the canonical engine sees them."""
+    token = _bearer(authorization)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+        user_id = await _verify_user(client, token)
+
+    decision, gate = await pwa_billing.resolve(user_id=user_id)
+    ctx = pwa_billing.PwaBillingContext(
+        user_id=user_id, intent_id="", tier=decision.tier,
+        is_free=decision.consumes_free_quota,
+        watermark=not decision.clean_watermark and not gate.has_active_pass,
+        free_credits=gate.free_credits, pass_credits=gate.pass_credits,
+        total_credits=gate.total_credits, has_active_pass=gate.has_active_pass,
+    )
+
+    # The catalogue comes from `products`, never from a constant in the client:
+    # prices and credit amounts are configuration, and a Web build must not be
+    # able to disagree with what the Billing Engine would actually grant.
+    products = await pwa_billing.catalogue()
+
+    return {
+        "can_generate": gate.allow,
+        "reason": gate.reason or "",
+        "billing_state": "" if gate.allow else pwa_billing.billing_state_for(gate.reason),
+        **ctx.public_state,
+        "products": products,
+        # The payment seam is declared, not implemented. The client renders a
+        # provider-unavailable state from THIS, rather than from a hardcoded
+        # assumption that will silently rot once ABA is wired.
+        "payment": {
+            "provider": pwa_billing.payment_provider_id(),
+            "configured": pwa_billing.payment_provider_configured(),
+        },
+    }
+
+
 @router.get("/health")
 async def pwa_health() -> dict:
     """Confirms the adapter is mounted AND pointed at staging — without ever

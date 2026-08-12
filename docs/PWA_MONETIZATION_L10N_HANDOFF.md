@@ -1,9 +1,8 @@
-# PWA — Billing Engine + localization : état et suite (2026-08-12)
+# PWA — Billing Engine + localization + Auth/Paywall : état et suite (2026-08-12)
 
 > Suite de `PWA_PARITY_CLOSURE_HANDOFF.md` et de `PWA_MONETIZATION_AUDIT.md`.
-> **PHASE A (Billing) : TERMINÉE ET VERTE.** **PHASE B (i18n) : fondation
-> complète + surfaces principales converties ; reste la revue visuelle et le
-> passage final.**
+> **PHASE A (Billing) : TERMINÉE ET VERTE.** **PHASE B (i18n) : FERMÉE.**
+> **PHASE C (Auth + Paywall foundation) : LIVRÉE — voir §5.**
 
 ---
 
@@ -380,3 +379,191 @@ Rappel : `20260707_grants_hardening` reste **non appliqué en production**.
   `switch_atmosphere`, `refine`, `QUOTA_EXHAUSTED`, `kPwaGenericRoomLabel`
   (sentinelle comparée à des données stockées).
 * **Production intouchée** : aucun deploy, aucune migration, aucun accès DB prod.
+* **Un seul modèle d'identité** : celui du spec gelé, complété par la mesure D2
+  (upgrade-in-place). Les deux parcours restent SÉPARÉS — attacher une identité
+  n'est pas se connecter, et se connecter ne transfère RIEN. Pas de troisième
+  modèle, pas de migration de données comme contournement.
+* **Le client ne décide jamais de l'argent** : pas de compteur local, pas de
+  paywall ouvert par un timeout, pas de champ du corps de requête qui achète
+  quoi que ce soit. Le ledger tranche, le serveur refuse.
+* **Aucun code de paiement spéculatif** : le seam existe, l'implémentation
+  n'existe pas, et le paywall le dit.
+
+---
+
+## 5 — PHASE C : AUTH + PAYWALL FOUNDATION (2026-08-12)
+
+### 5.1 La question qui devait être répondue AVANT d'écrire une seule vue
+
+Le spec identité gelé laissait une inconnue (U4) : convertir une session
+anonyme en compte réel produit-il le **MÊME** `user_id` (upgrade-in-place) ou un
+nouveau ? Sur mobile elle était inrépondable sans device (il faut un vrai
+`id_token` Apple). Sur le Web la question est répondable, et elle l'a été
+**contre le vrai projet staging** avant toute UI :
+
+    backend/pwa_staging_identity_probe.py      PASS 12 / FAIL 0
+
+* **B2 — `uid_after == uid_before`.** L'attachement d'une identité PRÉSERVE le
+  `user_id`. C'est **D2**, mesuré, plus supposé.
+* **B5/B6** — la session ouverte alors qu'on était anonyme continue de résoudre
+  vers ce même utilisateur, et le compte cesse d'être anonyme.
+* **D1/D2** — un e-mail déjà pris se refuse avec un code machine :
+  `422 email_exists`. Le second visiteur reste intact et anonyme (**D3**).
+* **C1** — le transport client (`updateUser(email)`) est joignable. Le projet
+  utilise le **SMTP intégré** de Supabase, dont le quota d'envoi est petit :
+  quand il est épuisé l'API répond `429 over_email_send_rate_limit`. **C'est
+  une limite d'ENVOI, pas un refus de l'opération d'identité** — l'UI le dit
+  comme tel (« trop de codes envoyés »), et un vrai SMTP la supprime.
+
+Conséquence directe sur le code : `beginLinkIdentity` n'a **aucune** étape de
+migration, parce qu'il n'y a rien à déplacer. Projets, lignes de ledger et
+toutes les policies RLS sont clés sur ce même id.
+
+### 5.2 Les deux parcours, jamais fusionnés
+
+| | attacher une NOUVELLE identité | se connecter à un compte EXISTANT |
+|---|---|---|
+| transport | `updateUser(email)` + OTP `emailChange` | `signInWithOtp(shouldCreateUser:false)` + OTP `email` |
+| `user_id` | **conservé** | **change** |
+| ce qui suit | tout (rien ne bouge) | **rien** — pas de quota, pas de ledger, pas de pass, pas de projets |
+
+`PwaEmailOtpChannel.linkNewIdentity` s'ARRÊTE sur `email_exists` et remonte
+`destinationAlreadyRegistered`. Ce n'est pas une erreur, c'est une bifurcation :
+l'écran l'explique et **la personne choisit**. Aucun basculement implicite —
+AUTH05 vérifie que l'autre canal n'a reçu aucun appel.
+
+`identityPreserved` / `switchedAccount` sont **mesurés** (id lu avant et après
+`verifyOTP`), jamais déduits du parcours : si GoTrue cessait un jour de
+préserver l'id, l'UI cesserait de promettre que le travail a suivi (AUTH04).
+
+### 5.3 Le paywall lit un ÉTAT SERVEUR, jamais un compteur
+
+Nouvel endpoint : `GET /pwa/staging/entitlement` → `can_generate`,
+`billing_state`, `tier`, `access_source`, `watermarked`, les trois compteurs,
+le catalogue et le seam de paiement. `PwaEntitlement` en fait 8 états, dont les
+deux qu'on oublie toujours : **on n'a pas encore demandé** (`loading`) et **on a
+demandé sans obtenir de réponse** (`billingError`, qui **échoue OUVERT** — le
+serveur refuse de toute façon, et bloquer un client payant sur un paquet perdu
+serait pire).
+
+Un 402 est appliqué **immédiatement** (`applyRefusal`) : le refus EST la
+nouvelle billing de référence, `billing_try_hold` ayant déjà tranché sous verrou
+consultatif. Attendre un aller-retour ferait arriver le paywall en retard.
+
+**Seul un refus de facturation ouvre un paywall** (`isBillingRefusal`) — un
+timeout ou un backend injoignable ne doit jamais ressembler à une vente.
+
+### 5.4 §10 / §11 — ce que le catalogue canonique dit vraiment
+
+Lu, pas inventé (`GET /pwa/staging/entitlement` sur staging réel) :
+
+* `pack_10 / 25 / 50 / 100` — CREDIT_PACK, `khqr_enabled`, **aucun** id store →
+  `web_enabled: true`.
+* `weekly_pass` (30 crédits / 7 j / $7.99) et `annual_pass` (300 / 365 j /
+  $79.99) — **PASS portant des ids Apple/RevenueCat** → `store_only: true`. Le
+  Web ne peut pas les vendre ; le paywall le dit (« Disponible dans
+  l'application mobile ») au lieu de sous-entendre un checkout inexistant.
+
+**Découverte à ne pas perdre** : `orders_provider_check` et
+`payments_provider_check` n'autorisent que `('revenuecat', 'khqr')`. **Il n'y a
+pas d'`aba`.** Brancher un provider web n'est donc pas « un adaptateur » : c'est
+**une migration + un adaptateur**. Le schéma canonique a un avis sur qui peut
+encaisser.
+
+Aucun code ABA n'a été écrit (§11) : `PwaPaymentProvider` est une interface, et
+la seule implémentation, `PwaUnconfiguredPaymentProvider`, répond honnêtement
+« pas disponible ». Le serveur possède la vérité (`payment.provider` /
+`payment.configured`), pas le navigateur. PAY09 relit le fichier source pour
+qu'aucune bonne intention n'y glisse du code de paiement écrit d'après des docs
+communautaires.
+
+### 5.5 §12 — post-paiement sans faux paiement
+
+`backend/pwa_staging_seed_pass.py` (CLI, service-role, **inaccessible depuis le
+navigateur**) appelle la RPC canonique `billing_grant_purchase` — celle du
+webhook RevenueCat et du futur callback ABA. Le pass obtenu est **réel** : ligne
+`passes`, crédit append-only, projection wallet, résolu par le même
+`billing_try_hold` que le rendu. Mesuré : `wallet 30`, `active passes 1`.
+`--revoke` fait expirer (`ends_at` dans le passé), il ne supprime rien : le
+ledger est append-only par construction.
+
+Détail appris en le faisant : un pass est « actif » pour la projection
+canonique quand `status = 'ACTIVE'` **et** `now() between starts_at and
+ends_at`. Il n'y a pas de colonne `expires_at` ni `credits_remaining` sur
+`public.passes` — les crédits vivent dans le ledger, pas sur le pass.
+
+### 5.6 §17 — prouver qu'on ne peut pas générer sans payer
+
+    backend/pwa_staging_enforcement_probe.py   PASS 22 / FAIL 0
+
+Contre le backend qui tourne, en HTTP réel, avec une vraie identité Supabase :
+
+* **ENF01/02/03** — sans token, avec un token forgé : refusé. L'entitlement
+  aussi.
+* **ENF06/07** — une fois le crédit gratuit dépensé : `402 QUOTA_EXHAUSTED`,
+  `billing_state: FREE_EXHAUSTED`, `render_started: false`.
+* **ENF08** — huit mensonges différents dans le corps de la requête (tier
+  premium, pass actif, solde, `access_source`, `watermark:false`,
+  `billing_state`, `user_id`, `intent_id`) : **huit refus**. Le corps n'est pas
+  une entrée de la décision ; le ledger l'est.
+* **ENF10** — se réclamer d'un autre `user_id` ne change rien : le serveur lit
+  le JWT.
+* **ENF11** — la route de lecture n'invente ni état ni image.
+
+**Ordre des refus, constaté** : propriété du projet (`PROJECT_NOT_FOUND`) puis
+namespace Storage (`PATH_FORBIDDEN`) **avant** la facturation. Les deux sont des
+refus ; la sonde lève les deux premières objections précisément pour pouvoir
+mesurer la troisième.
+
+### 5.7 Où vivent les nouvelles pièces
+
+| rôle | fichier |
+|---|---|
+| abstraction de vérification (transport-agnostique) | `lib/features/pwa/auth/pwa_verification_channel.dart` |
+| adaptateur EMAIL OTP (seul fichier qui connaît GoTrue) | `lib/features/pwa/auth/pwa_email_otp_channel.dart` |
+| règles d'identité, un seul endroit | `lib/features/pwa/auth/pwa_auth_service.dart` |
+| état billing structuré | `lib/features/pwa/billing/pwa_entitlement.dart` |
+| lecture serveur + politique de refresh | `lib/features/pwa/billing/pwa_entitlement_controller.dart` |
+| seam de paiement (volontairement vide) | `lib/features/pwa/billing/pwa_payment_provider.dart` |
+| paywall | `lib/features/pwa/presentation/pwa_paywall.dart` |
+| feuille compte | `lib/features/pwa/presentation/pwa_account_sheet.dart` |
+| puce compte (jamais une barrière, §8) | `lib/features/pwa/presentation/pwa_account_chip.dart` |
+| endpoint + catalogue + seam serveur | `backend/pwa_staging_api.py`, `backend/pwa_staging_billing.py` |
+
+### 5.8 Tests
+
+| suite | résultat |
+|---|---|
+| `pwa_staging_billing_contract_test.py` (contrat DB) | **128 checks, 0 échec** |
+| `pwa_staging_billing_test.py` (enforcement billing) | **81 assertions, vertes** |
+| `pwa_staging_adapter_test.py` (parité adaptateur) | **278 assertions, vertes** |
+| `pwa_staging_identity_probe.py` (identité, staging réel) | **12/12** |
+| `pwa_staging_enforcement_probe.py` (§17) | **22/22** |
+| `pwa_auth_paywall_test.dart` (AUTH01-15 + PAY01-11) | **26 tests** |
+| suite Flutter complète | **1071 tests, 0 échec** |
+| `flutter analyze lib` | **No issues found** |
+| `flutter build web --release` (staging) | **vert** |
+
+### 5.9 Piloter le navigateur : deux pièges mesurés
+
+En plus du piège rAF déjà documenté (onglet non redimensionné ⇒ pas de repaint) :
+
+1. **Il n'y a pas de DOM adressable.** Flutter ne construit l'arbre sémantique
+   qu'après un geste qu'il accepte comme signal d'accessibilité ; un `.click()`
+   synthétique sur le `flt-semantics-placeholder` (1×1, hors écran) n'en est pas
+   un. La revue clique donc des **coordonnées mesurées** et vérifie par capture.
+2. **Le premier appui après une navigation ne touche aucun widget** — il est
+   consommé par la prise de focus du canvas. Toute interaction doit être envoyée
+   **deux fois**, la capture suivant la seconde.
+
+### 5.10 Ce qui reste ouvert, nommément
+
+1. **Aucun provider de paiement.** C'est l'état correct aujourd'hui, pas un
+   trou : le paywall affiche « les paiements ne sont pas encore ouverts ». Pour
+   ouvrir : migration du CHECK provider + adaptateur `PwaPaymentProvider` +
+   `PWA_PAYMENT_PROVIDER` côté serveur. **Rien à changer dans les widgets.**
+2. **SMTP staging** — quota intégré épuisé ⇒ `429` sur l'envoi. Configurer un
+   vrai expéditeur pour tester un OTP de bout en bout dans un navigateur.
+3. **PHONE OTP** — `PwaVerificationChannel` existe pour ça ; le Cambodge le
+   voudra. Écrire un second adaptateur, ne toucher à aucune vue.
+4. `20260707_grants_hardening` reste **non appliqué en production**.
