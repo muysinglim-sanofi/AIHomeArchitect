@@ -573,7 +573,13 @@ web à $6.99 et $11.99 — une échelle de prix avec un trou dedans.
 `productsForDisplay` groupe désormais « ce que le web peut vendre » avant
 « ce qu'il ne peut pas ». Test : PAY08.
 
-**NON obtenu en navigateur** : les captures KM/FR des DEUX nouvelles feuilles.
+> ✅ **OBTENU DEPUIS** — voir §7 : navigateur neuf, KM et FR, desktop et mobile,
+> et la revue a trouvé deux défauts réels (bouton illisible, échelle de prix
+> trouée). Le paragraphe qui suit décrit ce qui bloquait alors, et reste utile
+> comme description du piège.
+
+**NON obtenu à CETTE passe (2026-08-12, première tentative)** : les captures
+KM/FR des DEUX nouvelles feuilles.
 Le pilotage par coordonnées a fini par dériver (Chrome accumule les overrides
 `setDeviceMetricsOverride` et finit par composer des tuiles répétées), et la
 position de la puce compte change avec la locale parce que les libellés
@@ -758,3 +764,131 @@ exactement ce qui a produit la contradiction du 2026-08-12.
 * Le blocage reste : **attendre le contrat/sandbox commercial ABA**. Ce qu'on
   sait maintenant, c'est que cette attente ne bloque **pas** le schéma — elle
   bloque l'adaptateur.
+
+---
+
+## 7 — REVUE VISUELLE AUTH/PAYWALL — KM & FR (2026-08-12, navigateur neuf)
+
+Chrome relancé sur un profil vierge, port CDP dédié, **aucun**
+`Emulation.setDeviceMetricsOverride` (c'est lui qui avait corrompu les captures
+de la passe précédente) : la fenêtre est dimensionnée au lancement, donc ce qui
+est capturé est un vrai viewport.
+
+**Rien n'est simulé.** Le paywall s'affiche parce que l'invité de ce navigateur
+n'a réellement plus de crédit — dépensé par `billing_try_hold`, la RPC que
+`/generate` appelle. Le parcours « e-mail déjà pris » utilise une vraie adresse
+déjà enregistrée. L'état « trop de codes » est le vrai `429` du SMTP intégré.
+
+### 7.1 DEUX DÉFAUTS TROUVÉS ET CORRIGÉS
+
+**(1) Le bouton principal était illisible — dans ses DEUX états.**
+
+`pwaSans` porte `color: pwaInk` par défaut, et un `TextStyle` explicite **bat**
+le `foregroundColor` du bouton. Écrit de la façon évidente, le libellé peignait
+donc du quasi-noir sur la pastille noire : **contraste 1,12** — invisible.
+
+La revue anglaise l'avait manqué parce que le bouton qu'elle avait photographié
+était **désactivé**. Le khmer, avec une adresse saisie, l'a montré tout de suite.
+
+Premier correctif : forcer `pwaOnDark`. **Sa propre capture a montré l'autre
+moitié du problème** : la pastille désactivée est du noir à 35 % sur ivoire, un
+gris pâle sur lequel un texte clair disparaît tout autant — **contraste 2,07**.
+Une couleur fixe ne peut pas servir les deux états ; elle suit désormais
+`enabled`.
+
+`AUTH16` vérifie le **CONTRASTE** (≥ 4,5:1, WCAG AA) et non une couleur précise,
+donc il tient à travers un restylage. **Les deux moitiés ont été vérifiées en
+échec sans leur correctif** (1,12 et 2,07) — un test qui passe dans les deux cas
+n'aurait rien valu ici.
+
+**(2) L'échelle de prix avait un trou** — corrigé à la passe précédente et
+**confirmé visuellement ici** : le serveur trie par prix, ce qui plaçait le pass
+mobile-only à 7,99 $ ENTRE les packs web à 6,99 $ et 11,99 $.
+`productsForDisplay` groupe « ce que le web peut vendre » avant « ce qu'il ne
+peut pas ». Vu correct en KM desktop, FR desktop et FR mobile.
+
+### 7.2 CE QUI A ÉTÉ VU, ET OÙ
+
+| surface | KM desktop | FR desktop | FR mobile | EN desktop |
+|---|:--:|:--:|:--:|:--:|
+| accueil + barre supérieure | ✅ | ✅ | ✅ | ✅ |
+| menu compte (2 entrées) | ✅ | ✅ | ✅ | ✅ |
+| feuille compte, vide | ✅ | — | ✅ | ✅ |
+| validation (adresse malformée → action désactivée) | ✅ | — | ✅ | — |
+| adresse valide saisie → action activée | ✅ | — | ✅ | — |
+| bifurcation « e-mail déjà pris » | ✅ | — | — | — |
+| erreur « trop de codes envoyés » (429 réel) | ✅ | — | — | — |
+| paywall complet + défilé | ✅ | ✅ | ✅ | ✅ |
+| provider indisponible (« pas encore ouverts ») | ✅ | ✅ | ✅ | ✅ |
+| cartes produit + traitement mobile-only | ✅ | ✅ | ✅ | ✅ |
+| sélecteur de langue | ✅ | ✅ | ✅ | ✅ |
+
+Points spécifiquement vérifiés :
+
+* **Shaping khmer** : souscrites et signes vocaliques corrects partout, y compris
+  dans les titres 26 px et les libellés de bouton. **Aucun tofu** — la police
+  embarquée fait son travail hors ligne.
+* **Police khmère** : identique en corps de texte, en champ, en bouton et en
+  message d'erreur.
+* **Retour à la ligne français** : « Vous avez vu ce qu'Ayden peut faire de votre
+  espace… » passe sur deux lignes en desktop et trois en mobile, sans coupure.
+  « Disponible dans l'application mobile » tient sur une ligne à 430 px.
+* **Libellés longs** : aucun n'est tronqué ; les boutons enveloppent au lieu de
+  couper (`textAlign.center`, pas d'`ellipsis`).
+* **Débordement / clipping** : aucun, à 1386 px comme à 430 px. Le paywall
+  dépasse la fenêtre en desktop khmer et **défile** correctement.
+
+### 7.3 CE QUI N'A PAS PU ÊTRE VU, ET POURQUOI
+
+**Saisie du code OTP et bouton « renvoyer ».** Ces deux écrans ne s'atteignent
+qu'après un envoi RÉUSSI, et le quota du SMTP intégré de Supabase est épuisé :
+tout envoi répond `429 over_email_send_rate_limit`. §3 de la commande interdit
+explicitement de résoudre le SMTP dans cette tâche, et **fabriquer l'état aurait
+été un mensonge** — l'écran aurait été photographié, pas vérifié.
+
+Ce qui EST vérifié à leur place : le chemin qui y mène (envoi déclenché, erreur
+transportée, wording correct), et `AUTH13` qui monte le vrai widget et vérifie
+que l'écran de code s'affiche après un envoi réussi.
+
+**Quelques cases du tableau ci-dessus sont vides** (feuille compte en FR desktop,
+tout le KM mobile). Ce ne sont pas des défauts produit : ce sont des scènes où le
+pilotage n'a pas armé l'arbre sémantique à temps. **Ce que ces cases testeraient
+est couvert ailleurs** — le français dans la même feuille à 430 px, le khmer dans
+la même feuille à 1386 px — c'est-à-dire la langue ET la largeur, séparément.
+
+### 7.4 Piloter Flutter Web : ce qui marche vraiment
+
+Quatre pièges mesurés, tous coûteux à redécouvrir :
+
+1. **`Page.navigate` vers l'URL déjà affichée ne recharge rien.** Le document
+   survit, la locale ne change pas, et le placeholder d'accessibilité garde le
+   style qu'un run précédent lui a posé. Symptôme trompeur : « la locale ne veut
+   pas coller » et « la sémantique a cessé de marcher ». Il faut une **vraie**
+   navigation — en pratique, relancer le navigateur.
+2. **L'arbre sémantique ne s'arme qu'après une navigation réelle**, et seulement
+   si l'on clique le `flt-semantics-placeholder` avec un **vrai pointeur** — il
+   fait 1×1 px hors écran, donc il faut d'abord le déplacer. Un `.click()`
+   synthétique ne suffit pas. Sans lui, il n'y a **aucun DOM adressable** : la
+   barre supérieure est alignée à droite, donc chaque coordonnée bouge avec la
+   langue.
+3. **La copie khmère porte des U+200B** (le khmer n'a pas d'espaces ; ce sont eux
+   qui autorisent un retour à la ligne). Ils ne survivent pas intacts dans le
+   texte sémantique : il faut les retirer **des deux côtés** avant de comparer.
+4. **Chrome persiste `localStorage` en asynchrone.** Le tuer juste après une
+   écriture perd la locale, et le lancement suivant démarre dans la langue
+   PRÉCÉDENTE. Laisser 3-4 s.
+
+Le champ de saisie, lui, ne porte **aucun nom accessible** : il faut le trouver
+comme élément (`input` dans `flt-text-editing-host`), pas par libellé.
+
+### 7.5 SMTP — à ne pas confondre avec l'identité
+
+* **MODÈLE D'IDENTITÉ / PRÉSERVATION DE L'UID = PROUVÉ** (§5.1, 12/12 contre le
+  vrai projet staging).
+* **FIABILITÉ DE LA DÉLIVRANCE E-MAIL = PAS ENCORE DE NIVEAU PRODUCTION.** Le
+  SMTP intégré répond `429`. C'est une limite d'**envoi**, pas un refus de
+  l'opération d'identité, et l'UI le dit comme tel (« trop de codes ont été
+  envoyés, patientez »), jamais « votre adresse a été rejetée ».
+
+Ces deux lignes ne se remplacent pas l'une l'autre. Un vrai expéditeur SMTP
+supprime la seconde sans rien changer à la première.
