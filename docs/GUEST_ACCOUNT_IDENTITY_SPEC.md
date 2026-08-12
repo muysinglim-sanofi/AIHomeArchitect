@@ -233,3 +233,46 @@ Architecture :            VALIDÉE (référence)
 Code (backend+front+UI) : CÂBLÉ + tests verts (OFF 3 / ON 1, correction anti-anon prouvée)
 Reste avant ON :          config RC dashboard + migration + CLAIM_TICKET_SECRET + validations device
 ```
+
+---
+
+## 10. Variante WEB (PWA) — actée 2026-08-12
+
+> Ajout au modèle figé, **pas une dérive**. Décision prise avec l'audit
+> [`PWA_MONETIZATION_AUDIT.md`](PWA_MONETIZATION_AUDIT.md) §6bis (D2).
+
+Sur le Web, l'identité anonyme est **upgradée sur place** :
+
+```
+anonyme Supabase ──(linkIdentity / updateUser + OTP)──▶ compte
+        même user_id, même wallet, mêmes projets
+```
+
+**Pourquoi le Web diverge du mobile.** Le navigateur dispose de `linkIdentity`,
+l'upgrade-sur-place officiel de Supabase — celui que §2 identifie comme « seul
+vrai upgrade-sur-place » et que le mobile n'emprunte pas. Puisque le `user_id`
+est conservé, il n'y a **rien à transférer** : ni parking, ni claim, ni
+re-parent de pass, ni restore. Toute cette mécanique existe côté mobile pour
+réparer une discontinuité d'identité que le Web n'a pas.
+
+**Conséquences sur les 9 règles :**
+
+| Règle | Web |
+|---|---|
+| 1 — Guest durable par navigateur | ✅ identique (l'anonyme EST le Guest) |
+| 2 — parking à la connexion | **sans objet** : pas de seconde identité à parquer |
+| 3 — sign-in existant = aucun transfert | **sans objet** : rien à transférer |
+| 4 — restore au sign-out | **sans objet** ; se déconnecter d'un compte Web ne fait pas réapparaître un invité, il n'y en a jamais eu deux |
+| 5 — création réclame le Guest 1× + accorde +2 | ✅ conservé — mais « réclamer » devient trivial (c'est le même utilisateur) ; **le +2 reste soumis au même claim-once** |
+| 6 — claim-once / un Guest par compte à vie | ✅ conservé, porté par le même compteur |
+| 7 — maximum initial 1+2 / 0+2 | ✅ conservé |
+| 8 — pas de cumul Premium + Free | ✅ conservé (autorité = pass mesuré) |
+| 9 — compatible PWA | ✅ c'est cette section |
+
+**Ce qui n'est PAS autorisé par cette variante** : un troisième système
+d'identité, un second moteur d'entitlement, ou un `user_id` Web distinct du
+`user_id` porteur du pass. L'autorité reste le Billing Engine.
+
+**Statut U4** : toujours ouvert côté mobile. Il ne conditionne plus le code Web —
+seulement la formulation de cette section (convergence si U4 = B, variante
+assumée si U4 = A).
