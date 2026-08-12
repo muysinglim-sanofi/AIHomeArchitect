@@ -22,6 +22,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import 'core/providers/locale_provider.dart';
 import 'features/pwa/application/pwa_controller.dart';
 import 'features/pwa/application/pwa_intro_gate.dart';
 import 'features/pwa/application/pwa_route.dart';
@@ -58,12 +59,41 @@ Future<void> main() async {
   _bootPwaMock(bridge, bootRoute);
 }
 
-/// The provider overrides every web boot shares: the live history bridge and a
-/// sessionStorage-backed intro gate (cinematic once per tab, surviving F5).
+/// The provider overrides every web boot shares: the live history bridge, a
+/// sessionStorage-backed intro gate (cinematic once per tab, surviving F5), and
+/// the locale seeded with the BROWSER's preference.
+///
+/// The locale override is the whole of the web-specific language resolution.
+/// [LocaleNotifier] already owns "explicit choice > persisted choice >
+/// fallback"; passing `deviceLocale` inserts the browser between the last two,
+/// so a visitor whose browser is set to Khmer reads Khmer on their first visit
+/// without touching a menu — and their first explicit pick still wins for good.
+/// Mobile constructs the same notifier with no argument and is unchanged.
 List<Override> _webNavOverrides(PwaUrlBridge bridge) => [
   pwaUrlBridgeProvider.overrideWithValue(bridge),
   pwaIntroGateProvider.overrideWithValue(PwaIntroGate(WebPwaSessionStore())),
+  localeProvider.overrideWith(
+    (ref) => LocaleNotifier(deviceLocale: _browserLanguage()),
+  ),
 ];
+
+/// The browser's preferred language, as a bare code ('km', 'en', 'fr'), or null.
+///
+/// Read from `platformDispatcher.locales`, which Flutter Web populates from
+/// `navigator.languages` — the user's OWN ordered preference list. The first
+/// entry the product supports wins, so a browser set to `km-KH, th, en-US`
+/// resolves to Khmer rather than falling through to English.
+///
+/// Deliberately NOT geolocation: where a request comes from is not what
+/// language a person reads, and inferring Khmer from a Cambodian IP would be
+/// wrong for a large part of the actual audience.
+String? _browserLanguage() {
+  for (final locale in WidgetsBinding.instance.platformDispatcher.locales) {
+    final code = locale.languageCode.toLowerCase();
+    if (code == 'km' || code == 'en' || code == 'fr') return code;
+  }
+  return null;
+}
 
 /// AYDEN_ENV=mock — self-contained offline prototype. No Supabase, no network.
 /// The boot URL still drives the first screen (F5 on a seeded project restores

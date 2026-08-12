@@ -16,6 +16,7 @@ import '../domain/pwa_models.dart';
 import 'pwa_brand.dart';
 import 'pwa_stored_image.dart';
 import 'pwa_theme.dart';
+import '../l10n/pwa_l10n.dart';
 
 const Color kPwaGold = AppColors.accent; // #C8A86A
 
@@ -171,8 +172,8 @@ class PwaRevealCard extends StatelessWidget {
                 initialFraction: 0.32,
                 autoSweep: true,
                 aspectRatio: aspectRatio,
-                beforeLabel: 'Before',
-                afterLabel: 'After',
+                beforeLabel: context.pwaL10n.beforeLabel,
+                afterLabel: context.pwaL10n.afterLabel,
                 showLabels: true,
               ),
               // §9 — the full-screen affordance lives at the BOTTOM-right so it
@@ -198,7 +199,7 @@ class PwaRevealCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              _VisionChip(label: 'Vision ${vision.visionNumber}'),
+              _VisionChip(label: context.pwaL10n.visionN(vision.visionNumber)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -289,8 +290,8 @@ Future<void> showPwaFullscreenReveal(
                     vision: vision, versions: versions),
                   initialFraction: 0.32,
                   autoSweep: true,
-                  beforeLabel: 'Before',
-                  afterLabel: 'After',
+                  beforeLabel: context.pwaL10n.beforeLabel,
+                  afterLabel: context.pwaL10n.afterLabel,
                   showLabels: true,
                 ),
               ),
@@ -300,7 +301,7 @@ Future<void> showPwaFullscreenReveal(
                 bottom: 20,
                 child: SafeArea(
                   child: Text(
-                    'Vision ${vision.visionNumber} · ${vision.title}',
+                    '${context.pwaL10n.visionN(vision.visionNumber)} · ${vision.title}',
                     style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 13,
@@ -563,7 +564,7 @@ class _ViewAllButton extends StatelessWidget {
           ),
           const SizedBox(height: 3),
           Text(
-            'All $count',
+            context.pwaL10n.allCount(count),
             style: const TextStyle(
               fontSize: 10,
               fontWeight: FontWeight.w600,
@@ -610,8 +611,11 @@ class PwaTextBubble extends StatelessWidget {
 }
 
 class PwaLoadingBubble extends StatelessWidget {
-  const PwaLoadingBubble({super.key, this.label = 'Creating your vision…'});
-  final String label;
+  const PwaLoadingBubble({super.key, this.label});
+
+  /// Null = "use the current language's default". Resolved in `build`, not in
+  /// the constructor, so the bubble follows a language change while visible.
+  final String? label;
   @override
   Widget build(BuildContext context) => Align(
     alignment: Alignment.centerLeft,
@@ -633,7 +637,7 @@ class PwaLoadingBubble extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           Text(
-            label,
+            label ?? context.pwaL10n.creatingYourVision,
             style: const TextStyle(
               color: AppColors.textSecondary,
               fontSize: 13.5,
@@ -721,7 +725,7 @@ class _PwaComposerState extends State<PwaComposer> {
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _send(),
                 decoration: InputDecoration(
-                  hintText: 'Ask Ayden anything…',
+                  hintText: context.pwaL10n.askAydenAnything,
                   filled: true,
                   fillColor: AppColors.surface,
                   contentPadding: const EdgeInsets.symmetric(

@@ -22,6 +22,7 @@ import 'pwa_architect_tokens.dart';
 import 'pwa_brand.dart';
 import 'pwa_stored_image.dart';
 import 'pwa_working_indicator.dart';
+import '../l10n/pwa_l10n.dart';
 
 // V7 responsive tiers (§4). Local to the Architect so the shared
 // `pwaFormFactorForWidth` (used by the frozen entry screen) stays untouched.
@@ -502,7 +503,11 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
         return [
           const _V7ChatGap(),
           _V7InlineGenerating(
-            phases: pwaWorkingPhasesFor(m.workingKind, m.workingSubject),
+            phases: pwaWorkingPhasesFor(
+              m.workingKind,
+              m.workingSubject,
+              context.pwaL10n,
+            ),
           ),
         ];
       case PwaMessageKind.text:
@@ -555,7 +560,10 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
             const SizedBox(height: 14),
             const _V7ChangePrompt(),
             const SizedBox(height: 10),
-            _V7QuickActions(chips: _defaultQuickActions, onTap: _onQuickAction),
+            _V7QuickActions(
+              chips: _defaultQuickActions(context.pwaL10n),
+              onTap: _onQuickAction,
+            ),
           ],
         ];
 
@@ -613,11 +621,16 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
 /// An earlier version of this comment claimed the first chip was advice-only
 /// and the rest were refines — believing that is how "What do you think?" ended
 /// up buying an image.
-const List<String> _defaultQuickActions = [
-  'What do you think?',
-  'Make it warmer',
-  'More natural light',
-  'Open the kitchen',
+/// A top-level const cannot read a dictionary, so the chips became a function
+/// of one. They are UI-OWNED suggestions (the backend's own `suggestions` take
+/// precedence whenever it sends any), which is exactly why they must be
+/// translated: a Khmer speaker offered four English chips is being asked to
+/// type in English.
+List<String> _defaultQuickActions(PwaL10n l) => [
+  l.chipWhatDoYouThink,
+  l.chipWarmer,
+  l.chipMoreLight,
+  l.chipOpenKitchen,
 ];
 
 /// §20 — a leading gold glyph per quick-action chip (matches the reference).
@@ -691,7 +704,7 @@ class _V7GlobalHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'DESIGN WORKSPACE',
+                  context.pwaL10n.workspaceLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: av7Eyebrow(
@@ -719,9 +732,9 @@ class _V7BackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Back home',
+      label: context.pwaL10n.backHome,
       child: Tooltip(
-        message: 'Back home',
+        message: context.pwaL10n.backHome,
         child: Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(999),
@@ -744,7 +757,7 @@ class _V7BackButton extends StatelessWidget {
                   if (!compact) ...[
                     const SizedBox(width: 12),
                     Text(
-                      'Back home',
+                      context.pwaL10n.backHome,
                       style: av7Sans(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -771,9 +784,9 @@ class _V7ProjectsButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'My Projects',
+      label: context.pwaL10n.myProjects,
       child: Tooltip(
-        message: 'My Projects',
+        message: context.pwaL10n.myProjects,
         child: Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(999),
@@ -881,7 +894,7 @@ class _V7ConversationHeader extends StatelessWidget {
       if ((snap?.roomLabel ?? '').isNotEmpty) snap!.roomLabel,
       if ((snap?.atmosphereLabel ?? '').isNotEmpty) snap!.atmosphereLabel,
       if (state.currentVision != null)
-        'Vision ${state.currentVision!.visionNumber}',
+        context.pwaL10n.visionN(state.currentVision!.visionNumber),
     ];
     return Container(
       key: const ValueKey('av7-conversation-header'),
@@ -903,7 +916,7 @@ class _V7ConversationHeader extends StatelessWidget {
                 // Named first: the screen must announce a conversation, not
                 // read as a gallery caption.
                 Text(
-                  'AYDEN ARCHITECT',
+                  context.pwaL10n.architectLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: av7Eyebrow(fontSize: 10.5, letterSpacing: 2.2),
@@ -1136,7 +1149,7 @@ class _V7VisionCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
             child: Text(
-              'Vision ${vision.visionNumber} · $atmosphereName',
+              context.pwaL10n.visionNWithAtmosphere(vision.visionNumber, atmosphereName),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: av7Sans(
@@ -1168,7 +1181,7 @@ class _V7VisionCard extends StatelessWidget {
                     Semantics(
                       button: true,
                       label:
-                          'Open Vision ${vision.visionNumber}, $atmosphereName, in the Full Reveal',
+                          context.pwaL10n.openVisionInReveal(vision.visionNumber, atmosphereName),
                       child: MouseRegion(
                         cursor: SystemMouseCursors.click,
                         child: GestureDetector(
@@ -1199,18 +1212,18 @@ class _V7VisionCard extends StatelessWidget {
               children: [
                 _VisionAction(
                   icon: Icons.open_in_full_rounded,
-                  label: 'View full reveal',
+                  label: context.pwaL10n.viewFullReveal,
                   primary: true,
                   onTap: onOpenReveal,
                 ),
                 _VisionAction(
                   icon: Icons.tune_rounded,
-                  label: 'Refine this',
+                  label: context.pwaL10n.refineThis,
                   onTap: onRefine,
                 ),
                 _VisionAction(
                   icon: Icons.auto_awesome,
-                  label: 'Try another atmosphere',
+                  label: context.pwaL10n.tryAnotherAtmosphere,
                   onTap: onTryAtmosphere,
                 ),
               ],
@@ -1299,9 +1312,9 @@ class _ExpandRevealButtonState extends State<_ExpandRevealButton> {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Open full reveal',
+      label: context.pwaL10n.openFullReveal,
       child: Tooltip(
-        message: 'Open full reveal',
+        message: context.pwaL10n.openFullReveal,
         child: MouseRegion(
           onEnter: (_) => setState(() => _hover = true),
           onExit: (_) => setState(() => _hover = false),
@@ -1359,7 +1372,7 @@ class _V7RefineContextBar extends StatelessWidget {
           const SizedBox(width: 8),
           Flexible(
             child: Text(
-              'Refining Vision ${vision.visionNumber}',
+              context.pwaL10n.refiningVisionN(vision.visionNumber),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: av7Sans(
@@ -1372,9 +1385,9 @@ class _V7RefineContextBar extends StatelessWidget {
           const SizedBox(width: 4),
           Semantics(
             button: true,
-            label: 'Cancel refinement',
+            label: context.pwaL10n.cancelRefinement,
             child: Tooltip(
-              message: 'Cancel refinement',
+              message: context.pwaL10n.cancelRefinement,
               child: InkWell(
                 key: const ValueKey('av7-refine-context-cancel'),
                 customBorder: const CircleBorder(),
@@ -1404,7 +1417,7 @@ class _V7ChangePrompt extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(left: 42),
     child: Text(
-      'What would you like to change?',
+      context.pwaL10n.whatWouldYouLikeToChange,
       style: av7Sans(
         fontSize: 13.5,
         fontWeight: FontWeight.w600,
@@ -1519,7 +1532,7 @@ class _V7RefineConfirmCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Apply this change?',
+              context.pwaL10n.applyThisChange,
               style: av7Sans(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -1542,7 +1555,7 @@ class _V7RefineConfirmCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Creates Vision $nextN · Uses 1 Space',
+                      context.pwaL10n.createsVisionUsesSpace(nextN),
                       style: av7Sans(fontSize: 11.5, color: soft),
                     ),
                   ),
@@ -1563,7 +1576,7 @@ class _V7RefineConfirmCard extends StatelessWidget {
                     ),
                     // On a refusal the only action left is to rephrase, so the
                     // button says that rather than "Cancel".
-                    child: Text(isRed ? 'Edit request' : 'Cancel'),
+                    child: Text(isRed ? context.pwaL10n.editRequest : context.pwaL10n.cancel),
                   ),
                 ),
                 if (!isRed) ...[
@@ -1589,7 +1602,7 @@ class _V7RefineConfirmCard extends StatelessWidget {
                       backgroundColor: av7Gold,
                       foregroundColor: av7Ink,
                     ),
-                    child: Text(busy ? 'Creating…' : 'Create vision'),
+                    child: Text(busy ? context.pwaL10n.creating : context.pwaL10n.createVision),
                   ),
                 ),
                 ],
@@ -1682,7 +1695,7 @@ class _V7ComposerState extends State<_V7Composer> {
                         fillColor: light
                             ? const Color(0xFFFFFBF8).withValues(alpha: 0.68)
                             : kPwaWarmAccent.withValues(alpha: 0.48),
-                        hintText: 'Ask Ayden anything…',
+                        hintText: context.pwaL10n.askAydenAnything,
                         hintStyle: av7Sans(fontSize: 15, color: fieldSoft),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 18,
@@ -1713,7 +1726,7 @@ class _V7ComposerState extends State<_V7Composer> {
             ),
             const SizedBox(height: 7),
             Text(
-              'Ayden can make mistakes. Always review design details.',
+              context.pwaL10n.aydenDisclaimer,
               style: av7Sans(fontSize: 10.5, color: kPwaOnGlassSoft),
             ),
           ],
@@ -1731,7 +1744,7 @@ class _V7SendButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Send message',
+      label: context.pwaL10n.sendMessage,
       child: Material(
         color: enabled ? av7Gold : av7Line,
         shape: const CircleBorder(),

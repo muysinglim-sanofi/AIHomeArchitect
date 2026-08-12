@@ -24,6 +24,7 @@ import '../domain/pwa_models.dart';
 import 'pwa_architect_tokens.dart';
 import 'pwa_brand.dart';
 import 'pwa_widgets.dart';
+import '../l10n/pwa_l10n.dart';
 
 /// Desktop puts the details panel beside the image; below this the panel drops
 /// under it and the atmospheres become a full-width rail.
@@ -270,9 +271,9 @@ class PwaRevealHeader extends StatelessWidget {
         children: [
           Semantics(
             button: true,
-            label: 'Back to conversation',
+            label: context.pwaL10n.backToConversation,
             child: Tooltip(
-              message: 'Back to conversation',
+              message: context.pwaL10n.backToConversation,
               child: Material(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
@@ -296,7 +297,7 @@ class PwaRevealHeader extends StatelessWidget {
                         if (!compact) ...[
                           const SizedBox(width: 10),
                           Text(
-                            'Back to conversation',
+                            context.pwaL10n.backToConversation,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: av7Sans(
@@ -316,7 +317,7 @@ class PwaRevealHeader extends StatelessWidget {
           const Spacer(),
           if (!compact)
             Text(
-              'FULL REVEAL',
+              context.pwaL10n.fullReveal,
               style: av7Eyebrow(fontSize: 10, letterSpacing: 4),
             ),
           const Spacer(),
@@ -358,8 +359,8 @@ class PwaVisionNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final label = total <= 0
-        ? 'Vision 0 of 0'
-        : 'Vision $shownNumber of $total';
+        ? context.pwaL10n.visionOfTotal(0, 0)
+        : context.pwaL10n.visionOfTotal(shownNumber, total);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -381,7 +382,7 @@ class PwaVisionNav extends StatelessWidget {
           size: arrowSize,
           enabled: hasPrev,
           onTap: onPrev,
-          semantic: 'Previous vision',
+          semantic: context.pwaL10n.previousVision,
         ),
         const SizedBox(width: 8),
         _NavArrow(
@@ -389,7 +390,7 @@ class PwaVisionNav extends StatelessWidget {
           size: arrowSize,
           enabled: hasNext,
           onTap: onNext,
-          semantic: 'Next vision',
+          semantic: context.pwaL10n.nextVision,
         ),
       ],
     );
@@ -507,7 +508,7 @@ class PwaVisionMeta extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Vision ${vision.visionNumber}',
+                    context.pwaL10n.visionN(vision.visionNumber),
                     maxLines: 1,
                     style: av7Sans(
                       fontSize: 13,
@@ -527,7 +528,7 @@ class PwaVisionMeta extends StatelessWidget {
                   ),
                   dot(),
                   Text(
-                    'Created just now',
+                    context.pwaL10n.createdJustNow,
                     maxLines: 1,
                     style: av7Sans(
                       fontSize: 13,
@@ -587,10 +588,10 @@ class PwaVisionDetailsPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('VISION DETAILS', style: av7Eyebrow(fontSize: 11)),
+        Text(context.pwaL10n.visionDetails, style: av7Eyebrow(fontSize: 11)),
         const SizedBox(height: 14),
         Text(
-          'Vision ${vision.visionNumber}',
+          context.pwaL10n.visionN(vision.visionNumber),
           style: av7Sans(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -635,15 +636,15 @@ class PwaVisionDetailsPanel extends StatelessWidget {
         // this action exists only because it carries an intent with it.
         _RevealAction(
           icon: Icons.tune_rounded,
-          label: 'Refine with Ayden',
-          subtitle: 'Continue this vision in the conversation',
+          label: context.pwaL10n.refineWithAyden,
+          subtitle: context.pwaL10n.continueInConversation,
           onTap: () => controller.startRefineContext(vision.versionId),
         ),
         const SizedBox(height: 10),
         _RevealAction(
           icon: Icons.auto_awesome,
-          label: 'Try another atmosphere',
-          subtitle: 'Explore a different style',
+          label: context.pwaL10n.tryAnotherAtmosphere,
+          subtitle: context.pwaL10n.exploreDifferentStyle,
           onTap: onTryAtmosphere,
         ),
         if (state.isPreviewingOther) ...[
@@ -771,7 +772,7 @@ class PwaRevealPreviewActions extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Previewing Vision ${v.visionNumber}',
+            context.pwaL10n.previewingVisionN(v.visionNumber),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: av7Sans(
@@ -792,7 +793,7 @@ class PwaRevealPreviewActions extends StatelessWidget {
                   size: 15,
                   color: av7OnDark,
                 ),
-                label: const Text('Set as current'),
+                label: Text(context.pwaL10n.setAsCurrent),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: av7OnDark,
                   side: BorderSide(color: av7Gold.withValues(alpha: 0.4)),
@@ -813,7 +814,7 @@ class PwaRevealPreviewActions extends StatelessWidget {
                   size: 15,
                   color: av7OnDark,
                 ),
-                label: const Text('Continue from this vision'),
+                label: Text(context.pwaL10n.continueFromThisVision),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: av7OnDark,
                   side: BorderSide(color: av7Gold.withValues(alpha: 0.4)),
@@ -856,7 +857,7 @@ class PwaAtmosphereRail extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('ATMOSPHERES', style: av7Eyebrow()),
+        Text(context.pwaL10n.atmospheresSection, style: av7Eyebrow()),
         const SizedBox(height: 12),
         SizedBox(
           height: imgH + 64,
@@ -918,7 +919,7 @@ class _AtmosphereCard extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: 'Select ${atmosphere.name} atmosphere',
+      label: context.pwaL10n.selectAtmosphere(atmosphere.name),
       child: GestureDetector(
         onTap: enabled ? onTap : null,
         child: Container(
@@ -1039,7 +1040,7 @@ class PwaRevealPendingBar extends StatelessWidget {
             spacing: 8,
             children: [
               Text(
-                '${atmo.name} selected',
+                context.pwaL10n.atmosphereSelected(atmo.name),
                 style: av7Sans(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -1047,11 +1048,11 @@ class PwaRevealPendingBar extends StatelessWidget {
                 ),
               ),
               Text(
-                '· Creates Vision ${state.versionCount + 1}',
+                context.pwaL10n.createsVisionN(state.versionCount + 1),
                 style: av7Sans(fontSize: 13, color: av7OnDarkSoft),
               ),
               Text(
-                '· Uses 1 Space',
+                context.pwaL10n.usesOneSpace,
                 style: av7Sans(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -1069,7 +1070,7 @@ class PwaRevealPendingBar extends StatelessWidget {
         foregroundColor: av7OnDarkSoft,
         minimumSize: const Size(80, 40),
       ),
-      child: const Text('Cancel'),
+      child: Text(context.pwaL10n.cancel),
     );
     final create = FilledButton(
       // A new vision is a conversation event: create it, then return to the
@@ -1086,7 +1087,7 @@ class PwaRevealPendingBar extends StatelessWidget {
         minimumSize: const Size(120, 40),
       ),
       child: Text(
-        busy ? 'Creating…' : 'Create vision',
+        busy ? context.pwaL10n.creating : context.pwaL10n.createVision,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontWeight: FontWeight.w600),

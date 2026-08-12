@@ -152,6 +152,7 @@ class PwaGenerationIntent {
     this.parentVisionId = '',
     this.userInstruction = '',
     this.confirm = false,
+    this.uiLocale = 'en',
   });
 
   final String projectId;
@@ -169,6 +170,15 @@ class PwaGenerationIntent {
   /// The user has read the advisor's objection and asked to proceed anyway.
   /// Mirrors mobile's `confirm` on POST /refine.
   final bool confirm;
+
+  /// The language Ayden should ANSWER in — 'en' | 'fr' | 'km'.
+  ///
+  /// It reaches the canonical `localize_reply` and decides the wording of the
+  /// advisor's reply, exactly as mobile's own `ui_locale` does. It never
+  /// reaches the image prompt: that is composed server-side, in English, from
+  /// structured facts, by the frozen composer. A locale can change what Ayden
+  /// SAYS; it can never change what Ayden DRAWS.
+  final String uiLocale;
 }
 
 abstract class PwaGenerationService {
@@ -259,6 +269,7 @@ class PwaStagingGenerationService implements PwaGenerationService {
           userInstruction: intent.userInstruction,
           visionNumber: intent.visionNumber,
           confirm: intent.confirm,
+          uiLocale: intent.uiLocale,
         ),
       );
       return _vision(r);

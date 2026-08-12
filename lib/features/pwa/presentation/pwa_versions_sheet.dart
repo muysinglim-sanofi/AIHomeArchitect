@@ -14,6 +14,7 @@ import '../application/pwa_controller.dart';
 import '../domain/pwa_models.dart';
 import 'pwa_stored_image.dart';
 import 'pwa_widgets.dart';
+import '../l10n/pwa_l10n.dart';
 
 Future<void> showPwaVersionsSheet(BuildContext context, WidgetRef ref) {
   return showModalBottomSheet<void>(
@@ -38,9 +39,9 @@ class _PwaVersionsSheet extends ConsumerWidget {
     final height = MediaQuery.sizeOf(context).height * 0.9;
 
     String parentLabel(PwaVision v) {
-      if (v.parentVersionId == null) return 'Original upload';
+      if (v.parentVersionId == null) return context.pwaL10n.originalUpload;
       final p = versions.where((x) => x.versionId == v.parentVersionId);
-      return p.isEmpty ? 'Original upload' : 'Vision ${p.first.visionNumber}';
+      return p.isEmpty ? context.pwaL10n.originalUpload : context.pwaL10n.visionN(p.first.visionNumber);
     }
 
     return SizedBox(
@@ -62,7 +63,7 @@ class _PwaVersionsSheet extends ConsumerWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'Your visions',
+                    context.pwaL10n.yourVisions,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: pwaSerif(fontSize: 22, fontWeight: FontWeight.w500),
@@ -70,7 +71,7 @@ class _PwaVersionsSheet extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  '${versions.length} total',
+                  context.pwaL10n.totalCount(versions.length),
                   style: const TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 13,
@@ -110,7 +111,7 @@ class _PwaVersionsSheet extends ConsumerWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          'Jumped to Vision ${v.visionNumber} in the conversation',
+                          context.pwaL10n.jumpedToVision(v.visionNumber),
                         ),
                         behavior: SnackBarBehavior.floating,
                       ),
@@ -189,7 +190,7 @@ class _VersionRow extends StatelessWidget {
                     Row(
                       children: [
                         Text(
-                          'Vision ${vision.visionNumber}',
+                          context.pwaL10n.visionN(vision.visionNumber),
                           style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
@@ -206,8 +207,8 @@ class _VersionRow extends StatelessWidget {
                               color: kPwaGold,
                               borderRadius: BorderRadius.circular(999),
                             ),
-                            child: const Text(
-                              'Current',
+                            child: Text(
+                              context.pwaL10n.currentBadge,
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 9.5,
@@ -227,7 +228,7 @@ class _VersionRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      'Created from $parentLabel · ${vision.reasonLabel}',
+                      context.pwaL10n.createdFrom(parentLabel, vision.reasonLabel),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -245,11 +246,11 @@ class _VersionRow extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: [
-              _Action(label: 'Open', onTap: onOpen),
-              _Action(label: 'Compare', onTap: onCompare),
-              _Action(label: 'Continue', onTap: onContinue),
-              _Action(label: 'Find in chat', onTap: onFind),
-              _Action(label: 'Set current', onTap: onSetCurrent),
+              _Action(label: context.pwaL10n.open, onTap: onOpen),
+              _Action(label: context.pwaL10n.compare, onTap: onCompare),
+              _Action(label: context.pwaL10n.continueAction, onTap: onContinue),
+              _Action(label: context.pwaL10n.findInChat, onTap: onFind),
+              _Action(label: context.pwaL10n.setCurrent, onTap: onSetCurrent),
             ],
           ),
         ],

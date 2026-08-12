@@ -20,6 +20,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../application/pwa_controller.dart';
 import 'pwa_widgets.dart';
+import '../l10n/pwa_l10n.dart';
 
 class PwaLoadingScreen extends ConsumerStatefulWidget {
   const PwaLoadingScreen({super.key});
@@ -123,7 +124,7 @@ class _PwaLoadingScreenState extends ConsumerState<PwaLoadingScreen>
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'This usually takes a couple of minutes.',
+                  context.pwaL10n.usuallyACoupleOfMinutes,
                   key: const ValueKey('loading-duration-note'),
                   style: pwaSerif(
                     fontSize: 13,

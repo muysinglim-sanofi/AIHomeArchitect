@@ -1,0 +1,515 @@
+/// THE PWA's localization surface — one facade, two sources, zero duplication.
+///
+/// Why a facade and not a second dictionary
+/// ----------------------------------------
+/// The product is already translated. `lib/core/l10n` carries 424 approved keys
+/// in English, Khmer and French, shipped in the mobile app, and that wording is
+/// the terminology of record: "Vision", "Atmosphere", "Living Room", the
+/// generation loading phrases, the room and atmosphere names. Re-translating any
+/// of it here would produce a second Khmer vocabulary for the same product — the
+/// exact failure this file exists to prevent.
+///
+/// So [PwaL10n] resolves in two steps:
+///
+///   1. a PWA-ONLY map (`pwa_translations.dart`) for copy that exists nowhere in
+///      the mobile app — the web hero, drag & drop, the desktop navigation, the
+///      billing access states introduced by the Billing Engine phase;
+///   2. otherwise it forwards to [AppLocalizations], the mobile dictionary,
+///      unchanged.
+///
+/// Widgets only ever touch `context.pwaL10n`. There is one lookup chain, one
+/// fallback rule (locale -> English -> the key itself) and one place to add a
+/// string, so nothing in the PWA can grow a `if (locale == 'km')` branch.
+///
+/// What must never be translated
+/// -----------------------------
+/// Canonical identifiers — `living_room`, `warm_modern`, `switch_atmosphere`,
+/// `refine`, `QUOTA_EXHAUSTED` — are machine vocabulary. They key the DNA, the
+/// lineage and the ledger. This file translates LABELS; ids pass through it
+/// untouched, and `pwa_i18n_test.dart` proves the ids are byte-identical in all
+/// three locales.
+library;
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/l10n/app_localizations.dart';
+import '../../../core/models/atmosphere_style.dart';
+import '../../../core/providers/locale_provider.dart';
+import 'pwa_translations.dart';
+
+class PwaL10n {
+  const PwaL10n(this.locale, this._mobile);
+
+  final Locale locale;
+  final AppLocalizations _mobile;
+
+  static PwaL10n of(BuildContext context) {
+    final mobile = AppLocalizations.of(context);
+    // Defensive: a widget rendered outside the app's Localizations scope (a
+    // bare `pumpWidget` in a test) still gets English rather than a crash.
+    final resolved = mobile ?? AppLocalizations(const Locale('en'));
+    return PwaL10n(resolved.locale, resolved);
+  }
+
+  static const supportedLocales = AppLocalizations.supportedLocales;
+  static const delegate = AppLocalizations.delegate;
+
+  bool get isKhmer => locale.languageCode == 'km';
+  bool get isFrench => locale.languageCode == 'fr';
+
+  /// The MOBILE dictionary, for the keys it already owns. Public so a screen
+  /// that needs an approved mobile string reads it from the one place it lives.
+  AppLocalizations get shared => _mobile;
+
+  String _get(String key) {
+    final map = isFrench
+        ? pwaFrTranslations
+        : (isKhmer ? pwaKmTranslations : pwaEnTranslations);
+    return map[key] ?? pwaEnTranslations[key] ?? key;
+  }
+
+  // ══ REUSED FROM MOBILE ═════════════════════════════════════════════════════
+  // Every getter in this block forwards to the approved mobile wording. They
+  // exist so a widget never has to decide which dictionary a string lives in.
+
+  String get appName => _mobile.appName;
+  String get beforeLabel => _mobile.beforeLabel;
+  String get afterLabel => _mobile.afterLabel;
+  String get vision => _mobile.vision;
+  String get visions => _mobile.visions;
+  String visionCount(int n) => _mobile.visionCount(n);
+  String get today => _mobile.today;
+  String get yesterday => _mobile.yesterday;
+  String get lastUpdated => _mobile.lastUpdated;
+  String get continueLabel => _mobile.continueLabel;
+  String get skip => _mobile.skip;
+  String get seeAll => _mobile.seeAll;
+  String get newProject => _mobile.newProject;
+  String get noProjects => _mobile.noProjects;
+  String get continueDesigning => _mobile.continueDesigning;
+  String get recentTransformations => _mobile.recentTransformations;
+  String get uploadYourSpace => _mobile.uploadYourSpace;
+  String get uploadFileTypes => _mobile.uploadFileTypes;
+  String get replacePhoto => _mobile.replacePhoto;
+  String get sourcePhoto => _mobile.sourcePhoto;
+  String get tryAnother => _mobile.tryAnother;
+  String get viewBeforeAfter => _mobile.viewBeforeAfter;
+  String get exploreOtherAtmospheres => _mobile.exploreOtherAtmospheres;
+  String get yourTransformation => _mobile.yourTransformation;
+  String get historyTitle => _mobile.historyTitle;
+  String get navHome => _mobile.navHome;
+  String get navProjects => _mobile.navProjects;
+  String get chatPlaceholder => _mobile.chatPlaceholder;
+  String get generateButton => _mobile.generateButton;
+  String get uplAiDecide => _mobile.uplAiDecide;
+  String get uplStepperRoom => _mobile.uplStepperRoom;
+  String get uplStepperAtmosphere => _mobile.uplStepperAtmosphere;
+  String get settingsLanguage => _mobile.settingsLanguage;
+  String get chooseLanguage => _mobile.chooseLanguage;
+  String get english => _mobile.english;
+  String get khmer => _mobile.khmer;
+  String get french => _mobile.french;
+  String get genLongWait => _mobile.genLongWait;
+  String get genTookLonger => _mobile.genTookLonger;
+  String get genTransportInterrupted => _mobile.genTransportInterrupted;
+  String get genStartError => _mobile.genStartError;
+  List<String> get genInitPhrases => _mobile.genInitPhrases;
+  List<String> get genRefinePhrases => _mobile.genRefinePhrases;
+  String? genFlavor(String atmosphere) => _mobile.genFlavor(atmosphere);
+  String atmosphereTagline(String id) => _mobile.atmosphereTagline(id);
+  String atmosphereSubtitle(String id) => _mobile.atmosphereSubtitle(id);
+
+  /// The ROOM label, from the canonical id. The id is what the engine keys its
+  /// DNA on and what `RoomTypeImages.enLabelForId` routes; this is only how it
+  /// is spelled on screen.
+  String roomLabel(String roomId) {
+    switch (roomId) {
+      case 'living_room':
+        return _mobile.livingRoom;
+      case 'master_bedroom':
+      case 'bedroom':
+        return _mobile.masterBedroom;
+      case 'kitchen':
+        return _mobile.kitchen;
+      case 'bathroom':
+        return _mobile.bathroom;
+      case 'home_office':
+      case 'office':
+        return _mobile.homeOffice;
+      case 'dining_room':
+        return _mobile.diningRoom;
+      case 'entrance_hall':
+        return _mobile.entranceHall;
+      case 'house_facade':
+      case 'facade':
+        return _mobile.houseFacade;
+      case 'garden':
+        return _mobile.garden;
+      case 'pool_area':
+        return _mobile.poolArea;
+      case 'terrace':
+        return _mobile.terrace;
+      case 'balcony':
+        return _mobile.balcony;
+      case 'driveway':
+        return _mobile.driveway;
+      default:
+        return '';
+    }
+  }
+
+  /// ATMOSPHERE names are BRAND names and stay English on every platform —
+  /// "Warm Modern", "Soft Luxury", "Japandi Calm". Mobile made that choice
+  /// deliberately (`app_localizations.dart`: "names stay English brand; tagline
+  /// + subtitle are localized by atmosphere id") and the PWA preserves it. Only
+  /// the tagline and subtitle are localized, via [atmosphereTagline] /
+  /// [atmosphereSubtitle].
+  String atmosphereName(String atmosphereId) {
+    for (final a in kAtmospheresOrdered) {
+      if (a.id == atmosphereId) return a.name;
+    }
+    return '';
+  }
+
+  // ══ NEW, PWA-ONLY ══════════════════════════════════════════════════════════
+
+  // Chrome / navigation (a desktop browser has affordances a phone has not).
+  String get workspaceLabel => _get('pwaWorkspaceLabel');
+  String get architectLabel => _get('pwaArchitectLabel');
+  String get backHome => _get('pwaBackHome');
+  String get myProjects => _get('pwaMyProjects');
+  String get myProjectsCaps => _get('pwaMyProjectsCaps');
+  String get newProjectAction => _get('pwaNewProjectAction');
+  String get dismiss => _get('pwaDismiss');
+  String get languageLabel => _get('pwaLanguageLabel');
+  String get cancel => _get('pwaCancel');
+  String get open => _get('pwaOpen');
+  String get continueAction => _get('pwaContinueAction');
+
+  // Home.
+  String get heroLead => _get('pwaHeroLead');
+  String get heroAccent => _get('pwaHeroAccent');
+  String get heroSub => _get('pwaHeroSub');
+  String get seeHowItWorks => _get('pwaSeeHowItWorks');
+  String get continueDesigningEyebrow => _get('pwaContinueDesigningEyebrow');
+  String get pickUpWhereYouLeftOff => _get('pwaPickUpWhereYouLeftOff');
+  String get viewAllProjects => _get('pwaViewAllProjects');
+  String get filterAll => _get('pwaFilterAll');
+  String get yourSpaceFallback => _get('pwaYourSpaceFallback');
+
+  // Create / upload.
+  String get uploadCta => _get('pwaUploadCta');
+  String get dragAndDropHint => _get('pwaDragAndDropHint');
+  String get fileConstraints => _get('pwaFileConstraints');
+  String get tipsForBestResults => _get('pwaTipsForBestResults');
+  String get autoDetect => _get('pwaAutoDetect');
+  String get stepRoom => _get('pwaStepRoom');
+  String get stepAtmosphere => _get('pwaStepAtmosphere');
+  String get moreRooms => _get('pwaMoreRooms');
+  String get fewerRooms => _get('pwaFewerRooms');
+  String get moreAtmospheres => _get('pwaMoreAtmospheres');
+  String get fewerAtmospheres => _get('pwaFewerAtmospheres');
+  String get createFirstVision => _get('pwaCreateFirstVision');
+  String get removePhoto => _get('pwaRemovePhoto');
+  String startWithExample(String label) =>
+      _get('pwaStartWithExample').replaceAll('{label}', label);
+
+  // First reveal / reveal.
+  String get yourFirstVision => _get('pwaYourFirstVision');
+  String get fullReveal => _get('pwaFullReveal');
+  String get visionDetails => _get('pwaVisionDetails');
+  String get atmospheresSection => _get('pwaAtmospheresSection');
+  String get viewFullReveal => _get('pwaViewFullReveal');
+  String get compare => _get('pwaCompare');
+  String get usesOneSpace => _get('pwaUsesOneSpace');
+
+  // Home, continued.
+  String get createFirstVisionTitle => _get('pwaCreateFirstVisionTitle');
+  String get readyToImagine => _get('pwaReadyToImagine');
+  String get onePhotoIsAll => _get('pwaOnePhotoIsAll');
+  String get startANewProject => _get('pwaStartANewProject');
+  String openNamed(String title) =>
+      _get('pwaOpenNamed').replaceAll('{title}', title);
+
+  // Create, continued.
+  String get tipBody => _get('pwaTipBody');
+  String get selectedByAyden => _get('pwaSelectedByAyden');
+  String get dataPrivate => _get('pwaDataPrivate');
+  String get firstVisionFree => _get('pwaFirstVisionFree');
+  String get orStartWithExample => _get('pwaOrStartWithExample');
+  String get tryAnExample => _get('pwaTryAnExample');
+  String get moreRoomsCaps => _get('pwaMoreRoomsCaps');
+  String get moreAtmospheresCaps => _get('pwaMoreAtmospheresCaps');
+  String get shapeYourSpace => _get('pwaShapeYourSpace');
+  String get nowChooseRoomAndAtmosphere =>
+      _get('pwaNowChooseRoomAndAtmosphere');
+  String get addPhotoToStart => _get('pwaAddPhotoToStart');
+  String get fastPathPrefix => _get('pwaFastPathPrefix');
+  String get generateMyVision => _get('pwaGenerateMyVision');
+
+  // Architect.
+  String get editRequest => _get('pwaEditRequest');
+  String get continueAnyway => _get('pwaContinueAnyway');
+  String get chipWhatDoYouThink => _get('pwaChipWhatDoYouThink');
+  String get chipWarmer => _get('pwaChipWarmer');
+  String get chipMoreLight => _get('pwaChipMoreLight');
+  String get chipOpenKitchen => _get('pwaChipOpenKitchen');
+  String get openFullReveal => _get('pwaOpenFullReveal');
+  String get refineThis => _get('pwaRefineThis');
+  String get tryAnotherAtmosphere => _get('pwaTryAnotherAtmosphere');
+  String get cancelRefinement => _get('pwaCancelRefinement');
+  String get whatWouldYouLikeToChange => _get('pwaWhatWouldYouLikeToChange');
+  String get applyThisChange => _get('pwaApplyThisChange');
+  String get creating => _get('pwaCreating');
+  String get createVision => _get('pwaCreateVision');
+  String get askAydenAnything => _get('pwaAskAydenAnything');
+  String get aydenDisclaimer => _get('pwaAydenDisclaimer');
+  String get sendMessage => _get('pwaSendMessage');
+  String get creatingYourVision => _get('pwaCreatingYourVision');
+  String get noChangeUnderstood => _get('pwaNoChangeUnderstood');
+
+  String visionN(int n) => _get('pwaVisionN').replaceAll('{n}', '$n');
+  String visionNWithAtmosphere(int n, String name) => _get(
+        'pwaVisionNWithAtmosphere',
+      ).replaceAll('{n}', '$n').replaceAll('{name}', name);
+  String openVisionInReveal(int n, String name) => _get(
+        'pwaOpenVisionInReveal',
+      ).replaceAll('{n}', '$n').replaceAll('{name}', name);
+  String refiningVisionN(int n) =>
+      _get('pwaRefiningVisionN').replaceAll('{n}', '$n');
+  String createsVisionUsesSpace(int n) =>
+      _get('pwaCreatesVisionUsesSpace').replaceAll('{n}', '$n');
+  String switchTo(String name) =>
+      _get('pwaSwitchTo').replaceAll('{name}', name);
+
+  // The four beats of a render. The ORDER and the count are the existing
+  // product behaviour; only the words are translated.
+  List<String> get workRefinePhases => [
+        _get('pwaWorkRefine1'),
+        _get('pwaWorkRefine2'),
+        _get('pwaWorkRefine3'),
+        _get('pwaWorkRefine4'),
+      ];
+  List<String> get workInitialPhases => [
+        _get('pwaWorkInitial1'),
+        _get('pwaWorkInitial2'),
+        _get('pwaWorkInitial3'),
+        _get('pwaWorkInitial4'),
+      ];
+  List<String> get workSwitchPhases => [
+        _get('pwaWorkSwitch1'),
+        _get('pwaWorkSwitch2'),
+        _get('pwaWorkSwitch3'),
+        _get('pwaWorkSwitch4'),
+      ];
+  List<String> workSwitchNamedPhases(String name) => [
+        _get('pwaWorkSwitchNamed1').replaceAll('{name}', name),
+        _get('pwaWorkSwitchNamed2'),
+        _get('pwaWorkSwitch3'),
+        _get('pwaWorkSwitch4'),
+      ];
+  String get thinking => _get('pwaThinking');
+  String get working => _get('pwaWorking');
+  String get usuallyACoupleOfMinutes => _get('pwaUsuallyACoupleOfMinutes');
+
+  // Reveal, continued.
+  String get continueWithAyden => _get('pwaContinueWithAyden');
+  String get backToConversation => _get('pwaBackToConversation');
+  String get previousVision => _get('pwaPreviousVision');
+  String get nextVision => _get('pwaNextVision');
+  String get createdJustNow => _get('pwaCreatedJustNow');
+  String get refineWithAyden => _get('pwaRefineWithAyden');
+  String get continueInConversation => _get('pwaContinueInConversation');
+  String get exploreDifferentStyle => _get('pwaExploreDifferentStyle');
+  String get setAsCurrent => _get('pwaSetAsCurrent');
+  String get continueFromThisVision => _get('pwaContinueFromThisVision');
+  String visionOfTotal(int n, int total) => _get('pwaVisionOfTotal')
+      .replaceAll('{n}', '$n')
+      .replaceAll('{total}', '$total');
+  String previewingVisionN(int n) =>
+      _get('pwaPreviewingVisionN').replaceAll('{n}', '$n');
+  String selectAtmosphere(String name) =>
+      _get('pwaSelectAtmosphere').replaceAll('{name}', name);
+  String atmosphereSelected(String name) =>
+      _get('pwaAtmosphereSelected').replaceAll('{name}', name);
+  String createsVisionN(int n) =>
+      _get('pwaCreatesVisionN').replaceAll('{n}', '$n');
+
+  // Versions sheet.
+  String get originalUpload => _get('pwaOriginalUpload');
+  String get yourVisions => _get('pwaYourVisions');
+  String get currentBadge => _get('pwaCurrentBadge');
+  String get findInChat => _get('pwaFindInChat');
+  String get setCurrent => _get('pwaSetCurrent');
+  String totalCount(int n) => _get('pwaTotalCount').replaceAll('{n}', '$n');
+  String jumpedToVision(int n) =>
+      _get('pwaJumpedToVision').replaceAll('{n}', '$n');
+  String createdFrom(String name, String label) => _get('pwaCreatedFrom')
+      .replaceAll('{name}', name)
+      .replaceAll('{label}', label);
+  String allCount(int n) => _get('pwaAllCount').replaceAll('{n}', '$n');
+
+  // Projects.
+  String get yourSpaces => _get('pwaYourSpaces');
+  String get searchProjects => _get('pwaSearchProjects');
+  String get clearSearch => _get('pwaClearSearch');
+  String get sortProjects => _get('pwaSortProjects');
+  String get sortNewest => _get('pwaSortNewest');
+  String get sortOldest => _get('pwaSortOldest');
+  String get sortNameAz => _get('pwaSortNameAz');
+  String get draftBadge => _get('pwaDraftBadge');
+  String get save => _get('pwaSave');
+  String get duplicate => _get('pwaDuplicate');
+  String get delete => _get('pwaDelete');
+  String get deleteProjectTitle => _get('pwaDeleteProjectTitle');
+  String get updatedToday => _get('pwaUpdatedToday');
+  String get contineShapingHome => _get('pwaContinueShapingHome');
+  String get returnToProject => _get('pwaReturnToProject');
+  String get openProject => _get('pwaOpenProject');
+  String get projectOptions => _get('pwaProjectOptions');
+  String get renameProject => _get('pwaRenameProject');
+  String get rename => _get('pwaRename');
+  String get yourNextSpace => _get('pwaYourNextSpace');
+  String get uploadAndCreate => _get('pwaUploadAndCreate');
+  String get noMatchingProjects => _get('pwaNoMatchingProjects');
+  String get tryAnotherRoom => _get('pwaTryAnotherRoom');
+  String get noProjectsFoundFor => _get('pwaNoProjectsFoundFor');
+  String get oneProjectFoundFor => _get('pwaOneProjectFoundFor');
+  String get untitledSpace => _get('pwaUntitledSpace');
+  String get draftContinueSetup => _get('pwaDraftContinueSetup');
+  String get continueSetup => _get('pwaContinueSetup');
+  String nProjectsFoundFor(int n) =>
+      _get('pwaNProjectsFoundFor').replaceAll('{n}', '$n');
+  String deleteProjectBody(String title) =>
+      _get('pwaDeleteProjectBody').replaceAll('{title}', title);
+  String updatedDaysAgo(int n) =>
+      _get('pwaUpdatedDaysAgo').replaceAll('{n}', '$n');
+
+  // Billing access states (Phase A). The BACKEND sends a code; this translates
+  // it. No billing decision depends on the locale.
+  String get freeVisionAvailable => _get('pwaFreeVisionAvailable');
+  String get freeVisionWatermarked => _get('pwaFreeVisionWatermarked');
+  String get billingFreeExhausted => _get('pwaBillingFreeExhausted');
+  String get billingFreeExhaustedSub => _get('pwaBillingFreeExhaustedSub');
+  String get billingPassRequired => _get('pwaBillingPassRequired');
+  String get billingPassExhausted => _get('pwaBillingPassExhausted');
+  String get billingUnavailable => _get('pwaBillingUnavailable');
+  String passSpacesLeft(int n) =>
+      _get('pwaPassSpacesLeft').replaceAll('{n}', '$n');
+
+  /// A backend `billing_state` code -> the sentence a person reads.
+  ///
+  /// The switch is exhaustive on the codes `pwa_staging_billing._BILLING_STATE`
+  /// can emit; anything unknown falls back to the generic exhausted message
+  /// rather than showing a raw code.
+  String billingState(String code) {
+    switch (code) {
+      case 'FREE_EXHAUSTED':
+        return billingFreeExhausted;
+      case 'PASS_REQUIRED':
+        return billingPassRequired;
+      case 'PASS_EXHAUSTED':
+        return billingPassExhausted;
+      case 'BILLING_UNAVAILABLE':
+        return billingUnavailable;
+      default:
+        return billingFreeExhausted;
+    }
+  }
+
+  // Errors surfaced by the generation API. Keyed by the backend's `error_code`
+  // so the wording lives here and the transport carries a code (see §24 of the
+  // monetization brief and `pwa_staging_billing._deny`).
+  String get errSessionExpired => _get('pwaErrSessionExpired');
+  String get errBackendUnreachable => _get('pwaErrBackendUnreachable');
+  String get errTimeout => _get('pwaErrTimeout');
+  String get errNetwork => _get('pwaErrNetwork');
+  String get errGenerationFailed => _get('pwaErrGenerationFailed');
+  String get errGenerationLost => _get('pwaErrGenerationLost');
+  String get errCancelled => _get('pwaErrCancelled');
+  String get errStillWorking => _get('pwaErrStillWorking');
+  String get errUploadFailed => _get('pwaErrUploadFailed');
+  String get errPrepareFailed => _get('pwaErrPrepareFailed');
+  String get errSaveFailed => _get('pwaErrSaveFailed');
+  String get errUnknown => _get('pwaErrUnknown');
+  String get retry => _get('pwaRetry');
+
+  String errorForCode(String code) {
+    switch (code) {
+      case 'SESSION_EXPIRED':
+      case 'MISSING_TOKEN':
+        return errSessionExpired;
+      case 'BACKEND_UNREACHABLE':
+        return errBackendUnreachable;
+      case 'TIMEOUT':
+        return errTimeout;
+      case 'NETWORK_ERROR':
+        return errNetwork;
+      case 'GENERATION_FAILED':
+      case 'ENGINE_REJECTED':
+      case 'EMPTY_RESULT':
+      case 'MALFORMED_RESPONSE':
+        return errGenerationFailed;
+      case 'GENERATION_LOST':
+        return errGenerationLost;
+      case 'CANCELLED':
+        return errCancelled;
+      case 'PROCESSING':
+        return errStillWorking;
+      case 'UPLOAD_FAILED':
+        return errUploadFailed;
+      case 'PREPARE_FAILED':
+        return errPrepareFailed;
+      case 'SAVE_FAILED':
+      case 'PERSIST_FAILED':
+        return errSaveFailed;
+      case 'QUOTA_EXHAUSTED':
+        return billingFreeExhausted;
+      case 'BILLING_UNAVAILABLE':
+        return billingUnavailable;
+      default:
+        return errUnknown;
+    }
+  }
+}
+
+/// Resolve the dictionary WITHOUT a BuildContext.
+///
+/// [PwaController] produces user-facing error text and suggestion chips, and it
+/// is a `StateNotifier` with a `ref` but no element in the tree. Rather than
+/// give it a second, context-free copy of the strings — the exact duplication
+/// this layer exists to prevent — it builds the SAME facade from the locale it
+/// already watches. `AppLocalizations` is a plain object over three maps, so
+/// constructing one costs nothing and needs no widget.
+PwaL10n pwaL10nFor(Locale locale) =>
+    PwaL10n(locale, AppLocalizations(locale));
+
+/// `context.pwaL10n` — the ONLY accessor a PWA widget needs.
+extension PwaBuildContextL10n on BuildContext {
+  PwaL10n get pwaL10n => PwaL10n.of(this);
+}
+
+/// The three languages, in the order the selector shows them. Khmer first is
+/// deliberate: this is a Cambodia-first product, and the selector should read
+/// as such rather than as an English app with translations bolted on.
+const List<Locale> kPwaLocaleOrder = [Locale('km'), Locale('en'), Locale('fr')];
+
+/// The name of a language, written IN that language — the only labelling that
+/// works when the person cannot read the current one.
+String pwaLanguageEndonym(String code) {
+  switch (code) {
+    case 'km':
+      return 'ភាសាខ្មែរ';
+    case 'fr':
+      return 'Français';
+    default:
+      return 'English';
+  }
+}
+
+/// Read the locale without a BuildContext (controllers, services, the
+/// `ui_locale` sent to the canonical chat turn).
+final pwaLocaleCodeProvider = Provider<String>(
+  (ref) => ref.watch(localeProvider).languageCode,
+);

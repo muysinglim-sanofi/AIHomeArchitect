@@ -32,6 +32,7 @@ import '../domain/pwa_models.dart';
 import 'pwa_brand.dart';
 import 'pwa_select_card.dart';
 import 'pwa_theme.dart';
+import '../l10n/pwa_l10n.dart';
 
 /// Which fast-path selector is expanded (one-open-at-a-time accordion).
 enum PwaExpandedSelector { none, room, atmosphere }
@@ -121,9 +122,13 @@ double entryCollapse(double shrinkOffset, double range) =>
     range <= 0 ? 1.0 : (shrinkOffset / range).clamp(0.0, 1.0);
 
 /// Short subtitle for an atmosphere id (from the app card catalog).
+/// A top-level helper has no BuildContext, so it cannot localize. It returns
+/// the catalog subtitle or the EMPTY string, and the caller — which does have a
+/// context — supplies `PwaL10n.selectedByAyden` for Ayden Signature. Reaching
+/// for a context here is what produced the compile error; passing the localized
+/// default down is the fix, not a global.
 String pwaAtmosphereSubtitle(String id) =>
-    kAtmosphereCardById[id]?.subtitle ??
-    (id == 'ayden_signature' ? 'Selected by Ayden' : '');
+    kAtmosphereCardById[id]?.subtitle ?? '';
 
 /// Room metadata by id (null id / unknown → null = Ayden auto-detect).
 RoomCardData? pwaRoomById(String? id) {
@@ -278,9 +283,9 @@ class _SlimBar extends StatelessWidget {
           // Create is reached FROM Home, so it always offers the way back.
           Semantics(
             button: true,
-            label: 'Back home',
+            label: context.pwaL10n.backHome,
             child: Tooltip(
-              message: 'Back home',
+              message: context.pwaL10n.backHome,
               child: Material(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
@@ -338,9 +343,9 @@ class _CompactProjectsButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'My Projects',
+      label: context.pwaL10n.myProjects,
       child: Tooltip(
-        message: 'My Projects',
+        message: context.pwaL10n.myProjects,
         child: Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(999),
@@ -369,7 +374,7 @@ class _CompactProjectsButton extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'My Projects',
+                          context.pwaL10n.myProjects,
                           style: pwaSans(
                             fontSize: 13,
                             color: pwaOnDark.withValues(alpha: 0.85),
@@ -404,7 +409,7 @@ class _PrivacyNote extends StatelessWidget {
           const SizedBox(width: 7),
           Flexible(
             child: Text(
-              'Your data is private and secure',
+              context.pwaL10n.dataPrivate,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: pwaSans(fontSize: 12, color: muted),
@@ -425,7 +430,7 @@ class _CreateFooter extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(top: isMobile ? 12 : 14),
       child: Text(
-        'First vision free · No account required',
+        context.pwaL10n.firstVisionFree,
         textAlign: TextAlign.center,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -456,7 +461,7 @@ class _ExamplesStrip extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Or start with an example',
+          context.pwaL10n.orStartWithExample,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: pwaSans(
@@ -515,7 +520,7 @@ class _ExampleCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Start with the $label example',
+      label: context.pwaL10n.startWithExample(label),
       child: SizedBox(
         width: 112,
         child: Material(
@@ -607,7 +612,7 @@ class _TryExampleCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Try an example',
+                      context.pwaL10n.tryAnExample,
                       style: pwaSans(
                         fontSize: 14.5,
                         color: pwaOnDark,
@@ -616,7 +621,7 @@ class _TryExampleCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'See how it works',
+                      context.pwaL10n.seeHowItWorks,
                       style: pwaSans(
                         fontSize: 12.5,
                         color: pwaOnDark.withValues(alpha: 0.55),
@@ -726,7 +731,7 @@ class _DropZoneState extends State<_DropZone> {
                         // drag & drop is stated as the alternative rather than
                         // competing with a second control.
                         Text(
-                          'Upload a photo',
+                          context.pwaL10n.uploadCta,
                           textAlign: TextAlign.center,
                           style: pwaSans(
                             fontSize: 19,
@@ -736,7 +741,7 @@ class _DropZoneState extends State<_DropZone> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'or drag & drop it here',
+                          context.pwaL10n.dragAndDropHint,
                           textAlign: TextAlign.center,
                           style: pwaSans(
                             fontSize: 14,
@@ -748,7 +753,7 @@ class _DropZoneState extends State<_DropZone> {
                         // image/jpeg|png|webp, 10 MiB limit) — never a format the
                         // upload would reject.
                         Text(
-                          'JPG, PNG or WebP · up to 10 MB',
+                          context.pwaL10n.fileConstraints,
                           style: pwaSans(
                             fontSize: 12,
                             color: pwaOnDark.withValues(alpha: 0.45),
@@ -804,7 +809,7 @@ class _UploadTips extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Tips for best results',
+                  context.pwaL10n.tipsForBestResults,
                   style: pwaSans(
                     fontSize: 12.5,
                     color: pwaOnDark,
@@ -813,8 +818,7 @@ class _UploadTips extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Use a clear, well-lit photo of the room you want to '
-                  'transform.',
+                  context.pwaL10n.tipBody,
                   style: pwaSans(
                     fontSize: 12,
                     color: pwaOnDark.withValues(alpha: 0.6),
@@ -962,7 +966,7 @@ class _CreateWorkspaceState extends State<_CreateWorkspace> {
         null,
         'Ayden Decide',
         'assets/cards/rooms/ayden_decide.png',
-        'Auto-detect',
+        context.pwaL10n.autoDetect,
         sel == null,
       ),
     ];
@@ -1035,7 +1039,7 @@ class _CreateWorkspaceState extends State<_CreateWorkspace> {
     width: _cardW,
     child: PwaSelectCard(
       title: a.name,
-      subtitle: a.id == 'ayden_signature' ? 'Selected by Ayden' : '',
+      subtitle: a.id == 'ayden_signature' ? context.pwaL10n.selectedByAyden : '',
       asset: a.asset,
       selected: a.id == sel,
       onTap: () => _selectAtmosphere(a.id),
@@ -1126,10 +1130,10 @@ class _CreateWorkspaceState extends State<_CreateWorkspace> {
   Widget _buildBody(BuildContext context) {
     final roomLevel = _SelectionLevel(
       rowKey: 'room',
-      heading: '1. ROOM',
-      collapsedLabel: 'More rooms',
-      expandedLabel: 'Fewer rooms',
-      optionalLabel: 'MORE ROOMS',
+      heading: context.pwaL10n.stepRoom,
+      collapsedLabel: context.pwaL10n.moreRooms,
+      expandedLabel: context.pwaL10n.fewerRooms,
+      optionalLabel: context.pwaL10n.moreRoomsCaps,
       expanded: _roomExpanded,
       onToggle: _toggleRoom,
       popularController: _roomPopScroll,
@@ -1143,10 +1147,10 @@ class _CreateWorkspaceState extends State<_CreateWorkspace> {
 
     final atmosLevel = _SelectionLevel(
       rowKey: 'atmos',
-      heading: '2. ATMOSPHERE',
-      collapsedLabel: 'More atmospheres',
-      expandedLabel: 'Fewer atmospheres',
-      optionalLabel: 'MORE ATMOSPHERES',
+      heading: context.pwaL10n.stepAtmosphere,
+      collapsedLabel: context.pwaL10n.moreAtmospheres,
+      expandedLabel: context.pwaL10n.fewerAtmospheres,
+      optionalLabel: context.pwaL10n.moreAtmospheresCaps,
       expanded: _atmosExpanded,
       onToggle: _toggleAtmos,
       popularController: _atmosPopScroll,
@@ -1354,7 +1358,7 @@ class _CreateIntro extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'CREATE YOUR FIRST VISION',
+          context.pwaL10n.createFirstVision,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
@@ -1368,7 +1372,7 @@ class _CreateIntro extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Shape your space with Ayden.',
+          context.pwaL10n.shapeYourSpace,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
@@ -1387,8 +1391,8 @@ class _CreateIntro extends StatelessWidget {
             // One sentence, two states — the journey is explained before the
             // photo exists, then hands over to the choices once it does.
             hasPhoto
-                ? "Great! Now let's choose the room type\nand the atmosphere you love."
-                : "Add a photo to get started, then we'll help you\ndesign it your way.",
+                ? context.pwaL10n.nowChooseRoomAndAtmosphere
+                : context.pwaL10n.addPhotoToStart,
             maxLines: isMobile ? 2 : 3,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -1432,7 +1436,7 @@ class _FastPathSummary extends StatelessWidget {
           decoration: TextDecoration.none,
         ),
         children: [
-          const TextSpan(text: 'Ayden will create your first vision using '),
+          TextSpan(text: context.pwaL10n.fastPathPrefix),
           TextSpan(text: room, style: goldSpan),
           const TextSpan(text: '  ·  '),
           TextSpan(text: atmosphereName, style: goldSpan),
@@ -1589,7 +1593,7 @@ class _PhotoPanelState extends State<_PhotoPanel> {
                               alignment: Alignment.centerLeft,
                               child: _MiniAction(
                                 icon: Icons.sync,
-                                label: 'Replace photo',
+                                label: context.pwaL10n.replacePhoto,
                                 onTap: widget.onReplace,
                               ),
                             ),
@@ -1604,7 +1608,7 @@ class _PhotoPanelState extends State<_PhotoPanel> {
                               alignment: Alignment.centerRight,
                               child: _MiniAction(
                                 icon: Icons.delete_outline,
-                                label: 'Remove photo',
+                                label: context.pwaL10n.removePhoto,
                                 onTap: widget.onRemove,
                               ),
                             ),
@@ -2059,7 +2063,7 @@ class _GenerateArea extends StatelessWidget {
     return Semantics(
       button: true,
       enabled: enabled,
-      label: 'Generate my vision',
+      label: context.pwaL10n.generateMyVision,
       child: Material(
         color: enabled ? pwaGold : Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(999),
@@ -2080,7 +2084,7 @@ class _GenerateArea extends StatelessWidget {
               children: [
                 Flexible(
                   child: Text(
-                    'Generate my vision',
+                    context.pwaL10n.generateMyVision,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,

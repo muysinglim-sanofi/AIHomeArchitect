@@ -17,6 +17,7 @@ import 'pwa_architect_tokens.dart';
 import 'pwa_brand.dart';
 import 'pwa_entry_screen.dart' show pwaRoomById;
 import 'pwa_widgets.dart';
+import '../l10n/pwa_l10n.dart';
 
 class PwaProjectsScreen extends ConsumerWidget {
   const PwaProjectsScreen({super.key});
@@ -136,7 +137,7 @@ class _ProjectsHeader extends StatelessWidget {
         children: [
           _HeaderTextButton(
             icon: Icons.arrow_back_rounded,
-            label: 'Back home',
+            label: context.pwaL10n.backHome,
             showLabel: !mobile,
             onTap: onBack,
           ),
@@ -157,7 +158,7 @@ class _ProjectsHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'MY PROJECTS',
+                  context.pwaL10n.myProjectsCaps,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: av7Eyebrow(
@@ -236,9 +237,9 @@ class _NewProjectButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'New project',
+      label: context.pwaL10n.newProjectAction,
       child: Tooltip(
-        message: 'New project',
+        message: context.pwaL10n.newProjectAction,
         child: Material(
           color: av7Gold,
           borderRadius: BorderRadius.circular(999),
@@ -257,7 +258,7 @@ class _NewProjectButton extends StatelessWidget {
                   if (!compact) ...[
                     const SizedBox(width: 8),
                     Text(
-                      'New project',
+                      context.pwaL10n.newProjectAction,
                       style: av7Sans(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
@@ -287,12 +288,12 @@ class _ProjectsIntro extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'YOUR SPACES',
+          context.pwaL10n.yourSpaces,
           style: av7Eyebrow(fontSize: 12, letterSpacing: 2.4),
         ),
         SizedBox(height: mobile ? 10 : 14),
         Text(
-          'Continue shaping your home.',
+          context.pwaL10n.contineShapingHome,
           style: av7Sans(
             fontSize: mobile ? 27 : 38,
             fontWeight: FontWeight.w600,
@@ -303,7 +304,7 @@ class _ProjectsIntro extends StatelessWidget {
         ),
         SizedBox(height: mobile ? 8 : 12),
         Text(
-          'Return to a project, explore its visions, or begin a new space.',
+          context.pwaL10n.returnToProject,
           style: av7Sans(
             fontSize: mobile ? 14 : 16,
             color: av7OnDarkSoft,
@@ -397,7 +398,7 @@ class _SearchField extends StatelessWidget {
         isDense: true,
         filled: true,
         fillColor: const Color(0xFF1A1712),
-        hintText: 'Search your projects…',
+        hintText: context.pwaL10n.searchProjects,
         hintStyle: av7Sans(fontSize: 15, color: av7MutedSoft),
         prefixIcon: const Icon(Icons.search_rounded, color: av7Muted, size: 20),
         contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
@@ -503,7 +504,7 @@ class _SortControl extends StatelessWidget {
     if (mobile) {
       return Semantics(
         button: true,
-        label: 'Sort projects',
+        label: context.pwaL10n.sortProjects,
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -518,7 +519,7 @@ class _SortControl extends StatelessWidget {
 
     return PopupMenuButton<PwaProjectSort>(
       key: const ValueKey('pwa-sort-button'),
-      tooltip: 'Sort projects',
+      tooltip: context.pwaL10n.sortProjects,
       color: av7CardDark,
       onSelected: onSort,
       itemBuilder: (ctx) => [
@@ -672,7 +673,7 @@ class _ProjectCardState extends ConsumerState<_ProjectCard> {
                         child: Padding(
                           padding: const EdgeInsets.all(14),
                           child: Text(
-                            'Open project',
+                            context.pwaL10n.openProject,
                             style: av7Sans(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -720,7 +721,7 @@ class _ProjectCardState extends ConsumerState<_ProjectCard> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${p.visionCount} ${p.visionCount == 1 ? 'vision' : 'visions'} · ${p.updatedLabel}',
+                  '${context.pwaL10n.visionCount(p.visionCount)} · ${p.updatedLabel}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: av7Sans(fontSize: 12.5, color: av7Muted),
@@ -737,7 +738,7 @@ class _ProjectCardState extends ConsumerState<_ProjectCard> {
       onExit: (_) => setState(() => _hover = false),
       child: Semantics(
         button: true,
-        label: 'Open ${p.title}',
+        label: context.pwaL10n.openNamed(p.title),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
@@ -769,7 +770,7 @@ class _DraftBadge extends StatelessWidget {
         border: Border.all(color: const Color(0x2ED3B064)),
       ),
       child: Text(
-        'Draft',
+        context.pwaL10n.draftBadge,
         style: av7Sans(
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -819,7 +820,7 @@ class _CardMenu extends ConsumerWidget {
         backgroundColor: av7CardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text(
-          'Rename project',
+          context.pwaL10n.renameProject,
           style: av7Sans(fontSize: 18, color: av7OnDark),
         ),
         content: TextField(
@@ -845,7 +846,7 @@ class _CardMenu extends ConsumerWidget {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
-              'Cancel',
+              context.pwaL10n.cancel,
               style: av7Sans(fontSize: 14, color: av7Muted),
             ),
           ),
@@ -856,7 +857,7 @@ class _CardMenu extends ConsumerWidget {
               Navigator.of(ctx).pop();
             },
             child: Text(
-              'Save',
+              context.pwaL10n.save,
               style: av7Sans(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -879,19 +880,18 @@ class _CardMenu extends ConsumerWidget {
         backgroundColor: av7CardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text(
-          'Delete project?',
+          context.pwaL10n.deleteProjectTitle,
           style: av7Sans(fontSize: 18, color: av7OnDark),
         ),
         content: Text(
-          'This removes “${project.title}” and its visions from your library. '
-          'This cannot be undone.',
+          context.pwaL10n.deleteProjectBody(project.title),
           style: av7Sans(fontSize: 14, color: av7OnDarkSoft, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
-              'Cancel',
+              context.pwaL10n.cancel,
               style: av7Sans(fontSize: 14, color: av7Muted),
             ),
           ),
@@ -902,7 +902,7 @@ class _CardMenu extends ConsumerWidget {
               Navigator.of(ctx).pop();
             },
             child: Text(
-              'Delete',
+              context.pwaL10n.delete,
               style: av7Sans(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -939,18 +939,18 @@ class _CardMenu extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 6),
-            _sheetTile(ctx, Icons.edit_outlined, 'Rename', _CardAction.rename),
+            _sheetTile(ctx, Icons.edit_outlined, context.pwaL10n.rename, _CardAction.rename),
             if (!renameOnly) ...[
               _sheetTile(
                 ctx,
                 Icons.copy_all_outlined,
-                'Duplicate',
+                context.pwaL10n.duplicate,
                 _CardAction.duplicate,
               ),
               _sheetTile(
                 ctx,
                 Icons.delete_outline_rounded,
-                'Delete',
+                context.pwaL10n.delete,
                 _CardAction.delete,
                 danger: true,
               ),
@@ -999,7 +999,7 @@ class _CardMenu extends ConsumerWidget {
     if (mobile) {
       return Semantics(
         button: true,
-        label: 'Project options',
+        label: context.pwaL10n.projectOptions,
         child: Material(
           color: Colors.transparent,
           shape: const CircleBorder(),
@@ -1018,22 +1018,22 @@ class _CardMenu extends ConsumerWidget {
       duration: const Duration(milliseconds: 200),
       child: PopupMenuButton<_CardAction>(
         key: ValueKey('project-menu-${project.projectId}'),
-        tooltip: 'Project options',
+        tooltip: context.pwaL10n.projectOptions,
         color: av7CardDark,
         padding: EdgeInsets.zero,
         onSelected: (a) => _run(context, ref, a),
         itemBuilder: (ctx) => [
-          _menuItem(_CardAction.rename, Icons.edit_outlined, 'Rename'),
+          _menuItem(_CardAction.rename, Icons.edit_outlined, context.pwaL10n.rename),
           if (!renameOnly) ...[
             _menuItem(
               _CardAction.duplicate,
               Icons.copy_all_outlined,
-              'Duplicate',
+              context.pwaL10n.duplicate,
             ),
             _menuItem(
               _CardAction.delete,
               Icons.delete_outline_rounded,
-              'Delete',
+              context.pwaL10n.delete,
               danger: true,
             ),
           ],
@@ -1085,7 +1085,7 @@ class _EmptyState extends StatelessWidget {
           const PwaLogoBadge(size: 56),
           const SizedBox(height: 24),
           Text(
-            'Your next space starts here.',
+            context.pwaL10n.yourNextSpace,
             textAlign: TextAlign.center,
             style: av7Sans(
               fontSize: 24,
@@ -1096,7 +1096,7 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'Upload a photo and create your first vision with Ayden.',
+            context.pwaL10n.uploadAndCreate,
             textAlign: TextAlign.center,
             style: av7Sans(fontSize: 15, color: av7OnDarkSoft, height: 1.45),
           ),
@@ -1128,7 +1128,7 @@ class _SearchEmptyState extends StatelessWidget {
       child: Column(
         children: [
           Text(
-            'No matching projects',
+            context.pwaL10n.noMatchingProjects,
             textAlign: TextAlign.center,
             style: av7Sans(
               fontSize: 22,
@@ -1138,7 +1138,7 @@ class _SearchEmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            'Try another room, atmosphere, or project name.',
+            context.pwaL10n.tryAnotherRoom,
             textAlign: TextAlign.center,
             style: av7Sans(fontSize: 15, color: av7OnDarkSoft, height: 1.45),
           ),
@@ -1164,10 +1164,10 @@ class _SearchContext extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final prefix = count == 0
-        ? 'No projects found for '
+        ? context.pwaL10n.noProjectsFoundFor
         : count == 1
-        ? '1 project found for '
-        : '$count projects found for ';
+        ? context.pwaL10n.oneProjectFoundFor
+        : context.pwaL10n.nProjectsFoundFor(count);
     return Row(
       key: const ValueKey('pwa-search-context'),
       children: [
@@ -1207,7 +1207,7 @@ class _ClearSearchButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Clear search',
+      label: context.pwaL10n.clearSearch,
       child: Material(
         color: filled ? const Color(0x1FD3B064) : Colors.transparent,
         borderRadius: BorderRadius.circular(999),
@@ -1220,7 +1220,7 @@ class _ClearSearchButton extends StatelessWidget {
             alignment: Alignment.center,
             padding: EdgeInsets.symmetric(horizontal: filled ? 18 : 10),
             child: Text(
-              'Clear search',
+              context.pwaL10n.clearSearch,
               style: av7Sans(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -1337,7 +1337,7 @@ class _DraftProjectCardState extends State<_DraftProjectCard> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Draft · Continue setup',
+                  context.pwaL10n.draftContinueSetup,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: av7Sans(fontSize: 12.5, color: av7Muted),
@@ -1354,7 +1354,7 @@ class _DraftProjectCardState extends State<_DraftProjectCard> {
       onExit: (_) => setState(() => _hover = false),
       child: Semantics(
         button: true,
-        label: 'Continue setup',
+        label: context.pwaL10n.continueSetup,
         child: Material(
           color: Colors.transparent,
           child: InkWell(

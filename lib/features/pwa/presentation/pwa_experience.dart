@@ -24,6 +24,7 @@ import 'pwa_projects_screen.dart';
 import 'pwa_first_reveal_screen.dart';
 import 'pwa_reveal_screen.dart';
 import 'pwa_widgets.dart';
+import '../l10n/pwa_l10n.dart';
 
 class PwaExperience extends ConsumerWidget {
   const PwaExperience({super.key});
@@ -61,10 +62,20 @@ class _PwaGenerationErrorBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final message = ref.watch(
+    final fallback = ref.watch(
       pwaControllerProvider.select((s) => s.generationError),
     );
-    if (message == null) return const SizedBox.shrink();
+    if (fallback == null) return const SizedBox.shrink();
+    // The CODE is what is rendered; the English sentence the controller wrote
+    // is the fallback for a code this build does not know. Translating here
+    // rather than where the failure happened is what lets the banner follow a
+    // language change that occurs while it is on screen.
+    final code = ref.watch(
+      pwaControllerProvider.select((s) => s.generationErrorCode),
+    );
+    final message = code == null || code.isEmpty
+        ? fallback
+        : context.pwaL10n.errorForCode(code);
     final retryable = ref.watch(
       pwaControllerProvider.select((s) => s.generationRetryable),
     );
@@ -98,12 +109,12 @@ class _PwaGenerationErrorBar extends ConsumerWidget {
                 TextButton(
                   key: const ValueKey('pwa-generation-retry'),
                   onPressed: controller.retryGeneration,
-                  child: const Text('Try again'),
+                  child: Text(context.pwaL10n.retry),
                 ),
               IconButton(
                 key: const ValueKey('pwa-generation-error-dismiss'),
                 icon: const Icon(Icons.close_rounded, size: 18),
-                tooltip: 'Dismiss',
+                tooltip: context.pwaL10n.dismiss,
                 onPressed: controller.clearGenerationError,
               ),
             ],

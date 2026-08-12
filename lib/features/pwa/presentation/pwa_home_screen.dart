@@ -23,15 +23,25 @@ import '../application/pwa_controller.dart';
 import '../application/pwa_intro_gate.dart';
 import '../domain/pwa_models.dart';
 import '../domain/pwa_project.dart';
+import '../l10n/pwa_l10n.dart';
 import 'hero/pwa_hero_sequence.dart';
 import 'hero/pwa_hero_video.dart';
 import 'pwa_architect_tokens.dart';
 import 'pwa_brand.dart';
+import 'pwa_language_switcher.dart';
 import 'pwa_stored_image.dart';
 import 'pwa_theme.dart';
 
 /// A generic label the repository returns when no room was ever chosen. It
 /// states nothing, so it is never shown.
+///
+/// NOT a presentation string, and therefore NOT translated: it is a SENTINEL
+/// that is compared against STORED data (rows written before a room was
+/// resolved carry exactly this text). Localising it would make every such
+/// comparison fail in Khmer and French, and the placeholder would start being
+/// displayed in precisely the two languages nobody looks at first. What a
+/// person sees when the room is unknown is `PwaL10n.yourSpaceFallback`, which
+/// IS translated.
 const String kPwaGenericRoomLabel = 'Your space';
 
 /// How many projects the dashboard offers before sending the user to the full
@@ -257,9 +267,11 @@ class _HomeBar extends StatelessWidget {
               ),
             ),
           ),
+          const PwaLanguageSwitcher(onDark: true, compact: true),
+          const SizedBox(width: 10),
           _BarAction(
             icon: Icons.grid_view_rounded,
-            label: 'My Projects',
+            label: context.pwaL10n.myProjects,
             showLabel: !mobile,
             onTap: onProjects,
           ),
@@ -346,9 +358,9 @@ class _NewProjectButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'New Project',
+      label: context.pwaL10n.newProjectAction,
       child: Tooltip(
-        message: 'New Project',
+        message: context.pwaL10n.newProjectAction,
         child: Material(
           color: av7Gold,
           borderRadius: BorderRadius.circular(999),
@@ -371,12 +383,20 @@ class _NewProjectButton extends StatelessWidget {
                   ),
                   if (!compact || large) ...[
                     const SizedBox(width: 8),
-                    Text(
-                      'New Project',
-                      style: av7Sans(
-                        fontSize: large ? 15 : 13.5,
-                        fontWeight: FontWeight.w700,
-                        color: av7DarkBg,
+                    Flexible(
+                      child: Text(
+                        context.pwaL10n.newProjectAction,
+                        // Text expansion: "Nouveau projet" and គម្រោង​ថ្មី are
+                        // both wider than "New Project". Flexible + ellipsis
+                        // keeps the pill from overflowing its row instead of
+                        // shortening the meaning to fit the geometry.
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: av7Sans(
+                          fontSize: large ? 15 : 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: av7DarkBg,
+                        ),
                       ),
                     ),
                   ],
@@ -465,7 +485,7 @@ class _HomeHero extends StatelessWidget {
                       TextSpan(
                         children: [
                           TextSpan(
-                            text: 'Your home. ',
+                            text: context.pwaL10n.heroLead,
                             style: pwaDisplay(
                               fontSize: mobile ? 30 : 46,
                               color: pwaOnDark,
@@ -473,7 +493,7 @@ class _HomeHero extends StatelessWidget {
                             ),
                           ),
                           TextSpan(
-                            text: 'Reimagined.',
+                            text: context.pwaL10n.heroAccent,
                             style: pwaDisplay(
                               fontSize: mobile ? 30 : 46,
                               color: pwaGold,
@@ -485,7 +505,7 @@ class _HomeHero extends StatelessWidget {
                     ),
                     SizedBox(height: mobile ? 10 : 14),
                     Text(
-                      'Turn any room into a vision,\nin the blink of an eye.',
+                      context.pwaL10n.heroSub,
                       style: pwaSans(
                         fontSize: mobile ? 13.5 : 15.5,
                         color: pwaOnDark.withValues(alpha: 0.82),
@@ -504,7 +524,7 @@ class _HomeHero extends StatelessWidget {
                           buttonKey: const ValueKey('pwa-hero-new-project'),
                         ),
                         _GhostCta(
-                          label: 'See how it works',
+                          label: context.pwaL10n.seeHowItWorks,
                           onTap: onHowItWorks,
                         ),
                       ],
@@ -591,14 +611,14 @@ class _ContinueDesigning extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'CONTINUE DESIGNING',
+                    context.pwaL10n.continueDesigningEyebrow,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: av7Eyebrow(fontSize: 11, letterSpacing: 2.2),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Pick up where you left off.',
+                    context.pwaL10n.pickUpWhereYouLeftOff,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: av7Sans(
@@ -613,7 +633,7 @@ class _ContinueDesigning extends StatelessWidget {
             const SizedBox(width: 12),
             Semantics(
               button: true,
-              label: 'View all projects',
+              label: context.pwaL10n.viewAllProjects,
               child: Material(
                 color: Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
@@ -627,7 +647,9 @@ class _ContinueDesigning extends StatelessWidget {
                       vertical: 6,
                     ),
                     child: Text(
-                      mobile ? 'All' : 'View all projects',
+                      mobile
+                          ? context.pwaL10n.filterAll
+                          : context.pwaL10n.viewAllProjects,
                       maxLines: 1,
                       style: av7Sans(
                         fontSize: 13,
@@ -710,12 +732,12 @@ class _ProjectCard extends StatelessWidget {
     final n = project.visions.length;
     final meta = <String>[
       if (project.atmosphereLabel.isNotEmpty) project.atmosphereLabel,
-      '$n ${n == 1 ? 'Vision' : 'Visions'}',
+      context.pwaL10n.visionCount(n),
     ].join('  ·  ');
 
     return Semantics(
       button: true,
-      label: 'Open ${project.title}',
+      label: context.pwaL10n.openNamed(project.title),
       child: Material(
         color: av7Reveal,
         borderRadius: BorderRadius.circular(16),
@@ -821,8 +843,8 @@ class _NewProjectBlock extends StatelessWidget {
         children: [
           Text(
             firstProject
-                ? 'Create your first vision'
-                : 'Ready to imagine something new?',
+                ? context.pwaL10n.createFirstVisionTitle
+                : context.pwaL10n.readyToImagine,
             textAlign: TextAlign.center,
             style: av7Sans(
               fontSize: mobile ? 19 : 23,
@@ -833,8 +855,8 @@ class _NewProjectBlock extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             firstProject
-                ? 'One photo is all Ayden needs to reimagine your space.'
-                : 'Start a new project.',
+                ? context.pwaL10n.onePhotoIsAll
+                : context.pwaL10n.startANewProject,
             textAlign: TextAlign.center,
             style: av7Sans(fontSize: 14, color: av7OnDarkSoft, height: 1.45),
           ),

@@ -13,6 +13,8 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/widgets.dart' show Locale;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -29,6 +31,8 @@ import '../data/pwa_repository_error.dart';
 import '../domain/pwa_models.dart';
 import '../domain/pwa_project.dart';
 import 'pwa_route.dart';
+import '../l10n/pwa_l10n.dart';
+import '../../../core/providers/locale_provider.dart';
 
 /// `entry` is the CREATE session (`/create`); `home` is the dashboard (`/`).
 enum PwaPhase { home, entry, loading, architect, firstReveal, reveal, projects }
@@ -86,6 +90,9 @@ final pwaControllerProvider = StateNotifierProvider<PwaController, PwaState>((
     persistence: ref.watch(pwaPersistenceProvider),
     pending: ref.watch(pwaPendingGenerationStoreProvider),
     restore: ref.watch(pwaBootRestoreProvider),
+    // READ, not watch: the controller must not be rebuilt (and the whole
+    // conversation lost) because someone changed the interface language.
+    localeCode: () => ref.read(localeProvider).languageCode,
   );
 });
 
@@ -318,6 +325,7 @@ class PwaState {
     this.activeTitleOverride,
     this.refineContextVisionId,
     this.generationError,
+    this.generationErrorCode,
     this.generationRetryable = false,
   });
 
@@ -376,6 +384,16 @@ class PwaState {
   /// last attempt succeeded. A generation that fails produces this and nothing
   /// else: no vision, no cover, no fixture standing in for a render.
   final String? generationError;
+
+  /// The SEMANTIC code behind [generationError].
+  ///
+  /// [generationError] is English and is written when the failure happens;
+  /// this is what the UI actually renders, through
+  /// `PwaL10n.errorForCode`. Keeping both means a person who switches
+  /// language while an error is on screen sees it change with them, and a
+  /// code this build has never heard of still shows the English sentence
+  /// rather than nothing at all.
+  final String? generationErrorCode;
 
   /// Whether that failure is worth retrying (a timeout, an unreachable backend)
   /// as opposed to terminal (an expired session, a forbidden project).
@@ -559,6 +577,7 @@ class PwaState {
     String? refineContextVisionId,
     bool clearRefineContext = false,
     String? generationError,
+    String? generationErrorCode,
     bool? generationRetryable,
     bool clearGenerationError = false,
   }) {
@@ -596,6 +615,9 @@ class PwaState {
       refineContextVisionId: clearRefineContext
           ? null
           : (refineContextVisionId ?? this.refineContextVisionId),
+      generationErrorCode: clearGenerationError
+          ? null
+          : (generationErrorCode ?? this.generationErrorCode),
       generationError: clearGenerationError
           ? null
           : (generationError ?? this.generationError),
@@ -607,15 +629,35 @@ class PwaState {
 }
 
 class PwaController extends StateNotifier<PwaState> {
+
+  /// How this controller learns the current language.
+  ///
+  /// A `StateNotifier` has neither a BuildContext nor a `ref`, and giving it a
+  /// second copy of the copy would be exactly the duplication the l10n layer
+  /// exists to prevent. So the PROVIDER injects a reader over the SAME
+  /// `localeProvider` the app root watches, and a chip written here is always
+  /// the same language as a label written in a widget.
+  ///
+  /// The default is English, which is what a directly-constructed controller
+  /// (every existing test) got before this parameter existed — so no test had
+  /// to change and none silently started depending on a locale.
+  final String Function() _localeCode;
+
+  static String _englishOnly() => 'en';
+
+  PwaL10n get _l10n => pwaL10nFor(Locale(_localeCode()));
+
   PwaController(
     this._repo, {
     required PwaGenerationService generation,
     required PwaPendingGenerationStore pending,
     PwaPersistenceRepository? persistence,
     PwaBootRestore? restore,
+    String Function()? localeCode,
   }) : _generation = generation,
        _pending = pending,
        _persistence = persistence,
+       _localeCode = localeCode ?? _englishOnly,
        super(_initialState(_repo, restore)) {
     // The first-frame screen was already chosen from `restore` (no async
     // flash). Seed the in-memory working library so My Projects + open/duplicate
@@ -938,6 +980,10 @@ class PwaController extends StateNotifier<PwaState> {
           parentVisionId: p.parentVisionId,
           userInstruction: p.userInstruction,
           confirm: p.confirm,
+          // Carried for the advisor's reply, which is conversational text.
+          // The generation prompt itself is composed server-side and never
+          // sees this value.
+          uiLocale: _localeCode(),
         ),
       );
     } on PwaGenerationProcessing catch (held) {
@@ -1179,6 +1225,7 @@ class PwaController extends StateNotifier<PwaState> {
                 if (m.id != removeMessageId) m,
             ],
       generationError: f.userMessage,
+      generationErrorCode: f.code,
       generationRetryable: f.retryable,
     );
     final p = await _pending.read();
@@ -1415,11 +1462,11 @@ class PwaController extends StateNotifier<PwaState> {
       kind: PwaMessageKind.reveal,
       text: _repo.firstVisionIntro(),
       visionId: v1.versionId,
-      chips: const [
-        'What do you think?',
-        'Make it warmer',
-        'More natural light',
-        'Open the kitchen',
+      chips: [
+        _l10n.chipWhatDoYouThink,
+        _l10n.chipWarmer,
+        _l10n.chipMoreLight,
+        _l10n.chipOpenKitchen,
       ],
     );
     await _settleFirstVision(v1, intro, chosen.id);
@@ -1461,6 +1508,7 @@ class PwaController extends StateNotifier<PwaState> {
         librarySearch: state.librarySearch,
         saveState: PwaSaveState.error,
         generationError: 'Your vision could not be saved. Try again.',
+        generationErrorCode: 'SAVE_FAILED',
         generationRetryable: true,
       );
       return;
@@ -1518,7 +1566,7 @@ class PwaController extends StateNotifier<PwaState> {
       id: _nextId('m'),
       role: PwaRole.user,
       kind: PwaMessageKind.text,
-      text: 'Switch to ${atmo.name}',
+      text: _l10n.switchTo(atmo.name),
     );
     final loadingMsg = PwaMessage(
       id: _nextId('m'),
@@ -1642,9 +1690,21 @@ class PwaController extends StateNotifier<PwaState> {
       clearGenerationError: true,
     );
 
+    // §23 — the ONE language signal, through the canonical mechanism.
+    //
+    // The adapter forwards `ui_locale` to `main.chat`, which is the SAME
+    // function the mobile route calls and which localizes Ayden's reply with
+    // `localize_reply`. There is no second translation pass here and none is
+    // wanted: the conversational answer comes back in the user's language
+    // because the canonical turn was told what it is.
+    //
+    // This changes what Ayden SAYS. It does not change what Ayden DRAWS: the
+    // image prompt is composed server-side by the frozen composer, in English,
+    // from structured facts — the locale never reaches it.
     final turn = await _generation.chat(
       projectId: state.project.projectId,
       message: text,
+      uiLocale: _localeCode(),
     );
     if (!mounted) return;
     state = state.copyWith(
@@ -1671,10 +1731,12 @@ class PwaController extends StateNotifier<PwaState> {
           id: _nextId('m'),
           role: PwaRole.ayden,
           kind: PwaMessageKind.text,
-          text: reply.isEmpty
-              ? "I didn't catch a change to make there — tell me what you'd "
-                    "like different and I'll take care of it."
-              : reply,
+          // `reply` is Ayden's OWN answer and is already in the user's
+          // language: the adapter forwards `ui_locale` to the canonical chat
+          // turn, which localizes it through `localize_reply`. Only the
+          // UI-owned fallback — shown when the canonical turn said nothing at
+          // all — is translated here.
+          text: reply.isEmpty ? _l10n.noChangeUnderstood : reply,
           chips: turn.suggestions,
         ),
       ],
@@ -1781,7 +1843,7 @@ class PwaController extends StateNotifier<PwaState> {
             text: raised.advisory.message,
             pendingRefine: instruction,
             advisoryVerdict: raised.advisory.verdict,
-            chips: const ['Continue anyway'],
+            chips: [_l10n.continueAnyway],
           ),
         ],
       );

@@ -20,6 +20,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../domain/pwa_models.dart' show PwaWorkKind;
+import '../l10n/pwa_l10n.dart';
 import 'pwa_widgets.dart';
 
 /// The qualitative phases shown while a vision is produced.
@@ -61,17 +62,34 @@ const List<String> kPwaConversationPhases = ['Thinking'];
 /// A switch is the one case where the first line can name what is being waited
 /// for, and that is the difference between "something is happening" and "my
 /// request was understood".
-List<String> pwaWorkingPhasesFor(PwaWorkKind kind, [String subject = '']) {
+/// [l10n] is optional and defaults to the English constants above.
+///
+/// That default is not laziness: those constants ARE the English wording, the
+/// existing behavioural tests assert against them by identity, and a wait must
+/// still read correctly if this is ever called with no dictionary to hand. When
+/// one IS available — which is every real render, from the architect screen —
+/// the phases come from it, so all three languages get the same four beats in
+/// the same order.
+List<String> pwaWorkingPhasesFor(
+  PwaWorkKind kind, [
+  String subject = '',
+  PwaL10n? l10n,
+]) {
   switch (kind) {
     case PwaWorkKind.conversation:
-      return kPwaConversationPhases;
+      return l10n == null ? kPwaConversationPhases : <String>[l10n.thinking];
     case PwaWorkKind.firstVision:
-      return kPwaFirstVisionPhases;
+      return l10n == null ? kPwaFirstVisionPhases : l10n.workInitialPhases;
     case PwaWorkKind.refine:
-      return kPwaRefinePhases;
+      return l10n == null ? kPwaRefinePhases : l10n.workRefinePhases;
     case PwaWorkKind.switchAtmosphere:
       final name = subject.trim();
-      if (name.isEmpty) return kPwaAtmospherePhases;
+      if (name.isEmpty) {
+        return l10n == null ? kPwaAtmospherePhases : l10n.workSwitchPhases;
+      }
+      // The atmosphere NAME is a brand noun and is interpolated verbatim in
+      // every language: "Switching to Soft Luxury" / "Passage a Soft Luxury".
+      if (l10n != null) return l10n.workSwitchNamedPhases(name);
       return <String>[
         'Switching to $name',
         'Reworking the materials and atmosphere',
@@ -144,7 +162,7 @@ class _PwaWorkingIndicatorState extends State<PwaWorkingIndicator>
   @override
   Widget build(BuildContext context) {
     final label = widget.phases.isEmpty
-        ? 'Working'
+        ? context.pwaL10n.working
         : widget.phases[_phase.clamp(0, widget.phases.length - 1)];
     final fg = widget.foreground;
 

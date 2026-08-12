@@ -20,6 +20,7 @@ import '../application/pwa_controller.dart';
 import 'pwa_architect_tokens.dart';
 import 'pwa_brand.dart';
 import 'pwa_widgets.dart';
+import '../l10n/pwa_l10n.dart';
 
 class PwaFirstRevealScreen extends ConsumerWidget {
   const PwaFirstRevealScreen({super.key});
@@ -148,7 +149,7 @@ class _BrandLine extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 2),
-      Text('YOUR FIRST VISION', style: av7Eyebrow(fontSize: 8.5)),
+      Text(context.pwaL10n.yourFirstVision, style: av7Eyebrow(fontSize: 8.5)),
     ],
   );
 }
@@ -163,7 +164,7 @@ class _ContinueButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Continue with Ayden',
+      label: context.pwaL10n.continueWithAyden,
       child: Material(
         color: av7Gold,
         borderRadius: BorderRadius.circular(999),
@@ -181,7 +182,7 @@ class _ContinueButton extends StatelessWidget {
               children: [
                 Flexible(
                   child: Text(
-                    'Continue with Ayden',
+                    context.pwaL10n.continueWithAyden,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: av7Sans(
