@@ -2163,6 +2163,15 @@ async def admin_patch_promo_code(
     return updated
 
 
+def _voice_snippet(text: str, limit: int = 80) -> str:
+    """Correction Pass 2026-08-13 (3.2) — extrait TRONQUÉ de la réponse pour le log de
+    routage. La politique de log de /chat autorise déjà le texte tronqué : le handler
+    loggue le message UTILISATEUR à 120 caractères. On reste sous cette limite, sur UNE
+    ligne, et jamais sur le prompt système ni sur une URL."""
+    t = (text or "").replace(chr(10), " ").strip()
+    return t[:limit] + ("…" if len(t) > limit else "")
+
+
 async def resolve_design_ai_message(
     client,
     *,
@@ -2210,23 +2219,36 @@ async def resolve_design_ai_message(
                 _exec = None
             _ms = (time.monotonic() - _t0) * 1000.0
             if _exec and _exec.strip():
-                log.info("[AYDEN-EXEC-VOICE] enabled latency_ms=%.0f", _ms)
+                # Correction Pass 2026-08-13 (3.2) — log de ROUTAGE. Les tags existants
+                # sont ETENDUS, pas remplaces :
+                #   voice=        qui a reellement produit le texte rendu
+                #   vision_input= le render a-t-il ete JOINT a l'appel. La voix
+                #                 d'execution est text-only par construction.
+                log.info("[AYDEN-EXEC-VOICE] voice=execution_voice vision_input=false "
+                         "latency_ms=%.0f reply=%r", _ms, _voice_snippet(_exec))
                 return _exec.strip()
-            log.info("[AYDEN-EXEC-VOICE] fallback (timeout/empty/error) latency_ms=%.0f — pools", _ms)
+            log.info("[AYDEN-EXEC-VOICE] voice=fallback vision_input=false "
+                     "(timeout/empty/error) latency_ms=%.0f — pools", _ms)
         log.info(
-            "[AYDEN-VOICE] disabled (turn=%s should_generate=%s) — pools fallback",
+            "[AYDEN-VOICE] voice=fallback vision_input=false disabled (turn=%s should_generate=%s) "
+            "— pools fallback",
             getattr(turn, "value", turn), should_generate,
         )
         return await localize_reply(client, fallback_msg, ui_locale, enabled=normalize_enabled)
 
     if not designer_voice_enabled():
         log.info(
-            "[AYDEN-VOICE] disabled (flag OFF) intent=design_advice room=%s has_vision=%s — pools fallback",
+            "[AYDEN-VOICE] voice=fallback vision_input=false disabled (flag OFF) "
+            "intent=design_advice room=%s has_vision=%s — pools fallback",
             _room, has_vision,
         )
         return await localize_reply(client, fallback_msg, ui_locale, enabled=normalize_enabled)
 
-    _vision = bool(image_url and image_url.strip().startswith("http"))
+    # 2026-08-13 (3.2) — MEME regle que designer_voice.has_image : `vision_input` dit si
+    # le render a ete JOINT a l'appel, pas s'il existe (has_vision, qui vient du frontend).
+    # Les deux restent loggues cote a cote : une divergence has_vision=True /
+    # vision_input=false = URL manquante cote client.
+    _vision = "true" if (image_url and image_url.strip().startswith("http")) else "false"
     _t0 = time.monotonic()
     voice = await generate_designer_voice(
         client, message=message, room_type=room_type,
@@ -2236,14 +2258,16 @@ async def resolve_design_ai_message(
     _ms = (time.monotonic() - _t0) * 1000.0
     if voice:
         log.info(
-            "[AYDEN-VOICE] enabled intent=design_advice room=%s has_vision=%s vision_input=%s latency_ms=%.0f",
-            _room, has_vision, _vision, _ms,
+            "[AYDEN-VOICE] voice=designer_voice vision_input=%s enabled intent=design_advice "
+            "room=%s has_vision=%s latency_ms=%.0f reply=%r",
+            _vision, _room, has_vision, _ms, _voice_snippet(voice),
         )
         return voice
     log.info(
-        "[AYDEN-VOICE] enabled intent=design_advice room=%s has_vision=%s vision_input=%s latency_ms=%.0f "
-        "fallback_reason=llm_empty_or_error — pools fallback",
-        _room, has_vision, _vision, _ms,
+        "[AYDEN-VOICE] voice=fallback vision_input=%s enabled intent=design_advice room=%s "
+        "has_vision=%s latency_ms=%.0f fallback_reason=llm_empty_error_or_capability_denial "
+        "— pools fallback",
+        _vision, _room, has_vision, _ms,
     )
     return await localize_reply(client, fallback_msg, ui_locale, enabled=normalize_enabled)
 
@@ -5401,7 +5425,9 @@ async def generate(
 # Spec : docs/REFINE_ENGINE_V2.md. Réutilise l'infra partagée (openai, supa, auth,
 # storage 'generated', httpx) — aucune logique V1.
 # ═══════════════════════════════════════════════════════════════════════════════
-from refine.parser import parse_changes as _refine_parse, Change as _RefineChange
+from refine.parser import (parse_changes as _refine_parse, Change as _RefineChange,
+                           # 3.3 — lecture SEULE du chemin emprunté par le parser (log).
+                           last_parser_source as _refine_parser_source)
 from refine.advisor import advise as _refine_advise, build_advisory_message as _refine_advisory_msg
 from refine.normalizer import normalize_changes as _refine_normalize
 from refine.engine import refine_generate as _refine_generate, prepare as _refine_prepare
@@ -5581,6 +5607,15 @@ async def refine_endpoint(
     _t_parse = time.monotonic()
     changes = await _refine_parse(message, client=openai)
     _parser_ms = (time.monotonic() - _t_parse) * 1000.0
+    # Correction Pass 2026-08-13 (3.3) — observabilité parser. Lu JUSTE après l'await du
+    # parser (aucun point de suspension entre les deux → valeur de CETTE requête). Émis ICI
+    # et pas seulement dans le [PERF SUMMARY] de fin, parce que les chemins empty_request et
+    # advisory RETOURNENT avant ce résumé : sans cette ligne, les tours advisory — précisément
+    # ceux corrigés en phase 2 — restent aveugles. Log PUR : aucune branche, aucun effet.
+    _parser_src = _refine_parser_source()
+    log.info("[REFINE-PARSE] parser=%s change_count=%d types=%s parser_ms=%.0f",
+             _parser_src, len(changes), "+".join(c.type for c in changes) or "(none)",
+             _parser_ms)
     if not changes:
         return {"status": "error", "error": "empty_request",
                 "user_message": "I couldn't read a change to make — could you rephrase?"}
@@ -5709,10 +5744,11 @@ async def refine_endpoint(
     _refine_total_ms = (time.monotonic() - _handler_entry) * 1000.0
     log.info(
         "[PERF SUMMARY] request_id=%s  total_ms=%.0f  model=%s  quality=low  iteration=%d"
-        "  gen_type=refine  parser_ms=%.0f  ownership_ms=%.0f  access_resolver_ms=%.0f"
-        "  status=%s  intent=%s",
+        "  gen_type=refine  parser_ms=%.0f  parser=%s  change_count=%d  ownership_ms=%.0f"
+        "  access_resolver_ms=%.0f  status=%s  intent=%s",
         (client_request_id.strip() or _op), _refine_total_ms, IMAGE_MODEL, iteration,
-        _parser_ms, _ownership_ms, _access_resolver_ms, resp.get("status"), intent_id,
+        _parser_ms, _parser_src, len(prepared.ordered_changes), _ownership_ms,
+        _access_resolver_ms, resp.get("status"), intent_id,
     )
 
     # RUNNING (lost-claim) → statut RÉCUPÉRABLE, aucune génération, pas d'extras 'completed'.
