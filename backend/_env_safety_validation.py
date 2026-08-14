@@ -34,7 +34,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-REF_STAGING = "eedcahzekpgxvvfxufbk"
+REF_STAGING = "lpegjufuhbmwwkfnaxjh"
 REF_PRODUCTION = "vtxkciupyafukhdsgxgw"
 
 URL_STAGING = f"https://{REF_STAGING}.supabase.co"

@@ -40,7 +40,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 STAGING_ENV = HERE / '.env.mobile-staging.local'
 PRODUCTION_ENV = HERE / '.env'
 
-STAGING_REF = 'eedcahzekpgxvvfxufbk'
+STAGING_REF = 'lpegjufuhbmwwkfnaxjh'
 PRODUCTION_REF = 'vtxkciupyafukhdsgxgw'
 REQUIRED = ('SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'OPENAI_API_KEY')
 

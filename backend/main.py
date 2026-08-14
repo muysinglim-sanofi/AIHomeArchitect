@@ -781,7 +781,16 @@ _GIT_SHA = (
 # en clair dans run_pwa_staging.py). On teste la valeur RÉSOLUE de SUPABASE_URL,
 # jamais un nom de fichier : c'est ce qui rend la garde infalsifiable par un
 # .env mal nommé. Patron repris de run_pwa_staging.py (garde PWA éprouvée).
-_SUPABASE_REF_STAGING = "eedcahzekpgxvvfxufbk"
+#
+# 2026-08-14 — la cible mobile est le projet DÉDIÉ `ayden-mobile-staging`, et lui
+# seul. La valeur précédente pointait `eedcahzekpgxvvfxufbk`, le projet du staging
+# PWA : provisionné pour une autre surface, il s'est révélé structurellement
+# différent de la production mobile (sessions à 2 colonnes contre 10,
+# account_state à 5 contre 7, six tables absentes). L'accepter ici rendrait le
+# laboratoire silencieusement infidèle — précisément ce que cette garde existe
+# pour empêcher. Le staging PWA n'est donc PAS une cible mobile valide, au même
+# titre que la production : tout ce qui n'est pas la ref ci-dessous est refusé.
+_SUPABASE_REF_STAGING = "lpegjufuhbmwwkfnaxjh"
 _SUPABASE_REF_PRODUCTION = "vtxkciupyafukhdsgxgw"
 
 
