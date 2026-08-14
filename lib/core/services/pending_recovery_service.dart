@@ -86,7 +86,29 @@ class PendingRecoveryService with WidgetsBindingObserver {
       // terminal (SUCCEEDED/FAILED). Un intent RUNNING ne déclenche jamais de
       // relaunch (réservé au no-intent confirmé) → aucun double POST.
       final status = probe['status'] as String?;
-      if (status == 'RUNNING') return RecoveryAction.keepRunning;
+      if (status == 'RUNNING') {
+        // Issue 11 (2026-08-14) — ce garde-fou n'avait AUCUNE borne d'âge :
+        // `ageMs` n'était calculé que dans la branche sans-intent, plus bas. Un
+        // Intent resté RUNNING (mort dure du backend — OOM/SIGKILL, aucun
+        // handler d'exception ne tourne) ramenait donc le spinner à CHAQUE
+        // réouverture, tant que la réconciliation serveur ne passait pas — et si
+        // elle était morte elle aussi, indéfiniment.
+        //
+        // On applique la MÊME borne que la branche sans-intent : maxAgeMs. Aucun
+        // nombre inventé, et la marge est large — le serveur retire un RUNNING
+        // périmé en JOB_TIMEOUT (12 min) plus un balayage (5 min), soit ~17 min
+        // au pire, très loin des 2 h. Le client ne court donc jamais après le
+        // serveur : il ne fait filet que si la réconciliation ne vient jamais.
+        //
+        // SÛRETÉ DU RÉSULTAT : on n'arrive ici que si la sonde vient de répondre
+        // RUNNING — donc PAS SUCCEEDED. Et effacer un pending n'efface pas un
+        // résultat : l'adoption d'un SUCCEEDED passe par la sonde de session
+        // (_loadMessages) et la dérivation backend de l'accueil, exactement
+        // comme pour `clearOnly`. Un succès survenu plus tard reste adopté.
+        final runningAgeMs = nowMs - pending.createdAtMs;
+        if (runningAgeMs > maxAgeMs) return RecoveryAction.dropStale;
+        return RecoveryAction.keepRunning;
+      }
       return RecoveryAction.clearOnly; // terminal → backend gagne
     }
     final ageMs = nowMs - pending.createdAtMs;
@@ -145,7 +167,11 @@ class PendingRecoveryService with WidgetsBindingObserver {
         return; // garde-fou 1 : ne PAS clear — filet de récupération conservé
       case RecoveryAction.dropStale:
         final ageH = ((nowMs - p.createdAtMs) / 3600000).toStringAsFixed(1);
-        debugPrint('[Recovery] ${p.sessionId} age=${ageH}h > 2h, no intent → DROP (not re-launched)');
+        // Issue 11 — dropStale couvre désormais DEUX origines : aucun intent
+        // confirmé, ou un intent resté RUNNING au-delà de la borne. Le log dit
+        // laquelle, sinon il affirmerait « no intent » à tort sur le second cas.
+        final origin = probe?['status'] == 'RUNNING' ? 'stale RUNNING' : 'no intent';
+        debugPrint('[Recovery] ${p.sessionId} age=${ageH}h > 2h, $origin → DROP (not re-launched)');
         await store.clear(p.sessionId);
         return;
       case RecoveryAction.relaunch:
