@@ -566,6 +566,8 @@ from version_state import (
 )
 
 from generation_profiles import get_active_profile, list_profiles
+# Diagnostics mémoire/image — observabilité pure, désarmée en production (2026-08-14).
+import _diag_mem as _diag
 from retry_classifier import classify_for_retry, RetryVerdict
 from push_service import send_push  # Phase B — FCM push on completion
 
@@ -4719,6 +4721,17 @@ async def generate(
 
             generated_bytes = base64.b64decode(b64)
             log.info("  generated: %d bytes (%.1f KB)", len(generated_bytes), len(generated_bytes) / 1024)
+            # Diagnostic 2026-08-14 — pic mémoire du pipeline. À cet instant
+            # `b64` (la chaîne base64, ~1,33× le PNG) ET `generated_bytes` ET
+            # l'objet `response` de l'SDK sont vivants SIMULTANÉMENT.
+            _diag.mem_checkpoint(
+                "image_provider_return", route="/generate",
+                out_bytes=len(generated_bytes), b64_len=len(b64),
+            )
+            # Issue 10 — le backend reçoit-il une image réellement noire ?
+            # Mesuré AVANT toute transformation (watermark, JPEG), donc ce qui
+            # est constaté ici est bien ce que le fournisseur a renvoyé.
+            _diag.image_stats(generated_bytes, label="provider_raw", route="/generate")
             # [RETRY-PROOF] (logging-only) — which attempt succeeded. "N>1" means
             # ONE backend generation retried internally (expected); two SEPARATE
             # [RETRY-PROOF] success lines with DIFFERENT request_ids ⇒ a real
@@ -4909,6 +4922,15 @@ async def generate(
             _buf = io.BytesIO()
             _src_img.save(_buf, format="JPEG", quality=85, optimize=True, progressive=True)
             generated_bytes = _buf.getvalue()
+        # Après l'encodage : c'est l'octet qui part réellement au stockage, donc
+        # ce que l'utilisateur verra. Comparé au « provider_raw » ci-dessus, cela
+        # distingue « le fournisseur a rendu du noir » de « notre post-traitement
+        # a noirci l'image » — les deux hypothèses de l'issue 10.
+        _diag.mem_checkpoint(
+            "image_compression_done", route="/generate",
+            in_bytes=_orig_size, out_bytes=len(generated_bytes),
+        )
+        _diag.image_stats(generated_bytes, label="stored_jpeg", route="/generate")
         _compress_s = time.monotonic() - _t_compress
         _ratio = _orig_size / max(len(generated_bytes), 1)
         log.info(
