@@ -16,7 +16,7 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import Body, Depends, FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from openai import AsyncOpenAI, BadRequestError
 from supabase import create_client
 
@@ -877,6 +877,8 @@ app = FastAPI(title="AIHomeArchitect API")
 async def _generation_error_handler(_req: Request, exc: GenerationError) -> JSONResponse:
     log.warning("GenerationError  code=%s  retryable=%s  request_id=%s",
                 exc.error_code, exc.retryable, exc.request_id)
+    # Issue 13 — un GenerationError levé APRÈS le HOLD laissait le crédit retenu.
+    await _release_hold_if_pending(_req, why=f"generation_error:{exc.error_code}")
     # Wave 5.6b — best-effort server-side persistence of the failure
     # message. Mirrors the Wave 5.6 success-path persistence (frontend
     # also writes on disconnect-free path; backend write is the
@@ -914,6 +916,72 @@ async def _generation_error_handler(_req: Request, exc: GenerationError) -> JSON
             "message_persisted": message_persisted,
         },
     )
+
+
+# ── Issue 13 (2026-08-14) — un échec technique APRÈS le HOLD doit RELÂCHER ───
+#
+# LE DÉFAUT. `/generate` pose un HOLD(-1) atomique (billing.try_hold) puis
+# traverse ~2000 lignes — réservation usage_log, ownership, vision, composer,
+# OpenAI, post-traitement, upload — avant d'atteindre le terminal SUCCEEDED.
+# Le mécanisme de libération existe déjà et est correct (`_decide` : FAILED →
+# RELEASE(+1), clé idempotente `release:<intent>`), mais RIEN ne le déclenchait
+# dans cette fenêtre : le seul gestionnaire applicatif était celui de
+# GenerationError, qui persiste un message et ne relâche pas ; une exception
+# brute partait en 500 Starlette sans rien relâcher du tout. Constaté en
+# staging : deux requêtes mortes sur `usage_log` (table absente, puis violation
+# de FK) ont consommé deux crédits pour ZÉRO appel OpenAI.
+#
+# POURQUOI PAS UN try/except AUTOUR DE LA RÉGION. Il faudrait ré-indenter ~2000
+# lignes — or ce fichier porte de gros littéraux de prompt en triple guillemets,
+# que la ré-indentation modifierait. Les prompts doivent rester byte-identiques.
+# On marque donc l'intent sur `request.state`, qui traverse intact jusqu'aux
+# gestionnaires d'exception (contrairement à un ContextVar, que le
+# BaseHTTPMiddleware de Starlette ne propage pas vers l'amont).
+#
+# PÉRIMÈTRE. Marqué APRÈS l'octroi du hold, effacé APRÈS l'observation
+# SUCCEEDED : un succès déjà commité ne peut donc pas être relâché par erreur.
+# Vérifié : AUCUNE HTTPException n'est levée entre ces deux bornes, donc les
+# deux gestionnaires ci-dessous couvrent toute la fenêtre.
+_HOLD_STATE_ATTR = "ayden_hold_intent"
+
+
+async def _release_hold_if_pending(request: Request, *, why: str) -> None:
+    """Relâche le HOLD si la requête en portait un non terminalisé.
+
+    Idempotent par construction : `observe_intent_end(FAILED)` écrit une entrée
+    `release:<intent>` dans un ledger append-only avec ON CONFLICT DO NOTHING —
+    un double appel ne peut pas produire un double remboursement.
+
+    NE MASQUE JAMAIS L'ERREUR D'ORIGINE : un échec de libération est journalisé,
+    jamais levé. L'appelant relève l'exception initiale.
+    """
+    intent_id = getattr(request.state, _HOLD_STATE_ATTR, None)
+    if not intent_id:
+        return
+    setattr(request.state, _HOLD_STATE_ATTR, None)   # une seule tentative
+    try:
+        await observe_intent_end(
+            intent_id, "FAILED",
+            error={"error_code": "TECHNICAL_FAILURE", "reason": why}, supa=supa)
+        log.info("[ISSUE13] hold released — intent=%s reason=%s", intent_id, why)
+    except Exception as exc:  # noqa: BLE001 — best-effort, jamais fatal
+        log.error("[ISSUE13] hold release FAILED — intent=%s reason=%s err=%s: %s",
+                  intent_id, why, type(exc).__name__, str(exc)[:200])
+
+
+@app.exception_handler(Exception)
+async def _unhandled_error_handler(request: Request, exc: Exception):
+    """Filet pour les exceptions BRUTES (postgrest, httpx, TypeError…).
+
+    Réponse volontairement IDENTIQUE au défaut Starlette (texte brut, 500) :
+    ce handler existe pour relâcher le hold, pas pour changer le contrat HTTP
+    des clients existants. `Exception` seulement — KeyboardInterrupt et
+    SystemExit dérivent de BaseException et ne sont donc jamais avalés.
+    """
+    await _release_hold_if_pending(request, why="unhandled_exception")
+    log.error("[ISSUE13] unhandled %s on %s: %s",
+              type(exc).__name__, request.url.path, str(exc)[:300])
+    return PlainTextResponse("Internal Server Error", status_code=500)
 
 
 app.add_middleware(
@@ -3224,6 +3292,10 @@ async def generate(
             },
         )
 
+    # Issue 13 — HOLD acquis : à partir d'ici, toute sortie non terminalisée doit
+    # relâcher. Effacé après l'observation SUCCEEDED (voir plus bas).
+    setattr(request.state, _HOLD_STATE_ATTR, _intent.id)
+
     # ── Wave 5.17b — Reserve quota slot BEFORE the OpenAI call ──────────────
     # INSERTs a 'in_progress' usage_log row. Counts immediately against the
     # user's quota — closes the parallel-request race. Confirmed on OpenAI
@@ -5247,6 +5319,8 @@ async def generate(
     # succès normal, sans savoir qu'il y a eu replay. Best-effort ; ne bloque pas
     # la réponse. (Un intent réparé par PR4 n'aura pas ce payload → le replay
     # bascule alors en 202 côté claim, jamais un JSON simplifié inventé.)
+    # Issue 13 — succès commité : le hold ne doit plus jamais être relâché.
+    setattr(request.state, _HOLD_STATE_ATTR, None)
     await observe_intent_end(_intent.id, "SUCCEEDED", result_ref=payload,
                              is_free=_decision.consumes_free_quota)
 
