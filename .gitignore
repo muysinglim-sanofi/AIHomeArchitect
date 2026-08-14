@@ -41,3 +41,7 @@ node_modules/
 
 # Backend runtime logs (1GB+) — never commit
 backend/logs/
+
+# Artefacts de base locale (dumps de schema, inventaires, rapports de parite).
+# Repertoire CIBLE uniquement : les migrations SQL suivies restent suivies.
+backend/.local-db/
