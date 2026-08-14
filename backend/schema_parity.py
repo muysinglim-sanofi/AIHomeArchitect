@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import re
 import sys
 
 import psycopg
@@ -97,6 +98,21 @@ def read_env(path: pathlib.Path, key: str) -> str:
     return ""
 
 
+# PostgreSQL nomme les contraintes NOT NULL implicites `<oid_schema>_<oid_table>_<n>_not_null`.
+# L'OID de table diffère par construction entre deux bases : comparer ces noms ferait
+# crier 224 différences là où les clauses sont rigoureusement identiques. On neutralise
+# donc le NOM de ces contraintes-là — et d'elles seules — en gardant la clause, qui est
+# la seule chose porteuse de sens. Une contrainte NOMMÉE par un humain reste comparée
+# sur son nom, car un renommage y serait une vraie divergence.
+_AUTO_NOT_NULL = re.compile(r"^\d+_\d+_\d+_not_null$")
+
+
+def _normalise(group: str, row: tuple) -> tuple:
+    if group == "constraints" and _AUTO_NOT_NULL.match(str(row[2])):
+        return (row[0], row[1], "<not_null_auto>", row[3])
+    return row
+
+
 def snapshot(url: str, label: str) -> dict:
     """Lit les catalogues. Connexion FORCÉE en lecture seule."""
     out: dict[str, list] = {}
@@ -117,7 +133,8 @@ def compare(prod: dict, target: dict) -> int:
     print("PARITÉ  —  PROD  vs  CIBLE")
     print("=" * 78)
     for group in QUERIES:
-        p, t = set(prod[group]), set(target[group])
+        p = {_normalise(group, r) for r in prod[group]}
+        t = {_normalise(group, r) for r in target[group]}
         only_prod, only_target = sorted(p - t), sorted(t - p)
         if not only_prod and not only_target:
             print(f"  {group:<14} MATCH        ({len(p)} objets)")
