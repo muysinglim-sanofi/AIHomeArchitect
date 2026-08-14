@@ -328,13 +328,24 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
     atmosphere with confidence + a one-phrase reason (drives image-driven Surprise
     Me). Reused by both consumers so there is a single vision call. All fields
     default empty / 'low' on any failure (callers fall back)."""
-    out = {"room": "", "atmosphere": "", "confidence": "low", "reason": ""}
+    out = {"room": "", "atmosphere": "", "confidence": "low", "reason": "",
+           # Lot B (2026-08-13) — canal d'état. Défaut "finished" = comportement
+           # d'aujourd'hui sur TOUS les chemins (échec, parsing raté, champ absent,
+           # valeur inconnue, confiance 'low', flag OFF).
+           "build_state": "finished"}
     # AYDEN_UNIFIED_VISION (default OFF): when ON, this SAME single vision pass also
     # classifies EXTERIOR spaces (no 2nd call, no pre-classifier). When OFF,
     # _prompt_text + _room_filter are byte-identical to the original interior-only
     # classifier (the else branch below is the verbatim original prompt).
     _unified = os.environ.get("AYDEN_UNIFIED_VISION", "0") == "1"
     _room_filter = (_INTERIOR_ROOMS | _EXTERIOR_ROOMS) if _unified else _INTERIOR_ROOMS
+    # Lot B (2026-08-13) — flag AYDEN_UNFINISHED_FACADE_COMPLETION, défaut OFF,
+    # DÉLIBÉRÉMENT hors de _BENCHED_DEFAULT_ON. ON ⇒ ce MÊME appel (zéro appel
+    # réseau supplémentaire) rend un 5ᵉ champ build_state. Couplé à _unified :
+    # sans le vocabulaire extérieur, room ne peut jamais valoir "facade" et le
+    # champ serait mort → le prompt legacy 4 champs reste byte-identique lui aussi.
+    _completion = _unified and os.environ.get(
+        "AYDEN_UNFINISHED_FACADE_COMPLETION", "0") == "1"
     if _unified:
         _prompt_text = (
             "Analyse this space (interior OR exterior). Reply with EXACTLY four "
@@ -373,6 +384,36 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
             "Example: terrace | tropical_escape | high | paved outdoor "
             "living area with greenery"
         )
+        if _completion:
+            # Le 5ᵉ champ est DÉRIVÉ du littéral 4 champs ci-dessus par substitutions
+            # ciblées (jamais un second littéral dupliqué) : le prompt flag-OFF reste
+            # donc littéralement le même objet, et une future retouche du prompt de
+            # base ne peut pas diverger silencieusement de la variante gatée.
+            # §5.2 — définition opérationnelle STRICTE : le style ne prouve RIEN,
+            # il faut un faisceau de preuves de chantier ; doute ⇒ finished.
+            _prompt_text = (
+                _prompt_text
+                .replace("EXACTLY four fields", "EXACTLY five fields", 1)
+                .replace(
+                    "room_type | recommended_atmosphere | confidence | reason\n",
+                    "room_type | recommended_atmosphere | confidence | reason | "
+                    "build_state\n", 1)
+                .replace(
+                    "- reason: a short phrase (max ~8 words).\n",
+                    "- reason: a short phrase (max ~8 words).\n"
+                    "- build_state: finished or unfinished — the CONSTRUCTION state "
+                    "of the building, never its style. Answer 'unfinished' ONLY on "
+                    "clear building-site evidence: window or door openings with NO "
+                    "glazing at all, missing or incomplete frames, an open unclosed "
+                    "garage opening, raw unrendered blockwork or masonry left "
+                    "mid-work, scaffolding or visible site works, or finish elements "
+                    "manifestly still missing. Deliberate architecture is NOT "
+                    "unfinished: exposed raw concrete, brutalism, mineral or japandi "
+                    "minimalism, a plain minimal facade, and dark openings caused by "
+                    "backlight, tinted glass or reflection are NOT evidence. If in "
+                    "doubt, answer finished.\n", 1)
+                + " | finished"
+            )
     else:
         _prompt_text = (
             "Analyse this interior. Reply with EXACTLY four fields "
@@ -416,7 +457,10 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
                     {"type": "text", "text": _prompt_text},
                 ],
             }],
-            max_tokens=40,
+            # Lot B — un 5ᵉ champ tronquerait la réponse à 40 tokens (la réponse
+            # nominale en consomme déjà ~20-30 avec `reason`). +16 UNIQUEMENT sur la
+            # branche flag-ON ; la branche OFF garde 40, inchangé.
+            max_tokens=56 if _completion else 40,
             **_det_kw,
         )
         raw = (resp.choices[0].message.content or "").strip()
@@ -431,6 +475,16 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
             out["confidence"] = parts[2] if parts[2] in ("high", "medium", "low") else "low"
         if len(parts) >= 4:
             out["reason"] = parts[3][:60]
+        # Lot B — 5ᵉ champ, parsé EN MIROIR des quatre autres (whitelist stricte,
+        # tout le reste → "finished"). Deux fail-safes cumulés : champ absent /
+        # valeur inconnue, et confiance 'low' (un état de chantier lu par un
+        # classifieur peu sûr est le faux positif le plus coûteux — le modèle
+        # recevrait l'ordre de vitrer un bâtiment terminé).
+        if _completion:
+            if len(parts) >= 5 and parts[4] == "unfinished":
+                out["build_state"] = "unfinished"
+            if out["confidence"] == "low":
+                out["build_state"] = "finished"
         log.info("  [AydenVision] raw=%r → %r", raw, out)
         log.info("  [AydenVision] classifier=%s  room=%s  atmosphere=%s  confidence=%s",
                  "unified" if _unified else "legacy",
@@ -439,6 +493,11 @@ async def _classify_ayden(image_bytes: bytes) -> dict:
                  "0" if _vd else "default", "42" if _vd else "none",
                  hashlib.sha1(_prompt_text.encode()).hexdigest()[:12],
                  hashlib.sha256(image_bytes).hexdigest()[:16])
+        # Ligne SÉPARÉE et gatée : flag OFF ⇒ la trace est byte-identique à
+        # aujourd'hui (le prompt_hash ci-dessus reste le canari de non-régression).
+        if _completion:
+            log.info("  [AydenVision] build_state=%s  (AYDEN_UNFINISHED_FACADE_COMPLETION=1)",
+                     out["build_state"])
     except Exception as exc:
         log.warning("  [AydenVision] classify failed (non-fatal): %s: %s",
                     type(exc).__name__, exc)
@@ -2015,6 +2074,15 @@ async def admin_patch_promo_code(
     return updated
 
 
+def _voice_snippet(text: str, limit: int = 80) -> str:
+    """Correction Pass 2026-08-13 (3.2) — extrait TRONQUÉ de la réponse pour le log de
+    routage. La politique de log de /chat autorise déjà le texte tronqué : le handler
+    loggue le message UTILISATEUR à 120 caractères (main.py:2133). On reste sous cette
+    limite, sur UNE ligne, et jamais sur le prompt système ni sur une URL."""
+    t = (text or "").replace("\n", " ").strip()
+    return t[:limit] + ("…" if len(t) > limit else "")
+
+
 async def resolve_design_ai_message(
     client,
     *,
@@ -2061,24 +2129,41 @@ async def resolve_design_ai_message(
             except Exception:  # noqa: BLE001 — TimeoutError inclus → fallback pool
                 _exec = None
             _ms = (time.monotonic() - _t0) * 1000.0
+            # Correction Pass 2026-08-13 (3.2) — log de ROUTAGE. Les tags existants
+            # ([AYDEN-VOICE] / [AYDEN-EXEC-VOICE]) sont ÉTENDUS, pas remplacés :
+            #   voice=        qui a réellement produit le texte rendu
+            #                 (designer_voice | execution_voice | fallback)
+            #   vision_input= le render a-t-il réellement été JOINT à l'appel qui a
+            #                 produit ce texte. La voix d'exécution est text-only par
+            #                 construction (designer_voice.py:143-171) et le pool ne
+            #                 voit rien → false sur ces deux chemins, toujours.
             if _exec and _exec.strip():
-                log.info("[AYDEN-EXEC-VOICE] enabled latency_ms=%.0f", _ms)
+                log.info("[AYDEN-EXEC-VOICE] voice=execution_voice vision_input=false "
+                         "latency_ms=%.0f reply=%r", _ms, _voice_snippet(_exec))
                 return _exec.strip()
-            log.info("[AYDEN-EXEC-VOICE] fallback (timeout/empty/error) latency_ms=%.0f — pools", _ms)
+            log.info("[AYDEN-EXEC-VOICE] voice=fallback vision_input=false "
+                     "(timeout/empty/error) latency_ms=%.0f — pools", _ms)
         log.info(
-            "[AYDEN-VOICE] disabled (turn=%s should_generate=%s) — pools fallback",
+            "[AYDEN-VOICE] voice=fallback vision_input=false disabled (turn=%s should_generate=%s) "
+            "— pools fallback",
             getattr(turn, "value", turn), should_generate,
         )
         return await localize_reply(client, fallback_msg, ui_locale, enabled=normalize_enabled)
 
     if not designer_voice_enabled():
         log.info(
-            "[AYDEN-VOICE] disabled (flag OFF) intent=design_advice room=%s has_vision=%s — pools fallback",
+            "[AYDEN-VOICE] voice=fallback vision_input=false disabled (flag OFF) "
+            "intent=design_advice room=%s has_vision=%s — pools fallback",
             _room, has_vision,
         )
         return await localize_reply(client, fallback_msg, ui_locale, enabled=normalize_enabled)
 
-    _vision = bool(image_url and image_url.strip().startswith("http"))
+    # 2026-08-13 (3.2) — MÊME règle que designer_voice.has_image (designer_voice.py:192) :
+    # `vision_input` dit si le render a été JOINT à l'appel, pas si un render existe
+    # (has_vision, qui vient du frontend). Les deux restent loggués côte à côte : une
+    # divergence has_vision=True / vision_input=false = URL manquante côté client, la
+    # cause exacte du prompt « render non joint » corrigé en 3.4a.
+    _vision = "true" if (image_url and image_url.strip().startswith("http")) else "false"
     _t0 = time.monotonic()
     voice = await generate_designer_voice(
         client, message=message, room_type=room_type,
@@ -2088,14 +2173,16 @@ async def resolve_design_ai_message(
     _ms = (time.monotonic() - _t0) * 1000.0
     if voice:
         log.info(
-            "[AYDEN-VOICE] enabled intent=design_advice room=%s has_vision=%s vision_input=%s latency_ms=%.0f",
-            _room, has_vision, _vision, _ms,
+            "[AYDEN-VOICE] voice=designer_voice vision_input=%s enabled intent=design_advice "
+            "room=%s has_vision=%s latency_ms=%.0f reply=%r",
+            _vision, _room, has_vision, _ms, _voice_snippet(voice),
         )
         return voice
     log.info(
-        "[AYDEN-VOICE] enabled intent=design_advice room=%s has_vision=%s vision_input=%s latency_ms=%.0f "
-        "fallback_reason=llm_empty_or_error — pools fallback",
-        _room, has_vision, _vision, _ms,
+        "[AYDEN-VOICE] voice=fallback vision_input=%s enabled intent=design_advice room=%s "
+        "has_vision=%s latency_ms=%.0f fallback_reason=llm_empty_error_or_capability_denial "
+        "— pools fallback",
+        _vision, _room, has_vision, _ms,
     )
     return await localize_reply(client, fallback_msg, ui_locale, enabled=normalize_enabled)
 
@@ -3861,6 +3948,26 @@ async def generate(
                  "STAGE (exterior shell-lock)" if _exterior_staged
                  else "PRESERVE (STAGE skipped)")
 
+    # ── Lot B (2026-08-13) — canal d'état "façade inachevée" ────────────────────
+    # Flag AYDEN_UNFINISHED_FACADE_COMPLETION (défaut OFF). Le build_state n'est
+    # LU que si la vision Ayden a elle-même produit la pièce ET que cette pièce est
+    # `facade` — donc jamais sur une pièce intérieure ni sur les 5 autres pièces
+    # extérieures. Toute autre situation ⇒ "finished" ⇒ prompt byte-identique.
+    #
+    # LIMITE PRODUIT CONNUE, À REMONTER (§5.3 — NE PAS contourner) : _classify_ayden
+    # ne tourne que sur le chemin Ayden Decide (_want_stage : let_ai_decide ET
+    # room_type vide ET iteration == 1). Si l'utilisateur choisit explicitement
+    # "House Facade" dans l'UI, room_type est non vide → aucun appel vision
+    # n'existe sur ce chemin (profil MOBILE_MVP_BASELINE : vision_analysis_fv=False ;
+    # capture structurelle OFF) → _build_state reste "finished" et la complétion NE
+    # s'active PAS, même flag ON. Ajouter un appel vision pour la déclencher est
+    # explicitement interdit.
+    _build_state = "finished"
+    if _stage_room == "facade" and _want_stage and _ayden_vision:
+        _build_state = _ayden_vision.get("build_state", "finished")
+        log.info("[UnfinishedFacade] build_state=%s (source=ayden_vision, room=facade)",
+                 _build_state)
+
     # PRIORITY FIX (flag AYDEN_DECIDE_PROPAGATE_ROOM) — propagate the DETECTED
     # interior room so it becomes the official room_type. This reactivates the
     # EXISTING per-atmosphere DNA (build_dna_room_context → furniture_language +
@@ -4089,10 +4196,12 @@ async def generate(
         design_prompt, _staged = apply_stage_mode(
             design_prompt, room_label=_stage_room, atmosphere_label=style_label,
             atmosphere_id=atmosphere_id,
+            # Lot B — "finished" partout sauf façade + vision 'unfinished' + flag ON.
+            build_state=_build_state,
         )
-        log.info("[AydenDecideFurnish] STAGE MODE %s (room=%s)",
+        log.info("[AydenDecideFurnish] STAGE MODE %s (room=%s build_state=%s)",
                  "applied" if _staged else "NO-OP (preserve contract not found)",
-                 _stage_room)
+                 _stage_room, _build_state)
     _prompt_s = time.monotonic() - _t_prompt
     log.info(
         "--- prompt composed (%d chars, compact_prompts=%s) ---",
@@ -5249,7 +5358,9 @@ async def generate(
 # Spec : docs/REFINE_ENGINE_V2.md. Réutilise l'infra partagée (openai, supa, auth,
 # storage 'generated', httpx) — aucune logique V1.
 # ═══════════════════════════════════════════════════════════════════════════════
-from refine.parser import parse_changes as _refine_parse, Change as _RefineChange
+from refine.parser import (parse_changes as _refine_parse, Change as _RefineChange,
+                           # 3.3 — lecture SEULE du chemin emprunté par le parser (log).
+                           last_parser_source as _refine_parser_source)
 from refine.advisor import advise as _refine_advise, build_advisory_message as _refine_advisory_msg
 from refine.normalizer import normalize_changes as _refine_normalize
 from refine.engine import refine_generate as _refine_generate, prepare as _refine_prepare
@@ -5429,6 +5540,15 @@ async def refine_endpoint(
     _t_parse = time.monotonic()
     changes = await _refine_parse(message, client=openai)
     _parser_ms = (time.monotonic() - _t_parse) * 1000.0
+    # Correction Pass 2026-08-13 (3.3) — observabilité parser. Lu JUSTE après l'await du
+    # parser (aucun point de suspension entre les deux → valeur de CETTE requête). Émis ICI
+    # et pas seulement dans le [PERF SUMMARY] de fin, parce que les chemins empty_request et
+    # advisory RETOURNENT avant ce résumé : sans cette ligne, les tours advisory — précisément
+    # ceux corrigés en phase 2 — restent aveugles. Log PUR : aucune branche, aucun effet.
+    _parser_src = _refine_parser_source()
+    log.info("[REFINE-PARSE] parser=%s change_count=%d types=%s parser_ms=%.0f",
+             _parser_src, len(changes), "+".join(c.type for c in changes) or "(none)",
+             _parser_ms)
     if not changes:
         return {"status": "error", "error": "empty_request",
                 "user_message": "I couldn't read a change to make — could you rephrase?"}
@@ -5557,10 +5677,11 @@ async def refine_endpoint(
     _refine_total_ms = (time.monotonic() - _handler_entry) * 1000.0
     log.info(
         "[PERF SUMMARY] request_id=%s  total_ms=%.0f  model=%s  quality=low  iteration=%d"
-        "  gen_type=refine  parser_ms=%.0f  ownership_ms=%.0f  access_resolver_ms=%.0f"
-        "  status=%s  intent=%s",
+        "  gen_type=refine  parser_ms=%.0f  parser=%s  change_count=%d  ownership_ms=%.0f"
+        "  access_resolver_ms=%.0f  status=%s  intent=%s",
         (client_request_id.strip() or _op), _refine_total_ms, IMAGE_MODEL, iteration,
-        _parser_ms, _ownership_ms, _access_resolver_ms, resp.get("status"), intent_id,
+        _parser_ms, _parser_src, len(prepared.ordered_changes), _ownership_ms,
+        _access_resolver_ms, resp.get("status"), intent_id,
     )
 
     # RUNNING (lost-claim) → statut RÉCUPÉRABLE, aucune génération, pas d'extras 'completed'.

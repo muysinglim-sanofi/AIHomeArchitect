@@ -141,6 +141,30 @@ _REFINE = re.compile(
     re.IGNORECASE,
 )
 
+# Correction Pass 2026-08-13 — lexique COULEUR / FINITION, taxonomie PARTAGÉE
+# (source UNIQUE, même convention que _FUNCTIONAL_ROOM plus bas). Trois consommateurs,
+# un seul vocabulaire — sinon les trois divergent au premier ajout de teinte :
+#   • _LOCAL_EDIT ci-dessous  — « Make the walls forest green. » est une ÉDITION
+#     exécutable, pas une conversation (A3) ;
+#   • refine.advisor          — « forest green » est une COULEUR, pas une forêt : le
+#     terme du set absurde suivi d'une couleur est un QUALIFICATIF, jamais un objet (A1) ;
+#   • refine.parser           — « change the walls to ivory white » est une FINITION,
+#     pas une opération structurelle (A4).
+# Alternation NUE (ni \b ni groupe capturant) pour rester interpolable.
+# Volontairement bornée aux COULEURS de base (+ formes FR) : y verser des MATÉRIAUX
+# ferait basculer « replace the partition with a glass one » du côté finition alors que
+# c'est bien du gros œuvre (assertion _refine_canonicalize_validation.py:39).
+COLOUR_TERM = (
+    r"white|off-white|black|grey|gray|beige|cream|ivory|taupe|charcoal|anthracite|"
+    r"green|blue|red|yellow|orange|pink|purple|violet|brown|"
+    r"navy|teal|turquoise|olive|sage|burgundy|maroon|terracotta|ochre|mustard|"
+    r"gold|golden|silver|bronze|copper|sand|ecru|"
+    # FR (le message brut peut arriver non normalisé si MULTILINGUAL_NORMALIZE est OFF)
+    r"blanc|blanche|noir|noire|gris|grise|cr[eè]me|ivoire|vert|verte|bleu|bleue|"
+    r"rouge|jaune|rose|violette|marron|brun|brune|dor[eé]e?|argent[eé]e?|bordeaux|sable"
+)
+COLOUR_TERM_RE = re.compile(rf"\b(?:{COLOUR_TERM})\b", re.IGNORECASE)
+
 _LOCAL_EDIT = re.compile(
     r"\b(add\s+(a|an|the|some)?|remove\s+(the|a)?|change\s+(the|a)?|replace\s+(the|a)?|"
     r"swap\s+(the|a)?|move\s+(the|a)?|put\s+(a|an|the)?|take\s+(out|away)|"
@@ -151,9 +175,30 @@ _LOCAL_EDIT = re.compile(
     r"turn\s+(the|a|it)\s+(around|to\s*face|toward|towards)|"
     r"face\s+(the|it|toward|towards)|brighten(\s+(the|a|it|up))?|darken(\s+(the|a|it))?|"
     r"different\s+(colour|color|material|fabric|finish|texture)|"
+    # Correction Pass 2026-08-13 (A3) — famille COULEUR / FINITION. Sans elle,
+    # « Paint the walls ivory white. » (5 mots) retombait sur le repli par comptage de
+    # mots (→ CONVERSATION/GENERAL) et « Peins les murs en blanc ivoire. » sur MIXED :
+    # dans les deux cas should_generate=False (main.py:2643/2653), donc une commande
+    # d'édition parfaitement exécutable ne produisait AUCUNE image.
+    # Vocabulaire repris de edit_intent.py:59-69 (_LOCAL_EDIT_SIGNALS contient déjà
+    # paint|colour|color, validé côté prompt image) — on ne crée pas de lexique concurrent.
+    # Déterminant EXIGÉ après le verbe : « I like the paint » (nom) ne matche pas.
+    r"(?:re)?paint(?:s|ed|ing)?\s+(the|a|an|it|this|that|my|our|over)|"
+    # « make <cible> <couleur> » : c'est le nom de COULEUR qui fait le signal d'édition,
+    # pas le verbe (« make it warmer » reste du ressort de _REFINE). `keep`/`leave` sont
+    # volontairement EXCLUS : « keep the walls white » est une CONTRAINTE de préservation
+    # (constraint_ack), pas un ordre de générer — l'ouvrir ici dépasserait le correctif.
+    rf"make\s+(the|a|an|it|this|that|my|our)\s+[\w\s'-]{{0,24}}?(?:{COLOUR_TERM})|"
     # French — local edit verbs and show-me generation triggers
     r"ajoute|ajouter|enl[eè]ve|enlever|retire|retirer|remplace|remplacer|"
-    r"d[eé]place|d[eé]placer|pose\s+(un|une)|mets\s+(un|une)|"
+    # FR peinture : IMPÉRATIF uniquement. L'infinitif « peindre » est volontairement
+    # EXCLU — il n'apparaît presque que dans une demande d'avis (« est-ce que je devrais
+    # peindre… »), déjà protégée par _DESIGN_OPINION_PATTERNS, autant ne pas l'armer.
+    r"(?:re)?peins\b|repeindre\b|"
+    # « mets/mettre + le|la|les|l' » : seul « mets un|une » était couvert, donc
+    # « Mets les murs en blanc ivoire. » n'était pas reconnu comme une édition.
+    r"d[eé]place|d[eé]placer|pose\s+(un|une)|mets\s+(un|une|le|la|les|l')|"
+    r"mettre\s+(un|une|le|la|les|l')|"
     r"montre-moi\s+(avec|sans|un|une|le|la|les)|essaie\s+(un|une|avec|le|la)|"
     r"utilise\s+(un|une)|diff[eé]rent(e)?\s+(canap[eé]|tapis|tissu|mati[eè]re|finition|texture))\b",
     re.IGNORECASE,
@@ -939,6 +984,13 @@ _DESIGN_OPINION_PATTERNS = [
     r"\bwhere\s+(i|we|you)\s+should\b",
     r"\bdois-je\b",
     r"\bdevrais-je\b",
+    # Correction Pass 2026-08-13 (A3) — forme FR non inversée. L'ouverture de
+    # _LOCAL_EDIT à la peinture (peins/repeins/repeindre) rend cette précédence
+    # EXPLICITE : « Est-ce que je devrais repeindre les murs ? » est un avis demandé,
+    # pas un ordre. detect_design_opinion_question() est évalué AVANT la branche
+    # _has_edit (voir classify_intent, bloc `if has_question`) — ne pas inverser.
+    r"\best-ce\s+que\s+je\s+(devrais|dois)\b",
+    r"\best-ce\s+qu'?on\s+(devrait|doit)\b",
     r"\bqu'en\s+(penses|dis)-tu\b",
     r"\bton\s+avis\b",
     r"\b(bonne|mauvaise)\s+id[ée]e\b",

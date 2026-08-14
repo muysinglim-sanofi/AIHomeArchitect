@@ -93,9 +93,32 @@ async def main():
     # structure AMBIGUË (cible non identifiable) → YELLOW
     for msg in ["remove this wall", "remove the wall", "close the window"]:
         check(f"YELLOW ambigu: {msg}", await verdict(msg) == "yellow", await verdict(msg))
-    # absurde → RED même si structure/typé (jamais auto-GREEN)
+    # ── Correction Pass 2026-08-13 — ASSERTION RÉÉCRITE, NE PAS LA REMETTRE À L'ENVERS ──
+    # AVANT, ce bloc s'intitulait « absurde → RED même si structure/typé » et n'assertait
+    # que les deux lignes RED : il verrouillait donc l'IMPLÉMENTATION (un .search() de
+    # sous-chaîne sur _ABSURD_INTERIOR, appliqué avant tout test de type). Or ce mécanisme
+    # produisait un faux RED sur « paint the walls forest green » — forest/ocean/sea sont
+    # AUSSI des noms de couleur — c'est-à-dire un véto esthétique sur une demande de
+    # peinture banale, en contradiction avec le contrat anti-paternalisme du composant
+    # (advisor.py, docstring l.15-16). L'assertion teste désormais l'INTENTION :
+    #   « un ADD d'objet réellement absurde dans un INTÉRIEUR CONNU reste RED »,
+    # et pas « la sous-chaîne pool/forest déclenche RED ». Les contre-exemples ci-dessous
+    # font partie de l'assertion : ils empêchent de « recorriger » le composant en
+    # rétablissant le véto par sous-chaîne, qui les repasserait tous au rouge.
     check("RED absurde: add a swimming pool (bedroom)", await verdict("add a swimming pool", "bedroom") == "red")
     check("RED absurde: add a Ferrari (bathroom)", await verdict("add a Ferrari", "bathroom") == "red")
+    # A1-b — le terme absurde en QUALIFICATIF de couleur n'introduit aucun objet.
+    for msg in ["paint the walls forest green", "paint the walls ocean blue",
+                "make the walls sea green"]:
+        check(f"PAS RED (couleur, pas un objet): {msg}", await verdict(msg) != "red", await verdict(msg))
+    # A1-a — une modification de PROPRIÉTÉ ne peut pas faire entrer une piscine.
+    check("PAS RED (propriété): change the sofa to forest green",
+          await verdict("change the sofa to forest green") != "red")
+    # A2 — pièce INCONNUE (libellé produit / localisé / absent) : plus de véto dur.
+    for room in ["", "Your space", "Salon"]:
+        check(f"PAS RED (pièce inconnue {room!r}): add a swimming pool",
+              await verdict("add a swimming pool", room) != "red",
+              await verdict("add a swimming pool", room))
     # non-régression mobilier
     check("GREEN mobilier: move the TV to the left", await verdict("move the TV to the left") == "green")
     check("GREEN décor: add flowers", await verdict("add flowers") == "green")

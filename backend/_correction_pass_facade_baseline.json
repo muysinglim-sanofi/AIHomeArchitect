@@ -1,0 +1,451 @@
+{
+ "_baseline_source": "stage_contracts/assembled = git HEAD:preservation.py (pré-modification) sous env prod-like (import main) ; vision_prompt_* = code d'origine, capture v1",
+ "assembled": {
+  "balcony|japandi_calm": {
+   "len": 5978,
+   "sha256": "163fbdeb49443f41dd87795ec5f3382e5299c4bb29d6111b9f94dfa35c76e6e2",
+   "stage_applied": true
+  },
+  "balcony|nordic_warmth": {
+   "len": 5958,
+   "sha256": "83075425c583858456e09a0498d06897a986b95ef5599d3a3e19ff3b36cc103f",
+   "stage_applied": true
+  },
+  "balcony|soft_luxury": {
+   "len": 6133,
+   "sha256": "96a31360a67bdbf5286537af17abf091b7077161008ba87ac40a0c906b950411",
+   "stage_applied": true
+  },
+  "balcony|tropical_escape": {
+   "len": 5999,
+   "sha256": "58e7b34d11836b5df2cd2ca49ffdda32b640ed1a7bad4b642ce08e8bf48a5636",
+   "stage_applied": true
+  },
+  "balcony|warm_modern": {
+   "len": 6307,
+   "sha256": "8bb4d74d6f68baed431e44f5d79b818849efd37e23d0dbf6eba80ee664ea012f",
+   "stage_applied": true
+  },
+  "driveway|japandi_calm": {
+   "len": 6637,
+   "sha256": "b7cd6ae5f692527ad017b65303d8b5ffcd0a5a187a0aa482ef650f81c7f90cb6",
+   "stage_applied": true
+  },
+  "driveway|nordic_warmth": {
+   "len": 6696,
+   "sha256": "bebc8e19dd0d79b1a3c1c4c64c345bd9fcf74fcc5ee4d1ae9c283fcb17597084",
+   "stage_applied": true
+  },
+  "driveway|soft_luxury": {
+   "len": 6777,
+   "sha256": "21844d4ad0661cd66ee835bda964b2d1df1f1d94ab1672d0ae4383ed1e7b1c90",
+   "stage_applied": true
+  },
+  "driveway|tropical_escape": {
+   "len": 6663,
+   "sha256": "b2bc65aac0f456befcfbf79be7e9ff71fd7929112f19a3abd3b90097185bf23f",
+   "stage_applied": true
+  },
+  "driveway|warm_modern": {
+   "len": 6988,
+   "sha256": "b951b59b0c810f6a5752c05c9d1db3a3cc7b7c0db46da3ad8ea1598e6198fcbc",
+   "stage_applied": true
+  },
+  "facade|japandi_calm": {
+   "len": 7103,
+   "sha256": "3ed05c444afc1ee27c5299625370c5ab401e7e3d190749a4dd20244b64ff6cdf",
+   "stage_applied": true
+  },
+  "facade|nordic_warmth": {
+   "len": 7253,
+   "sha256": "1d861dd008e5bb0b005864fbc9001a5cfb8606a191b22cd97238eb68e6bca32f",
+   "stage_applied": true
+  },
+  "facade|soft_luxury": {
+   "len": 7314,
+   "sha256": "577327de2b67f10697122249c08505ab11e4686659bd90cd9384d4f3eaa72488",
+   "stage_applied": true
+  },
+  "facade|tropical_escape": {
+   "len": 7162,
+   "sha256": "4ca180ccd7c82c65340fa742c4845640a736a592d11e938e82d75122226c82a6",
+   "stage_applied": true
+  },
+  "facade|warm_modern": {
+   "len": 7440,
+   "sha256": "ac97999fab4238ea9193f03e3565fa7bcd0a95db33b6abdf8643e753ad0fdd19",
+   "stage_applied": true
+  },
+  "garden|japandi_calm": {
+   "len": 6403,
+   "sha256": "03b316c8581b86850f9844454282f1c2eb363836d8eed51283d4ea41afbc0fdb",
+   "stage_applied": true
+  },
+  "garden|nordic_warmth": {
+   "len": 6437,
+   "sha256": "f0cf68a8c1be98d41864d643a71cc6c4e23cffbf71deb018bf2264f6bb902502",
+   "stage_applied": true
+  },
+  "garden|soft_luxury": {
+   "len": 6595,
+   "sha256": "7a847f38fa7dc274ba4a33a1efbb1e7cb857dcbbca23084742578c25444fca00",
+   "stage_applied": true
+  },
+  "garden|tropical_escape": {
+   "len": 6531,
+   "sha256": "3b082d24a12916d80af49998190808adcbfda87b1af71d685189ffdc675391b2",
+   "stage_applied": true
+  },
+  "garden|warm_modern": {
+   "len": 6701,
+   "sha256": "93dda80c64f0da78f301ee57d6a51afcea74013312c3a8354685905bd0b6e98b",
+   "stage_applied": true
+  },
+  "pool_area|japandi_calm": {
+   "len": 6070,
+   "sha256": "544843f830983dcf840b7bded8c2986afdec96859acbec5a4675a1e2b818d86b",
+   "stage_applied": true
+  },
+  "pool_area|nordic_warmth": {
+   "len": 6195,
+   "sha256": "e8d5b7ef681d563a08b60d1fa13367fe7013613d797482098a4e6af14dcbbd1d",
+   "stage_applied": true
+  },
+  "pool_area|soft_luxury": {
+   "len": 6448,
+   "sha256": "8cdd638b53a8fe14fea5ddbc2fad6b03eaf463c2cdd2ef8465153f55b90e0a61",
+   "stage_applied": true
+  },
+  "pool_area|tropical_escape": {
+   "len": 6300,
+   "sha256": "251fe4231debfaf2676a5e6481e81de84ebd81951ff95fa41b27e406df74b86a",
+   "stage_applied": true
+  },
+  "pool_area|warm_modern": {
+   "len": 6650,
+   "sha256": "0fbc03b9d8b24d900f404e2c04a21c1b6e2ca2735abd2cdbd5388549e7d3750c",
+   "stage_applied": true
+  },
+  "terrace|japandi_calm": {
+   "len": 7031,
+   "sha256": "119526254da009a66bbb8f200868c52348da885611b2ed7860b0df54ab349324",
+   "stage_applied": true
+  },
+  "terrace|nordic_warmth": {
+   "len": 6887,
+   "sha256": "e946befce18262c9d13502554730ed81e99ffe034b44b659b77516aa40eed515",
+   "stage_applied": true
+  },
+  "terrace|soft_luxury": {
+   "len": 7205,
+   "sha256": "c0490d58c078ca2f8490f7b4e632788ef13882943c1a20db1cc5e9f3402357d4",
+   "stage_applied": true
+  },
+  "terrace|tropical_escape": {
+   "len": 6896,
+   "sha256": "b9be18f7614531f10b76a92e19e4903e0ae56254b916e1433a6e56cb274ebb43",
+   "stage_applied": true
+  },
+  "terrace|warm_modern": {
+   "len": 7180,
+   "sha256": "005db7df90a41ed3213ac1164665f2773845d39abb9e959cb6a2f534472c9386",
+   "stage_applied": true
+  }
+ },
+ "facade_stage_contract_text": "OUTDOOR STAGE — compose a complete, living scene while the architecture stays locked.\nPRIMARY SHELL — reproduce EXACTLY (pixel-for-pixel): the building facade in full — every wall, the roofline and the roof, all openings (windows, doors, garage door, glazing) with their exact positions, sizes and proportions, balconies, railings and garde-corps, columns, the porch and entrance, all facade materials and cladding, and the storeys and levels — together with the driveway, paths and paved approach, every existing boundary wall, gate and fence, and all mature and established trees and structural planting stay exactly as photographed. Never change, move, resize, rebuild or replace them, and never add or extend PERMANENT architecture (no new wall, no enclosure of the space, no building roof or extension, no new fence, no floor or deck extension, no platform). An open shade structure — a pergola, canopy, shade sail or parasol — is scene furniture and IS allowed (see SCENE). CONTEXT — never invented: do not rebuild, beautify or replace the neighbouring buildings, surroundings or sky, and never turn a construction site or service area into new villas. A degraded or unsightly background MAY be naturally softened or partially screened by the scene's planting and depth; a desirable view (sea, open landscape, greenery) is preserved and framed, never screened or replaced. COMPOSITION — the intent: the entrance and the building's architectural presence is the hero; orient the freestanding pieces toward it and to the existing geometry; keep circulation and the key edges clear; build depth in layers from foreground to background. Be AMBITIOUS with planting and landscaping WITHIN the existing space: any open, bare or unplanted ground MUST be resolved into layered greenery and grouped planters placed on the ground that already exists — never left as bare earth or a sparse, empty surround, and never by enlarging the space or shrinking any built element. Use only as many functional zones as the existing space naturally fits — a generous space may hold more than one (for example a lounge and a dining area), a small one keeps a single well-composed zone; never overcrowd. Make it read as a rich, lived-in, resort-grade moment — never a showroom and never a bare construction plot. SCENE — freestanding and lightweight scene elements on the existing surfaces: a designer, layered arrival: rich multi-height foundation and border planting — structural evergreens, ornamental grasses and flowering shrubs — that resolves every patch of bare ground along the approach, grouped statement planters, urns and clipped topiary flanking the existing entrance, a focal specimen tree or sculptural plant where the ground allows, a generous, well-defined and welcoming path to the front door with crisp planted edges, and — ONLY where an existing porch, veranda, stoop or covered threshold is already present — a small styled entrance vignette (a bench or a pair of outdoor chairs with a side table, a cushion and a lantern) set on that existing hard surface, never on the drive and never blocking the door; finished with a quality doormat at the existing threshold and a full warm lighting design — uplights grazing the facade and planting, path and step lights, and lanterns or sconces flanking the entrance; arranged to realise the composition above. Place all planting, pots, lighting and any entrance vignette on existing beds, paths, the paved approach, an existing porch or covered threshold, or stable ground only — never against the facade in a way that hides or climbs over any opening, and never blocking the entrance, a door or the driveway; keep the approach to the front door clear and walkable. Their materials and forms follow the atmosphere (see STYLE below). NO indoor furniture: no indoor sofa, no TV, no chandelier, nothing that belongs inside the house. RULE — the permanent architecture is the fixed frame: compose the scene strictly within the space it leaves. When the desired scene would need more room than exists, the SCENE gets smaller — the architecture NEVER shrinks, moves, resizes or reshapes to make room for it. If a piece composes the scene WITHOUT altering the existing architecture and WITHOUT enclosing, walling, roofing-over or extending the building, place it — open shade structures (pergola, canopy, sail, parasol) count as scene furniture; if it changes the existing architecture, encloses or walls the space, or extends the building footprint, it is forbidden. Keep the photographed time-of-day with a warm, inviting light. The freestanding scene, styling and lighting are yours to compose; the architecture is not.",
+ "label_to_id": {
+  "Japandi Calm": "japandi_calm",
+  "Nordic Warmth": "nordic_warmth",
+  "Soft Luxury": "soft_luxury",
+  "Tropical Escape": "tropical_escape",
+  "Warm Modern": "warm_modern"
+ },
+ "stage_contracts": {
+  "balcony|japandi_calm": {
+   "len": 3579,
+   "sha256": "d11b7debd8976d20415c842b6730ac9c27440930d84e3f00cefa37df3da1d5cf"
+  },
+  "balcony|nordic_warmth": {
+   "len": 3579,
+   "sha256": "d11b7debd8976d20415c842b6730ac9c27440930d84e3f00cefa37df3da1d5cf"
+  },
+  "balcony|soft_luxury": {
+   "len": 3579,
+   "sha256": "d11b7debd8976d20415c842b6730ac9c27440930d84e3f00cefa37df3da1d5cf"
+  },
+  "balcony|tropical_escape": {
+   "len": 3579,
+   "sha256": "d11b7debd8976d20415c842b6730ac9c27440930d84e3f00cefa37df3da1d5cf"
+  },
+  "balcony|warm_modern": {
+   "len": 3579,
+   "sha256": "d11b7debd8976d20415c842b6730ac9c27440930d84e3f00cefa37df3da1d5cf"
+  },
+  "bathroom|japandi_calm": {
+   "len": 2743,
+   "sha256": "abb78173168638d5f86a78b7406738d630d6f4be14e94cc89c0f45f66d08aef5"
+  },
+  "bathroom|nordic_warmth": {
+   "len": 2229,
+   "sha256": "e4837c167d2b7d6f9e38ea5151a09af723502d8c78d3d65cc36fad6d90c87e2f"
+  },
+  "bathroom|soft_luxury": {
+   "len": 2255,
+   "sha256": "64e05b6bd1c8f0d5e6e54e94f2c4b216c60a1f2608df57235273134e27d998a0"
+  },
+  "bathroom|tropical_escape": {
+   "len": 2223,
+   "sha256": "63e5f8c036f08294b4b572cb7c45d61aa73f06faa635f262336e0b91aab504b9"
+  },
+  "bathroom|warm_modern": {
+   "len": 2368,
+   "sha256": "b51b081faa9c864e78500adae6129f9774651e0c17d508c211b0a56fa9ef29ea"
+  },
+  "bedroom|japandi_calm": {
+   "len": 2748,
+   "sha256": "6e936456e6e10f0c96ead805d5562a6bdd270241ca7a2d8f9b6498c723c1072a"
+  },
+  "bedroom|nordic_warmth": {
+   "len": 2234,
+   "sha256": "668bf88d69d0f81eda8a58eb716f0ea62fc0d9d33fddcd01da6ced20022a90f9"
+  },
+  "bedroom|soft_luxury": {
+   "len": 2260,
+   "sha256": "dc25555af66f1f3dd4e0f4a5545c3ae57fa5003da6e1f0b34778dcab268283d8"
+  },
+  "bedroom|tropical_escape": {
+   "len": 2228,
+   "sha256": "5dab9c9d6c30c632959354d38ae7856e86173310c9da06a8543e086cd69e7000"
+  },
+  "bedroom|warm_modern": {
+   "len": 2373,
+   "sha256": "027ae0f5c06cd421f3aec67d0960abba1b52c0567e2e58538ac8b626e6816f39"
+  },
+  "dining_room|japandi_calm": {
+   "len": 2735,
+   "sha256": "bc5f6a0cee49c155c7b627b5fc3a3a62c92c7874a1ef4624718e4ada515f8716"
+  },
+  "dining_room|nordic_warmth": {
+   "len": 2221,
+   "sha256": "44489204e17fa09aa68759d549557c8e499889d74c0ef85f67aba19a7c178368"
+  },
+  "dining_room|soft_luxury": {
+   "len": 2247,
+   "sha256": "b66f697c4e600749743298a417edb94ceaf8758bbcd28b8b869a028cc2c79cb5"
+  },
+  "dining_room|tropical_escape": {
+   "len": 2215,
+   "sha256": "1282777a2f3545b31043fe19691fd1f8de58abe200f39b5cb85fc9d16bcddf1c"
+  },
+  "dining_room|warm_modern": {
+   "len": 2360,
+   "sha256": "9b931351d3cee13b4103b3fc786e26325d3d5252f089a5bec184fa6a9e8ed543"
+  },
+  "driveway|japandi_calm": {
+   "len": 4205,
+   "sha256": "89c2f67d53473aba4b01c75d9aebde0df0f863e47ab7acb936eb318686c36516"
+  },
+  "driveway|nordic_warmth": {
+   "len": 4205,
+   "sha256": "89c2f67d53473aba4b01c75d9aebde0df0f863e47ab7acb936eb318686c36516"
+  },
+  "driveway|soft_luxury": {
+   "len": 4205,
+   "sha256": "89c2f67d53473aba4b01c75d9aebde0df0f863e47ab7acb936eb318686c36516"
+  },
+  "driveway|tropical_escape": {
+   "len": 4205,
+   "sha256": "89c2f67d53473aba4b01c75d9aebde0df0f863e47ab7acb936eb318686c36516"
+  },
+  "driveway|warm_modern": {
+   "len": 4205,
+   "sha256": "89c2f67d53473aba4b01c75d9aebde0df0f863e47ab7acb936eb318686c36516"
+  },
+  "entrance|japandi_calm": {
+   "len": 2819,
+   "sha256": "ea2597c6a3687b4031edf43d958a28c0205887a2772d5517509903c88b71d4b3"
+  },
+  "entrance|nordic_warmth": {
+   "len": 2305,
+   "sha256": "426ab1c6f1fe2eeeb3bbe607bf1f134ab6ee88e8607897c454a85d943cba2560"
+  },
+  "entrance|soft_luxury": {
+   "len": 2331,
+   "sha256": "aebc4f0e4f7494caadd1c24bd2225fa5a3d8f89010dc1ea4bfaec0cc4b726214"
+  },
+  "entrance|tropical_escape": {
+   "len": 2299,
+   "sha256": "b45f9555bc66cdfc2c6883464b85959028a0d9150b724c73a83721c371ef5b70"
+  },
+  "entrance|warm_modern": {
+   "len": 2444,
+   "sha256": "67247e8953d267f9420931fda78bd6e194665f6e39e3c4ebb9f6d507696888b2"
+  },
+  "facade|japandi_calm": {
+   "len": 4659,
+   "sha256": "ca8f9b1f48155c985bacdec69ae511705209873537d5e9d831fd0c2168e4b7c7"
+  },
+  "facade|nordic_warmth": {
+   "len": 4659,
+   "sha256": "ca8f9b1f48155c985bacdec69ae511705209873537d5e9d831fd0c2168e4b7c7"
+  },
+  "facade|soft_luxury": {
+   "len": 4659,
+   "sha256": "ca8f9b1f48155c985bacdec69ae511705209873537d5e9d831fd0c2168e4b7c7"
+  },
+  "facade|tropical_escape": {
+   "len": 4659,
+   "sha256": "ca8f9b1f48155c985bacdec69ae511705209873537d5e9d831fd0c2168e4b7c7"
+  },
+  "facade|warm_modern": {
+   "len": 4659,
+   "sha256": "ca8f9b1f48155c985bacdec69ae511705209873537d5e9d831fd0c2168e4b7c7"
+  },
+  "garden|japandi_calm": {
+   "len": 3891,
+   "sha256": "39f81b90b04d49dfeac21b5b2af2ef8ae3c2821aea59034569834fa031229187"
+  },
+  "garden|nordic_warmth": {
+   "len": 3891,
+   "sha256": "39f81b90b04d49dfeac21b5b2af2ef8ae3c2821aea59034569834fa031229187"
+  },
+  "garden|soft_luxury": {
+   "len": 3891,
+   "sha256": "39f81b90b04d49dfeac21b5b2af2ef8ae3c2821aea59034569834fa031229187"
+  },
+  "garden|tropical_escape": {
+   "len": 3891,
+   "sha256": "39f81b90b04d49dfeac21b5b2af2ef8ae3c2821aea59034569834fa031229187"
+  },
+  "garden|warm_modern": {
+   "len": 3891,
+   "sha256": "39f81b90b04d49dfeac21b5b2af2ef8ae3c2821aea59034569834fa031229187"
+  },
+  "hallway|japandi_calm": {
+   "len": 2760,
+   "sha256": "4ffafff1fd9a6ad66a06ef5d228d8ba878f95d2fbcdf57c9b40812d56f1d8bbe"
+  },
+  "hallway|nordic_warmth": {
+   "len": 2246,
+   "sha256": "c0dd5be820b4d60035297d7d08ac66df901c2e5db841324d442ad89bb0f76121"
+  },
+  "hallway|soft_luxury": {
+   "len": 2272,
+   "sha256": "11d1bc72239d8e12f9949092017957360d0fb17bed4ff713e7a53524317076ed"
+  },
+  "hallway|tropical_escape": {
+   "len": 2240,
+   "sha256": "b170275af37215c1c9b71015ee47d70030e5e68263cf0ff40a60d3cf19b3b222"
+  },
+  "hallway|warm_modern": {
+   "len": 2385,
+   "sha256": "71343d42e5984efdabca099820400a4a85374d843cc02c50d35c35cdb382b4a1"
+  },
+  "kitchen|japandi_calm": {
+   "len": 2766,
+   "sha256": "0b1cf8db3a406c8ab9484be9360b1f3c18f3cdb03c9e7536421ff56e63ee160c"
+  },
+  "kitchen|nordic_warmth": {
+   "len": 2252,
+   "sha256": "2f775bb985d09c06fd45ab371551816f934ed6279c8df9600d66f03453c6e3d6"
+  },
+  "kitchen|soft_luxury": {
+   "len": 2278,
+   "sha256": "c8999511d0dcc6f66bf7336345522501366a9fb9b3e570949c8c4b8c8e546206"
+  },
+  "kitchen|tropical_escape": {
+   "len": 2246,
+   "sha256": "1820839becc76393df9636210260c77d984b13fac9f15a219eafd0ab9b932343"
+  },
+  "kitchen|warm_modern": {
+   "len": 2391,
+   "sha256": "f1dddc5d646cd7802e08836c58d09986ad32863c5c5655621c305c1e1ddfea23"
+  },
+  "living_room|japandi_calm": {
+   "len": 2969,
+   "sha256": "669be65d5eeb7cca89b0de0ce7708c6c388e3b1a437e8e4493a642f9f111e7a8"
+  },
+  "living_room|nordic_warmth": {
+   "len": 2455,
+   "sha256": "4cee8cdd33b9625762b6f6024f9bfa1f577b51f48d52038114a33cb5995582e0"
+  },
+  "living_room|soft_luxury": {
+   "len": 3837,
+   "sha256": "ffca3b1ac8fbfd2eddd22fa2478d86a271dc7e24d2ba9dcbed55a16697d184e9"
+  },
+  "living_room|tropical_escape": {
+   "len": 2449,
+   "sha256": "fa63762d3f0e27a0ed103a6bb2dce23570212eaa74b6d72278905f74169a2060"
+  },
+  "living_room|warm_modern": {
+   "len": 2594,
+   "sha256": "0c7f4f8e67125e55b54e5e21686d8dbf150154e1d626c6d4313c4cf5a7084eb7"
+  },
+  "office|japandi_calm": {
+   "len": 2698,
+   "sha256": "073b7c4ab6f60dc4983bfe2b1dd8ed56007e61582589172a6fcf4c9b473df9df"
+  },
+  "office|nordic_warmth": {
+   "len": 2184,
+   "sha256": "7197cd8879f98da6ee3b6cd4ce92e0c950ebe4f484712a7223d3878efd9a84a8"
+  },
+  "office|soft_luxury": {
+   "len": 2210,
+   "sha256": "ab03398d3b6cca84a17ed2a9f0205c0e9d7bca68865340df6259d27ac410ea7c"
+  },
+  "office|tropical_escape": {
+   "len": 2178,
+   "sha256": "498438a7850e920b0b978d10e307529987cd534b07a60e88cf119ac3b7b36936"
+  },
+  "office|warm_modern": {
+   "len": 2323,
+   "sha256": "42dbf026be3a9b842a3b0bec4e580c46d9b2e8cd69a38eda8cd7384b698400cd"
+  },
+  "pool_area|japandi_calm": {
+   "len": 3652,
+   "sha256": "28c77b681da3637b2e06262e822d002a7a88e8a72245900f5da9fbad1513843b"
+  },
+  "pool_area|nordic_warmth": {
+   "len": 3652,
+   "sha256": "28c77b681da3637b2e06262e822d002a7a88e8a72245900f5da9fbad1513843b"
+  },
+  "pool_area|soft_luxury": {
+   "len": 3652,
+   "sha256": "28c77b681da3637b2e06262e822d002a7a88e8a72245900f5da9fbad1513843b"
+  },
+  "pool_area|tropical_escape": {
+   "len": 3652,
+   "sha256": "28c77b681da3637b2e06262e822d002a7a88e8a72245900f5da9fbad1513843b"
+  },
+  "pool_area|warm_modern": {
+   "len": 3652,
+   "sha256": "28c77b681da3637b2e06262e822d002a7a88e8a72245900f5da9fbad1513843b"
+  },
+  "terrace|japandi_calm": {
+   "len": 3957,
+   "sha256": "1c5ac2f99df81e048f0af8080d214ea23cada99df8c4922d9be2b86661c7c394"
+  },
+  "terrace|nordic_warmth": {
+   "len": 3957,
+   "sha256": "1c5ac2f99df81e048f0af8080d214ea23cada99df8c4922d9be2b86661c7c394"
+  },
+  "terrace|soft_luxury": {
+   "len": 3957,
+   "sha256": "1c5ac2f99df81e048f0af8080d214ea23cada99df8c4922d9be2b86661c7c394"
+  },
+  "terrace|tropical_escape": {
+   "len": 3957,
+   "sha256": "1c5ac2f99df81e048f0af8080d214ea23cada99df8c4922d9be2b86661c7c394"
+  },
+  "terrace|warm_modern": {
+   "len": 3957,
+   "sha256": "1c5ac2f99df81e048f0af8080d214ea23cada99df8c4922d9be2b86661c7c394"
+  }
+ },
+ "vision_prompt_legacy": "Analyse this interior. Reply with EXACTLY four fields separated by ' | ', nothing else:\nroom_type | recommended_atmosphere | confidence | reason\n- room_type: one of living_room, bedroom, kitchen, dining_room, office, bathroom, entrance, hallway, other.\n- recommended_atmosphere: the ONE best-fitting from: warm_modern (warm walnut/caramel, cosy residential), soft_luxury (marble/brass/velvet, elegant — fits high ceilings, large or refined spaces), japandi_calm (pale wood, minimal, zen — fits simple, bright, uncluttered spaces), nordic_warmth (pale wood, cosy hygge, light), tropical_escape (rattan/teak/greenery — fits garden views or lush, bright spaces). Choose by architecture, light, materials, view and mood — NOT a default.\n- confidence: high, medium or low.\n- reason: a short phrase (max ~8 words).\nExample: living_room | soft_luxury | high | high ceilings, large, elegant proportions",
+ "vision_prompt_legacy_max_tokens": 40,
+ "vision_prompt_legacy_sha1_12": "35cb6b931d8b",
+ "vision_prompt_unified": "Analyse this space (interior OR exterior). Reply with EXACTLY four fields separated by ' | ', nothing else:\nroom_type | recommended_atmosphere | confidence | reason\n- room_type: classify into EXACTLY ONE canonical type. CRITICAL INTERIOR RULE: if the photo is taken from INSIDE a room (interior walls, a ceiling and an indoor floor are visible), it is an INTERIOR type EVEN IF a balcony, terrace, garden, pool or city view is visible THROUGH a window or a glass/sliding door. A visible outdoor view, skyline, natural light or large glazing is NOT evidence of an exterior room. Pick an exterior type ONLY when the camera is physically OUTSIDE, standing on that outdoor surface, with no interior ceiling or enclosing room around it. Interior: living_room, bedroom, kitchen, dining_room, office, bathroom, entrance, hallway, other. Exterior: terrace, balcony, garden, pool_area, facade, driveway. Never return a generic label such as 'outdoor', 'exterior' or 'outside'. Prefer the MOST SPECIFIC type: pool_area over garden if a pool dominates; balcony over terrace if elevated and railing-bound; terrace over garden if it is a paved usable outdoor living surface; facade if the building front elevation dominates; driveway if vehicle access or paved parking dominates; for an entry / door approach choose facade, driveway or terrace by the dominant content.\n- recommended_atmosphere: the ONE best-fitting from: warm_modern (warm walnut/caramel, cosy residential), soft_luxury (marble/brass/velvet, elegant — fits high ceilings, large or refined spaces), japandi_calm (pale wood, minimal, zen — fits simple, bright, uncluttered spaces), nordic_warmth (pale wood, cosy hygge, light), tropical_escape (rattan/teak/greenery — fits garden views or lush, bright spaces). Choose by architecture, light, materials, view and mood — NOT a default.\n- confidence: high, medium or low.\n- reason: a short phrase (max ~8 words).\nExample: terrace | tropical_escape | high | paved outdoor living area with greenery",
+ "vision_prompt_unified_max_tokens": 40,
+ "vision_prompt_unified_sha1_12": "5ef82da398d5"
+}
