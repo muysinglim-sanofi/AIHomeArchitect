@@ -63,11 +63,24 @@ def _rss_bytes_windows() -> int:
                 ("PeakPagefileUsage", ctypes.c_size_t),
             ]
 
+        # Déclarer restype/argtypes n'est PAS optionnel en 64 bits.
+        # GetCurrentProcess() renvoie le pseudo-handle (HANDLE)-1 ; sans restype
+        # ctypes le traite comme un c_int et le tronque, l'appel échoue alors
+        # silencieusement en renvoyant 0 — c'est-à-dire une RSS de 0 Mo, une
+        # mesure fausse qui ressemble à une mesure. Mesuré ici le 2026-08-14.
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+        kernel32.GetCurrentProcess.argtypes = []
+        psapi.GetProcessMemoryInfo.argtypes = [
+            wintypes.HANDLE, ctypes.POINTER(_PMC), wintypes.DWORD,
+        ]
+        psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+
         counters = _PMC()
         counters.cb = ctypes.sizeof(_PMC)
-        handle = ctypes.windll.kernel32.GetCurrentProcess()
-        if not ctypes.windll.psapi.GetProcessMemoryInfo(
-            handle, ctypes.byref(counters), counters.cb
+        if not psapi.GetProcessMemoryInfo(
+            kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb
         ):
             return 0
         return int(counters.WorkingSetSize)
