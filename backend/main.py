@@ -750,6 +750,64 @@ log.info(
     list_profiles(),
 )
 
+# ── Deployment identity + fail-closed environment guard (2026-08-14) ─────────
+# DEUX CONCEPTS DISTINCTS, deux variables. C'est la décision de conception de
+# cette passe, et elle est délibérée :
+#   • APP_ENV       = COMMENT Ayden génère (profil d'image : mobile_mvp_baseline,
+#                     prod, dev). Il pilote quality/input_fidelity/max_attempts.
+#   • AYDEN_DEPLOY_ENV = OÙ Ayden tourne (staging | production).
+# Réutiliser APP_ENV pour porter « staging » aurait basculé le moteur sur un
+# profil non benché : le staging n'aurait plus reproduit la production, ce qui
+# est exactement ce qu'on lui demande de faire. Les deux restent donc séparés,
+# et un staging tourne avec APP_ENV=mobile_mvp_baseline, comme la prod.
+#
+# ASYMÉTRIE ASSUMÉE : la garde ne s'arme QUE sur AYDEN_DEPLOY_ENV=staging.
+# Variable absente ⇒ "production" ⇒ ce bloc ne fait que journaliser, aucune
+# vérification, aucun chemin d'échec ajouté. La production ne peut donc pas se
+# mettre à refuser de démarrer à cause de ce code.
+_DEPLOY_ENV = (os.environ.get("AYDEN_DEPLOY_ENV") or "production").strip().lower()
+_SERVICE_NAME = (os.environ.get("AYDEN_SERVICE_NAME") or "ayden-backend").strip()
+# SHA court, résolu UNE fois à l'import — jamais de sous-processus git par requête.
+# RENDER_GIT_COMMIT est fourni par Render ; AYDEN_GIT_SHA permet de forcer la valeur
+# en local ou sur un autre hébergeur. Inconnu ⇒ "unknown", jamais une supposition.
+_GIT_SHA = (
+    (os.environ.get("AYDEN_GIT_SHA") or os.environ.get("RENDER_GIT_COMMIT") or "")
+    .strip()[:7] or "unknown"
+)
+
+# Refs de PROJET Supabase (identifiants d'URL, PAS des secrets — ils figurent déjà
+# en clair dans run_pwa_staging.py). On teste la valeur RÉSOLUE de SUPABASE_URL,
+# jamais un nom de fichier : c'est ce qui rend la garde infalsifiable par un
+# .env mal nommé. Patron repris de run_pwa_staging.py (garde PWA éprouvée).
+_SUPABASE_REF_STAGING = "eedcahzekpgxvvfxufbk"
+_SUPABASE_REF_PRODUCTION = "vtxkciupyafukhdsgxgw"
+
+
+def _refuse_start(reason: str) -> None:
+    """Arrêt fail-closed. N'imprime QUE la raison — jamais une URL, une clé ni un
+    token. log.critical part sur stderr (basicConfig) ET dans backend.log."""
+    log.critical("[ENV-SAFETY] staging backend refused to start: %s", reason)
+    raise SystemExit(2)
+
+
+if _DEPLOY_ENV == "staging":
+    _supabase_url = os.environ.get("SUPABASE_URL", "")
+    if _SUPABASE_REF_PRODUCTION in _supabase_url:
+        _refuse_start("Supabase project mismatch (production project referenced)")
+    if _SUPABASE_REF_STAGING not in _supabase_url:
+        _refuse_start(
+            "Supabase project mismatch (expected staging project not referenced)"
+        )
+    log.info("[ENV-SAFETY] staging Supabase project verified")
+
+log.info(
+    "[AYDEN-ENV] environment=%s service=%s commit=%s",
+    _DEPLOY_ENV, _SERVICE_NAME, _GIT_SHA,
+)
+# Journalisé séparément, parce que ce sont bien deux choses différentes : un
+# staging DOIT afficher le même generation_profile que la production.
+log.info("[AYDEN-ENV] generation_profile=%s", _startup_profile.name)
+
 # Sprint 1 — monetization config visibility. Logs PRESENCE only (booleans), never
 # the secret values, so a missing key is obvious at boot without any leak.
 log.info(
@@ -1376,7 +1434,22 @@ def _patch_dominant_opening_position(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    """Diagnostic ADDITIF (2026-08-14) — prouve QUEL backend un build mobile atteint.
+
+    `status` est conservé en tête et inchangé : les consommateurs existants (le
+    health check Render) ne lisent que lui, et aucun appelant Flutter ni backend
+    ne consomme cet endpoint (vérifié par grep sur frontend/lib et backend/).
+
+    Ne contient AUCUN secret : ni clé, ni URL Supabase, ni URL signée, ni donnée
+    personnelle. Le SHA est court et résolu une fois à l'import — aucun
+    sous-processus git par requête. Valeurs déterministes.
+    """
+    return {
+        "status": "ok",
+        "environment": _DEPLOY_ENV,
+        "service": _SERVICE_NAME,
+        "commit": _GIT_SHA,
+    }
 
 
 # ── Wave 5.18 — Developer Validation Mode admin flag ─────────────────────────
