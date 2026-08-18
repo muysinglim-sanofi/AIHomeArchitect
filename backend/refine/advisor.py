@@ -81,6 +81,13 @@ class AdviceResult:
 _INTERIOR_ROOMS = {
     "bathroom", "bedroom", "kitchen", "living room", "living", "dining room", "dining",
     "office", "hallway", "kids room", "kids", "laundry", "closet", "entryway", "study",
+    # 2026-08-13 (A2) — « Entrance Hall » est l'un des 7 libellés INTÉRIEURS réellement
+    # envoyés par l'UI (RoomTypeImages.interiorIds : entranceHall). Il ne matchait ni
+    # "hallway" ni "entryway" par sous-chaîne : avec _room_kind() il tombait donc en
+    # `unknown` et PERDAIT le véto intérieur (prouvé : « add a swimming pool » en
+    # Entrance Hall → GREEN au lieu de RED). Le set doit couvrir les libellés de
+    # production, pas seulement leur forme générique.
+    "entrance", "hall",
 }
 _EXTERIOR_ROOMS = {
     "terrace", "pool", "garden", "balcony", "patio", "driveway", "facade", "backyard",
@@ -94,7 +101,10 @@ _UNIVERSAL_DECOR = re.compile(
     r"bookshelf|bookcase|stools?|poufs?|side\s+table|coffee\s+table|plant\s+pot|trays?|bowls?|"
     r"greenery|decor|ornaments?)\b", re.I)
 
-# add/structure d'un de ces objets dans une pièce INTÉRIEURE → RED backstop
+# add/structure d'un de ces objets dans une pièce INTÉRIEURE → RED backstop.
+# ⚠ Correction Pass 2026-08-13 (A1) — ce set contient des mots qui sont AUSSI des noms
+# de couleur (forest, ocean, sea, sand…). Ne JAMAIS l'utiliser via un .search() nu :
+# passer par _absurd_object_hit(), qui exige que le terme soit la TÊTE de l'objet.
 _ABSURD_INTERIOR = re.compile(
     r"\b(cars?|ferrari|lamborghini|porsche|trucks?|vans?|motorcycles?|motorbikes?|"
     r"boats?|yachts?|ships?|canoes?|kayaks?|airplanes?|planes?|jets?|helicopters?|tanks?|"
@@ -111,6 +121,8 @@ from refine.normalizer import _FUNCTIONAL_INSTALL, _FUNC_INSTALL_VERB
 # Import unidirectionnel refine→prompt_engine (aucun cycle : intent_classifier n'importe
 # jamais refine). Réutilisée pour la calibration L1 des conversions de zone.
 from prompt_engine.intent_classifier import _FUNCTIONAL_ROOM_RE
+# Correction Pass 2026-08-13 (A1) — lexique COULEUR partagé, MÊME source unique.
+from prompt_engine.intent_classifier import COLOUR_TERM
 
 # STRUCTURE — ajout/ouverture/conversion d'un NOUVEL élément ou zone (pas d'ambiguïté de cible).
 _STRUCT_ADDITION = re.compile(r"^\s*(add|create|build|put|install|make|convert|open|fit|set\s+up)\b", re.I)
@@ -127,14 +139,55 @@ def _is_targeted(change: Change) -> bool:
     return bool(_TARGET_QUALIFIER.search(f"{change.object} {change.raw}"))
 
 
-def _room_is_interior(room_type: Optional[str]) -> bool:
-    """Défaut prudent : pièce inconnue traitée comme INTÉRIEURE (le set absurde s'applique)."""
-    if not room_type:
+# ── Correction Pass 2026-08-13 (A1) — un nom de COULEUR n'est pas un objet ───
+# « forest green », « ocean blue », « sea green » : le terme du set absurde est un
+# QUALIFICATIF de teinte, la TÊTE de l'objet est la couleur (« green »). Un simple
+# _ABSURD_INTERIOR.search() y voyait une forêt/un océan dans le salon et posait un RED —
+# c'est-à-dire un véto esthétique sur une demande de peinture parfaitement banale, en
+# contradiction frontale avec le contrat anti-paternalisme du composant (docstring, l.15).
+# Discriminant DÉTERMINISTE (aucun LLM) : terme absurde immédiatement suivi d'un nom de
+# couleur → qualificatif, on l'ignore. « add an ocean inside the living room » (suivi de
+# « inside ») et « add a swimming pool » (suivi de rien) restent des OBJETS → RED.
+_COLOUR_TAIL = re.compile(rf"\s+(?:{COLOUR_TERM})\b", re.I)
+
+
+def _absurd_object_hit(text: str) -> bool:
+    """Le set absurde désigne-t-il un vrai OBJET (et non un qualificatif de couleur) ?"""
+    for m in _ABSURD_INTERIOR.finditer(text or ""):
+        if _COLOUR_TAIL.match(text, m.end()):
+            continue          # « forest green » / « ocean blue » → teinte, pas un objet
         return True
+    return False
+
+
+# Correction Pass 2026-08-13 (A1) — le véto « objet absurde » n'a de sens que pour les
+# opérations qui INTRODUISENT un objet dans la pièce (add) ou qui touchent la coquille
+# (structure). Un modify/replace/move/remove porte sur une PROPRIÉTÉ d'un élément déjà
+# là (« change the sofa to forest green ») : il ne peut pas faire entrer une piscine.
+_INTRODUCES_OBJECT = {"add", "structure"}
+
+
+# Correction Pass 2026-08-13 (A2) — trois états, pas deux.
+# L'ancien _room_is_interior() renvoyait True par « défaut prudent » : room_type vide,
+# None, libellé produit (« Your space ») ou LOCALISÉ (« Salon », « Chambre principale »,
+# libellé khmer) héritait donc de TOUTE la sévérité du set absurde. Résultat : la
+# sévérité maximale s'appliquait précisément là où on en sait le MOINS. On distingue
+# désormais INTÉRIEUR connu / EXTÉRIEUR connu / INCONNU ; seul le véto dur intérieur
+# (règle 1) est désarmé sur INCONNU — le reste du pipeline de verdict tourne normalement
+# (escalade L2 si un client est fourni, sinon GREEN confiance 0.5, cf. advise()).
+# Call sites : `_room_is_interior` était PRIVÉ et n'avait AUCUN appelant hors de ce
+# module (grep repo 2026-08-13 : refine/advisor.py:166 uniquement) — il est donc
+# remplacé plutôt que doublé, sans wrapper de compatibilité à maintenir.
+def _room_kind(room_type: Optional[str]) -> str:
+    """'interior' | 'exterior' | 'unknown' — jamais d'inférence sur un libellé non résolu."""
+    if not room_type or not room_type.strip():
+        return "unknown"
     r = room_type.strip().lower()
     if r in _EXTERIOR_ROOMS or any(e in r for e in _EXTERIOR_ROOMS):
-        return False
-    return True
+        return "exterior"
+    if r in _INTERIOR_ROOMS or any(i in r for i in _INTERIOR_ROOMS):
+        return "interior"
+    return "unknown"
 
 
 # Wave 4.9.5 — cible de conversion EXPLICITE : un qualificatif spatial dans le detail,
@@ -161,9 +214,16 @@ def _l1_classify(change: Change, room_type: Optional[str]) -> str:
     text = f"{change.object} {change.raw}"
     raw_low = (change.raw or "").lower()
 
-    # 1) Absurde/irréalisable en intérieur (véhicule/piscine/outdoor) → RED, quel que soit le type.
-    #    → la structure ne devient JAMAIS auto-GREEN juste parce qu'elle est typée structure.
-    if _room_is_interior(room_type) and _ABSURD_INTERIOR.search(text):
+    # 1) Absurde/irréalisable en intérieur (véhicule/piscine/outdoor) → RED.
+    #    → une structure ne devient JAMAIS auto-GREEN juste parce qu'elle est typée structure.
+    #    Correction Pass 2026-08-13 (A1/A2) — TROIS gardes, toutes déterministes :
+    #      • la pièce doit être un INTÉRIEUR *connu* (A2 : plus de « défaut prudent ») ;
+    #      • l'opération doit INTRODUIRE l'objet (add/structure) — une modification de
+    #        propriété (modify/replace/move/remove) ne fait entrer aucune piscine (A1-a) ;
+    #      • le terme doit être la TÊTE de l'objet, pas un qualificatif de couleur (A1-b).
+    if (_room_kind(room_type) == "interior"
+            and change.type in _INTRODUCES_OBJECT
+            and _absurd_object_hit(text)):
         return "red"
 
     # 2) Installation fonctionnelle majeure EXPLICITE et plausible → GREEN
@@ -205,8 +265,10 @@ def _l1_classify(change: Change, room_type: Optional[str]) -> str:
 def _red_alternative(change: Change, room_type: Optional[str]) -> str:
     """Alternative générique (L1 RED) — jamais un mur : on propose une redirection."""
     obj = change.object.strip() or "that"
+    # 2026-08-13 (A1) — même détecteur que la règle 1 (jamais un .search() nu) : sinon
+    # l'alternative « place it outside » pouvait s'afficher pour un simple nom de couleur.
     return (f"place the {obj} outside (on a terrace, driveway or garden) instead"
-            if _ABSURD_INTERIOR.search(f"{change.object} {change.raw}") else
+            if _absurd_object_hit(f"{change.object} {change.raw}") else
             "adapt it to something that fits this room")
 
 

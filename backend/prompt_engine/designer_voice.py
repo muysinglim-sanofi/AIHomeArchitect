@@ -7,8 +7,9 @@ a short, anchored, opinionated reply. The internal reasoning is NEVER shown.
 
 Strictly gated by the caller: fires ONLY when AYDEN_VOICE=1 AND the turn is
 DESIGN_ADVICE (not Support / OOS / Meta / action-refine). On any error or empty
-output, generate_designer_voice returns None so the caller falls back to the
-existing pools (byte-identical fallback). No /generate, no DNA/STAGE change.
+output — and, since 2026-08-13, on a GLOBAL product-capability denial (§3.4b) —
+generate_designer_voice returns None so the caller falls back to the existing
+pools (byte-identical fallback). No /generate, no DNA/STAGE change.
 
 Vision input (optional): when the current render URL is passed, the image is
 attached so Ayden answers about what is ACTUALLY in THIS render (real layout,
@@ -18,16 +19,95 @@ client / no render) → text-only, same as before.
 """
 from __future__ import annotations
 
+import logging
 import os
+import re
+import time
 from typing import Optional
 
 from prompt_engine.design_knowledge import render_brief_for_prompt
+
+log = logging.getLogger("aih")
 
 _MODEL = "gpt-4o-mini"
 _TIMEOUT_S = 12.0
 _MAX_TOKENS = 200
 
 _LANG_NAME = {"en": "English", "fr": "French", "km": "Khmer"}
+
+
+# ── Correction Pass 2026-08-13 (3.1) — l'exception avalée devient une TRACE ───
+# Les deux voix faisaient `except Exception: return None` en SILENCE (anciennes
+# l.170 et l.217). En production, une panne LLM, un timeout ou une image illisible
+# produisaient donc EXACTEMENT la même trace qu'un tour sans voix : impossible de
+# distinguer « la voix n'a pas été appelée » de « la voix a planté ». Le repli sur
+# les pools ne change PAS (contrat byte-identique) ; on le rend seulement visible.
+# Ce qu'on loggue, et RIEN de plus :
+#   voice=       chemin de voix (designer_voice | execution_voice)
+#   image=       une image était-elle jointe à l'appel (yes|no)
+#   err=         type d'exception + message COURT
+#   latency_ms=  temps écoulé avant l'échec (distingue timeout ≠ erreur immédiate)
+# INTERDIT ici : octets d'image, URL signée du render, message utilisateur, prompt
+# complet. Le message d'exception est purgé de toute URL (une erreur de fetch porte
+# l'URL signée) PUIS tronqué.
+_MAX_ERR_CHARS = 160
+_URL_RE = re.compile(r"https?://\S+", re.I)
+
+
+def _safe_err(exc: BaseException) -> str:
+    """Message d'exception sans URL et tronqué — jamais de prompt, jamais d'image."""
+    msg = _URL_RE.sub("<url>", str(exc) or "").replace("\n", " ").strip()
+    return msg[:_MAX_ERR_CHARS]
+
+
+def _log_voice_error(voice: str, has_image: bool, exc: BaseException, t0: float) -> None:
+    # Tag PAR VOIX, identique à celui que l'appelant utilise déjà (main.py:2065-2100) :
+    # un grep « [AYDEN-EXEC-VOICE] » continue de ramener TOUT le cycle de la voix
+    # d'exécution, échecs compris. Le champ voice= reste redondant à dessein (il rend
+    # la ligne lisible seule, hors contexte de grep).
+    tag = "[AYDEN-EXEC-VOICE]" if voice == "execution_voice" else "[AYDEN-VOICE]"
+    log.warning(
+        "%s voice=%s failed image=%s err=%s: %s latency_ms=%.0f — pools fallback",
+        tag, voice, "yes" if has_image else "no", type(exc).__name__, _safe_err(exc),
+        (time.monotonic() - t0) * 1000.0,
+    )
+
+
+# ── Correction Pass 2026-08-13 (3.4b) — garde anti-déni de CAPACITÉ GLOBALE ──
+# Symptôme terrain : la voix conversationnelle répondait « I cannot generate images »
+# alors que le produit génère (le tour suivant appelle bel et bien /generate). Ce
+# n'est pas une opinion de designer, c'est une contre-vérité produit : on ne restitue
+# pas ce texte et on retombe sur le pool EXISTANT (le repli déjà en place, aucun
+# nouveau chemin). Le levier principal reste le prompt (_system_prompt) ; ceci est le
+# filet déterministe.
+# GARDE VOLONTAIREMENT ÉTROITE — l'objet doit être GÉNÉRIQUE (« images », « an image »,
+# « d'images ») : un constat ancré dans la SCÈNE (« I can't clearly see the TV from
+# this angle », « je ne vois pas bien la télé sous cet angle ») nomme un objet de la
+# pièce et DOIT passer intact. « the image » / « cette image » (le render joint, donc
+# spécifique) est volontairement hors lexique pour la même raison.
+# LIMITE ASSUMÉE : filet EN + FR seulement. Le khmer n'est PAS couvert par la regex —
+# on ne devine pas un lexique qu'on ne peut pas tester ici ; pour km, la protection
+# reste la correction de prompt (3.4a), qui elle s'applique à toutes les langues.
+_CAP_DENIAL_EN = re.compile(
+    r"\bi\s*(?:can(?:\s?not|[’']?t)"                       # I cannot / I can't
+    r"|(?:\s+am|[’']m)\s+(?:not\s+able|unable)\s+to"       # I'm unable to / I am not able to
+    r"|\s+do\s?(?:not|n[’']?t)\s+(?:have\s+the\s+ability\s+to\s+)?)"  # I don't (have the ability to)
+    r"[^.!?\n]{0,30}?\b(?:generate|create|produce|make|render|see|view|show|display|provide)\b"
+    r"[^.!?\n]{0,25}?\b(?:images|an\s+image|any\s+image)\b", re.I)
+_CAP_DENIAL_FR = re.compile(
+    r"\bje\s+n(?:e\s+|[’'])\s*[^.!?\n]{0,45}?"            # je ne … / je n'…
+    r"\b(?:g[ée]n[ée]r(?:er|e)|cr[ée]e[rz]?|produi(?:re|s)|fais|faire|vois|voir|"
+    r"affich(?:er|e)|montr(?:er|e))\b"
+    r"[^.!?\n]{0,20}?\b(?:d[’']images?|des\s+images?|une\s+image|les\s+images)\b", re.I)
+
+
+def _is_capability_denial(text: str) -> bool:
+    """Le texte nie-t-il une capacité GLOBALE du produit (générer / voir DES images) ?
+    Vrai UNIQUEMENT sur un objet générique — jamais sur un constat de scène."""
+    t = (text or "").strip()
+    if not t:
+        return False
+    return bool(_CAP_DENIAL_EN.search(t) or _CAP_DENIAL_FR.search(t))
 
 
 def designer_voice_enabled() -> bool:
@@ -58,9 +138,19 @@ def _system_prompt(
             "room.\n"
         )
     elif has_vision:
+        # Correction Pass 2026-08-13 (3.4a) — un render EXISTE mais n'a PAS pu être
+        # joint (URL absente / client ancien / non-http, cf. l.192). L'ancienne phrase
+        # (« reason about THIS room ») ordonnait de raisonner sur cette pièce précise
+        # sans qu'aucun pixel ne soit fourni : le modèle décrivait alors un render
+        # qu'il n'avait jamais vu, puis se rattrapait en niant sa capacité (« I cannot
+        # see images »), exactement le déni traité en 3.4b. On dit donc la vérité de
+        # l'entrée — image non fournie — sans dégrader la qualité du conseil.
         vision_line = (
-            "A rendered vision of this room currently exists; reason about THIS "
-            "room, not rooms in general.\n"
+            "A render of this room exists but is NOT attached to this turn — you "
+            "have NOT seen it. Answer from the project context above and the "
+            "principles for this room type; never describe what the render looks "
+            "like, and if your answer depends on what is actually there, ask ONE "
+            "short question instead of guessing.\n"
         )
     else:
         vision_line = (
@@ -89,6 +179,15 @@ def _system_prompt(
         "- Never give a numeric score. Never invent a measurement (cm, m², angles).\n"
         "- If a fact you'd need is unknown, say so plainly OR ask ONE short "
         "question — do not guess.\n"
+        # Correction Pass 2026-08-13 (3.4a, §4) — mention de capacité COURTE et
+        # CONDITIONNELLE : le produit applique bien les changements et rend une
+        # nouvelle image QUAND l'utilisateur en demande une. Formulée « quand il le
+        # demande » et jamais « je le fais maintenant » : ce tour est un tour de
+        # CONSEIL (should_generate=False côté appelant), aucune génération n'est
+        # promise. Objectif : couper à la racine le déni de capacité globale.
+        "- Ayden Studio applies changes and renders a new image when the user asks "
+        "for one, so never claim you cannot generate or see images; if a change is "
+        "needed, say it can be applied once they ask for it.\n"
         "- Improve the project, not your ego: if the user has a clear constraint "
         "or taste, update your recommendation and name the trade-off."
     )
@@ -153,6 +252,7 @@ async def generate_execution_voice(
     Returns None on empty/error so the caller falls back to the pools (byte-identical)."""
     if not message or not message.strip():
         return None
+    _t0 = time.monotonic()
     try:
         resp = await client.chat.completions.create(
             model=_EXEC_MODEL,
@@ -166,8 +266,16 @@ async def generate_execution_voice(
             ],
         )
         text = (resp.choices[0].message.content or "").strip()
+        # 2026-08-13 (3.4b) — la voix d'exécution est censée ACTER ; si elle nie
+        # malgré tout la capacité produit, on ne restitue pas (→ pool). Text-only
+        # par construction, donc image=no.
+        if text and _is_capability_denial(text):
+            log.warning("[AYDEN-EXEC-VOICE] voice=execution_voice capability_denial_filtered "
+                        "image=no chars=%d — pools fallback", len(text))
+            return None
         return text or None
-    except Exception:  # noqa: BLE001 — any LLM/network error → caller falls back
+    except Exception as exc:  # noqa: BLE001 — any LLM/network error → caller falls back
+        _log_voice_error("execution_voice", False, exc, _t0)
         return None
 
 
@@ -199,6 +307,7 @@ async def generate_designer_voice(
         ]
     else:
         user_content = message.strip()
+    _t0 = time.monotonic()
     try:
         resp = await client.chat.completions.create(
             model=_MODEL,
@@ -213,6 +322,16 @@ async def generate_designer_voice(
             ],
         )
         text = (resp.choices[0].message.content or "").strip()
+        # 2026-08-13 (3.4b) — déni de capacité GLOBALE ⇒ on ne restitue pas et on
+        # retombe sur le pool existant (None = contrat de repli déjà en place).
+        # `image=` dit si le render était joint : un déni AVEC image jointe pointe
+        # le modèle, un déni SANS image pointe le prompt (3.4a).
+        if text and _is_capability_denial(text):
+            log.warning("[AYDEN-VOICE] voice=designer_voice capability_denial_filtered "
+                        "image=%s chars=%d — pools fallback",
+                        "yes" if has_image else "no", len(text))
+            return None
         return text or None
-    except Exception:  # noqa: BLE001 — any LLM/network error → caller falls back
+    except Exception as exc:  # noqa: BLE001 — any LLM/network error → caller falls back
+        _log_voice_error("designer_voice", has_image, exc, _t0)
         return None

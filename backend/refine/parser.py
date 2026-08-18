@@ -7,6 +7,7 @@ AUCUN appel image. NE TOUCHE JAMAIS /generate, le composer, la DNA, la préserva
 """
 from __future__ import annotations
 
+import contextvars
 import json
 import re
 from dataclasses import dataclass
@@ -14,6 +15,9 @@ from typing import Optional
 
 # Read-only reuse of the compound-instruction splitter (regex split, no engine logic).
 from prompt_engine.edit_intent import _split_changes
+# Correction Pass 2026-08-13 (A4) — lexique COULEUR partagé (source unique, cf.
+# intent_classifier). Import unidirectionnel refine→prompt_engine, aucun cycle.
+from prompt_engine.intent_classifier import COLOUR_TERM_RE
 
 TYPES = ("move", "add", "remove", "replace", "modify", "structure")
 
@@ -107,6 +111,36 @@ def _is_arch_object(obj: str) -> bool:
     return bool(_ARCH_HEAD.search(o))
 
 
+# ── Correction Pass 2026-08-13 (A4) — FINITION ≠ STRUCTURE ───────────────────
+# « change the walls to ivory white » était typé `replace` (motif l.45-47) puis PROMU en
+# `structure` au seul motif que « walls » est un nom architectural : une couleur de
+# peinture devenait une opération de gros œuvre, et l'advisor la renvoyait ensuite en
+# YELLOW « je ne sais pas de quelle cloison tu parles » (advisor l.186-191) alors que la
+# demande est limpide. Changer la SURFACE d'un élément ≠ changer sa GÉOMÉTRIE.
+# Garde volontairement ÉTROITE — trois conditions CUMULÉES, sinon on promeut comme avant :
+#   1. la clause a une destination explicite (to/into/for/with …) ;
+#   2. cette destination nomme une COULEUR (lexique partagé) — « with a bigger one » et
+#      « with a glass one » n'en sont pas, donc restent STRUCTURE ;
+#   3. cette destination ne nomme AUCUN élément architectural — « replace the French
+#      doors with a glass wall » reste STRUCTURE (_refine_canonicalize_validation.py:84).
+# Le verbe structurel explicite (_STRUCT_VERB) court-circuite la garde : « widen … » reste
+# structurel quoi qu'il arrive. Le contrat STRUCTURE du planner n'est pas touché : seule
+# la classification d'ENTRÉE change.
+_FINISH_DEST = re.compile(r"\b(?:to|into|for|with)\s+(?P<dest>[^.,;]{1,40})\s*$", re.I)
+
+
+def _is_finish_change(raw: str) -> bool:
+    """La clause change-t-elle une PROPRIÉTÉ de surface (couleur/finition) plutôt que la
+    géométrie ? Utilisé UNIQUEMENT pour bloquer la promotion en `structure`."""
+    if _STRUCT_VERB.search(raw or ""):
+        return False
+    m = _FINISH_DEST.search(raw or "")
+    if not m:
+        return False
+    dest = m.group("dest")
+    return bool(COLOUR_TERM_RE.search(dest)) and not _ARCH_WORD.search(dest)
+
+
 def _natural_type(raw: str) -> str:
     """Type naturel d'après le verbe (pour DÉMOTER un faux positif structure)."""
     low = (raw or "").lower()
@@ -141,7 +175,8 @@ def canonicalize_types(changes: list[Change]) -> list[Change]:
             c.type = "structure"
             continue
         action_ok = c.type in ("add", "remove", "replace") or bool(_STRUCT_VERB.search(raw))
-        if action_ok and _is_arch_object(c.object):
+        # 2026-08-13 (A4) — une FINITION sur un élément archi n'est pas une STRUCTURE.
+        if action_ok and _is_arch_object(c.object) and not _is_finish_change(raw):
             c.type = "structure"
     return changes
 
@@ -205,13 +240,41 @@ async def parse_llm(message: str, client) -> Optional[list[Change]]:
         return None
 
 
+# ── Correction Pass 2026-08-13 (3.3) — observabilité : QUEL chemin a parsé ? ──
+# Une sortie du parser LLM et une sortie du fallback déterministe sont aujourd'hui
+# INDISCERNABLES dans les logs de /refine, alors qu'elles n'ont ni la même qualité de
+# typage ni le même coût (un pic de `fallback` = le LLM tombe, silencieusement).
+# On expose donc le chemin emprunté SANS toucher ni la signature ni la valeur de retour
+# de parse_changes : `main._refine_parse` est un SEAM de monkeypatch utilisé par au moins
+# quatre harnais (_refine_endpoint_asgi_test.py:75, validate_wave500_refine_wiring_asgi.py:90,
+# structural_capture_mode_test.py:170, benchmarks/struct_lineage_bench.py:203) et
+# _fastpath_perf_validation.py:258 scanne littéralement « _refine_parse( » dans le source
+# du handler — changer l'appel les casserait tous (et rendrait leur faux parser inopérant,
+# donc RÉSEAU réel en test).
+# ContextVar (et pas une globale) : la valeur est locale à la TÂCHE asyncio — deux requêtes
+# concurrentes ne peuvent pas se marcher dessus, et le handler la lit immédiatement après
+# SON propre await (aucun point de suspension entre les deux). Si le seam est monkeypatché,
+# la valeur reste "unknown" : honnête, jamais trompeuse.
+_PARSER_SOURCE: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "refine_parser_source", default="unknown")
+
+
+def last_parser_source() -> str:
+    """Chemin du DERNIER parse_changes de cette tâche : llm | fallback | empty | unknown.
+    Lecture seule, observabilité uniquement — ne pilote AUCUNE décision."""
+    return _PARSER_SOURCE.get()
+
+
 async def parse_changes(message: str, client=None) -> list[Change]:
     """Point d'entrée. LLM si `client` fourni (sinon/à l'échec → fallback déterministe).
     JAMAIS d'appel image ; ne dépend que du split (lecture seule)."""
     if not message or not message.strip():
+        _PARSER_SOURCE.set("empty")
         return []
     if client is not None:
         chs = await parse_llm(message, client)
         if chs:
+            _PARSER_SOURCE.set("llm")
             return chs
+    _PARSER_SOURCE.set("fallback")
     return parse_deterministic(message)
