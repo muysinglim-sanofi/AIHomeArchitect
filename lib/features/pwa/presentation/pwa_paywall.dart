@@ -12,13 +12,21 @@
 ///
 /// Honesty about payment
 /// ---------------------
-/// No payment provider is implemented (§11). So the sheet says the truth —
-/// buying on the web is not open yet — and does NOT render a Buy button that
-/// would do nothing. The products are still listed, because they are real and
-/// come from the canonical catalogue, and because "here is what is coming, and
-/// what it costs" is worth more than an empty screen. The two subscription
-/// passes carry app-store product ids, so they are marked as mobile-only rather
-/// than presented as web merchandise (§10).
+/// Whether a purchase can be completed is a SERVER fact, read from
+/// `payment.configured` on the entitlement, and this file renders whichever
+/// answer it gets:
+///
+///   configured    the web-sellable products carry a Buy button that opens the
+///                 KHQR payment sheet. The two subscription passes still do
+///                 not: they carry app-store product ids, so they are marked
+///                 mobile-only rather than presented as web merchandise (§10).
+///   not           the "payments are not open yet" notice, and NO Buy button
+///                 anywhere — an offer that cannot complete is worse than none.
+///
+/// The client never assumes either way. A browser build that believed ABA was
+/// live while the backend had no merchant configuration would show a button
+/// that dead-ends, and the whole point of putting the answer on the server is
+/// that wiring a rail is a deployment, not a release.
 library;
 
 import 'package:flutter/material.dart';
@@ -30,6 +38,7 @@ import '../billing/pwa_entitlement.dart';
 import '../billing/pwa_entitlement_controller.dart';
 import '../l10n/pwa_l10n.dart';
 import 'pwa_account_sheet.dart';
+import 'pwa_payment_sheet.dart';
 import 'pwa_theme.dart';
 import 'pwa_widgets.dart' show pwaSerif;
 
@@ -140,7 +149,22 @@ class PwaPaywallSheet extends ConsumerWidget {
                     _PaymentNotice(entitlement: e),
                     const SizedBox(height: PwaGap.md),
                     for (final p in e.productsForDisplay)
-                      _ProductRow(product: p),
+                      _ProductRow(
+                        product: p,
+                        // Buyable only when the SERVER says a rail is open AND
+                        // the catalogue says this row belongs to the web.
+                        purchasable: e.paymentConfigured && p.webEnabled,
+                        onBuy: () async {
+                          final granted =
+                              await showPwaPaymentSheet(context, ref, p);
+                          // A completed purchase closes the paywall behind the
+                          // sheet: leaving someone on a purchase screen for
+                          // something they have just bought reads as a bug.
+                          if (granted && context.mounted) {
+                            Navigator.of(context).maybePop();
+                          }
+                        },
+                      ),
                     const SizedBox(height: PwaGap.md),
                     Text(l.paywallSecureNote,
                         style: pwaSans(fontSize: 12, color: pwaFaint)),
@@ -225,11 +249,20 @@ class _PaymentNotice extends StatelessWidget {
   }
 }
 
-/// One catalogue row. Not a Buy button — there is nothing to buy yet.
+/// One catalogue row, with a Buy button only when there is genuinely something
+/// to press it for.
 class _ProductRow extends StatelessWidget {
-  const _ProductRow({required this.product});
+  const _ProductRow({
+    required this.product,
+    this.purchasable = false,
+    this.onBuy,
+  });
 
   final PwaProduct product;
+
+  /// True when this deployment can complete a purchase of THIS row.
+  final bool purchasable;
+  final Future<void> Function()? onBuy;
 
   @override
   Widget build(BuildContext context) {
@@ -268,6 +301,22 @@ class _ProductRow extends StatelessWidget {
           if (product.priceLabel.isNotEmpty)
             Text(product.priceLabel,
                 style: pwaSans(fontSize: 16, fontWeight: FontWeight.w600)),
+          if (purchasable && onBuy != null) ...[
+            const SizedBox(width: PwaGap.sm),
+            FilledButton(
+              onPressed: onBuy,
+              style: FilledButton.styleFrom(
+                backgroundColor: pwaInk,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(PwaGap.radius),
+                ),
+              ),
+              child: Text(l.payBuy,
+                  style: pwaSans(fontSize: 14, fontWeight: FontWeight.w600)),
+            ),
+          ],
         ],
       ),
     );

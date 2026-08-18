@@ -12,6 +12,7 @@ import 'package:web/web.dart' as web;
 
 import '../application/pwa_intro_gate.dart';
 import '../application/pwa_url_bridge.dart';
+import 'pwa_external_launcher.dart';
 
 /// Real browser history bridge (pushState / replaceState / popstate).
 class WebPwaUrlBridge implements PwaUrlBridge {
@@ -56,4 +57,22 @@ class WebPwaSessionStore implements PwaSessionStore {
   @override
   void write(String key, String value) =>
       web.window.sessionStorage.setItem(key, value);
+}
+
+/// Real navigation to somewhere outside the app — today, the ABA Mobile
+/// deeplink from the payment sheet.
+///
+/// `location.href` rather than `window.open`: a custom scheme opened in a new
+/// tab leaves an empty tab behind on every mobile browser, and mobile is where
+/// this button exists at all. Assigning href hands the URL to the OS, which
+/// either opens ABA Mobile or does nothing — and doing nothing is fine, because
+/// the QR is still on screen underneath.
+class WebPwaExternalLauncher implements PwaExternalLauncher {
+  const WebPwaExternalLauncher();
+
+  @override
+  void open(String url) {
+    if (url.isEmpty) return;
+    web.window.location.href = url;
+  }
 }

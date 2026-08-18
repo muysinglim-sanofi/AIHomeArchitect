@@ -262,6 +262,53 @@ const Map<String, String> pwaEnTranslations = {
   'pwaPaywallClose': 'Not now',
   'pwaPaywallSecureNote': 'Payment is handled by Ayden. Never in your browser.',
 
+  // -- Payment (ABA PayWay / KHQR) -------------------------------------------
+  // Cambodia-first wording. 'KHQR' and 'ABA Mobile' stay untranslated in all
+  // three locales: they are the names printed on the thing a person is about to
+  // tap, and translating a brand is how an interface becomes unrecognisable.
+  'pwaPayBuy': 'Buy',
+  'pwaPayTitle': 'Pay with KHQR',
+  'pwaPayPreparing': 'Preparing your payment...',
+  'pwaPayScanTitle': 'Scan to pay',
+  'pwaPayScanBody':
+      'Open ABA Mobile — or any Cambodian bank app that reads KHQR — and scan '
+      'this code.',
+  'pwaPayOpenAba': 'Open ABA Mobile',
+  'pwaPayOrScan': 'or scan the code with another bank app',
+  'pwaPayExpiresIn': 'This code expires in {t}',
+  'pwaPayWaiting': 'Waiting for your payment',
+  'pwaPayConfirmingTitle': 'Confirming your payment',
+  'pwaPayConfirmingBody':
+      'Your bank has told us. We are checking with ABA before adding your '
+      'spaces.',
+  'pwaPayActivatingTitle': 'Activating your spaces',
+  'pwaPayActivatingBody': 'Payment confirmed. Adding it to your account now.',
+  'pwaPayDoneTitle': 'You are all set',
+  'pwaPayDoneBody': '{n} spaces are on your account. Keep designing.',
+  'pwaPayContinue': 'Continue designing',
+  'pwaPayExpiredTitle': 'This code expired',
+  'pwaPayExpiredBody':
+      'Nothing was charged. Start a new payment whenever you are ready.',
+  'pwaPayCancelledTitle': 'Payment cancelled',
+  'pwaPayCancelledBody': 'Nothing was charged.',
+  'pwaPayFailedTitle': 'Payment did not go through',
+  'pwaPayFailedBody': 'Nothing was added to your account. You can try again.',
+  'pwaPayFailedDeclined': 'Your bank declined the payment. Nothing was charged.',
+  'pwaPayFailedAmount':
+      'The amount received did not match this purchase, so nothing was added. '
+      'Contact us and we will sort it out.',
+  'pwaPayFailedProvider':
+      'The payment service refused the request. Please try again.',
+  'pwaPayFailedNewAttempt':
+      'This payment code can no longer be used. Start a new payment.',
+  'pwaPayUnreachableTitle': 'We lost the connection',
+  'pwaPayUnreachableBody':
+      'Your payment may still be going through. Stay on this screen — we will '
+      'keep checking.',
+  'pwaPayRetry': 'Try again',
+  'pwaPayCancel': 'Cancel payment',
+  'pwaPaySafeNote': 'Ayden never sees your banking details.',
+
   // -- Account / verification ------------------------------------------------
   'pwaAccountTitle': 'Save your work',
   'pwaAccountBody':
@@ -557,6 +604,56 @@ const Map<String, String> pwaKmTranslations = {
   'pwaPaywallClose': 'មិន​ទាន់​ទេ',
   'pwaPaywallSecureNote':
       'ការ​ទូទាត់​ត្រូវ​បាន​គ្រប់គ្រង​ដោយ Ayden មិន​មែន​ក្នុង​កម្មវិធី​រុករក​របស់​អ្នក​ទេ។',
+
+  // -- Payment (ABA PayWay / KHQR) -------------------------------------------
+  'pwaPayBuy': 'ទិញ',
+  'pwaPayTitle': 'ទូទាត់​ដោយ KHQR',
+  'pwaPayPreparing': 'កំពុង​រៀបចំ​ការ​ទូទាត់​របស់​អ្នក...',
+  'pwaPayScanTitle': 'ស្កេន​ដើម្បី​ទូទាត់',
+  'pwaPayScanBody':
+      'បើក ABA Mobile — ឬ​កម្មវិធី​ធនាគារ​កម្ពុជា​ណា​មួយ​ដែល​អាន KHQR បាន — '
+      'រួច​ស្កេន​កូដ​នេះ។',
+  'pwaPayOpenAba': 'បើក ABA Mobile',
+  'pwaPayOrScan': 'ឬ​ស្កេន​កូដ​ដោយ​កម្មវិធី​ធនាគារ​ផ្សេង',
+  'pwaPayExpiresIn': 'កូដ​នេះ​ផុត​កំណត់​ក្នុង​រយៈពេល {t}',
+  'pwaPayWaiting': 'កំពុង​រង់ចាំ​ការ​ទូទាត់​របស់​អ្នក',
+  'pwaPayConfirmingTitle': 'កំពុង​បញ្ជាក់​ការ​ទូទាត់​របស់​អ្នក',
+  'pwaPayConfirmingBody':
+      'ធនាគារ​របស់​អ្នក​បាន​ជូន​ដំណឹង​មក​យើង​ហើយ។ '
+      'យើង​កំពុង​ផ្ទៀងផ្ទាត់​ជាមួយ ABA មុន​ពេល​បន្ថែម Spaces របស់​អ្នក។',
+  'pwaPayActivatingTitle': 'កំពុង​ដំណើរការ Spaces របស់​អ្នក',
+  'pwaPayActivatingBody':
+      'ការ​ទូទាត់​ត្រូវ​បាន​បញ្ជាក់។ កំពុង​បន្ថែម​ទៅ​គណនី​របស់​អ្នក។',
+  'pwaPayDoneTitle': 'រួចរាល់​ហើយ',
+  'pwaPayDoneBody': '{n} Spaces មាន​ក្នុង​គណនី​របស់​អ្នក​ហើយ។ បន្ត​រចនា​ត​ទៅ។',
+  'pwaPayContinue': 'បន្ត​រចនា',
+  'pwaPayExpiredTitle': 'កូដ​នេះ​ផុត​កំណត់​ហើយ',
+  'pwaPayExpiredBody':
+      'គ្មាន​ការ​កាត់​ប្រាក់​ទេ។ '
+      'ចាប់ផ្ដើម​ការ​ទូទាត់​ថ្មី​នៅ​ពេល​ណា​ដែល​អ្នក​ត្រៀម​រួច។',
+  'pwaPayCancelledTitle': 'ការ​ទូទាត់​ត្រូវ​បាន​បោះបង់',
+  'pwaPayCancelledBody': 'គ្មាន​ការ​កាត់​ប្រាក់​ទេ។',
+  'pwaPayFailedTitle': 'ការ​ទូទាត់​មិន​បាន​សម្រេច',
+  'pwaPayFailedBody':
+      'គ្មាន​អ្វី​ត្រូវ​បាន​បន្ថែម​ទៅ​គណនី​របស់​អ្នក​ទេ។ '
+      'អ្នក​អាច​ព្យាយាម​ម្ដង​ទៀត។',
+  'pwaPayFailedDeclined':
+      'ធនាគារ​របស់​អ្នក​បាន​បដិសេធ​ការ​ទូទាត់។ គ្មាន​ការ​កាត់​ប្រាក់​ទេ។',
+  'pwaPayFailedAmount':
+      'ចំនួន​ទឹកប្រាក់​ដែល​ទទួល​បាន​មិន​ត្រូវ​គ្នា​នឹង​ការ​ទិញ​នេះ​ទេ '
+      'ដូច្នេះ​គ្មាន​អ្វី​ត្រូវ​បាន​បន្ថែម។ សូម​ទាក់ទង​មក​យើង '
+      'នោះ​យើង​នឹង​ដោះស្រាយ​ជូន។',
+  'pwaPayFailedProvider':
+      'សេវា​ទូទាត់​បាន​បដិសេធ​សំណើ។ សូម​ព្យាយាម​ម្ដង​ទៀត។',
+  'pwaPayFailedNewAttempt':
+      'កូដ​ទូទាត់​នេះ​មិន​អាច​ប្រើ​បាន​ទៀត​ទេ។ សូម​ចាប់ផ្ដើម​ការ​ទូទាត់​ថ្មី។',
+  'pwaPayUnreachableTitle': 'ការ​ភ្ជាប់​ត្រូវ​បាន​ដាច់',
+  'pwaPayUnreachableBody':
+      'ការ​ទូទាត់​របស់​អ្នក​អាច​កំពុង​ដំណើរការ​នៅ​ឡើយ។ '
+      'សូម​នៅ​លើ​អេក្រង់​នេះ — យើង​នឹង​បន្ត​ពិនិត្យ។',
+  'pwaPayRetry': 'ព្យាយាម​ម្ដង​ទៀត',
+  'pwaPayCancel': 'បោះបង់​ការ​ទូទាត់',
+  'pwaPaySafeNote': 'Ayden មិន​ដែល​ឃើញ​ព័ត៌មាន​ធនាគារ​របស់​អ្នក​ទេ។',
 
   // -- Account / verification ------------------------------------------------
   'pwaAccountTitle': 'រក្សា​ទុក​ការងារ​របស់​អ្នក',
@@ -855,6 +952,53 @@ const Map<String, String> pwaFrTranslations = {
   'pwaPaywallClose': 'Pas maintenant',
   'pwaPaywallSecureNote':
       'Le paiement est géré par Ayden. Jamais dans votre navigateur.',
+
+  // -- Payment (ABA PayWay / KHQR) -------------------------------------------
+  'pwaPayBuy': 'Acheter',
+  'pwaPayTitle': 'Payer avec KHQR',
+  'pwaPayPreparing': 'Préparation de votre paiement...',
+  'pwaPayScanTitle': 'Scannez pour payer',
+  'pwaPayScanBody':
+      'Ouvrez ABA Mobile — ou toute application bancaire cambodgienne qui lit '
+      'le KHQR — et scannez ce code.',
+  'pwaPayOpenAba': 'Ouvrir ABA Mobile',
+  'pwaPayOrScan': 'ou scannez le code avec une autre application bancaire',
+  'pwaPayExpiresIn': 'Ce code expire dans {t}',
+  'pwaPayWaiting': 'En attente de votre paiement',
+  'pwaPayConfirmingTitle': 'Confirmation de votre paiement',
+  'pwaPayConfirmingBody':
+      "Votre banque nous a prévenus. Nous vérifions auprès d'ABA avant "
+      "d'ajouter vos Spaces.",
+  'pwaPayActivatingTitle': 'Activation de vos Spaces',
+  'pwaPayActivatingBody': 'Paiement confirmé. Ajout à votre compte en cours.',
+  'pwaPayDoneTitle': 'Tout est prêt',
+  'pwaPayDoneBody': '{n} Spaces sont sur votre compte. Continuez à créer.',
+  'pwaPayContinue': 'Continuer à créer',
+  'pwaPayExpiredTitle': 'Ce code a expiré',
+  'pwaPayExpiredBody':
+      "Rien n'a été débité. Lancez un nouveau paiement quand vous voulez.",
+  'pwaPayCancelledTitle': 'Paiement annulé',
+  'pwaPayCancelledBody': "Rien n'a été débité.",
+  'pwaPayFailedTitle': "Le paiement n'a pas abouti",
+  'pwaPayFailedBody':
+      "Rien n'a été ajouté à votre compte. Vous pouvez réessayer.",
+  'pwaPayFailedDeclined':
+      "Votre banque a refusé le paiement. Rien n'a été débité.",
+  'pwaPayFailedAmount':
+      "Le montant reçu ne correspond pas à cet achat : rien n'a été ajouté. "
+      'Contactez-nous, nous réglerons cela.',
+  'pwaPayFailedProvider':
+      'Le service de paiement a refusé la demande. Veuillez réessayer.',
+  'pwaPayFailedNewAttempt':
+      'Ce code de paiement ne peut plus être utilisé. Lancez un nouveau '
+      'paiement.',
+  'pwaPayUnreachableTitle': 'Connexion perdue',
+  'pwaPayUnreachableBody':
+      'Votre paiement est peut-être toujours en cours. Restez sur cet écran — '
+      'nous continuons à vérifier.',
+  'pwaPayRetry': 'Réessayer',
+  'pwaPayCancel': 'Annuler le paiement',
+  'pwaPaySafeNote': 'Ayden ne voit jamais vos informations bancaires.',
 
   // -- Account / verification ------------------------------------------------
   'pwaAccountTitle': 'Enregistrez votre travail',

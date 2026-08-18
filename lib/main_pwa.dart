@@ -30,8 +30,10 @@ import 'features/pwa/application/pwa_url_bridge.dart';
 import 'features/pwa/auth/pwa_auth_controller.dart';
 import 'features/pwa/auth/pwa_auth_service.dart';
 import 'features/pwa/billing/pwa_entitlement_controller.dart';
+import 'features/pwa/billing/pwa_payment_controller.dart';
 import 'features/pwa/config/pwa_environment.dart';
 import 'features/pwa/data/mock_pwa_experience_repository.dart';
+import 'features/pwa/data/pwa_external_launcher.dart';
 import 'features/pwa/data/pwa_generation_api.dart';
 import 'features/pwa/data/pwa_generation_service.dart';
 import 'features/pwa/data/pwa_image_url_resolver.dart';
@@ -229,6 +231,21 @@ Future<void> _bootPwaStaging(
         pwaBootRestoreProvider.overrideWithValue(restore),
         // The paywall reads THIS and never a local counter (§9).
         pwaEntitlementReaderProvider.overrideWithValue(api.entitlement),
+        // The KHQR payment rail. Four server calls and no gateway: the browser
+        // holds no merchant id, no api key and no signing material, because a
+        // credential in a web bundle is a credential published.
+        pwaPaymentGatewayProvider.overrideWithValue(
+          PwaPaymentGateway(
+            startCheckout: api.startCheckout,
+            orderStatus: api.orderStatus,
+            openOrder: api.openOrder,
+            cancelOrder: api.cancelOrder,
+          ),
+        ),
+        // Opening ABA Mobile is a browser navigation, so its implementation
+        // lives with the other `package:web` adapters and is injected here.
+        pwaExternalLauncherProvider
+            .overrideWithValue(const WebPwaExternalLauncher()),
         pwaAuthServiceProvider.overrideWithValue(auth),
         ..._webNavOverrides(bridge),
       ],

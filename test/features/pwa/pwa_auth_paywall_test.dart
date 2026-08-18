@@ -32,7 +32,6 @@ import 'package:ai_home_architect/features/pwa/auth/pwa_email_otp_channel.dart';
 import 'package:ai_home_architect/features/pwa/auth/pwa_verification_channel.dart';
 import 'package:ai_home_architect/features/pwa/billing/pwa_entitlement.dart';
 import 'package:ai_home_architect/features/pwa/billing/pwa_entitlement_controller.dart';
-import 'package:ai_home_architect/features/pwa/billing/pwa_payment_provider.dart';
 import 'package:ai_home_architect/features/pwa/data/pwa_generation_service.dart';
 import 'package:ai_home_architect/features/pwa/l10n/pwa_l10n.dart';
 import 'package:ai_home_architect/features/pwa/l10n/pwa_translations.dart';
@@ -635,25 +634,48 @@ void main() {
       expect(e.productsForDisplay.map((p) => p.sku), ['pack_10', 'weekly_pass']);
     });
 
-    test('PAY09 no payment provider is configured, and none is faked', () {
+    test('PAY09 the client holds NO gateway credential and speaks NO gateway '
+        'protocol', () {
       final e = _ent({
         'can_generate': false,
         'billing_state': 'FREE_EXHAUSTED',
         'payment': {'provider': 'none', 'configured': false},
       });
-      expect(e.paymentConfigured, isFalse);
+      expect(e.paymentConfigured, isFalse,
+          reason: 'the SERVER decides whether a purchase can complete');
 
-      final provider = pwaPaymentProviderFor(e);
-      expect(provider.isConfigured, isFalse);
-      expect(provider, isA<PwaUnconfiguredPaymentProvider>());
-
-      // §11, checked over the SOURCE so it survives someone's good intentions.
-      final src = _read('lib/features/pwa/billing/pwa_payment_provider.dart');
-      for (final term in ['payway', 'aba.com.kh', 'merchant_id', 'hash=']) {
-        expect(src.toLowerCase().contains(term), isFalse,
-            reason: 'no production-like payment code may be written from '
-                'community docs');
+      // 2026-08-18 — this assertion changed shape with the KHQR rail, and the
+      // reason matters. It used to guard `pwa_payment_provider.dart`, a
+      // client-side abstraction for a checkout that did not exist; that file is
+      // gone, because the answer turned out to be that the browser needs NO
+      // provider abstraction at all. It sends a sku, the server does the rest.
+      //
+      // So the check moved from one file to the WHOLE of `lib/`, and from
+      // "no production-like code" to the thing that actually matters: no
+      // credential and no signing material can ever be in a web bundle, because
+      // a credential in a bundle is a credential published.
+      final banned = [
+        'payway_api_key',
+        'payway_merchant',
+        'merchant_id',
+        'hmac',
+        'sha512',
+        'checkout-sandbox.payway',
+        'checkout.payway',
+        'generate-qr',
+        'check-transaction',
+      ];
+      final offenders = <String>[];
+      for (final file in Directory('lib').listSync(recursive: true)) {
+        if (file is! File || !file.path.endsWith('.dart')) continue;
+        final src = file.readAsStringSync().toLowerCase();
+        for (final term in banned) {
+          if (src.contains(term)) offenders.add('${file.path}: $term');
+        }
       }
+      expect(offenders, isEmpty,
+          reason: 'the browser must never hold a gateway credential or sign a '
+              'gateway request');
     });
 
     testWidgets('PAY10 the paywall renders the refused state in all three '

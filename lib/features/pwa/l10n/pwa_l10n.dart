@@ -589,6 +589,60 @@ class PwaL10n {
   String get paywallClose => _get('pwaPaywallClose');
   String get paywallSecureNote => _get('pwaPaywallSecureNote');
 
+  // ── Payment (ABA PayWay / KHQR) ────────────────────────────────────────────
+  //
+  // Every string a person sees while paying goes through here, including the
+  // failure copy. The backend sends MACHINE codes — `AMOUNT_MISMATCH`,
+  // `DECLINED`, `QR_REFUSED` — and [payFailedBody] is the one place that turns
+  // a code into a sentence, so no widget ever renders a reason string raw and
+  // no locale can drift from another.
+  String get payBuy => _get('pwaPayBuy');
+  String get payTitle => _get('pwaPayTitle');
+  String get payPreparing => _get('pwaPayPreparing');
+  String get payScanTitle => _get('pwaPayScanTitle');
+  String get payScanBody => _get('pwaPayScanBody');
+  String get payOpenAba => _get('pwaPayOpenAba');
+  String get payOrScan => _get('pwaPayOrScan');
+  String payExpiresIn(String remaining) =>
+      _get('pwaPayExpiresIn').replaceAll('{t}', remaining);
+  String get payWaiting => _get('pwaPayWaiting');
+  String get payConfirmingTitle => _get('pwaPayConfirmingTitle');
+  String get payConfirmingBody => _get('pwaPayConfirmingBody');
+  String get payActivatingTitle => _get('pwaPayActivatingTitle');
+  String get payActivatingBody => _get('pwaPayActivatingBody');
+  String get payDoneTitle => _get('pwaPayDoneTitle');
+  String payDoneBody(int n) =>
+      _get('pwaPayDoneBody').replaceAll('{n}', '$n');
+  String get payContinue => _get('pwaPayContinue');
+  String get payExpiredTitle => _get('pwaPayExpiredTitle');
+  String get payExpiredBody => _get('pwaPayExpiredBody');
+  String get payCancelledTitle => _get('pwaPayCancelledTitle');
+  String get payCancelledBody => _get('pwaPayCancelledBody');
+  String get payFailedTitle => _get('pwaPayFailedTitle');
+  String get payUnreachableTitle => _get('pwaPayUnreachableTitle');
+  String get payUnreachableBody => _get('pwaPayUnreachableBody');
+  String get payRetry => _get('pwaPayRetry');
+  String get payCancel => _get('pwaPayCancel');
+  String get paySafeNote => _get('pwaPaySafeNote');
+
+  /// The sentence for a machine failure code. Unknown codes fall back to the
+  /// generic body rather than to the code itself — a person must never be shown
+  /// `PRODUCT_UNMAPPED`.
+  String payFailedBody(String reason, {bool newAttemptRequired = false}) {
+    if (newAttemptRequired || reason == 'DUPLICATE_TRAN_ID') {
+      return _get('pwaPayFailedNewAttempt');
+    }
+    return switch (reason.toUpperCase()) {
+      'DECLINED' || 'CANCELLED' => _get('pwaPayFailedDeclined'),
+      'AMOUNT_MISMATCH' ||
+      'CURRENCY_MISMATCH' ||
+      'AMOUNT_MISSING' =>
+        _get('pwaPayFailedAmount'),
+      'QR_REFUSED' || 'UNREACHABLE' => _get('pwaPayFailedProvider'),
+      _ => _get('pwaPayFailedBody'),
+    };
+  }
+
   // ── Account / verification ─────────────────────────────────────────────────
   String get accountTitle => _get('pwaAccountTitle');
   String get accountBody => _get('pwaAccountBody');

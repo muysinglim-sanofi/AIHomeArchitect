@@ -574,4 +574,88 @@ class PwaGenerationApi {
       return null;
     }
   }
+
+  // ── PAYMENTS (KHQR / ABA PayWay) ───────────────────────────────────────────
+  //
+  // Four reads and two writes, and NONE of them talks to PayWay. The browser
+  // holds no merchant id, no api key and no signing material; it asks Ayden,
+  // Ayden asks PayWay. That is not a convenience — a credential in a web bundle
+  // is a credential published.
+  //
+  // These methods deliberately return the RAW body, failures included, instead
+  // of throwing. A payment surface has to render "the gateway refused", "this
+  // expired" and "we could not reach the server" as distinct, translated
+  // states; collapsing them into an exception would lose exactly the
+  // distinctions the person needs. The backend speaks a machine vocabulary
+  // (`error_code`, `payment_state`, `reason`) and the client translates it.
+
+  /// Ask the SERVER to open a payment for [sku]. The only two things the
+  /// browser gets to say.
+  ///
+  /// [attemptKey] is stable for one purchase ATTEMPT: reusing it after a
+  /// refresh, a retry or a dropped response converges on the same PayWay
+  /// transaction, and a person who taps "try again" gets a new one.
+  Future<Map<String, Object?>> startCheckout({
+    required String sku,
+    required String attemptKey,
+  }) => _payment('POST', '/pwa/staging/payments/checkout',
+      body: {'sku': sku, 'attempt_key': attemptKey});
+
+  /// The server's view of one payment. THE polling endpoint — it re-verifies
+  /// with PayWay server-side, so this is how the browser learns it was paid.
+  Future<Map<String, Object?>> orderStatus(String tranId) => _payment(
+      'GET', '/pwa/staging/payments/order/${Uri.encodeComponent(tranId)}');
+
+  /// The payment still in progress for this person, if any. Asked at boot: an
+  /// F5 or a second tab restores the sheet from the SERVER, so nothing about a
+  /// payment is ever kept in browser storage.
+  Future<Map<String, Object?>> openOrder() =>
+      _payment('GET', '/pwa/staging/payments/open');
+
+  /// The person closed the sheet. Cancels the ATTEMPT — the server verifies
+  /// first, so money that arrived a moment ago still wins.
+  Future<Map<String, Object?>> cancelOrder(String tranId) => _payment(
+      'POST',
+      '/pwa/staging/payments/order/${Uri.encodeComponent(tranId)}/cancel');
+
+  Future<Map<String, Object?>> _payment(
+    String method,
+    String path, {
+    Map<String, Object?>? body,
+  }) async {
+    if (_disposed) {
+      return const {'ok': false, 'error_code': 'CANCELLED', 'retryable': true};
+    }
+    final token = await _tokenProvider();
+    if (token == null || token.isEmpty) {
+      return const {'ok': false, 'error_code': 'MISSING_TOKEN', 'retryable': false};
+    }
+    final options = Options(
+      headers: {'Authorization': 'Bearer $token'},
+      receiveTimeout: const Duration(seconds: 30),
+    );
+    try {
+      final res = method == 'GET'
+          ? await _dio.get<Object?>(path, options: options)
+          : await _dio.post<Object?>(path, data: body ?? const {}, options: options);
+      final code = res.statusCode ?? 0;
+      final data = res.data;
+      final map = data is Map
+          ? data.cast<String, Object?>()
+          : <String, Object?>{};
+      if (code >= 200 && code < 300) return {'ok': true, ...map};
+      // FastAPI wraps a raised HTTPException detail; unwrap it so the caller
+      // sees the same shape whether the backend raised or returned.
+      final detail = map['detail'];
+      return {
+        'ok': false,
+        'http_status': code,
+        ...(detail is Map ? detail.cast<String, Object?>() : map),
+      };
+    } catch (_) {
+      // Unreachable is NOT refused. A payment in flight must survive a dropped
+      // packet, and the next poll asks again.
+      return const {'ok': false, 'error_code': 'UNREACHABLE', 'retryable': true};
+    }
+  }
 }
