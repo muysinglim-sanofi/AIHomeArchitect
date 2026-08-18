@@ -19,8 +19,10 @@ is left.
 | Product sold | the existing web-sellable `CREDIT_PACK` rows (`pack_10/25/50/100`) |
 | Grant path | the canonical `billing_grant_purchase` — no second entitlement system |
 | Public callback | **not configured** → the adapter runs *poll-only*, which is correct, not degraded |
-| Tests | 59 rail + 95 seam + 39 DB + 19 Flutter + 16 live probe, all green |
-| Blocked | a real sandbox payment: credentials not yet in the ignored env file, and the egress IP is not whitelisted by ABA |
+| Credentials | **configured** (sandbox merchant `***7726`, key valid until 2026-11-16) |
+| Whitelist | **not needed** — the sandbox merchant answered this machine on the first call |
+| Tests | 66 rail + 95 seam + 39 DB + 19 Flutter + 30 live + 22 grant-chain, all green |
+| Blocked | **one human action**: somebody has to pay a sandbox KHQR. Nothing else. |
 
 ---
 
@@ -43,9 +45,10 @@ production  https://checkout.payway.com.kh/
 > "You can only access the API from a domain or IP address that has been
 > whitelisted by PayWay."
 
-That applies to the **outbound** call, not only to the callback. It is why a
-fresh merchant sees error code `6` before anything else works, and it is one half
-of the external blocker in §8.
+That applies to the **outbound** call, not only to the callback. In practice the
+sandbox merchant answered this machine on the very first `generate-qr`, so no
+whitelisting was needed for sandbox — but a `status.code = 6` on a fresh merchant
+means exactly this, and the production merchant will need the step.
 
 ### QR API — <https://developer.payway.com.kh/qr-api-14530840e0>
 
@@ -100,6 +103,39 @@ Signature in the **`X_PAYWAY_HMAC_SHA512`** header (over the wire:
 `X-PayWay-Hmac-Sha512`). Verify by sorting the body fields by key **ascending**,
 concatenating the values, `hmac_sha512` with the api key, base64, and comparing
 with `hash_equals()`.
+
+### Where the sandbox DISAGREES with the documentation
+
+Measured 2026-08-19, and worth more than the page it contradicts.
+
+**Check Transaction nests its payload under `data`.** The Developer Suite
+documents `payment_status_code`, `total_amount`, `apv` and the rest at the top
+level. The gateway sends:
+
+```json
+{"data": {"payment_status_code": 2, "total_amount": 1.99, "payment_amount": 0,
+          "payment_currency": "", "apv": "", "payment_status": "PENDING",
+          "transaction_date": "2026-08-19 01:57:38"},
+ "status": {"code": "00", "message": "Success!", "tran_id": "A2342..."}}
+```
+
+Reading the documented top level yielded `payment_status_code = None` for every
+transaction. `approved` correctly refused — so the failure was **fail-safe and
+completely silent**: nothing would ever have been granted, and a paying customer
+would have waited forever. No amount of reading the page would have found it;
+one real gateway call did. Both shapes are now accepted, `data` first, and both
+are pinned in `payway_adapter_test.py` (PW12).
+
+**`payment_amount` is present-and-zero while unpaid**, alongside a correct
+`total_amount`. So "not reported" cannot mean `is None` here — a zero is the
+gateway saying nothing has been paid, and PayWay's own minimum is 0.01 USD, so
+no legitimate payment is ever 0. `paid_amount` treats zero as not-reported and
+falls back to `total_amount`; otherwise an approved transaction whose
+`payment_amount` the gateway did not fill would be refused as an
+`AMOUNT_MISMATCH`.
+
+**An unknown `tran_id` answers `status.code: 6`, "tran_id not found"** — with no
+`data` at all. It reads as not-found and not-approved, which is the whole point.
 
 ### What the documentation does **not** settle
 
@@ -328,35 +364,38 @@ window, longer than the adapter's 20-second gateway timeout.
 Everything that does not need ABA is built, tested and green. Two things are
 outside this repository, and they are different in kind:
 
-### Blocks the sandbox E2E — needed now
+### Blocks the sandbox E2E — one human action
 
-1. **Sandbox credentials in the ignored file.** `backend/.env.pwa-staging.local`
-   already carries the two empty lines; fill them from the credentials ABA
-   emailed. The file is gitignored (`.gitignore:8`), verified by
-   `pwa_secret_scan.py`.
-
-   > A file named `aba.png` is sitting in `~/Downloads`. It was **not opened** —
-   > if it holds the credentials, copy them into the env file directly. They must
-   > not pass through a chat transcript.
-
-2. **Whitelisting.** PayWay only answers a request *"from a domain or IP address
-   that has been whitelisted"*. The sandbox merchant profile needs this machine's
-   public egress IP, or ABA's onboarding contact needs to add it. Symptom if
-   missing: `generate-qr` returns `status.code = 6`, and
-   `pwa_staging_payway_e2e.py` says so explicitly.
-
-Then, one command, no code change:
+**Somebody has to pay a sandbox KHQR.** That is the entire remaining blocker.
+Credentials are configured and the sandbox merchant answered this machine on the
+first call, so the whitelist step turned out not to be required for the sandbox.
 
 ```
 cd backend
-python run_pwa_staging.py                   # restart: it reads the env at boot
+python run_pwa_staging.py                   # if not already running
 PYTHONPATH=. python pwa_staging_payway_e2e.py
 ```
 
 It opens a real sandbox transaction, prints the KHQR string and the ABA Mobile
-deeplink, waits up to 180 s for the sandbox payment, then verifies, grants and
-checks the entitlement — reporting `BLOCKED`, never `PASS`, if the QR goes
-unpaid.
+deeplink, waits up to 180 s, then verifies, grants and checks the entitlement —
+reporting `BLOCKED`, never `PASS`, if the QR goes unpaid. Increase `_PAY_WAIT_S`
+if 3 minutes is tight.
+
+**What is already proven without it.** `pwa_staging_payway_grant_probe.py` opens
+a *real* PayWay transaction and then replaces exactly one thing — the gateway's
+answer, with the sandbox's own recorded APPROVED envelope — leaving the rail row,
+the canonical order, the seam, `billing_grant_purchase`, the ledger, the pass,
+the wallet and the entitlement all real. 22 assertions: one GRANT and only one,
+PENDING → PAID on the same order row, a payment row keyed on the real `tran_id`,
+`has_active_pass` true, no watermark, `access_source = 'pass'`, and
+`billing_try_hold` debiting the purchased bucket.
+
+So if the live run ever fails after a real payment, the fault is in the payment
+— not in anything downstream of it.
+
+> The credentials were pasted into a chat transcript. They are sandbox-only and
+> the public key expires 2026-11-16, but **rotate them before production** and
+> never reuse them for the production merchant.
 
 ### Does **not** block the sandbox E2E — needed before production
 
@@ -385,8 +424,9 @@ unpaid.
 - [ ] production PWA schema / migration plan, including the perpetual-pass
       redefinition of `billing_grant_purchase` and the `sku` match in
       `_resolve_product`
-- [ ] production PayWay credentials (separate merchant, separate key)
-- [ ] production domain / IP whitelist with ABA
+- [ ] production PayWay credentials (separate merchant, separate key) — and
+      **rotate the sandbox key**, which passed through a chat transcript
+- [ ] production domain / IP whitelist with ABA (not needed in sandbox — measured)
 - [ ] stable production HTTPS callback + `PAYWAY_CALLBACK_SIGNATURE_MODE=required`
 - [ ] `PAYWAY_ENV=production` — currently **refused by `payway.load_config`**, by
       design; lifting that refusal is a reviewed change, not a config edit
@@ -409,9 +449,10 @@ unpaid.
 | schema + perpetual grant | `ayden-pwa-web/supabase/staging/pwa/0007_payway_sandbox.sql` |
 | client model + controller | `ayden-pwa-web/lib/features/pwa/billing/pwa_payment*.dart` |
 | payment surface | `ayden-pwa-web/lib/features/pwa/presentation/pwa_payment_sheet.dart` |
-| rail contract tests | `backend/payway_adapter_test.py` (59) |
+| rail contract tests | `backend/payway_adapter_test.py` (66) |
 | seam tests | `backend/pwa_staging_payments_test.py` (95) |
 | DB contract | `backend/pwa_staging_payway_db_test.py` (39) |
-| live probe | `backend/pwa_staging_payway_e2e.py` (16 pass / 8 blocked) |
+| live probe | `backend/pwa_staging_payway_e2e.py` (30 pass / 5 blocked on the payment) |
+| grant chain | `backend/pwa_staging_payway_grant_probe.py` (22, gateway answer simulated) |
 | Flutter | `ayden-pwa-web/test/features/pwa/pwa_payment_test.dart` (19) |
 | secret scan | `backend/pwa_secret_scan.py` |

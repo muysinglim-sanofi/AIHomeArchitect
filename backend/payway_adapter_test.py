@@ -370,6 +370,92 @@ def test_status_semantics() -> None:
           status(total_amount=1.99).paid_amount == 1.99)
 
 
+def test_real_envelope_shapes() -> None:
+    """PW12 — the envelopes the SANDBOX actually sends, captured verbatim.
+
+    These two payloads are not invented. They were recorded from
+    checkout-sandbox.payway.com.kh on 2026-08-19, and they are here because the
+    first one disagrees with the documentation in a way that silently disabled
+    every grant: the Developer Suite documents `payment_status_code` at the top
+    level, and the gateway nests it under `data`. The parser read the top level,
+    found nothing, and `approved` correctly refused — forever, for everyone.
+
+    Fail-safe, and invisible. Pinning the real shape is what stops it coming
+    back the next time someone tidies the parser against the documentation.
+    """
+    import asyncio  # noqa: PLC0415
+
+    section("PW12  the envelopes the sandbox really sends")
+
+    captured = {}
+
+    async def _fake_post(cfg, path, body):  # noqa: ANN001
+        return captured["reply"]
+
+    real_post = payway._post  # noqa: SLF001
+    payway._post = _fake_post  # noqa: SLF001
+    try:
+        cfg = _configured()
+
+        # MEASURED: an unpaid transaction. `data`-nested, and `payment_amount`
+        # is present-and-zero rather than absent.
+        captured["reply"] = {
+            "data": {"payment_status_code": 2, "total_amount": 1.99,
+                     "original_amount": 1.99, "refund_amount": 0,
+                     "discount_amount": 0, "payment_amount": 0,
+                     "payment_currency": "", "apv": "",
+                     "payment_status": "PENDING",
+                     "transaction_date": "2026-08-19 01:57:38"},
+            "status": {"code": "00", "message": "Success!", "tran_id": "A1"},
+        }
+        s = asyncio.run(payway.check_transaction(cfg=cfg, tran_id="A1"))
+        check("PW12 the `data`-nested payment status is read",
+              s.payment_status_code == 2 and s.payment_status == "PENDING",
+              f"{s.payment_status_code} {s.payment_status!r}")
+        check("PW12 an unpaid transaction is PENDING, never approved",
+              s.pending and not s.approved and not s.terminal_failure)
+        check("PW12 a zero payment_amount falls back to total_amount",
+              s.paid_amount == 1.99, str(s.paid_amount))
+
+        # MEASURED: a transaction PayWay has never heard of.
+        captured["reply"] = {
+            "status": {"code": 6, "message": "tran_id not found",
+                       "tran_id": "ANOSUCH"},
+        }
+        s = asyncio.run(payway.check_transaction(cfg=cfg, tran_id="ANOSUCH"))
+        check("PW12 an unknown tran_id is not found and not approved",
+              not s.found and not s.approved, str(s.envelope_code))
+
+        # The APPROVED shape, in the SAME nesting. This is the one that must
+        # grant, and the one the bug made unreachable.
+        captured["reply"] = {
+            "data": {"payment_status_code": 0, "payment_status": "APPROVED",
+                     "total_amount": 1.99, "payment_amount": 1.99,
+                     "payment_currency": "USD", "apv": "832865",
+                     "transaction_date": "2026-08-19 02:03:11"},
+            "status": {"code": "00", "message": "Success!", "tran_id": "A2"},
+        }
+        s = asyncio.run(payway.check_transaction(cfg=cfg, tran_id="A2"))
+        check("PW12 an APPROVED transaction is approved", s.approved)
+        check("PW12 the approval code and paid amount come through",
+              s.approval_code == "832865" and s.paid_amount == 1.99
+              and s.currency == "USD", str(s))
+
+        # And the DOCUMENTED flat shape still parses, so a future gateway
+        # release that matches its own page does not break this.
+        captured["reply"] = {
+            "payment_status_code": 0, "payment_status": "APPROVED",
+            "total_amount": 1.99, "payment_amount": 1.99,
+            "payment_currency": "USD", "apv": "111111",
+            "status": {"code": "00", "message": "Success!", "tran_id": "A3"},
+        }
+        s = asyncio.run(payway.check_transaction(cfg=cfg, tran_id="A3"))
+        check("PW12 the DOCUMENTED flat shape is still accepted",
+              s.approved and s.approval_code == "111111", str(s))
+    finally:
+        payway._post = real_post  # noqa: SLF001
+
+
 def main() -> int:
     print("ABA PayWay rail — OFFLINE contract (no network, no database)\n")
     test_config()
@@ -379,6 +465,7 @@ def main() -> int:
     test_pushback()
     test_no_secret_leak()
     test_status_semantics()
+    test_real_envelope_shapes()
 
     print()
     if _failed:

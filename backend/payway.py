@@ -627,9 +627,19 @@ class TransactionStatus:
 
         `payment_amount` is documented as "the amount that customer has paid" and
         is therefore the figure to compare against the order. `total_amount` (the
-        amount after discount) is the fallback for a sandbox reply that omits it.
+        amount after discount) is the fallback.
+
+        MEASURED 2026-08-19, sandbox: an UNPAID transaction comes back with
+        `payment_amount: 0` and `total_amount: 1.99` — the field is present and
+        zero rather than absent. So "absent" cannot be `is None` here: a zero is
+        the gateway saying "nothing has been paid yet", and PayWay's own minimum
+        is 0.01 USD / 100 KHR, so no legitimate payment is ever 0. Treating it as
+        not-reported is what stops an approved transaction whose `payment_amount`
+        the gateway did not fill from being refused as an AMOUNT_MISMATCH.
         """
-        return self.payment_amount if self.payment_amount is not None else self.total_amount
+        if self.payment_amount:
+            return self.payment_amount
+        return self.total_amount
 
 
 def _as_float(value: Any) -> Optional[float]:
@@ -654,20 +664,44 @@ async def check_transaction(*, cfg: PayWayConfig, tran_id: str) -> TransactionSt
     the answer does not depend on PayWay being able to reach us.
     """
     body = build_check_request(cfg=cfg, tran_id=tran_id)
-    data = await _post(cfg, PATH_CHECK_TRANSACTION, body)
-    code, message, _ = _status(data)
+    envelope = await _post(cfg, PATH_CHECK_TRANSACTION, body)
+    code, message, _ = _status(envelope)
+
+    # WHERE THE PAYMENT FIELDS REALLY LIVE.
+    #
+    # The Developer Suite documents `payment_status_code`, `total_amount`, `apv`
+    # and the rest at the TOP LEVEL of the response. The sandbox does not put
+    # them there. Measured 2026-08-19, verbatim:
+    #
+    #   {"data": {"payment_status_code": 2, "total_amount": 1.99,
+    #             "payment_amount": 0, "payment_currency": "", "apv": "",
+    #             "payment_status": "PENDING",
+    #             "transaction_date": "2026-08-19 01:57:38"},
+    #    "status": {"code": "00", "message": "Success!", "tran_id": "A2342..."}}
+    #
+    # Reading the top level therefore yielded `payment_status_code = None` for
+    # every transaction, which `approved` correctly refuses — so the failure mode
+    # was fail-SAFE (nothing would ever have been granted) and completely silent
+    # (a paid customer would have waited forever). Only a real gateway call could
+    # have found it; no amount of reading the page would have.
+    #
+    # Both shapes are accepted, `data` first, because the documentation may
+    # describe an older or a future response and neither should break this.
+    payload = envelope.get("data")
+    payload = payload if isinstance(payload, dict) else envelope
+
     status = TransactionStatus(
         tran_id=tran_id,
         envelope_code=code,
         envelope_message=message,
-        payment_status_code=_as_int(data.get("payment_status_code")),
-        payment_status=str(data.get("payment_status") or ""),
-        total_amount=_as_float(data.get("total_amount")),
-        payment_amount=_as_float(data.get("payment_amount")),
-        currency=str(data.get("payment_currency") or ""),
-        approval_code=str(data.get("apv") or ""),
-        transaction_date=str(data.get("transaction_date") or ""),
-        raw={k: v for k, v in data.items() if k != "hash"},
+        payment_status_code=_as_int(payload.get("payment_status_code")),
+        payment_status=str(payload.get("payment_status") or ""),
+        total_amount=_as_float(payload.get("total_amount")),
+        payment_amount=_as_float(payload.get("payment_amount")),
+        currency=str(payload.get("payment_currency") or ""),
+        approval_code=str(payload.get("apv") or ""),
+        transaction_date=str(payload.get("transaction_date") or ""),
+        raw={k: v for k, v in envelope.items() if k != "hash"},
     )
     log.info("[payway] check tran_id=%s envelope=%s payment_status=%s(%s) "
              "amount=%s %s", tran_id, code, status.payment_status,
