@@ -155,6 +155,29 @@ def main() -> None:
 
     canonical.app.include_router(pwa_staging_api.router)
     print('[pwa-staging] adapter mounted at /pwa/staging')
+
+    # 5b) The KHQR payment rail (ABA PayWay SANDBOX). Mounted here for the same
+    #     reason as the adapter: `main.py` stays byte-identical and the mobile
+    #     launch path gains no payment endpoint.
+    #
+    #     Absent credentials are a supported state, not an error. The router is
+    #     always mounted so `/payments/config` can answer truthfully; every
+    #     endpoint that would take money refuses with 503 until
+    #     `PAYWAY_MERCHANT_ID` and `PAYWAY_API_KEY` are present in the ignored
+    #     staging secrets file. Nothing below prints either value.
+    import payway  # noqa: PLC0415
+    import pwa_staging_payments  # noqa: PLC0415
+
+    canonical.app.include_router(pwa_staging_payments.router)
+    _pw = payway.redacted_config()
+    if _pw.get('configured'):
+        print(f'[pwa-staging] payments  : rail=khqr gateway=payway '
+              f'env={_pw["environment"]} merchant=***{_pw["merchant_id_suffix"]} '
+              f'callback={"configured" if _pw["callback_configured"] else "POLL-ONLY"} '
+              f'signature={_pw["callback_signature"]}')
+    else:
+        print('[pwa-staging] payments  : NOT CONFIGURED — the paywall will say '
+              'payments are not open (fill PAYWAY_* in .env.pwa-staging.local)')
     print(f'[pwa-staging] target project ref: {STAGING_REF} — verified')
     print(f'[pwa-staging] APP_ENV={os.environ.get("APP_ENV")} '
           f'BIMODAL_ENABLED={os.environ.get("BIMODAL_ENABLED")}')

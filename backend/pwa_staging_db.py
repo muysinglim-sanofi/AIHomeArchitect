@@ -129,29 +129,56 @@ def prove_target() -> dict:
         # The decisive one: `pwa_staging` exists ONLY in the staging project.
         cur.execute("select exists (select 1 from pg_namespace where nspname = 'pwa_staging')")
         facts["pwa_staging_schema"] = cur.fetchone()[0]
-        # And production's own tables must NOT be here.
+        # And a table production owns must NOT be here.
         #
-        # 2026-08-12 — the marker set CHANGED, and the reason matters. It used to
-        # be ('generation_intents', 'wallets', 'passes'), which was a correct
-        # negative marker for exactly as long as the staging project had no
-        # Billing Engine. Migration 0006 installs those three BY DESIGN (one
-        # billing brain, canonical names — PWA_MONETIZATION_AUDIT §8.5), so the
-        # old set would have started refusing every later migration and, worse,
-        # would have read "this is production" about the project we had just
-        # provisioned on purpose.
+        # 2026-08-12 — the marker set CHANGED once already: it used to be
+        # ('generation_intents', 'wallets', 'passes'), a correct negative marker
+        # for exactly as long as the staging project had no Billing Engine.
+        # Migration 0006 installs those three BY DESIGN, so the old set would
+        # have started reading "this is production" about the project we had
+        # just provisioned on purpose. It was replaced with
+        # ('usage_log', 'messages', 'account_state', 'device_tokens').
         #
-        # The replacements are the tables production owns that this project is
-        # committed NEVER to have (§8.5 "hors périmètre" + mobile-only chat and
-        # push): `usage_log` (legacy free-quota ledger, superseded by the ledger
-        # free bucket), `messages` (mobile chat), `account_state` (identity /
-        # account-mode) and `device_tokens` (mobile push). None of them can
-        # appear here without someone having pointed this tooling at the wrong
-        # database — which is precisely what the check is for.
+        # 2026-08-18 — it broke for the SAME reason, and this is the measurement
+        # rather than the story. Asked of the staging database today:
+        #
+        #     account_state  present, 73 rows
+        #     messages       present,  0 rows
+        #     usage_log      present,  0 rows
+        #     device_tokens  absent
+        #
+        # Three of the four markers are present, so `pwa_staging_migrate` was
+        # refusing every migration. They are not evidence of production: this
+        # staging project is SHARED with the unified-identity work, which
+        # installed `account_state` (and the empty `messages` / `usage_log`
+        # shells that come with it). `usage_log` in particular is harmless here
+        # — `resolve_generation_access` only READS it for a legacy display
+        # figure and it gates nothing (promo.py: "`free_remaining` (usage_log)
+        # reste calculé pour l'AFFICHAGE legacy … mais ne gate plus rien ici").
+        #
+        # The lesson is that a negative marker over a shared project decays. So
+        # the REFUSAL now rests on the two facts that cannot decay:
+        #
+        #   1. the connection string carries the staging project ref and not the
+        #      production one — enforced in `resolve_staging_url`, on the exact
+        #      string that will be dialled;
+        #   2. the schema `pwa_staging` exists, and it exists in NO other
+        #      project — checked above, and checked by the caller.
+        #
+        # `device_tokens` (mobile push, production-only, and nothing in the Web
+        # chantier can create it) is kept as one cheap negative marker. The rest
+        # are reported as information, so a surprise is still visible without
+        # being fatal.
         cur.execute("""
-            select count(*) from information_schema.tables
+            select table_name from information_schema.tables
              where table_schema = 'public'
                and table_name in ('usage_log', 'messages',
                                   'account_state', 'device_tokens')
+             order by table_name
         """)
-        facts["production_tables_present"] = cur.fetchone()[0]
+        present = [r[0] for r in cur.fetchall()]
+        facts["production_only_tables_present"] = [
+            t for t in present if t == "device_tokens"]
+        facts["legacy_shared_tables_present"] = [
+            t for t in present if t != "device_tokens"]
     return facts

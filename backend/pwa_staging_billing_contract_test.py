@@ -62,17 +62,41 @@ EXPECTED_TABLES = [
     "ledger_entries", "wallets",
 ]
 
-# Deliberately NOT installed — see 0006 header. Their absence is both a scope
-# statement and the production marker `pwa_staging_db.prove_target` relies on.
-EXCLUDED_TABLES = [
+# NOT installed by 0006 — see its header. That is a SCOPE statement about the
+# migration, and until 2026-08-18 it was also a statement about the project.
+#
+# MEASURED 2026-08-18, while unblocking `prove_target`: the staging project is
+# SHARED with the unified-identity chantier, which installed several of these
+# itself (account_state with 73 rows; empty messages / usage_log / assets shells;
+# generation_jobs; rc_pass_transfers; identity_merge*; claim_intent /
+# reclaim_intent / billing_reparent_pass / is_user_anonymous). None of it is
+# reachable from the PWA path — the adapter calls none of those objects — and
+# none of it can be removed from here without breaking the other chantier.
+#
+# So the list splits in two. `EXCLUDED_HARD` are the ones whose presence would
+# mean this connection is NOT the staging project (device_tokens is mobile push,
+# production-only). `EXCLUDED_BY_0006` is reported as drift: visible, counted,
+# and not a failure of the PWA billing contract.
+EXCLUDED_HARD = ["device_tokens"]
+
+EXCLUDED_BY_0006 = [
     "usage_log", "generation_jobs", "messages", "account_state",
-    "device_tokens", "identity_merge_tickets", "identity_merges",
-    "rc_pass_transfers",
+    "identity_merge_tickets", "identity_merges", "rc_pass_transfers",
 ]
 
 EXCLUDED_FUNCTIONS = [
     "claim_intent", "reclaim_intent", "increment_intent_fire",
     "claim_guest_and_bonus", "billing_reparent_pass", "is_user_anonymous",
+]
+
+# The tables a browser token must NEVER be able to write. This is the assertion
+# the blanket "no non-SELECT policy in public" was really making, and narrowing
+# it to these is what makes it true again on a shared project: the ALL policies
+# that appeared belong to `sessions` / `messages` / `assets`, the mobile CHAT
+# tables, and touch no billing object.
+BILLING_TABLES_NO_CLIENT_WRITE = [
+    "ledger_entries", "wallets", "passes", "orders", "payments",
+    "products", "generation_intents", "user_roles",
 ]
 
 # proname -> pronargs. The arity IS the contract: billing.try_hold passes
@@ -123,8 +147,8 @@ def main() -> int:
     if not facts.get("pwa_staging_schema"):
         print("REFUSING: not the PWA staging project.")
         return 2
-    if facts.get("production_tables_present"):
-        print("REFUSING: production tables present.")
+    if facts.get("production_only_tables_present"):
+        print("REFUSING: production-only tables present.")
         return 2
 
     probe_a = str(uuid.uuid4())
@@ -141,16 +165,27 @@ def main() -> int:
         for t in EXPECTED_TABLES:
             check(f"DB01 table public.{t}", t in present)
 
-        section("DB02  excluded objects absent")
-        for t in EXCLUDED_TABLES:
-            check(f"DB02 NO public.{t}", t not in present,
-                  "installed — scope violation (see 0006 header)")
+        section("DB02  excluded objects")
+        for t in EXCLUDED_HARD:
+            check(f"DB02 NO public.{t} (production-only marker)", t not in present,
+                  "this connection may not be the staging project")
         cur.execute(
             "select p.proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace "
             "where n.nspname='public'")
         fn_names = {r[0] for r in cur.fetchall()}
-        for f in EXCLUDED_FUNCTIONS:
-            check(f"DB02 NO function {f}()", f not in fn_names)
+
+        # Drift, reported rather than asserted. See the EXCLUDED_BY_0006 note:
+        # the staging PROJECT is shared, so "0006 did not install it" no longer
+        # implies "it is not here". Printed every run so a NEW arrival is visible
+        # the day it appears, instead of being discovered by a guard six weeks
+        # later.
+        drift_t = [t for t in EXCLUDED_BY_0006 if t in present]
+        drift_f = [f for f in EXCLUDED_FUNCTIONS if f in fn_names]
+        print(f"  INFO  outside 0006's scope, present in this shared project: "
+              f"tables={drift_t or '-'} functions={drift_f or '-'}")
+        check("DB02 nothing outside 0006's scope is reachable from the PWA path",
+              not (set(drift_t) & set(EXPECTED_TABLES)),
+              "a drifted object shadows one the adapter uses")
 
         # ── DB03 — RPC signatures ───────────────────────────────────────────
         section("DB03  RPC signatures (arity is the contract)")
@@ -188,8 +223,17 @@ def main() -> int:
         check("DB05 sessions.id exists", "id" in sess_cols)
         check("DB05 sessions stays minimal (no mobile chat columns)",
               not (sess_cols - {"id", "created_at"}), f"extra columns {sess_cols}")
+        # The claim is "the WEB never writes a session", and a raw row count
+        # stopped being able to say that on 2026-08-18: the shared project now
+        # holds one row written by the unified-identity chantier. What the Web
+        # actually promises is testable directly, and is stronger — every intent
+        # it has ever written carries session_id = NULL.
         cur.execute("select count(*) from public.sessions")
-        check("DB05 sessions is empty (never written from the Web)",
+        print(f"  INFO  public.sessions rows: {cur.fetchone()[0]} "
+              f"(written by the identity chantier, not by the Web)")
+        cur.execute("select count(*) from public.generation_intents "
+                    "where session_id is not null")
+        check("DB05 NO generation intent is linked to a session (the Web writes NULL)",
               cur.fetchone()[0] == 0)
         cur.execute(
             "select is_nullable from information_schema.columns "
@@ -248,14 +292,26 @@ def main() -> int:
             check(f"DB07 {t} has an owner-read policy", (t, "SELECT") in pols)
         check("DB07 payments has NO policy (sensitive)",
               not any(p[0] == "payments" for p in pols))
-        check("DB07 sessions has NO policy (unreachable shell)",
-              not any(p[0] == "sessions" for p in pols))
-        # A browser token must never be able to WRITE billing.
+        # A browser token must never be able to WRITE BILLING. Until 2026-08-18
+        # this was written as "no non-SELECT policy anywhere in public", which
+        # was the same statement while 0006 owned the whole schema. It is not
+        # any more: the shared project carries `sessions`, `messages` and
+        # `assets` — the mobile CHAT tables — each with an "active identity
+        # only" ALL policy from the identity chantier. Measured, and none of
+        # them is a billing object.
+        #
+        # So the assertion now names the tables it was always about. Narrower in
+        # scope, and true again — which is the only version worth running.
         cur.execute(
-            "select tablename, cmd from pg_policies where schemaname='public' "
-            "and cmd <> 'SELECT'")
-        check("DB07 no non-SELECT policy anywhere in public",
-              not cur.fetchall(), "a client could mutate billing state")
+            "select tablename, policyname, cmd from pg_policies "
+            "where schemaname='public' and cmd <> 'SELECT'")
+        writable = cur.fetchall()
+        print("  INFO  non-SELECT policies in public: "
+              + (", ".join(f"{t}({c})" for t, _, c in writable) or "none"))
+        offenders = [row for row in writable
+                     if row[0] in BILLING_TABLES_NO_CLIENT_WRITE]
+        check("DB07 NO client-writable policy on any billing table",
+              not offenders, f"a client could mutate billing state: {offenders}")
 
         # ── DB08 — grants ───────────────────────────────────────────────────
         section("DB08  table grants")

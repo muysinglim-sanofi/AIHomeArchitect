@@ -29,9 +29,18 @@ def apply(path: pathlib.Path) -> int:
     if not facts.get("pwa_staging_schema"):
         print("REFUSING: pwa_staging schema absent — this is not the PWA staging project.")
         return 2
-    if facts.get("production_tables_present"):
-        print("REFUSING: production tables present — this looks like production.")
+    if facts.get("production_only_tables_present"):
+        print("REFUSING: production-only tables present "
+              f"({', '.join(facts['production_only_tables_present'])}) — "
+              "this looks like production.")
         return 2
+    # Not fatal, but never silent: this staging project is shared with the
+    # unified-identity chantier, so tables the PWA phase deliberately did not
+    # install can legitimately be here. See pwa_staging_db.prove_target.
+    if facts.get("legacy_shared_tables_present"):
+        print("  note: shared-project tables present "
+              f"({', '.join(facts['legacy_shared_tables_present'])}) — "
+              "expected, not a production signal.")
 
     print(f"\napplying    : {path.name}")
     with staging_connection(autocommit=True) as conn:

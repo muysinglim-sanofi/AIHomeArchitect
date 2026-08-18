@@ -66,7 +66,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 from dataclasses import dataclass
 from typing import Optional
 
@@ -429,21 +428,30 @@ async def catalogue() -> list:
 
 
 def payment_provider_id() -> str:
-    """Which payment adapter this deployment would use. `none` today.
+    """Which acquisition RAIL this deployment sells on. SERVER-owned.
 
-    Deliberately a value the SERVER owns. ABA is not implemented, no ABA config
-    exists, and no client may assume otherwise — the Paywall renders whatever
-    this says, so wiring a provider later is a server change plus an adapter,
-    not a hunt through widgets.
+    2026-08-18 — this used to be `PWA_PAYMENT_PROVIDER or 'none'`, a promise that
+    the answer would come from the server the day a provider existed. That day
+    arrived: `pwa_staging_payments.provider_id()` returns `khqr` when — and only
+    when — real ABA PayWay sandbox credentials are present, and `none` otherwise.
+    The environment variable still wins when set, which keeps it a kill switch.
+
+    The value is the RAIL (`khqr`), not the gateway brand (`payway`), because
+    that is what `orders.provider` means and what the client's vocabulary should
+    match. The gateway is reported separately by `/pwa/staging/payments/config`.
     """
-    return os.environ.get("PWA_PAYMENT_PROVIDER", "none").strip().lower() or "none"
+    import pwa_staging_payments  # noqa: PLC0415 — lazy: payments imports billing
+
+    return pwa_staging_payments.provider_id()
 
 
 def payment_provider_configured() -> bool:
-    """Whether that adapter can actually take money right now.
+    """Whether that rail can actually take money right now.
 
-    False in staging, and it must STAY false until a real provider is wired:
-    a Paywall that offers a purchase it cannot complete is worse than one that
-    says so.
+    Still false whenever credentials are absent, and it must stay that way: a
+    Paywall that offers a purchase it cannot complete is worse than one that says
+    payments are not open.
     """
-    return payment_provider_id() not in ("", "none")
+    import pwa_staging_payments  # noqa: PLC0415
+
+    return pwa_staging_payments.is_open()

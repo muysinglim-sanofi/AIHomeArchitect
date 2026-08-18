@@ -727,14 +727,29 @@ class GrantResult:
 
 
 async def _resolve_product(supa, store_product_id: str) -> Optional[dict]:
-    """products actif dont revenuecat_product_id OU apple_product_id == l'id store.
-    Le mapping est figé en base (migration ticket 0). Renvoie la ligne ou None."""
+    """products actif dont revenuecat_product_id OU apple_product_id OU sku ==
+    l'identifiant reçu. Le mapping store est figé en base (migration ticket 0).
+    Renvoie la ligne ou None.
+
+    AJOUT `sku` (2026-08-18, rail Web ABA PayWay/KHQR) — ADDITIF, non régressif :
+      • un produit vendu sur le WEB n'a par construction ni `apple_product_id` ni
+        `revenuecat_product_id` (c'est exactement ce qui le rend `store_only=false`
+        dans le catalogue PWA). Son identifiant canonique est donc son `sku`, et
+        c'est ce que l'adaptateur PayWay passe en `store_product_id` ;
+      • aucune collision possible avec le chemin mobile : les ids store sont des
+        bundle ids (`com.aydenstudio.app.weekly`), les skus sont des noms courts
+        (`pack_10`, `weekly_pass`). Vérifié sur les 6 lignes du catalogue ;
+      • l'ordre du OR ne change rien : `.limit(1)` sur un catalogue où ces trois
+        colonnes sont mutuellement exclusives par ligne.
+    Sans cet ajout, `grant_purchase` lève ProductNotMapped pour tout produit Web —
+    c'est-à-dire qu'un paiement KHQR encaissé ne pourrait jamais être crédité."""
     res = await asyncio.to_thread(
         lambda: supa.table("products")
         .select("id, type, credits_granted, duration_days")
         .or_(
             f"revenuecat_product_id.eq.{store_product_id},"
-            f"apple_product_id.eq.{store_product_id}"
+            f"apple_product_id.eq.{store_product_id},"
+            f"sku.eq.{store_product_id}"
         )
         .eq("active", True)
         .limit(1)
