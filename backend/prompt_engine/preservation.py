@@ -634,6 +634,101 @@ _EXTERIOR_STAGE_ITEMS = {
 }
 
 
+# ── FACADE DESIGN (2026-08-17) — flag AYDEN_FACADE_DESIGN, défaut OFF.
+#
+# LE DÉFAUT. La façade a été ajoutée au moteur STAGE extérieur, conçu pour des
+# scènes (piscine, terrasse, jardin) où le bâtiment est un DÉCOR à verrouiller.
+# Pour une façade, le bâtiment EST le produit — et deux verrous indépendants lui
+# interdisent tout design :
+#   • verrou 1 — _EXTERIOR_SHELL_LOCK["facade"] fusionne la GÉOMÉTRIE (murs,
+#     toiture, positions/tailles/proportions des ouvertures, niveaux) et l'ÉTAT DE
+#     SURFACE ("glazing", "all facade materials and cladding") sous un unique
+#     "reproduce EXACTLY (pixel-for-pixel) … stay exactly as photographed" ;
+#   • verrou 2 — le garde DNA decor_language[0] de la cellule room_type="facade",
+#     byte-identique dans les 5 atmosphères MVP, qui interdit SÉPARÉMENT tout
+#     restylage de mur/fenêtre/porte/toit/parement et ne laisse qu'un paillasson,
+#     des plantes au sol et une lumière chaude sur l'entrée.
+# Résultat mesuré : sur TOUTE façade, finie ou en chantier, Ayden ne peut changer
+# que ces trois éléments. Lever un seul verrou est un no-op prouvé.
+#
+# POURQUOI SANS build_state. Le candidat historique (3ff33cc) conditionnait la levée
+# à un build_state issu de _classify_ayden. Or _want_stage exige `not room_type`
+# (main.py:3988) : l'utilisateur qui choisit explicitement "House Facade" ne
+# déclenche AUCUN appel vision, donc build_state restait "finished" et la complétion
+# ne s'activait jamais — no-op sur le chemin produit principal. Le contrat ci-dessous
+# est INCONDITIONNEL et couvre les deux cas d'un seul tenant : « du vitrage dans
+# chaque ouverture existante » est déjà satisfait sur une façade finie (où il ne
+# reste que la rénovation des finitions) et complète une façade en chantier. Aucun
+# appel vision, aucun canal d'état, aucun changement dans main.py.
+_FACADE_DESIGN_FLAG = "AYDEN_FACADE_DESIGN"
+
+# Verrou 1, version gatée : MÊME énumération, amputée des DEUX seuls tokens d'état
+# de surface ("glazing" et "all facade materials and cladding"). Murs, toiture,
+# positions/tailles/proportions des ouvertures, niveaux et abords restent verrouillés
+# À L'IDENTIQUE — la géométrie ne bouge pas d'un pixel.
+_EXTERIOR_SHELL_LOCK_FACADE_DESIGN = (
+    "the building's GEOMETRY in full — every wall and its exact position, the "
+    "roofline and the roof, all openings (windows, doors, garage door) with their "
+    "exact positions, sizes and proportions, balconies, railings and garde-corps, "
+    "columns, the porch and entrance, and the storeys and levels — together with "
+    "the driveway, paths and paved approach, every existing boundary wall, gate and "
+    "fence, and all mature and established trees and structural planting"
+)
+
+# La clause anti-invention du CONTEXTE vise les ALENTOURS ; sur un bâtiment en
+# chantier elle se relit comme une interdiction de finir le sujet lui-même. Gatée,
+# on la porte explicitement sur le voisinage — l'interdiction de rebâtir les
+# alentours reste entière.
+_EXTERIOR_CONTEXT_SITE_CLAUSE = (
+    "never turn a construction site or service area into new villas"
+)
+_EXTERIOR_CONTEXT_SITE_CLAUSE_SCOPED = (
+    "never turn a NEIGHBOURING construction site or service area into new villas "
+    "(this applies to the surroundings, never to the building being designed)"
+)
+
+# Le contrat de design. UN seul bloc, non dupliqué. Contrainte reprise de l'audit du
+# 2026-08-13 : la préservation géométrique est RÉAFFIRMÉE DANS LA MÊME PHRASE que
+# l'autorisation de design — séparer les deux ordres est précisément ce qui les rend
+# contradictoires.
+_FACADE_FINISH_CONTRACT = (
+    "FACADE FINISH — the geometry above is fixed; the FINISHES are yours to design. "
+    "Within the existing openings and wall surfaces, renew or complete: glazing and "
+    "frames in every existing opening, the entrance door and garage closure, render, "
+    "cladding, material and colour, the finish of railings and gate, and the exterior "
+    "lighting. A visibly unfinished surface or opening — raw concrete, bare "
+    "blockwork, an empty opening — is a construction state, not a design choice: "
+    "complete it. Never create, remove, move, resize or reshape any opening, wall, "
+    "storey or roof. Same building, same geometry, newly finished."
+)
+
+# Verrou 2 — la phrase EXACTE du garde DNA (byte-identique dans les 5 fichiers
+# d'atmosphère MVP, cellule room_type="facade", decor_language[0] ; vérifié 5/5 et
+# présent sur aucune autre pièce) et son remplacement gaté.
+_DNA_FACADE_ARCH_GUARD = (
+    "keep the building exactly — never add, alter, narrow, extend, or restyle any "
+    "wall, window, door, roof, cladding or structure; only ground-level planting, a "
+    "doormat and warm light on the existing entrance"
+)
+# Le remplacement ne RÉAUTORISE pas en détail — _FACADE_FINISH_CONTRACT le fait déjà.
+# Il se borne à lever l'interdiction de restylage tout en durcissant la géométrie,
+# d'où un delta de longueur quasi nul (contrainte §19 : pas de nouvelle solution
+# à +847 caractères).
+_DNA_FACADE_ARCH_GUARD_DESIGN = (
+    "keep the building's exact geometry — never add, remove, narrow, extend, move or "
+    "resize any wall, window, door, opening, storey or roof; the facade finishes may "
+    "be renewed or completed within those boundaries; ground-level planting, a "
+    "doormat and warm light on the existing entrance"
+)
+
+
+def is_facade_design_enabled() -> bool:
+    """Flag AYDEN_FACADE_DESIGN — défaut OFF (lu à l'appel, pas au chargement du
+    module : le harnais le bascule sans réimport). OFF ⇒ tout le chemin ci-dessous
+    est mort et le prompt est byte-identique à aujourd'hui."""
+    return _os.environ.get(_FACADE_DESIGN_FLAG, "0").strip().lower() == "1"
+
+
 def is_exterior_stage_room(room_key: str) -> bool:
     """True iff this exterior room uses the EXTERIOR STAGE engine. Eligibility =
     membership in the per-room tables (pool_area, terrace, garden, balcony, facade,
@@ -642,17 +737,23 @@ def is_exterior_stage_room(room_key: str) -> bool:
     return (room_key or "").strip().lower() in _EXTERIOR_STAGE_ITEMS
 
 
-def _build_exterior_stage_contract(room_key: str) -> str:
+def _build_exterior_stage_contract(room_key: str, facade_design: bool = False) -> str:
     """Exterior STAGE contract — the frozen 4-zone framework (PRIMARY SHELL →
     CONTEXT → COMPOSITION → SCENE + one architectural rule): compose a complete,
     living outdoor scene while the architecture stays locked. Per-room tokens
     (shell / focal / placement / scene) drive it; per-atmosphere materials/forms
-    stay in the room DNA (ROOM block)."""
-    shell = _EXTERIOR_SHELL_LOCK[room_key]
+    stay in the room DNA (ROOM block).
+
+    `facade_design` (défaut False) — n'a d'effet QUE sur room_key == "facade" ; les
+    5 autres pièces extérieures et les 8 clés intérieures sont inatteignables par ce
+    chemin. False ⇒ ZÉRO opération supplémentaire, sortie byte-identique."""
+    _fd = bool(facade_design) and room_key == "facade"
+    shell = (_EXTERIOR_SHELL_LOCK_FACADE_DESIGN if _fd
+             else _EXTERIOR_SHELL_LOCK[room_key])
     focal = _EXTERIOR_FOCAL[room_key]
     placement = _EXTERIOR_PLACEMENT[room_key]
     scene = _EXTERIOR_STAGE_ITEMS[room_key]
-    return (
+    contract = (
         "OUTDOOR STAGE — compose a complete, living scene while the architecture "
         "stays locked.\n"
         # ① PRIMARY SHELL — hard lock
@@ -701,16 +802,30 @@ def _build_exterior_stage_contract(room_key: str) -> str:
         "a warm, inviting light. The freestanding scene, styling and lighting are "
         "yours to compose; the architecture is not."
     )
+    if not _fd:
+        return contract
+    # Façade UNIQUEMENT. (1) On porte la clause anti-invention du CONTEXTE sur le
+    # voisinage — sinon elle interdit textuellement ce que le bloc ci-dessous
+    # autorise ; (2) on ajoute le contrat de finition EN DERNIER, donc après la
+    # RULE, pour qu'il soit la dernière instruction lue sur ce point.
+    return (
+        contract.replace(_EXTERIOR_CONTEXT_SITE_CLAUSE,
+                         _EXTERIOR_CONTEXT_SITE_CLAUSE_SCOPED, 1)
+        + " " + _FACADE_FINISH_CONTRACT
+    )
 
 
 def build_stage_contract(room_label: str = "", atmosphere_label: str = "",
-                         atmosphere_id: str = "") -> str:
+                         atmosphere_id: str = "",
+                         facade_design: bool = False) -> str:
     room_key = (room_label or "").strip().lower()
     # ── PR-1 (ADDITIVE): exterior STAGE rooms use a dedicated exterior contract.
     # Interior rooms are NOT in _EXTERIOR_STAGE_ITEMS → they fall straight through to
     # the UNCHANGED interior code path below (byte-identical).
+    # `facade_design` ne franchit ce point que pour room_key == "facade" (filtré dans
+    # _build_exterior_stage_contract) ; il n'atteint JAMAIS la branche intérieure.
     if room_key in _EXTERIOR_STAGE_ITEMS:
-        return _build_exterior_stage_contract(room_key)
+        return _build_exterior_stage_contract(room_key, facade_design)
     room = room_key.replace("_", " ") or "room"
     atmo = (atmosphere_label or "").split("·")[0].strip()
     atmo_phrase = f" in the {atmo} style" if atmo else ""
@@ -837,11 +952,29 @@ def apply_stage_mode(prompt: str, room_label: str = "",
                      atmosphere_id: str = "") -> tuple[str, bool]:
     """Swap whichever preserve contract is present for the STAGE (furnish)
     contract. Returns (new_prompt, applied). No-op (applied=False) if no preserve
-    contract is found (creative mode / unexpected prompt) — safe by construction."""
-    stage = build_stage_contract(room_label, atmosphere_label, atmosphere_id)
+    contract is found (creative mode / unexpected prompt) — safe by construction.
+
+    FACADE DESIGN (flag AYDEN_FACADE_DESIGN, défaut OFF) : le flag est lu ICI et non
+    passé par l'appelant — c'est ce qui rend le correctif entièrement contenu dans ce
+    module (aucune ligne de main.py modifiée) et le rend actif sur les DEUX chemins
+    qui mènent à room_label == "facade" : la sélection explicite « House Facade »
+    (main.py:4067) comme Ayden Decide. Les deux conditions doivent tenir ensemble —
+    flag ON et room_key == "facade" ; toute autre combinaison retombe sur le chemin
+    actuel, byte-identique."""
+    room_key = (room_label or "").strip().lower()
+    _fd = is_facade_design_enabled() and room_key == "facade"
+    stage = build_stage_contract(room_label, atmosphere_label, atmosphere_id, _fd)
     for _contract in (_PRESERVE_MODE_CONTRACT_LIGHT, _PRESERVE_MODE_CONTRACT):
         if _contract in prompt:
-            return prompt.replace(_contract, stage), True
+            out = prompt.replace(_contract, stage)
+            # Verrou 2 — le garde DNA vit dans le bloc ROOM du prompt composé, pas
+            # dans le contrat : on le neutralise par substitution ciblée ici plutôt
+            # qu'en éditant les 5 fichiers DNA (rayon réduit à une fonction, rollback
+            # = un flag). Absent du prompt ⇒ replace est un no-op silencieux.
+            if _fd:
+                out = out.replace(_DNA_FACADE_ARCH_GUARD,
+                                  _DNA_FACADE_ARCH_GUARD_DESIGN, 1)
+            return out, True
     return prompt, False
 
 
