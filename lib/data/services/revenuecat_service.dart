@@ -126,12 +126,11 @@ class RevenuecatService {
   /// premium ever, purchase flows fail with a clear error).
   Future<void> configure({required String userId}) async {
     if (_configured) {
-      // Re-bind only on actual UUID change (e.g. after Restore).
-      try {
-        await Purchases.logIn(userId);
-      } catch (e) {
-        debugPrint('[RevenuecatService] logIn re-bind failed: $e');
-      }
+      // ISSUE 14 — la re-liaison passe désormais par le chemin GARDÉ. L'ancienne
+      // version appelait `Purchases.logIn(userId)` sans condition : appelée depuis
+      // le chemin de boot hérité (`main.dart`, rollback `!fastBoot`), elle
+      // contournait entièrement la convergence et pouvait déplacer un abonnement.
+      await _rebindIfSafe(userId);
       return;
     }
 
@@ -202,30 +201,56 @@ class RevenuecatService {
     // confirme que l'identité courante est saine. Une identité fermée ou un
     // backend injoignable ⇒ AUCUNE re-liaison (jamais de transfert à l'aveugle).
     if (_configured) {
-      String? current;
-      try {
-        current = await Purchases.appUserID;
-      } catch (_) {/* best-effort */}
-      if (current == userId) return;
-      final probe = await StatusService().probeIdentityHealth();
-      final action = decideRcBinding(
-        supabaseUserId: userId,
-        rcAppUserId: current,
-        health: probe.health,
-        rcHasActiveEntitlement: isPremium,
-        backendSaysEntitled: probe.backendEntitled,
-      );
-      applyIdentityVerdict(action);
-      debugPrint('[IDENTITY][ENSURE] rc=${current ?? "-"} supabase=$userId '
-          'health=${probe.health} backend_entitled=${probe.backendEntitled} '
-          'action=$action');
-      if (action == RcBindAction.bindToSupabase) {
-        await logIn(userId);
-      }
+      await _rebindIfSafe(userId);
       return;
     }
     return _configuring ??=
         configure(userId: userId).whenComplete(() => _configuring = null);
+  }
+
+  /// ISSUE 14 — SEUL chemin autorisé à changer l'identité d'un SDK déjà configuré.
+  ///
+  /// Ne re-lie que si DEUX conditions tiennent ensemble : le backend confirme que
+  /// l'identité cible est active, ET la liaison ne déplacerait aucun abonnement
+  /// actif. Identité fermée, backend injoignable, ou abonnement en jeu ⇒ aucune
+  /// action. Ne lève jamais.
+  Future<void> _rebindIfSafe(String userId) async {
+    String? current;
+    try {
+      current = await Purchases.appUserID;
+    } catch (_) {/* best-effort */}
+    if (current == userId) return;
+    final probe = await StatusService().probeIdentityHealth();
+    final action = decideRcBinding(
+      supabaseUserId: userId,
+      rcAppUserId: current,
+      health: probe.health,
+      rcHasActiveEntitlement: isPremium,
+      backendSaysEntitled: probe.backendEntitled,
+    );
+    applyIdentityVerdict(action);
+    debugPrint('[IDENTITY][REBIND] rc=${current ?? "-"} supabase=$userId '
+        'health=${probe.health} backend_entitled=${probe.backendEntitled} '
+        'action=$action');
+    if (action == RcBindAction.bindToSupabase) {
+      await logIn(userId);
+    }
+  }
+
+  /// Applique une décision de liaison DÉJÀ prise par la convergence de boot, sans
+  /// re-sonder le backend.
+  ///
+  /// La décision est exigée EN PARAMÈTRE, et toute valeur autre que
+  /// [RcBindAction.bindToSupabase] est un no-op : l'invariant « on ne lie que sur
+  /// décision favorable » devient ainsi structurel, et non une convention que le
+  /// prochain appelant pourrait ignorer.
+  Future<void> applyBinding(RcBindAction decision, String userId) async {
+    if (decision != RcBindAction.bindToSupabase) return;
+    if (_configured) {
+      await logIn(userId);
+      return;
+    }
+    await configure(userId: userId);
   }
 
   /// Fetch the current offerings (products configured for this app in

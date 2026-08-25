@@ -127,7 +127,8 @@ class AppBoot {
           'supabase=${userId ?? "-"} action=$action');
       switch (action) {
         case RcBindAction.bindToSupabase:
-          await RevenuecatService.instance.configure(userId: userId!);
+          // `applyBinding` exige la décision : toute autre valeur serait un no-op.
+          await RevenuecatService.instance.applyBinding(action, userId!);
           bootLog(sw, 'bg: RevenueCat ready');
         case RcBindAction.noop:
           bootLog(sw, 'bg: RevenueCat déjà aligné');
