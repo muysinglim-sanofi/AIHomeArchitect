@@ -16,6 +16,8 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/auth/identity_convergence.dart';
+
 class MeStatus {
   final bool isPremium;
   final bool isAdmin;
@@ -202,6 +204,48 @@ class StatusService {
     } catch (e) {
       debugPrint('[StatusService] fetchStatus failed: $e');
       return null;
+    }
+  }
+
+  /// ISSUE 14 — sonde de SANTÉ D'IDENTITÉ, distincte de [fetchStatus].
+  ///
+  /// [fetchStatus] avale toute erreur et renvoie `null` : il ne permet donc PAS de
+  /// distinguer « identité fermée » (403 `identity_merged`) d'une simple panne
+  /// réseau. Cette différence est pourtant décisive : la première interdit de lier
+  /// RevenueCat, la seconde impose seulement d'attendre. On expose donc le code
+  /// HTTP et l'`error_code`, sans modifier [fetchStatus] (zéro régression).
+  ///
+  /// N'écrit rien et ne lève jamais.
+  Future<IdentityProbe> probeIdentityHealth() async {
+    final token = Supabase.instance.client.auth.currentSession?.accessToken;
+    if (token == null || token.isEmpty) {
+      // Sans JWT le backend ne peut rien affirmer — surtout pas « saine ».
+      return IdentityProbe.unknown;
+    }
+    try {
+      final r = await _dio.get(
+        '/me/status',
+        options: Options(validateStatus: (_) => true),
+      );
+      String? code;
+      String? src;
+      final data = r.data;
+      if (data is Map) {
+        final detail = data['detail'];
+        if (detail is Map) code = detail['error_code'] as String?;
+        code ??= data['error_code'] as String?;
+        src = data['access_source'] as String?;
+      }
+      final h = healthFromProbe(httpStatus: r.statusCode, errorCode: code);
+      // Droit RÉEL uniquement : 'restore_required' et 'free' ne détiennent aucun
+      // abonnement mesuré, donc ne protègent pas contre un transfert.
+      final entitled = src == 'admin' || src == 'pass' || src == 'promo';
+      debugPrint('[IDENTITY][PROBE] http=${r.statusCode} error_code=$code '
+          'access_source=$src → $h entitled=$entitled');
+      return IdentityProbe(h, backendEntitled: entitled);
+    } catch (e) {
+      debugPrint('[IDENTITY][PROBE] réseau indisponible (${e.runtimeType}) → unknown');
+      return IdentityProbe.unknown;
     }
   }
 

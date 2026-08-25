@@ -19,9 +19,12 @@ library;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/services/revenuecat_service.dart';
+import '../../data/services/status_service.dart';
+import '../auth/identity_convergence.dart';
 import '../../firebase_options.dart';
 import '../services/local_notification_service.dart';
 import '../services/pending_recovery_service.dart';
@@ -96,14 +99,50 @@ class AppBoot {
 
     // RevenueCat configure (needs the Supabase UUID). No rethrow — graceful
     // degradation; the paywall awaits ensureConfigured before showing offers.
+    // ── ISSUE 14 (2026-08-25) — VALIDER L'IDENTITÉ AVANT DE LIER REVENUECAT ──
+    // Auparavant on liait RevenueCat à `currentUser.id` sans jamais vérifier que
+    // cette identité était encore la bonne. Une session anonyme périmée redevenue
+    // active a ainsi capté l'abonnement Weekly, et le renouvellement suivant a été
+    // crédité au mauvais compte. La liaison est destructrice même à la PREMIÈRE
+    // configuration : le SDK poste le reçu StoreKit au démarrage, ce qui peut
+    // déclencher un transfert côté RevenueCat. On sonde donc le backend d'abord.
+    // Dans le doute on ne lie pas : une liaison différée se rattrape au boot
+    // suivant, un abonnement transféré demande une réparation en base.
     final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId != null) {
-      try {
-        await RevenuecatService.instance.ensureConfigured(userId: userId);
-        bootLog(sw, 'bg: RevenueCat ready');
-      } catch (e) {
-        debugPrint('[RevenuecatService] configure() failed at boot (non-fatal): $e');
+    try {
+      final probe = await StatusService().probeIdentityHealth();
+      final configured = RevenuecatService.instance.isConfigured;
+      final rcId = configured ? await Purchases.appUserID : null;
+      final action = decideRcBinding(
+        supabaseUserId: userId,
+        rcAppUserId: rcId,
+        health: probe.health,
+        rcHasActiveEntitlement:
+            configured && RevenuecatService.instance.isPremium,
+        backendSaysEntitled: probe.backendEntitled,
+      );
+      applyIdentityVerdict(action);
+      debugPrint('[IDENTITY][CONVERGE] health=${probe.health} '
+          'backend_entitled=${probe.backendEntitled} rc=${rcId ?? "-"} '
+          'supabase=${userId ?? "-"} action=$action');
+      switch (action) {
+        case RcBindAction.bindToSupabase:
+          await RevenuecatService.instance.configure(userId: userId!);
+          bootLog(sw, 'bg: RevenueCat ready');
+        case RcBindAction.noop:
+          bootLog(sw, 'bg: RevenueCat déjà aligné');
+        case RcBindAction.recoveryRequired:
+          debugPrint('[IDENTITY][CONVERGE] identité FERMÉE — aucune liaison '
+              'RevenueCat, récupération requise');
+        case RcBindAction.holdSafe:
+          debugPrint('[IDENTITY][CONVERGE] état indéterminé — liaison RevenueCat '
+              'différée (aucun transfert)');
       }
+    } catch (e) {
+      // Fail-safe absolu : une erreur de convergence ne lie RIEN et ne casse pas
+      // le boot. L'app reste utilisable ; la liaison sera retentée au prochain boot.
+      debugPrint('[IDENTITY][CONVERGE] échec non fatal (${e.runtimeType}) — '
+          'aucune action RevenueCat');
     }
 
     // Notification channel + permission (the iOS dialog) — off the splash path.

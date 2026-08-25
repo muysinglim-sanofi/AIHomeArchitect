@@ -44,7 +44,9 @@ import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
+import '../../core/auth/identity_convergence.dart';
 import '../../core/feature_flags.dart';
+import 'status_service.dart';
 
 /// Premium entitlement identifier. Must match the entitlement defined
 /// in the RevenueCat dashboard.
@@ -188,8 +190,40 @@ class RevenuecatService {
   /// boot call, or starts one. Never throws to the caller (errors are logged in
   /// configure under graceful degradation; a non-graceful StateError would
   /// surface, but boot/paywall both wrap this).
-  Future<void> ensureConfigured({required String userId}) {
-    if (_configured) return Future<void>.value();
+  Future<void> ensureConfigured({required String userId}) async {
+    // ── ISSUE 14 (2026-08-25) — NE PLUS SORTIR SUR « déjà configuré » ──────────
+    // L'ancienne version renvoyait immédiatement dès que `_configured` était vrai,
+    // sans jamais comparer l'identité. Si l'utilisateur Supabase changeait en cours
+    // de session, le SDK restait lié à l'ANCIEN `appUserID` — donc les achats, le
+    // restore et les renouvellements suivaient une identité qui n'était plus celle
+    // de l'app. C'est l'exact scénario S7 de l'incident.
+    //
+    // On compare désormais systématiquement, ET on ne re-lie que si le backend
+    // confirme que l'identité courante est saine. Une identité fermée ou un
+    // backend injoignable ⇒ AUCUNE re-liaison (jamais de transfert à l'aveugle).
+    if (_configured) {
+      String? current;
+      try {
+        current = await Purchases.appUserID;
+      } catch (_) {/* best-effort */}
+      if (current == userId) return;
+      final probe = await StatusService().probeIdentityHealth();
+      final action = decideRcBinding(
+        supabaseUserId: userId,
+        rcAppUserId: current,
+        health: probe.health,
+        rcHasActiveEntitlement: isPremium,
+        backendSaysEntitled: probe.backendEntitled,
+      );
+      applyIdentityVerdict(action);
+      debugPrint('[IDENTITY][ENSURE] rc=${current ?? "-"} supabase=$userId '
+          'health=${probe.health} backend_entitled=${probe.backendEntitled} '
+          'action=$action');
+      if (action == RcBindAction.bindToSupabase) {
+        await logIn(userId);
+      }
+      return;
+    }
     return _configuring ??=
         configure(userId: userId).whenComplete(() => _configuring = null);
   }

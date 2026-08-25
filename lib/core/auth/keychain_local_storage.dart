@@ -159,8 +159,30 @@ class KeychainLocalStorage extends LocalStorage {
       final legacy = prefs.getString(legacyKey);
       if (legacy != null && legacy.isNotEmpty) {
         await _storage.write(key: kSessionKey, value: legacy);
-        debugPrint('[Keychain] MIGRÉ session legacy SharedPreferences → Keychain '
-            '(key=$legacyKey)');
+        // ── ISSUE 14 (2026-08-25) — PURGE DE LA SOURCE APRÈS MIGRATION CONFIRMÉE.
+        //
+        // POURQUOI. Sans cette purge, la clé SharedPreferences survit indéfiniment.
+        // Or `signOut()` (flux compte : park → signOutLocal → nouvelle session) efface
+        // `kSessionKey` du Keychain SANS toucher au legacy. Au boot suivant, cette
+        // migration retrouve le Keychain vide, relit SharedPreferences et RESSUSCITE
+        // une session anonyme périmée — potentiellement vieille de plusieurs mois.
+        // C'est le mécanisme réel de l'incident du 2026-08-16 : une identité de juin
+        // est redevenue active, RevenueCat l'a suivie, et le renouvellement suivant a
+        // été crédité au mauvais compte. La migration doit être un ÉVÉNEMENT UNIQUE.
+        //
+        // ORDRE IMPOSÉ : on ne retire la source qu'après avoir RELU la destination.
+        // Une écriture Keychain échouée (verrouillé avant premier déverrouillage) ne
+        // doit jamais faire perdre la session — dans ce cas on conserve le legacy et
+        // la migration sera retentée au prochain boot.
+        final confirmed = await _storage.read(key: kSessionKey);
+        if (confirmed != null && confirmed.isNotEmpty) {
+          await prefs.remove(legacyKey);
+          debugPrint('[Keychain] MIGRÉ session legacy SharedPreferences → Keychain '
+              '+ source PURGÉE (key=$legacyKey)');
+        } else {
+          debugPrint('[Keychain] migration NON CONFIRMÉE (Keychain illisible) — '
+              'source legacy CONSERVÉE pour un nouvel essai (key=$legacyKey)');
+        }
       } else {
         debugPrint('[Keychain] aucune session legacy à migrer '
             '(install neuf ou SharedPreferences déjà wipé) key=$legacyKey');

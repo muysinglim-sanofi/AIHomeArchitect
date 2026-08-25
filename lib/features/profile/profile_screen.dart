@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../data/models/project_model.dart';
+import '../../core/auth/identity_convergence.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_spacing.dart';
 import '../../core/constants/build_info.dart';
@@ -1166,7 +1167,13 @@ class _PremiumStatusCardState extends ConsumerState<_PremiumStatusCard> {
     // restore_required > free). 'restore_required' = premium role (RC active sub)
     // but NO measured pass → NEVER "Premium active"; offer a restore action.
     final String src = status.accessSource;
-    final bool needsRestore = src == 'restore_required';
+    // ISSUE 14 — un abonné payant ne doit JAMAIS retomber sur « Free plan » + un
+    // paywall d'ACHAT quand Ayden sait que le compte est en récupération
+    // d'identité. `identityRecoveryRequired` n'est vrai que si la convergence au
+    // boot a constaté une identité FERMÉE côté backend (403 identity_merged) ; il
+    // reste faux dans tous les autres cas, donc l'affichage habituel est inchangé.
+    final bool needsRestore =
+        src == 'restore_required' || identityRecoveryRequired.value;
     final bool entitled = src == 'admin' || src == 'pass' || src == 'promo';
     final Color accent = (entitled || needsRestore)
         ? AppColors.accent
