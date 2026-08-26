@@ -13,15 +13,15 @@ is left.
 
 | | |
 |---|---|
-| API surface | **QR API** (`generate-qr`) + **Check Transaction** (`check-transaction-2`) + pushback |
-| Payment option | `abapay_khqr` — one call returns a KHQR string, a QR image **and** an ABA Mobile deeplink |
+| API surface | **Purchase** (`/payments/purchase`) + **Check Transaction** (`check-transaction-2`) + pushback |
+| Payment option | none imposed — PayWay shows its own chooser (cards / ABA Pay / KHQR), `view_type=hosted_view` |
 | Rail (`orders.provider`) | `khqr` — unchanged, no schema modification |
 | Product sold | the existing web-sellable `CREDIT_PACK` rows (`pack_10/25/50/100`) |
 | Grant path | the canonical `billing_grant_purchase` — no second entitlement system |
 | Public callback | **not configured** → the adapter runs *poll-only*, which is correct, not degraded |
 | Credentials | **configured** (sandbox merchant `***7726`, key valid until 2026-11-16) |
 | Whitelist | **not needed** — the sandbox merchant answered this machine on the first call |
-| Tests | 66 rail + 95 seam + 39 DB + 19 Flutter + 30 live + 22 grant-chain, all green |
+| Tests | 93 rail + 117 seam + 39 DB + 24 Flutter payment + 1096 Flutter + 32 live + 22 grant-chain |
 | Blocked | **one human action**: somebody has to pay a sandbox KHQR. Nothing else. |
 
 ---
@@ -456,3 +456,69 @@ So if the live run ever fails after a real payment, the fault is in the payment
 | grant chain | `backend/pwa_staging_payway_grant_probe.py` (22, gateway answer simulated) |
 | Flutter | `ayden-pwa-web/test/features/pwa/pwa_payment_test.dart` (19) |
 | secret scan | `backend/pwa_secret_scan.py` |
+
+
+---
+
+## 11 — 2026-08-26: the checkout moved to ABA (`/payments/purchase`)
+
+ABA, in writing: *"For website app or native app integration please use this
+endpoint to match the guidelines"* → `/api/payment-gateway/v1/payments/purchase`.
+
+`generate-qr` still works and is still in `payway.py`, documented as deprecated.
+Nothing in the PWA path calls it, and a test asserts that against the call graph
+rather than trusting the claim.
+
+### The Purchase hash is not the QR hash
+
+Twenty-four fields, and four differences from the nineteen that are easy to miss
+because everything else lines up:
+
+```
+req_time merchant_id tran_id amount items SHIPPING firstname lastname email
+phone TYPE payment_option return_url cancel_url continue_success_url
+return_deeplink currency custom_fields return_params payout lifetime
+additional_params google_pay_token SKIP_SUCCESS_PAGE
+```
+
+`shipping` is inserted after `items`; `first_name`/`last_name` lose their
+underscores; `type` replaces `purchase_type`; `skip_success_page` comes LAST,
+after `google_pay_token`. `payment_gate` and `view_type` are sent but are NOT in
+the hash. Getting any of it wrong is `status.code = 1` and nothing else.
+
+Encoding follows the page literally, including where it is inconsistent:
+`return_url` and `return_deeplink` base64, `cancel_url` and
+`continue_success_url` plain.
+
+### Three answer shapes, all measured
+
+| request | answer |
+|---|---|
+| `view_type=hosted_view` (default) | **302**, `Location:` the checkout |
+| `view_type=popup` | **302**, `Location:` the checkout |
+| `payment_option=abapay_khqr_deeplink` | **200 JSON** — `checkout_qr_url`, `qr_string`, `abapay_deeplink` |
+| HTML body | refused — there is no URL to hand over, and proxying ABA's page is what the guideline forbids |
+
+Decoding the checkout blob confirms ABA renders its own option chooser
+(`"step":"payment-option"`, with `cards`, `abapay_deeplink`,
+`abapay_khqr_deeplink`, `abapay_khqr`) and that our `cancel_url` arrives intact.
+
+### The checkout token lives 180 seconds
+
+From inside the checkout URL, measured:
+
+```
+"token_time": 1787716747, "expire_in": 1787716927, "expire_in_sec": "180"
+```
+
+— on a request that asked for `lifetime = 30` **minutes**. Two different clocks.
+The transaction stays payable; the LINK does not. `checkout_stale` is computed
+from our own issue time (the blob is opaque and not a contract), the payment is
+never marked failed for it, and the client offers a fresh attempt instead of a
+dead link.
+
+### What did NOT change
+
+`orders.provider` is still `khqr`. The Billing Engine, the grant path, the
+idempotency key, the tampering surface and the exactly-once rule are untouched —
+only the acquisition call and the screen the customer pays on moved.
