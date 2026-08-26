@@ -522,3 +522,60 @@ dead link.
 `orders.provider` is still `khqr`. The Billing Engine, the grant path, the
 idempotency key, the tampering surface and the exactly-once rule are untouched —
 only the acquisition call and the screen the customer pays on moved.
+
+
+---
+
+## 12 — 2026-08-26: the Cambodia catalogue (10 / 30 / 300)
+
+| badge | spaces | price | shown against | rail |
+|---|---|---|---|---|
+| `starter` | 10 | **$4.99** | — | khqr |
+| `popular` | 30 | **$7.99** | — | khqr |
+| `best_value` | 300 | **$47.99** | ~~$79.99~~, 40% off | khqr |
+
+Migration `0009_web_credit_packs.sql`. `pack_25` / `pack_50` / `pack_100` are
+`active = false` — not deleted, because 54 orders reference `products(id)` and
+history has to stay readable. `weekly_pass` and `annual_pass` are untouched and
+the migration **raises** if either moved.
+
+### Where the crossed-out price lives, and why not in a column
+
+`$79.99` is display-only. Giving it a column beside `price_usd` would put a
+second plausible answer to *"what does this cost"* one join from the code that
+signs a PayWay request.
+
+`products.metadata jsonb` already existed (billing PR0, default `'{}'`) and is
+read by **nothing** in the billing path — checked across `billing.py`, the seam
+and every migration in the repository. So:
+
+```
+metadata->>'list_price_usd'   the crossed-out reference price
+metadata->>'badge'            a MACHINE code the client translates
+```
+
+The **discount percentage is not stored**. It is derived from the two prices at
+render time, so "40% OFF" cannot contradict the numbers printed beside it.
+
+`badge` is a code (`starter` / `popular` / `best_value`), never a label — the
+same rule already used for `billing_state` and `error_code`. An English
+marketing word in a database is an untranslated string where no translator looks.
+
+### There is no unlimited product
+
+`credits_granted` is a positive integer for every active row, asserted by the
+migration. `billing_grant_purchase` takes `p_credits int` — "unlimited" is not a
+value the Billing Engine can express, and `PwaProduct.credits` is an `int` with
+no sentinel, so a null parses to `0` (grants nothing) rather than to everything.
+
+### What is proven, not asserted
+
+* `79.99` appears nowhere in the signed PayWay request and nowhere in the
+  browser payload;
+* a callback claiming the crossed-out price is an `AMOUNT_MISMATCH` that grants
+  nothing;
+* a checkout body carrying `credits`, `unlimited`, `price_usd` or
+  `list_price_usd` is **rejected**, not ignored;
+* the live E2E now buys `pack_300` specifically — the only product where a wrong
+  amount is possible at all — and asserts the served catalogue is exactly
+  `10@4.99, 30@7.99, 300@47.99`.
