@@ -1,29 +1,36 @@
 /// The payment surface. Renders a SERVER state — never an inference.
 ///
-/// The Cambodian shape of this screen
-/// ----------------------------------
-/// KHQR is scanned in two completely different ways, and a design that ignores
-/// the difference is wrong on half the traffic:
+/// Where Ayden stops and ABA starts
+/// --------------------------------
+/// Here. This sheet's job is to name what is being bought, for how much, and to
+/// hand the browser one link: PayWay's own checkout, on PayWay's own domain.
+/// ABA renders the payment — their option chooser (cards, ABA Pay, KHQR), their
+/// QR, their ABA Mobile handoff — because their integration guideline says the
+/// payment screen is theirs, and because a checkout we drew would be a copy we
+/// had to keep in step with theirs forever.
 ///
-///   on a DESKTOP the phone is the scanner. The QR is the interface — big,
-///   central, quiet — and the deeplink is useless (there is no ABA Mobile on
-///   the machine showing it).
+/// That is why there is no QR in the primary path any more. The earlier rail
+/// issued a KHQR and this sheet rendered it; it worked, and it made Ayden the
+/// checkout. A QR only appears now when the deployment deliberately pins
+/// `abapay_khqr_deeplink`, and even then it is secondary to the link.
 ///
-///   on a PHONE the browser and the bank app are on the same device. Asking
-///   someone to scan a code with the phone that is displaying it is the classic
-///   web-payment failure. So the deeplink is the primary action, and the QR
-///   moves below it for the person whose bank is not ABA.
-///
-/// [pwaFormFactorForWidth] already owns the breakpoint, so this file adds no
-/// new one.
+/// The link expires before the payment does
+/// ----------------------------------------
+/// Measured on the sandbox: a PayWay checkout token lives 180 seconds, on a
+/// transaction whose own lifetime is thirty minutes. So a person who opens this
+/// sheet, walks away, and returns to an F5 has a payment that is still perfectly
+/// open and a link that is dead. [PwaPayment.needsFreshCheckout] is that case,
+/// and it is rendered as "start again" — never as a failure, because nothing
+/// failed.
 ///
 /// What is NOT here
 /// ----------------
-/// No success path that the browser can reach on its own. There is no timer
-/// that concludes, no "I have paid" button that unlocks, and no interpretation
-/// of the browser regaining focus after ABA Mobile. The only widget that says
-/// "you are all set" is behind `PwaPaymentState.granted`, which the SERVER
-/// writes after PayWay's Check Transaction and the Billing Engine's grant.
+/// No success path the browser can reach on its own. There is no timer that
+/// concludes, no "I have paid" button that unlocks, no reading of the browser
+/// regaining focus after ABA Mobile, and no interpretation of the URL PayWay
+/// returned to. The only widget that says "you are all set" is behind
+/// `PwaPaymentState.granted`, which the SERVER writes after PayWay's Check
+/// Transaction and the Billing Engine's grant.
 ///
 /// There is also no progress bar. A payment has no measurable progress — a
 /// filling bar would be a fabricated number, and the states below say more.
@@ -44,20 +51,32 @@ import '../l10n/pwa_l10n.dart';
 import 'pwa_theme.dart';
 import 'pwa_widgets.dart' show pwaSerif;
 
+/// How the payment sheet was left. Three outcomes, because they mean three
+/// different things to the screen underneath.
+enum PwaPaymentExit {
+  /// Paid, and the person chose to go and use it.
+  startDesigning,
+
+  /// Paid, and the person chose to stay where they were.
+  later,
+
+  /// Not paid.
+  none,
+}
+
 /// Open the payment surface for [product] and start the checkout.
 ///
-/// Returns true when the payment ended GRANTED, so the caller can close the
-/// paywall behind it rather than leaving a person staring at a purchase screen
-/// for something they have just bought.
-Future<bool> showPwaPaymentSheet(
+/// Returns how it ended. A GRANTED payment closes the paywall behind it either
+/// way — nobody should be left looking at a purchase screen for something they
+/// have just bought — and [PwaPaymentExit.startDesigning] additionally says the
+/// person asked to go and use it.
+Future<PwaPaymentExit> showPwaPaymentSheetFor(
   BuildContext context,
   WidgetRef ref,
   PwaProduct product,
 ) async {
-  // Start before the sheet builds, so the first frame is already "preparing"
-  // instead of a blank panel that then flickers into one.
   ref.read(pwaPaymentProvider.notifier).start(product.sku);
-  final granted = await showModalBottomSheet<bool>(
+  final exit = await showModalBottomSheet<PwaPaymentExit>(
     context: context,
     isScrollControlled: true,
     isDismissible: false,
@@ -69,8 +88,17 @@ Future<bool> showPwaPaymentSheet(
     ),
     builder: (_) => PwaPaymentSheet(product: product),
   );
-  return granted == true;
+  return exit ?? PwaPaymentExit.none;
 }
+
+/// Back-compat shim for callers that only need "did it end paid".
+Future<bool> showPwaPaymentSheet(
+  BuildContext context,
+  WidgetRef ref,
+  PwaProduct product,
+) async =>
+    (await showPwaPaymentSheetFor(context, ref, product)) !=
+    PwaPaymentExit.none;
 
 class PwaPaymentSheet extends ConsumerWidget {
   const PwaPaymentSheet({super.key, required this.product});
@@ -266,7 +294,7 @@ class _Working extends StatelessWidget {
       );
 }
 
-/// The live payment request: a QR, a deeplink, or both — ordered by device.
+/// The live payment: what is being bought, and the way to ABA's checkout.
 class _Payable extends StatelessWidget {
   const _Payable({required this.payment, required this.onPhone});
 
@@ -276,27 +304,35 @@ class _Payable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = context.pwaL10n;
-    final hasDeeplink = payment.deeplink.isNotEmpty;
 
-    final qr = _QrPanel(payment: payment);
-    final deeplink = hasDeeplink
-        ? _OpenAbaButton(deeplink: payment.deeplink)
-        : const SizedBox.shrink();
+    // The link has aged out. The PAYMENT has not — so this is an invitation to
+    // start again, not an error, and it must not read like one.
+    if (payment.needsFreshCheckout) {
+      return _Outcome(
+        icon: Icons.link_off_outlined,
+        tone: pwaMuted,
+        title: l.payLinkExpiredTitle,
+        body: l.payLinkExpiredBody,
+      );
+    }
+
+    // Only when the deployment pinned `abapay_khqr_deeplink`. Normally empty —
+    // ABA shows the QR on its own page, which is where it belongs.
+    final hasQr = payment.qrImage.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(onPhone && hasDeeplink ? l.payTitle : l.payScanTitle,
-            style: pwaSans(fontSize: 15, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
-        Text(l.payScanBody,
+        // No heading here: the sheet header already names the payment. A
+        // second copy of the same sentence is noise on a screen whose whole
+        // job is one clear action.
+        Text(onPhone ? l.payHandoffBodyPhone : l.payHandoffBodyDesktop,
             style: pwaSans(fontSize: 13, color: pwaMuted, height: 1.5)),
         const SizedBox(height: PwaGap.lg),
 
-        // The ONLY difference between the two devices: which of the two ways to
-        // pay is offered first.
-        if (onPhone && hasDeeplink) ...[
-          deeplink,
+        _ContinueToAbaButton(url: payment.checkoutUrl),
+
+        if (hasQr) ...[
           const SizedBox(height: PwaGap.md),
           Center(
             child: Text(l.payOrScan,
@@ -304,18 +340,44 @@ class _Payable extends StatelessWidget {
                 style: pwaSans(fontSize: 12, color: pwaFaint)),
           ),
           const SizedBox(height: PwaGap.sm),
-          qr,
-        ] else ...[
-          qr,
-          if (hasDeeplink) ...[
-            const SizedBox(height: PwaGap.md),
-            deeplink,
-          ],
+          _QrPanel(payment: payment),
         ],
 
         const SizedBox(height: PwaGap.md),
         _Waiting(payment: payment),
       ],
+    );
+  }
+}
+
+/// The one action on this sheet: go to ABA.
+///
+/// A NAVIGATION and nothing else. Tapping it writes no state, concludes
+/// nothing, and starts no timer — the poll that is already running is what will
+/// find out whether money moved, by asking the server, which asks PayWay.
+class _ContinueToAbaButton extends ConsumerWidget {
+  const _ContinueToAbaButton({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l = context.pwaL10n;
+    return FilledButton.icon(
+      onPressed: url.isEmpty
+          ? null
+          : () => ref.read(pwaExternalLauncherProvider).open(url),
+      icon: const Icon(Icons.open_in_new_rounded, size: 18),
+      label: Text(l.payContinueToAba,
+          style: pwaSans(fontSize: 15, fontWeight: FontWeight.w600)),
+      style: FilledButton.styleFrom(
+        backgroundColor: pwaInk,
+        foregroundColor: Colors.white,
+        minimumSize: const Size.fromHeight(52),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(PwaGap.radius),
+        ),
+      ),
     );
   }
 }
@@ -380,30 +442,6 @@ class _QrPanel extends StatelessWidget {
     } catch (_) {
       return null;
     }
-  }
-}
-
-class _OpenAbaButton extends ConsumerWidget {
-  const _OpenAbaButton({required this.deeplink});
-
-  final String deeplink;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l = context.pwaL10n;
-    return FilledButton(
-      onPressed: () => ref.read(pwaExternalLauncherProvider).open(deeplink),
-      style: FilledButton.styleFrom(
-        backgroundColor: pwaInk,
-        foregroundColor: Colors.white,
-        minimumSize: const Size.fromHeight(54),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(PwaGap.radius),
-        ),
-      ),
-      child: Text(l.payOpenAba,
-          style: pwaSans(fontSize: 15, fontWeight: FontWeight.w600)),
-    );
   }
 }
 
@@ -499,22 +537,39 @@ class _Actions extends ConsumerWidget {
     final l = context.pwaL10n;
     final notifier = ref.read(pwaPaymentProvider.notifier);
 
+    // PAID. What this person wants next is to USE what they bought — so the
+    // primary action is the work, not the wallet. Deliberately NOT a route back
+    // to the pack list: showing someone the thing they just bought, again, as
+    // the next mandatory step reads as "buy more" and is the single most common
+    // way a good purchase flow ends badly.
     if (payment.state == PwaPaymentState.granted) {
-      return FilledButton(
-        onPressed: () {
-          notifier.reset();
-          Navigator.of(context).pop(true);
-        },
-        style: FilledButton.styleFrom(
-          backgroundColor: pwaInk,
-          foregroundColor: Colors.white,
-          minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(PwaGap.radius),
+      return Column(
+        children: [
+          FilledButton(
+            onPressed: () {
+              notifier.reset();
+              Navigator.of(context).pop(PwaPaymentExit.startDesigning);
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: pwaInk,
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(PwaGap.radius),
+              ),
+            ),
+            child: Text(l.payStartDesigning,
+                style: pwaSans(fontSize: 15, fontWeight: FontWeight.w600)),
           ),
-        ),
-        child: Text(l.payContinue,
-            style: pwaSans(fontSize: 15, fontWeight: FontWeight.w600)),
+          TextButton(
+            onPressed: () {
+              notifier.reset();
+              Navigator.of(context).pop(PwaPaymentExit.later);
+            },
+            child: Text(l.payMaybeLater,
+                style: pwaSans(fontSize: 13, color: pwaMuted)),
+          ),
+        ],
       );
     }
 
@@ -544,7 +599,8 @@ class _Actions extends ConsumerWidget {
             final granted =
                 ref.read(pwaPaymentProvider).state == PwaPaymentState.granted;
             notifier.reset();
-            Navigator.of(context).pop(granted);
+            Navigator.of(context)
+                .pop(granted ? PwaPaymentExit.later : PwaPaymentExit.none);
           },
           child: Text(
             payment.isTerminal ? l.paywallClose : l.payCancel,

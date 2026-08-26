@@ -82,6 +82,9 @@ class PwaPayment {
     this.credits = 0,
     this.amount,
     this.currency = 'USD',
+    this.checkoutUrl = '',
+    this.checkoutMode = '',
+    this.checkoutStale = false,
     this.qrString = '',
     this.qrImage = '',
     this.deeplink = '',
@@ -103,9 +106,30 @@ class PwaPayment {
   final double? amount;
   final String currency;
 
-  /// The KHQR payload, and PayWay's rendering of it as a base64 PNG. Both are
-  /// the payment request itself — public by nature, which is why they may be in
-  /// a browser at all.
+  /// WHERE THE PERSON PAYS: PayWay's own checkout, on PayWay's own domain.
+  ///
+  /// ABA's integration guideline puts the payment screen with ABA, and this is
+  /// the whole of Ayden's part in it — hand the browser this URL. Ayden does not
+  /// draw a KHQR, does not host ABA's option chooser, and does not frame their
+  /// page. A checkout we rendered ourselves would be a copy we had to keep in
+  /// step with theirs forever, and it would be the wrong copy the first time
+  /// they changed anything.
+  final String checkoutUrl;
+
+  /// `redirect` | `json` — how PayWay answered. Diagnostic only.
+  final String checkoutMode;
+
+  /// True once PayWay's checkout TOKEN has aged out (180 seconds, measured).
+  ///
+  /// This is NOT a failed payment and must never be shown as one. The
+  /// transaction is still perfectly payable; only the link to it has expired.
+  /// The right response is to offer a fresh attempt, not an error.
+  final bool checkoutStale;
+
+  /// The KHQR payload, and PayWay's rendering of it as a base64 PNG. Populated
+  /// only when the deployment pins `abapay_khqr_deeplink`; empty is the normal
+  /// answer and is not a degraded state. Both are the payment request itself —
+  /// public by nature, which is why they may be in a browser at all.
   final String qrString;
   final String qrImage;
 
@@ -134,9 +158,22 @@ class PwaPayment {
         PwaPaymentState.verified,
       }.contains(state);
 
-  /// Whether there is something for a person to pay right now.
+  /// Whether there is a live place for a person to pay right now.
+  ///
+  /// Both halves matter. A checkout whose token has aged out is not payable
+  /// through THIS link even though the payment behind it is still open — so
+  /// offering it would send someone to a PayWay error page.
   bool get isPayable =>
-      state == PwaPaymentState.awaitingPayment && qrString.isNotEmpty;
+      state == PwaPaymentState.awaitingPayment &&
+      checkoutUrl.isNotEmpty &&
+      !checkoutStale;
+
+  /// The attempt is alive but its link is not. A fresh attempt is the only way
+  /// back to a payable state — PayWay refuses a second checkout for the same
+  /// transaction id.
+  bool get needsFreshCheckout =>
+      state == PwaPaymentState.awaitingPayment &&
+      (checkoutUrl.isEmpty || checkoutStale);
 
   /// Whether offering "try again" makes sense.
   bool get canRetry => const {
@@ -215,6 +252,9 @@ class PwaPayment {
       credits: (body['credits'] as num?)?.toInt() ?? 0,
       amount: (body['amount'] as num?)?.toDouble(),
       currency: (body['currency'] as String?) ?? 'USD',
+      checkoutUrl: (body['checkout_url'] as String?) ?? '',
+      checkoutMode: (body['checkout_mode'] as String?) ?? '',
+      checkoutStale: body['checkout_stale'] == true,
       qrString: (body['qr_string'] as String?) ?? '',
       qrImage: (body['qr_image'] as String?) ?? '',
       deeplink: (body['deeplink'] as String?) ?? '',

@@ -603,6 +603,15 @@ class PwaL10n {
   String get payScanBody => _get('pwaPayScanBody');
   String get payOpenAba => _get('pwaPayOpenAba');
   String get payOrScan => _get('pwaPayOrScan');
+  String get payContinueToAba => _get('pwaPayContinueToAba');
+  String get payStartDesigning => _get('pwaPayStartDesigning');
+  String get payMaybeLater => _get('pwaPayMaybeLater');
+  String get payHandoffBodyDesktop => _get('pwaPayHandoffBodyDesktop');
+  String get payHandoffBodyPhone => _get('pwaPayHandoffBodyPhone');
+  String get payLinkExpiredTitle => _get('pwaPayLinkExpiredTitle');
+  String get payLinkExpiredBody => _get('pwaPayLinkExpiredBody');
+  String get payReturnTitle => _get('pwaPayReturnTitle');
+  String get payReturnBody => _get('pwaPayReturnBody');
   String payExpiresIn(String remaining) =>
       _get('pwaPayExpiresIn').replaceAll('{t}', remaining);
   String get payWaiting => _get('pwaPayWaiting');

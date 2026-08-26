@@ -267,7 +267,24 @@ const Map<String, String> pwaEnTranslations = {
   // three locales: they are the names printed on the thing a person is about to
   // tap, and translating a brand is how an interface becomes unrecognisable.
   'pwaPayBuy': 'Buy',
-  'pwaPayTitle': 'Pay with KHQR',
+  'pwaPayTitle': 'Pay with ABA PayWay',
+  'pwaPayContinueToAba': 'Continue to ABA PayWay',
+  'pwaPayStartDesigning': 'Start a new design',
+  'pwaPayMaybeLater': 'Maybe later',
+  'pwaPayHandoffBodyDesktop':
+      'You will finish paying on ABA PayWay, where you can choose ABA KHQR, '
+      'ABA Pay or a card. We will bring you back here.',
+  'pwaPayHandoffBodyPhone':
+      'You will finish paying on ABA PayWay, where you can open ABA Mobile or '
+      'scan with another bank app. We will bring you back here.',
+  'pwaPayLinkExpiredTitle': 'This payment link has expired',
+  'pwaPayLinkExpiredBody':
+      'ABA payment links are only valid for a few minutes. Nothing was '
+      'charged — start again to get a fresh one.',
+  'pwaPayReturnTitle': 'Checking your payment',
+  'pwaPayReturnBody':
+      'We are confirming this with ABA. This only takes a moment, and you do '
+      'not need to pay again.',
   'pwaPayPreparing': 'Preparing your payment...',
   'pwaPayScanTitle': 'Scan to pay',
   'pwaPayScanBody':
@@ -607,7 +624,24 @@ const Map<String, String> pwaKmTranslations = {
 
   // -- Payment (ABA PayWay / KHQR) -------------------------------------------
   'pwaPayBuy': 'ទិញ',
-  'pwaPayTitle': 'ទូទាត់​ដោយ KHQR',
+  'pwaPayTitle': 'ទូទាត់​ដោយ ABA PayWay',
+  'pwaPayContinueToAba': 'បន្ត​ទៅ ABA PayWay',
+  'pwaPayStartDesigning': 'ចាប់​ផ្ដើម​រចនា​ថ្មី',
+  'pwaPayMaybeLater': 'ពេល​ក្រោយ',
+  'pwaPayHandoffBodyDesktop':
+      'អ្នក​នឹង​បញ្ចប់​ការ​ទូទាត់​នៅ​លើ ABA PayWay ដែល​អ្នក​អាច​ជ្រើស ABA KHQR, '
+      'ABA Pay ឬ​កាត។ យើង​នឹង​នាំ​អ្នក​ត្រឡប់​មក​វិញ។',
+  'pwaPayHandoffBodyPhone':
+      'អ្នក​នឹង​បញ្ចប់​ការ​ទូទាត់​នៅ​លើ ABA PayWay ដែល​អ្នក​អាច​បើក ABA Mobile '
+      'ឬ​ស្កេន​ដោយ​កម្មវិធី​ធនាគារ​ផ្សេង។ យើង​នឹង​នាំ​អ្នក​ត្រឡប់​មក​វិញ។',
+  'pwaPayLinkExpiredTitle': 'តំណ​ទូទាត់​នេះ​ផុត​កំណត់​ហើយ',
+  'pwaPayLinkExpiredBody':
+      'តំណ​ទូទាត់ ABA មាន​សុពលភាព​តែ​ប៉ុន្មាន​នាទី​ប៉ុណ្ណោះ។ គ្មាន​ការ​កាត់​ប្រាក់​ទេ — '
+      'សូម​ចាប់​ផ្ដើម​ម្ដង​ទៀត​ដើម្បី​ទទួល​តំណ​ថ្មី។',
+  'pwaPayReturnTitle': 'កំពុង​ពិនិត្យ​ការ​ទូទាត់​របស់​អ្នក',
+  'pwaPayReturnBody':
+      'យើង​កំពុង​បញ្ជាក់​ជាមួយ ABA។ វា​ចំណាយ​ពេល​តែ​មួយ​ភ្លែត ហើយ​អ្នក​មិន​ចាំបាច់ '
+      'ទូទាត់​ម្ដង​ទៀត​ទេ។',
   'pwaPayPreparing': 'កំពុង​រៀបចំ​ការ​ទូទាត់​របស់​អ្នក...',
   'pwaPayScanTitle': 'ស្កេន​ដើម្បី​ទូទាត់',
   'pwaPayScanBody':
@@ -955,7 +989,25 @@ const Map<String, String> pwaFrTranslations = {
 
   // -- Payment (ABA PayWay / KHQR) -------------------------------------------
   'pwaPayBuy': 'Acheter',
-  'pwaPayTitle': 'Payer avec KHQR',
+  'pwaPayTitle': 'Payer avec ABA PayWay',
+  'pwaPayContinueToAba': 'Continuer vers ABA PayWay',
+  'pwaPayStartDesigning': 'Créer un nouveau design',
+  'pwaPayMaybeLater': 'Plus tard',
+  'pwaPayHandoffBodyDesktop':
+      'Vous finaliserez le paiement sur ABA PayWay, où vous pourrez choisir '
+      'ABA KHQR, ABA Pay ou une carte. Nous vous ramènerons ici.',
+  'pwaPayHandoffBodyPhone':
+      'Vous finaliserez le paiement sur ABA PayWay, où vous pourrez ouvrir '
+      'ABA Mobile ou scanner avec une autre application bancaire. Nous '
+      'vous ramènerons ici.',
+  'pwaPayLinkExpiredTitle': 'Ce lien de paiement a expiré',
+  'pwaPayLinkExpiredBody':
+      'Les liens de paiement ABA ne sont valables que quelques minutes. Rien '
+      "n'a été débité — recommencez pour en obtenir un nouveau.",
+  'pwaPayReturnTitle': 'Vérification de votre paiement',
+  'pwaPayReturnBody':
+      "Nous confirmons avec ABA. Cela ne prend qu'un instant et vous n'avez "
+      'pas besoin de payer à nouveau.',
   'pwaPayPreparing': 'Préparation de votre paiement...',
   'pwaPayScanTitle': 'Scannez pour payer',
   'pwaPayScanBody':

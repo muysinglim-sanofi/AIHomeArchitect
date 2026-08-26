@@ -49,8 +49,11 @@ Map<String, Object?> _server({
   String tranId = 'A0123456789abcdef012',
   int credits = 10,
   double amount = 1.99,
-  String qr = 'khqr://pay/A0123456789abcdef012',
-  String deeplink = 'abamobile://pay/A0123456789abcdef012',
+  String checkoutUrl =
+      'https://checkout-sandbox.payway.com.kh/eyJzdGVwIjoicGF5bWVudCJ9',
+  bool checkoutStale = false,
+  String qr = '',
+  String deeplink = '',
   String failureReason = '',
   String? expiresAt,
 }) => {
@@ -63,8 +66,11 @@ Map<String, Object?> _server({
       'credits': credits,
       'amount': amount,
       'currency': 'USD',
+      'checkout_url': checkoutUrl,
+      'checkout_mode': 'redirect',
+      'checkout_stale': checkoutStale,
       'qr_string': qr,
-      'qr_image': _pngBase64,
+      'qr_image': qr.isEmpty ? '' : _pngBase64,
       'deeplink': deeplink,
       'expires_at': expiresAt ??
           DateTime.now().add(const Duration(minutes: 30)).toIso8601String(),
@@ -404,8 +410,10 @@ void main() {
 
       expect(server.calls, ['open']);
       expect(controller.state.state, PwaPaymentState.awaitingPayment);
-      expect(controller.state.qrString, isNotEmpty,
-          reason: 'F5 gets the SAME code back, without a second PayWay call');
+      expect(controller.state.checkoutUrl, isNotEmpty,
+          reason: 'F5 gets the SAME checkout back, without a second PayWay call');
+      expect(controller.state.isPayable, isTrue,
+          reason: 'and it is still usable — the link had not aged out');
       controller.dispose();
     });
 
@@ -421,12 +429,9 @@ void main() {
   // ══ the surface ═════════════════════════════════════════════════════════
 
   group('PAYWAY13-16  the surface', () {
-    testWidgets('PAYWAY13 desktop leads with the QR; a phone leads with ABA '
-        'Mobile', (tester) async {
-      for (final (size, phone) in [
-        (const Size(1400, 1000), false),
-        (const Size(390, 844), true),
-      ]) {
+    testWidgets('PAYWAY13 both devices get ONE handoff to ABA, and no QR of '
+        'our own', (tester) async {
+      for (final size in [const Size(1400, 1000), const Size(390, 844)]) {
         tester.view.physicalSize = size;
         tester.view.devicePixelRatio = 1.0;
         addTearDown(tester.view.resetPhysicalSize);
@@ -443,23 +448,17 @@ void main() {
         await tester.pump();
 
         final l = pwaL10nFor(const Locale('en'));
-        final qr = tester.getTopLeft(find.byType(Image));
-        final button = tester.getTopLeft(find.widgetWithText(
-            FilledButton, l.payOpenAba));
-
-        if (phone) {
-          expect(button.dy, lessThan(qr.dy),
-              reason: 'scanning a code with the phone showing it is the '
-                  'classic mobile-payment failure');
-        } else {
-          expect(qr.dy, lessThan(button.dy),
-              reason: 'on a desktop the phone is the scanner');
-        }
+        expect(find.widgetWithText(FilledButton, l.payContinueToAba),
+            findsOneWidget,
+            reason: "the checkout is ABA's, and this is the way to it");
+        // ABA draws the QR on ABA's page. Drawing our own was the old rail.
+        expect(find.byType(Image), findsNothing,
+            reason: "Ayden must not reproduce ABA's payment screen");
       }
       await _teardown(tester);
     });
 
-    testWidgets('PAYWAY14 tapping Open ABA Mobile NAVIGATES and concludes '
+    testWidgets('PAYWAY14 tapping Continue to ABA NAVIGATES and concludes '
         'nothing', (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1.0;
@@ -482,12 +481,14 @@ void main() {
       await tester.pump();
 
       final l = pwaL10nFor(const Locale('en'));
-      await tester.tap(find.widgetWithText(FilledButton, l.payOpenAba));
+      await tester.tap(find.widgetWithText(FilledButton, l.payContinueToAba));
       await tester.pump();
 
-      expect(launcher.opened, ['abamobile://pay/A0123456789abcdef012']);
+      expect(launcher.opened, [
+        'https://checkout-sandbox.payway.com.kh/eyJzdGVwIjoicGF5bWVudCJ9',
+      ]);
       expect(controller.state.state, PwaPaymentState.awaitingPayment,
-          reason: 'opening a bank app is not evidence of payment');
+          reason: "opening ABA's checkout is not evidence of payment");
       expect(entitlement.refreshes, 0);
       expect(find.text(l.payDoneTitle), findsNothing);
       await _teardown(tester);
@@ -500,7 +501,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
 
       final cases = <String, String Function(PwaL10n)>{
-        'AWAITING_PAYMENT': (l) => l.payScanTitle,
+        'AWAITING_PAYMENT': (l) => l.payContinueToAba,
         'PAID_PENDING_VERIFICATION': (l) => l.payConfirmingTitle,
         'VERIFIED': (l) => l.payActivatingTitle,
         'GRANTED': (l) => l.payDoneTitle,
@@ -652,5 +653,99 @@ void main() {
     expect(bytes, isA<Uint8List>());
     expect(bytes.length, greaterThan(8));
     expect(bytes.sublist(1, 4), equals('PNG'.codeUnits));
+  });
+
+  group('PAYWAY20-24  the checkout belongs to ABA', () {
+    test('PAYWAY20 a stale checkout link is not payable, and not failed', () {
+      final fresh = PwaPayment.parse(_server(state: 'AWAITING_PAYMENT'));
+      expect(fresh.isPayable, isTrue);
+      expect(fresh.needsFreshCheckout, isFalse);
+
+      // PayWay's checkout token lives 180 seconds; the transaction behind it
+      // lives thirty minutes. When the LINK dies the PAYMENT has not.
+      final stale =
+          PwaPayment.parse(_server(state: 'AWAITING_PAYMENT', checkoutStale: true));
+      expect(stale.state, PwaPaymentState.awaitingPayment,
+          reason: 'the payment is still open');
+      expect(stale.isTerminal, isFalse, reason: 'nothing failed');
+      expect(stale.isPayable, isFalse,
+          reason: 'but this link would land on a PayWay error page');
+      expect(stale.needsFreshCheckout, isTrue);
+    });
+
+    test('PAYWAY21 an answer with no checkout url is never payable', () {
+      final none =
+          PwaPayment.parse(_server(state: 'AWAITING_PAYMENT', checkoutUrl: ''));
+      expect(none.isPayable, isFalse);
+      expect(none.needsFreshCheckout, isTrue);
+    });
+
+    testWidgets('PAYWAY22 a stale link offers a way forward, not an error',
+        (tester) async {
+      final server = _FakeServer(
+          checkoutAnswer:
+              _server(state: 'AWAITING_PAYMENT', checkoutStale: true));
+      final controller = PwaPaymentController(server.gateway, null);
+      await controller.start('pack_10');
+
+      await tester.pumpWidget(_app(
+        const PwaPaymentSheet(product: _pack),
+        overrides: [pwaPaymentProvider.overrideWith((ref) => controller)],
+      ));
+      await tester.pump();
+
+      final l = pwaL10nFor(const Locale('en'));
+      expect(find.text(l.payLinkExpiredTitle), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, l.payContinueToAba), findsNothing,
+          reason: 'offering a dead link is worse than offering none');
+      // It must NOT be dressed as a failure — nothing went wrong.
+      expect(find.text(l.payFailedTitle), findsNothing);
+      await _teardown(tester);
+    });
+
+    testWidgets('PAYWAY23 a paid sheet offers the WORK, never the packs again',
+        (tester) async {
+      final server =
+          _FakeServer(checkoutAnswer: _server(state: 'GRANTED'));
+      final controller = PwaPaymentController(server.gateway, null);
+      await controller.start('pack_10');
+
+      await tester.pumpWidget(_app(
+        const PwaPaymentSheet(product: _pack),
+        overrides: [pwaPaymentProvider.overrideWith((ref) => controller)],
+      ));
+      await tester.pump();
+
+      final l = pwaL10nFor(const Locale('en'));
+      expect(find.text(l.payDoneTitle), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, l.payStartDesigning),
+          findsOneWidget,
+          reason: 'what someone wants after paying is to use what they bought');
+      expect(find.widgetWithText(TextButton, l.payMaybeLater), findsOneWidget);
+      // The single most common way a good purchase flow ends badly.
+      expect(find.text(l.payContinueToAba), findsNothing);
+      await _teardown(tester);
+    });
+
+    test('PAYWAY24 every new payment string exists in km, en and fr', () {
+      for (final code in ['km', 'en', 'fr']) {
+        final l = pwaL10nFor(Locale(code));
+        for (final value in [
+          l.payContinueToAba,
+          l.payHandoffBodyDesktop,
+          l.payHandoffBodyPhone,
+          l.payLinkExpiredTitle,
+          l.payLinkExpiredBody,
+          l.payStartDesigning,
+          l.payMaybeLater,
+        ]) {
+          expect(value, isNotEmpty, reason: code);
+          // A missing key falls back to the key itself — which always starts
+          // 'pwaPay'. That is the shape of an untranslated string.
+          expect(value.startsWith('pwaPay'), isFalse,
+              reason: '$code: "$value" is a key, not a translation');
+        }
+      }
+    });
   });
 }
