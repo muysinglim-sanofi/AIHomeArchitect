@@ -61,6 +61,8 @@ class PwaProduct {
     required this.storeOnly,
     required this.webEnabled,
     this.durationDays,
+    this.listPriceUsd,
+    this.badge = '',
   });
 
   final String sku;
@@ -84,6 +86,51 @@ class PwaProduct {
 
   /// True when this row is purchasable on the Web today.
   final bool webEnabled;
+
+  /// The CROSSED-OUT reference price, when this product is being discounted.
+  ///
+  /// Display only, and deliberately a separate field from [priceUsd] rather
+  /// than a second "price": nothing may ever charge it, and the server resolves
+  /// the PayWay amount from the catalogue row's own `price_usd` without this
+  /// payload being involved at all. Null when there is no promotion.
+  final double? listPriceUsd;
+
+  /// A MACHINE code for the marketing label — `starter`, `popular`,
+  /// `best_value` — or empty. Translated by the client, exactly like
+  /// `billing_state`: an English word stored in a database is an untranslated
+  /// string in the one place no translator will look.
+  final String badge;
+
+  /// Whether this product is being shown at a discount.
+  ///
+  /// Both halves matter: a reference price that is not ABOVE the real one is
+  /// not a discount, and rendering "0% OFF" beside two identical numbers would
+  /// be worse than rendering nothing.
+  bool get isDiscounted {
+    final list = listPriceUsd;
+    final now = priceUsd;
+    return list != null && now != null && list > now;
+  }
+
+  /// The discount as a whole percentage, DERIVED rather than stored.
+  ///
+  /// A third stored number is a third thing that can drift out of step with the
+  /// two beside it; computing it means "40% OFF" can never contradict \$79.99
+  /// and \$47.99 sitting next to it. Zero when there is no discount.
+  int get discountPercent {
+    if (!isDiscounted) return 0;
+    final list = listPriceUsd!;
+    return ((1 - (priceUsd! / list)) * 100).round();
+  }
+
+  /// The reference price as a person reads it. Same currency rule as
+  /// [priceLabel] — a price is a property of the product, not translated copy.
+  String get listPriceLabel {
+    final list = listPriceUsd;
+    if (list == null) return '';
+    final amount = list.toStringAsFixed(2);
+    return currency == 'USD' ? '\$$amount' : '$amount $currency';
+  }
 
   /// The price as a person reads it.
   ///
@@ -113,6 +160,8 @@ class PwaProduct {
       durationDays: (raw['duration_days'] as num?)?.toInt(),
       storeOnly: raw['store_only'] == true,
       webEnabled: raw['web_enabled'] == true,
+      listPriceUsd: (raw['list_price_usd'] as num?)?.toDouble(),
+      badge: (raw['badge'] as String?) ?? '',
     );
   }
 }

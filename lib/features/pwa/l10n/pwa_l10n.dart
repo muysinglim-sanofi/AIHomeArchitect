@@ -585,6 +585,19 @@ class PwaL10n {
   String get paywallUnavailableTitle => _get('pwaPaywallUnavailableTitle');
   String get paywallUnavailableBody => _get('pwaPaywallUnavailableBody');
   String get paywallStoreOnly => _get('pwaPaywallStoreOnly');
+  String paywallDiscount(int n) =>
+      _get('pwaPaywallDiscount').replaceAll('{n}', '$n');
+
+  /// Translate a product's marketing badge CODE. Unknown codes render as
+  /// nothing rather than as the raw code — a new badge added server-side must
+  /// look absent here, never look like a bug leaking machine vocabulary at a
+  /// customer.
+  String productBadge(String code) => switch (code) {
+        'starter' => _get('pwaProductBadgeStarter'),
+        'popular' => _get('pwaProductBadgePopular'),
+        'best_value' => _get('pwaProductBadgeBestValue'),
+        _ => '',
+      };
   String get paywallRestore => _get('pwaPaywallRestore');
   String get paywallClose => _get('pwaPaywallClose');
   String get paywallSecureNote => _get('pwaPaywallSecureNote');

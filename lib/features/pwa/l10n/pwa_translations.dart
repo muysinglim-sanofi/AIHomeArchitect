@@ -258,6 +258,10 @@ const Map<String, String> pwaEnTranslations = {
       'Buying on the web is coming to Cambodia soon. Your work is saved and '
       'will be waiting for you.',
   'pwaPaywallStoreOnly': 'Available in the mobile app',
+  'pwaPaywallDiscount': '{n}% OFF',
+  'pwaProductBadgeStarter': 'STARTER',
+  'pwaProductBadgePopular': 'POPULAR',
+  'pwaProductBadgeBestValue': 'BEST VALUE',
   'pwaPaywallRestore': 'I already paid',
   'pwaPaywallClose': 'Not now',
   'pwaPaywallSecureNote': 'Payment is handled by Ayden. Never in your browser.',
@@ -617,6 +621,10 @@ const Map<String, String> pwaKmTranslations = {
       'ការ​ទិញ​តាម​គេហទំព័រ​នឹង​មក​ដល់​កម្ពុជា​ក្នុង​ពេល​ឆាប់ៗ។ '
       'ការងារ​របស់​អ្នក​ត្រូវ​បាន​រក្សា​ទុក ហើយ​នឹង​នៅ​រង់ចាំ​អ្នក។',
   'pwaPaywallStoreOnly': 'មាន​នៅ​ក្នុង​កម្មវិធី​ទូរស័ព្ទ',
+  'pwaPaywallDiscount': 'បញ្ចុះ​តម្លៃ {n}%',
+  'pwaProductBadgeStarter': 'ចាប់​ផ្ដើម',
+  'pwaProductBadgePopular': 'ពេញ​និយម',
+  'pwaProductBadgeBestValue': 'តម្លៃ​ល្អ​បំផុត',
   'pwaPaywallRestore': 'ខ្ញុំ​បាន​ទូទាត់​រួច​ហើយ',
   'pwaPaywallClose': 'មិន​ទាន់​ទេ',
   'pwaPaywallSecureNote':
@@ -982,6 +990,10 @@ const Map<String, String> pwaFrTranslations = {
       "L'achat sur le web arrive bientôt au Cambodge. Votre travail est "
       'enregistré et vous attendra.',
   'pwaPaywallStoreOnly': "Disponible dans l'application mobile",
+  'pwaPaywallDiscount': '-{n}%',
+  'pwaProductBadgeStarter': 'DÉCOUVERTE',
+  'pwaProductBadgePopular': 'POPULAIRE',
+  'pwaProductBadgeBestValue': 'MEILLEURE OFFRE',
   'pwaPaywallRestore': "J'ai déjà payé",
   'pwaPaywallClose': 'Pas maintenant',
   'pwaPaywallSecureNote':

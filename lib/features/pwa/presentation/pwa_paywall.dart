@@ -280,6 +280,13 @@ class _ProductRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // The marketing label, translated from a machine code. Absent
+                // for the app-store rows, which carry no badge.
+                if (product.badge.isNotEmpty) ...[
+                  _BadgeChip(label: l.productBadge(product.badge),
+                      highlight: product.isDiscounted),
+                  const SizedBox(height: 6),
+                ],
                 Text(l.paywallSpaces(product.credits),
                     style: pwaSans(fontSize: 15, fontWeight: FontWeight.w600)),
                 if (product.durationDays != null) ...[
@@ -299,8 +306,33 @@ class _ProductRow extends StatelessWidget {
           ),
           const SizedBox(width: PwaGap.md),
           if (product.priceLabel.isNotEmpty)
-            Text(product.priceLabel,
-                style: pwaSans(fontSize: 16, fontWeight: FontWeight.w600)),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // The crossed-out reference price. Rendered ABOVE the real one
+                // and struck through, so the number a person acts on is the
+                // one they will actually be charged. It comes from a separate
+                // field precisely so it can never be mistaken for the price.
+                if (product.isDiscounted) ...[
+                  Text(product.listPriceLabel,
+                      style: pwaSans(
+                        fontSize: 12,
+                        color: pwaFaint,
+                      ).copyWith(decoration: TextDecoration.lineThrough)),
+                  const SizedBox(height: 1),
+                ],
+                Text(product.priceLabel,
+                    style: pwaSans(fontSize: 16, fontWeight: FontWeight.w600)),
+                if (product.isDiscounted) ...[
+                  const SizedBox(height: 2),
+                  Text(l.paywallDiscount(product.discountPercent),
+                      style: pwaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: pwaGold)),
+                ],
+              ],
+            ),
           if (purchasable && onBuy != null) ...[
             const SizedBox(width: PwaGap.sm),
             FilledButton(
@@ -319,6 +351,30 @@ class _ProductRow extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// The marketing label on a product row — a translated word, never a code.
+class _BadgeChip extends StatelessWidget {
+  const _BadgeChip({required this.label, this.highlight = false});
+
+  final String label;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    if (label.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: highlight ? pwaGoldSoft : pwaIvory,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: highlight ? pwaGold : pwaHairline),
+      ),
+      child: Text(label,
+          style: pwaSans(
+              fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.6)),
     );
   }
 }

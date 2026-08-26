@@ -748,4 +748,102 @@ void main() {
       }
     });
   });
+
+  group('CAT01-05  the catalogue is the price authority, the discount is not', () {
+    PwaProduct parse(Map<String, Object?> raw) => PwaProduct.parse(raw)!;
+
+    Map<String, Object?> row({
+      required String sku,
+      required int credits,
+      required double price,
+      double? listPrice,
+      String badge = '',
+    }) => {
+          'sku': sku,
+          'type': 'CREDIT_PACK',
+          'credits': credits,
+          'price_usd': price,
+          'currency': 'USD',
+          'store_only': false,
+          'web_enabled': true,
+          'list_price_usd': listPrice,
+          'badge': badge,
+        };
+
+    test('CAT01 the three packs parse at their canonical prices', () {
+      final starter = parse(row(
+          sku: 'pack_10', credits: 10, price: 4.99, badge: 'starter'));
+      final popular = parse(row(
+          sku: 'pack_30', credits: 30, price: 7.99, badge: 'popular'));
+      final best = parse(row(
+          sku: 'pack_300', credits: 300, price: 47.99,
+          listPrice: 79.99, badge: 'best_value'));
+
+      expect((starter.credits, starter.priceLabel), (10, r'$4.99'));
+      expect((popular.credits, popular.priceLabel), (30, r'$7.99'));
+      expect((best.credits, best.priceLabel), (300, r'$47.99'));
+    });
+
+    test('CAT02 the 300 pack shows 79.99 struck through and 40% off', () {
+      final best = parse(row(
+          sku: 'pack_300', credits: 300, price: 47.99,
+          listPrice: 79.99, badge: 'best_value'));
+      expect(best.isDiscounted, isTrue);
+      expect(best.listPriceLabel, r'$79.99');
+      expect(best.discountPercent, 40,
+          reason: 'derived from the two prices, never stored beside them');
+      // The payable label is the discounted one. This is the whole point.
+      expect(best.priceLabel, r'$47.99');
+    });
+
+    test('CAT03 an undiscounted pack renders no reference price at all', () {
+      final starter = parse(row(
+          sku: 'pack_10', credits: 10, price: 4.99, badge: 'starter'));
+      expect(starter.isDiscounted, isFalse);
+      expect(starter.listPriceLabel, isEmpty);
+      expect(starter.discountPercent, 0);
+    });
+
+    test('CAT04 a reference price that is not ABOVE the price is not a discount',
+        () {
+      for (final bad in [4.99, 3.00, 0.0]) {
+        final p = parse(row(
+            sku: 'pack_10', credits: 10, price: 4.99, listPrice: bad));
+        expect(p.isDiscounted, isFalse, reason: 'list=$bad');
+        expect(p.discountPercent, 0, reason: 'list=$bad — never a 0% badge');
+      }
+    });
+
+    test('CAT05 badge codes translate in km/en/fr; unknown codes render empty',
+        () {
+      for (final code in ['km', 'en', 'fr']) {
+        final l = pwaL10nFor(Locale(code));
+        for (final badge in ['starter', 'popular', 'best_value']) {
+          final label = l.productBadge(badge);
+          expect(label, isNotEmpty, reason: '$code/$badge');
+          expect(label, isNot(badge),
+              reason: '$code/$badge — the raw code must never reach a customer');
+          expect(label.startsWith('pwaProduct'), isFalse,
+              reason: '$code/$badge is an untranslated key');
+        }
+        // A badge the server adds later must look ABSENT, not broken.
+        expect(l.productBadge('flash_sale'), isEmpty);
+        expect(l.productBadge(''), isEmpty);
+        expect(l.paywallDiscount(40), contains('40'));
+      }
+    });
+
+    test('CAT06 there is no unlimited concept to parse into', () {
+      // `credits` is an int with no sentinel. A server that tried to express
+      // "unlimited" as 0 or a missing value produces a pack that grants
+      // nothing, not a pack that grants everything.
+      final weird = parse({
+        'sku': 'x', 'type': 'CREDIT_PACK', 'credits': null,
+        'price_usd': 9.99, 'currency': 'USD',
+        'store_only': false, 'web_enabled': true,
+      });
+      expect(weird.credits, 0);
+      expect(weird.credits, isA<int>());
+    });
+  });
 }
