@@ -55,7 +55,15 @@ API = "http://127.0.0.1:8000"
 #: How long to wait for a human to pay the sandbox QR before reporting BLOCKED.
 #: Long enough to open ABA Mobile and scan; short enough that an unattended run
 #: still finishes.
-_PAY_WAIT_S = 180
+#: How long to keep asking PayWay whether the money landed.
+#:
+#: Deliberately much longer than the 180-second CHECKOUT TOKEN, because the two
+#: deadlines govern different things. The token gates OPENING ABA's page; once
+#: someone is on it the transaction has the full `lifetime` (30 minutes) to be
+#: paid. Polling for only 180s would hand a person a stopwatch for the part that
+#: is not on a stopwatch, and report BLOCKED on a payment that was still in
+#: progress.
+_PAY_WAIT_S = 600
 
 _PASS: list[str] = []
 _FAIL: list[str] = []
@@ -340,7 +348,7 @@ def main() -> int:  # noqa: PLR0915 — one linear narrative
           str(res))
 
     section("ABA10/14  waiting for the real payment")
-    print(f"  Polling for up to {_PAY_WAIT_S}s. Pay the QR above in the ABA "
+    print(f"  Polling for up to {_PAY_WAIT_S}s. Open the checkout above in the ABA "
           f"sandbox app.")
     deadline = time.time() + _PAY_WAIT_S
     state = order.get("state")
