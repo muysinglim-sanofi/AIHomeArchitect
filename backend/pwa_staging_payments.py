@@ -5,6 +5,10 @@ The three-part split, and why it is three
 -----------------------------------------
     payway.py                 the RAIL. Speaks PayWay's protocol. Knows nothing
                               about products, users, credits or entitlement.
+                              Its ACTIVE call is `/payments/purchase`, which ABA
+                              confirmed on 2026-08-19 is the endpoint for website
+                              integrations. `generate-qr` survives in that module
+                              and is reachable from nothing in this one.
     THIS FILE                 the SEAM. Knows what a purchase attempt is, which
                               canonical product it is for, and what has to be
                               true before anything is granted.
@@ -50,6 +54,19 @@ That id is also what ties the rail to the engine:
 means. There is no 'aba' and no 'aba_payway' anywhere: PayWay is the gateway
 BRAND that operates the KHQR rail, and brands are not a schema concept here.
 
+WHOSE SCREEN THE CUSTOMER PAYS ON
+---------------------------------
+ABA's. `/payments/purchase` answers with a URL on PayWay's own domain, and the
+browser goes there — Ayden's surface ends at "Buy credit pack". The earlier rail
+issued a KHQR and drew the payment screen here, which worked and was still the
+wrong division of labour: ABA's integration guideline puts the payment UI with
+ABA, and a checkout we render is a checkout we would have to keep in step with
+theirs forever.
+
+What comes back is `checkout_url`, and on the `abapay_khqr_deeplink` mode also a
+KHQR string and an ABA Mobile deeplink. None of it is secret — it is the payment
+request itself — and none of it lets the browser conclude anything.
+
 THE GRANT RULE, in one sentence
 -------------------------------
 A pushback is a DOORBELL, never a receipt: the only thing allowed to justify a
@@ -72,6 +89,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
+from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -318,6 +336,24 @@ def public_view(row: dict) -> dict:
     is buying and it came from the catalogue, not from them.
     """
     state = row.get("state") or CREATED
+
+    # A CHECKOUT URL GOES STALE LONG BEFORE THE TRANSACTION DOES.
+    #
+    # PayWay's checkout token lives 180 seconds; the transaction it pays for
+    # lives `lifetime` minutes. So a person who opens the payment sheet, walks
+    # away, and comes back to an F5 four minutes later has a row that is still
+    # perfectly payable and a link that is dead. Handing them that link is worse
+    # than handing them nothing: they would land on a PayWay error page and
+    # reasonably conclude Ayden is broken.
+    #
+    # This is computed rather than stored so it stays true as time passes — a
+    # column would be right when written and wrong a minute later.
+    issued = _parse_ts(row.get("qr_issued_at"))
+    checkout_url = row.get("checkout_url") or ""
+    stale = bool(
+        checkout_url and issued
+        and (_now() - issued).total_seconds() > payway.CHECKOUT_TOKEN_TTL_S)
+
     return {
         "tran_id": row.get("tran_id"),
         "state": state,
@@ -326,6 +362,16 @@ def public_view(row: dict) -> dict:
         "credits": row.get("credits"),
         "amount": (float(row["amount"]) if row.get("amount") is not None else None),
         "currency": row.get("currency"),
+        # THE field the browser acts on: PayWay's own checkout page.
+        "checkout_url": checkout_url,
+        "checkout_mode": row.get("checkout_mode") or "",
+        # True once the link is past PayWay's 180-second token life. The payment
+        # is NOT dead — the client must offer a fresh attempt rather than a
+        # broken link, and must not present this as a failure.
+        "checkout_stale": stale,
+        "checkout_ttl_s": payway.CHECKOUT_TOKEN_TTL_S,
+        # Present only in the `abapay_khqr_deeplink` mode, and never the primary
+        # surface: ABA's guideline is that the payment screen is ABA's.
         "qr_string": row.get("qr_string") or "",
         "qr_image": row.get("qr_image") or "",
         "deeplink": row.get("deeplink") or "",
@@ -404,30 +450,36 @@ async def start_checkout(*, user_id: str, sku: str, attempt_key: str) -> dict:
                       currency=cfg.currency)
 
     try:
-        qr = await payway.generate_qr(
+        checkout = await payway.purchase(
             cfg=cfg, tran_id=tran_id, amount=product.price,
             currency=cfg.currency, lifetime_minutes=cfg.lifetime_minutes,
             # Echoed back on the pushback. Correlation only — no identity, no
             # token, no amount. The server reads all of those from its own row.
             return_params=json.dumps({"t": tran_id}, separators=(",", ":")),
+            # Where the BROWSER is sent afterwards. Neither URL is trusted for
+            # anything: landing on one changes no state, and the PWA's next poll
+            # asks the server — which asks PayWay — what actually happened.
+            continue_success_url=return_url_for(cfg, tran_id, "success"),
+            cancel_url=return_url_for(cfg, tran_id, "cancel"),
         )
     except payway.PayWayError as exc:
-        reason = "DUPLICATE_TRAN_ID" if str(exc.code) == "403" else "QR_REFUSED"
+        reason = ("DUPLICATE_TRAN_ID" if str(exc.code) == "403"
+                  else "CHECKOUT_REFUSED")
         await _fail(tran_id, reason, only_if=(CREATED,))
-        log.warning("[payway-seam] generate-qr refused tran=%s code=%s", tran_id, exc.code)
+        log.warning("[payway-seam] purchase refused tran=%s code=%s", tran_id, exc.code)
         raise HTTPException(
             status_code=502,
             detail={"error_code": "PAYMENT_PROVIDER_REFUSED",
                     "payment_state": FAILED, "reason": reason,
                     # A duplicate id can only be resolved by a NEW attempt, and
                     # the client is told exactly that rather than left to guess.
-                    "retryable": reason == "QR_REFUSED",
+                    "retryable": reason == "CHECKOUT_REFUSED",
                     "new_attempt_required": reason == "DUPLICATE_TRAN_ID"},
         ) from exc
     except payway.PayWayUnreachable as exc:
         # The row stays CREATED, which `payway_claim` allows to be re-claimed:
         # nothing payable was produced, so trying again is safe.
-        log.warning("[payway-seam] generate-qr unreachable tran=%s", tran_id)
+        log.warning("[payway-seam] purchase unreachable tran=%s", tran_id)
         raise HTTPException(
             status_code=503,
             detail={"error_code": "PAYMENT_PROVIDER_UNREACHABLE",
@@ -437,19 +489,46 @@ async def start_checkout(*, user_id: str, sku: str, attempt_key: str) -> dict:
 
     await _update(tran_id, {
         "state": AWAITING_PAYMENT,
-        "qr_string": qr.qr_string,
-        "qr_image": qr.qr_image,
-        "deeplink": qr.deeplink,
-        "app_store": qr.app_store,
-        "play_store": qr.play_store,
+        "checkout_url": checkout.checkout_url,
+        "checkout_mode": checkout.mode,
+        # Populated only in the `abapay_khqr_deeplink` mode. Empty is normal and
+        # is not a degraded state: the checkout URL is what the customer needs,
+        # and ABA renders the QR on its own page.
+        "qr_string": checkout.qr_string,
+        "deeplink": checkout.deeplink,
         "qr_issued_at": _iso(_now()),
         "expires_at": _iso(expires_at),
     }, only_if=(CREATED,))
 
     row = await _load(tran_id)
-    log.info("[payway-seam] QR issued tran=%s sku=%s amount=%s %s credits=%d",
-             tran_id, product.sku, product.price, cfg.currency, product.credits)
+    log.info("[payway-seam] checkout opened tran=%s sku=%s amount=%s %s "
+             "credits=%d mode=%s", tran_id, product.sku, product.price,
+             cfg.currency, product.credits, checkout.mode)
     return public_view(row or {"tran_id": tran_id, "state": AWAITING_PAYMENT})
+
+
+def return_url_for(cfg: payway.PayWayConfig, tran_id: str, outcome: str) -> str:
+    """Where PayWay hands the browser back, or "" when nowhere is configured.
+
+    THE RULE THIS ENCODES: these URLs are navigation, not evidence.
+
+    The `tran_id` is in the query string so the PWA can re-open the right
+    payment sheet immediately instead of guessing — and that is the whole of its
+    authority. `?outcome=success` is what PayWay was asked to append on a
+    completed payment, and the client may use it to choose a spinner rather than
+    a QR. It may not use it to say "paid", it may not unlock anything, and the
+    server never reads it at all: an attacker typing the success URL by hand
+    gets the same answer as everyone else, which is whatever Check Transaction
+    says.
+
+    Empty when `PAYWAY_RETURN_BASE_URL` is unset. PayWay then shows its own end
+    page and the customer navigates back on their own; the payment still
+    completes, because completion was never the browser's job.
+    """
+    if not cfg.has_return_target:
+        return ""
+    return (f"{cfg.return_base_url}/#/pwa/pay/return"
+            f"?tran_id={quote(tran_id, safe='')}&outcome={quote(outcome, safe='')}")
 
 
 def _config_or_refuse() -> payway.PayWayConfig:
@@ -741,6 +820,13 @@ async def payments_config() -> dict:
         "environment": cfg.get("environment", "none"),
         "callback_configured": cfg.get("callback_configured", False),
         "callback_signature": cfg.get("callback_signature", "required"),
+        # WHICH acquisition endpoint is live. Named so a support question can be
+        # answered without reading the source, and so a deployment still running
+        # the deprecated rail is visible rather than assumed.
+        "acquisition": cfg.get("acquisition", "none"),
+        "view_type": cfg.get("view_type", ""),
+        "payment_option": cfg.get("payment_option", ""),
+        "return_configured": cfg.get("return_configured", False),
     }
 
 

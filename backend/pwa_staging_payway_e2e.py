@@ -232,12 +232,12 @@ def main() -> int:  # noqa: PLR0915 — one linear narrative
               "reports configured=false,\n  the paywall renders 'payments are "
               "not open yet', and a checkout answers 503.")
         st, res = checkout({"sku": sku, "attempt_key": str(uuid.uuid4())})
-        check("ABA-FC a checkout with no credentials is 503, never a fake QR",
+        check("ABA-FC a checkout with no credentials is 503, never a fake checkout",
               st == 503 and _detail(res).get("error_code") == "PAYMENTS_UNAVAILABLE",
               f"{st} {json.dumps(res)[:160]}")
         for label in ("ABA01 PayWay transaction created",
-                      "ABA05 desktop KHQR renders from a real gateway response",
-                      "ABA06 the ABA Mobile deeplink is real",
+                      "ABA05 a PayWay-hosted checkout url came back",
+                      "ABA06 the answer mode is recorded",
                       "ABA10 Check Transaction approved -> exactly one grant",
                       "ABA11 duplicate callback -> exactly one grant",
                       "ABA15 the entitlement refreshes after the grant",
@@ -264,7 +264,7 @@ def main() -> int:  # noqa: PLR0915 — one linear narrative
     check("ABA01 a canonical Web product produces a PayWay transaction",
           bool(tran_id) and order.get("state") == "AWAITING_PAYMENT",
           json.dumps({k: v for k, v in order.items()
-                      if k not in ("qr_image",)})[:220])
+                      if k not in ("qr_image", "qr_string")})[:260])
     check("ABA01 the tran_id fits PayWay's 20-character limit",
           len(tran_id) <= 20, f"{len(tran_id)}: {tran_id}")
     check("ABA02 the amount the server opened is the CATALOGUE price",
@@ -273,17 +273,27 @@ def main() -> int:  # noqa: PLR0915 — one linear narrative
     check("ABA03 the credits are the CATALOGUE credits",
           int(order.get("credits") or 0) == int(credits),
           f"{order.get('credits')} vs {credits}")
-    check("ABA05 a KHQR string came back for a desktop scan",
-          bool(order.get("qr_string")), "empty qr_string")
-    check("ABA05 a QR image came back for rendering",
-          len(order.get("qr_image") or "") > 100,
-          f"{len(order.get('qr_image') or '')} chars")
-    check("ABA06 an ABA Mobile deeplink came back for a phone",
-          bool(order.get("deeplink")), "empty deeplink")
+    checkout_url = order.get("checkout_url") or ""
+    check("ABA05 a PayWay-hosted checkout url came back",
+          checkout_url.startswith("https://"), checkout_url or "empty")
+    check("ABA05 the checkout is on ABA's own domain, never on Ayden's",
+          "payway.com.kh" in checkout_url, checkout_url)
+    check("ABA05 it is the SANDBOX checkout host",
+          "checkout-sandbox.payway.com.kh" in checkout_url, checkout_url)
+    check("ABA06 the answer mode is recorded",
+          order.get("checkout_mode") in ("redirect", "json"),
+          str(order.get("checkout_mode")))
+    # ABA renders the payment options — including ABA Mobile — on its own page.
+    # A deeplink is only returned when this deployment pins abapay_khqr_deeplink,
+    # so its absence is a configuration fact, not a failure.
+    check("ABA06 Ayden does not draw ABA's payment screen itself",
+          not order.get("qr_image"),
+          "a QR image came back — the deprecated rail is still live")
 
-    print(f"\n  PAY THIS to continue the live matrix (sandbox only):")
-    print(f"    {order.get('qr_string')}")
-    print(f"    {order.get('deeplink')}")
+    print(f"\n  OPEN THIS to continue the live matrix (ABA's own checkout, sandbox only):")
+    print(f"    {checkout_url}")
+    if order.get("deeplink"):
+        print(f"    {order.get('deeplink')}")
 
     section("ABA04/12/13  the same purchase, again and again")
     st, again = checkout({"sku": sku, "attempt_key": attempt})

@@ -277,27 +277,30 @@ class _FakeGateway:
         self.qr_calls: list[str] = []
         self.check_calls: list[str] = []
         self.qr_error: Exception | None = None
+        self.last_body: dict = {}
         self.status_for: dict[str, payway.TransactionStatus] = {}
         self.default_status = _status(payment_status_code=payway.STATUS_PENDING,
                                       payment_status="PENDING")
 
-    async def generate_qr(self, *, cfg, tran_id, amount, currency="",
-                          lifetime_minutes=None, return_params=""):
+    async def purchase(self, *, cfg, tran_id, amount, currency="",
+                       lifetime_minutes=None, return_params="",
+                       continue_success_url="", cancel_url=""):
         self.qr_calls.append(tran_id)
         if self.qr_error:
             raise self.qr_error
-        # The REAL request builder runs, so the hash and the field order are
-        # exercised even though nothing leaves the process.
-        body = payway.build_qr_request(cfg=cfg, tran_id=tran_id, amount=amount,
-                                       currency=currency,
-                                       lifetime_minutes=lifetime_minutes,
-                                       return_params=return_params)
+        # The REAL request builder runs, so the twenty-four-field hash and the
+        # field order are exercised even though nothing leaves the process.
+        body = payway.build_purchase_request(
+            cfg=cfg, tran_id=tran_id, amount=amount, currency=currency,
+            lifetime_minutes=lifetime_minutes, return_params=return_params,
+            continue_success_url=continue_success_url, cancel_url=cancel_url)
         self.last_body = body
-        return payway.QrPayment(
-            tran_id=tran_id, qr_string=f"khqr://{tran_id}",
-            qr_image="iVBORw0KGgo=", deeplink=f"abamobile://pay/{tran_id}",
-            app_store="https://apps.apple.com/x", play_store="https://play.google.com/x",
-            amount=body["amount"], currency=body["currency"], trace_id="trace-1")
+        # The `redirect` shape — what `hosted_view` really answers with, and the
+        # default this deployment runs. No QR: ABA draws that on its own page.
+        return payway.PurchaseCheckout(
+            tran_id=tran_id,
+            checkout_url=f"https://checkout-sandbox.payway.com.kh/{tran_id}",
+            mode="redirect", trace_id="trace-1")
 
     async def check_transaction(self, *, cfg, tran_id):
         self.check_calls.append(tran_id)
@@ -373,7 +376,7 @@ PRODUCT_ID = str(uuid.uuid4())
 def _install() -> None:
     """Point the seam at the fakes. Everything else in it stays real."""
     seam._supa = lambda: DB                                     # noqa: SLF001
-    payway.generate_qr = GATEWAY.generate_qr
+    payway.purchase = GATEWAY.purchase
     payway.check_transaction = GATEWAY.check_transaction
     billing = types.ModuleType("billing")
     billing.grant_purchase = ENGINE.grant_purchase
@@ -466,14 +469,17 @@ async def test_aba01_checkout() -> None:
     _reset()
     view = await seam.start_checkout(user_id=USER, sku="pack_10", attempt_key="att-1")
 
-    check("ABA01 a QR was requested from PayWay", GATEWAY.qr_calls == [view["tran_id"]])
+    check("ABA01 a checkout was opened at PayWay",
+          GATEWAY.qr_calls == [view["tran_id"]])
     check("ABA01 the state is AWAITING_PAYMENT",
           view["state"] == seam.AWAITING_PAYMENT, view["state"])
-    check("ABA01 a KHQR string is returned for a desktop scan",
-          view["qr_string"].startswith("khqr://"))
-    check("ABA01 an ABA Mobile deeplink is returned for a phone",
-          view["deeplink"].startswith("abamobile://"))
-    check("ABA01 the QR image is returned for rendering", bool(view["qr_image"]))
+    check("ABA01 a PayWay-hosted checkout url is returned",
+          view["checkout_url"].startswith("https://checkout-sandbox.payway.com.kh/"),
+          view["checkout_url"])
+    check("ABA01 the checkout is on ABA's domain, never on Ayden's",
+          "payway.com.kh" in view["checkout_url"], view["checkout_url"])
+    check("ABA01 the answer mode is recorded for support",
+          view["checkout_mode"] == "redirect", view["checkout_mode"])
 
     check("ABA01 the amount comes from the CATALOGUE", view["amount"] == 1.99,
           str(view["amount"]))
@@ -488,8 +494,12 @@ async def test_aba01_checkout() -> None:
     check("ABA01 the order's idempotency key is the one the ENGINE will reuse",
           orders[0]["idempotency_key"] == seam.order_key_for(view["tran_id"]))
 
-    check("ABA01 the signed request carried the KHQR payment option",
-          GATEWAY.last_body["payment_option"] == "abapay_khqr")
+    check("ABA01 the signed request selects PayWay's own Checkout service",
+          GATEWAY.last_body["payment_gate"] == payway.PAYMENT_GATE_CHECKOUT,
+          str(GATEWAY.last_body.get("payment_gate")))
+    check("ABA01 no payment_option is imposed — ABA shows its own chooser",
+          "payment_option" not in GATEWAY.last_body,
+          str(GATEWAY.last_body.get("payment_option")))
     check("ABA01 the signed amount is the catalogue price, formatted once",
           GATEWAY.last_body["amount"] == "1.99", GATEWAY.last_body["amount"])
 
@@ -739,8 +749,8 @@ async def test_aba12_aba13_durability() -> None:
     check("ABA12 the SERVER remembers the open attempt",
           restored and restored["tran_id"] == tran_id)
     view2 = seam.public_view(restored)
-    check("ABA12 the restored view carries the SAME QR",
-          view2["qr_string"] == view["qr_string"] and view2["deeplink"] == view["deeplink"])
+    check("ABA12 the restored view carries the SAME checkout",
+          view2["checkout_url"] == view["checkout_url"], view2["checkout_url"])
     check("ABA12 nothing about restoring it touched PayWay again",
           GATEWAY.qr_calls == [tran_id])
 
@@ -881,8 +891,9 @@ async def test_public_surface() -> None:
     check("no user id in the public view", USER not in blob)
     check("no internal order id in the public view", "order_id" not in view)
     check("the public view carries what a payer needs",
-          all(k in view for k in ("qr_string", "qr_image", "deeplink", "amount",
-                                  "currency", "credits", "state", "expires_at")))
+          all(k in view for k in ("checkout_url", "checkout_mode", "qr_string",
+                                  "deeplink", "amount", "currency", "credits",
+                                  "state", "expires_at")))
 
     cfg = seam.payments_config
     conf = asyncio.get_event_loop()
@@ -914,6 +925,132 @@ async def test_unconfigured() -> None:
         os.environ["PAYWAY_API_KEY"] = saved
 
 
+async def test_return_is_navigation_not_evidence() -> None:
+    """RET — the return URL moves a browser. It cannot move money.
+
+    This is the single most dangerous idea in a redirect-based checkout: PayWay
+    sends the customer to `continue_success_url`, the URL has the word "success"
+    in it, and every instinct says to believe it. It is a link. Anyone can type
+    it, bookmark it, or share it, and none of that is a payment.
+
+    So what is asserted here is the ABSENCE of a code path: the seam never reads
+    the outcome, the URL carries nothing the server trusts, and landing on it
+    changes no state at all.
+    """
+    section("RET  the return URL is navigation, never evidence")
+
+    cfg = payway.load_config()
+    tran = seam.tran_id_for(USER, "pack_10", "att-ret")
+
+    success = seam.return_url_for(cfg, tran, "success")
+    cancel = seam.return_url_for(cfg, tran, "cancel")
+    check("RET no return base configured -> no URL is sent at all",
+          success == "" and cancel == "", f"{success!r} {cancel!r}")
+
+    os.environ["PAYWAY_RETURN_BASE_URL"] = "https://app.example.com"
+    try:
+        cfg = payway.load_config()
+        success = seam.return_url_for(cfg, tran, "success")
+        cancel = seam.return_url_for(cfg, tran, "cancel")
+        check("RET the return URL points at the PWA, not at the API",
+              success.startswith("https://app.example.com/#/pwa/pay/return"), success)
+        check("RET it carries the tran_id so the sheet can re-open",
+              f"tran_id={tran}" in success, success)
+        check("RET success and cancel are distinguishable to the CLIENT",
+              "outcome=success" in success and "outcome=cancel" in cancel)
+        check("RET the URL carries no amount, no credits, no user, no token",
+              not any(word in success for word in
+                      ("amount", "credits", "user", "token", "1.99", USER)),
+              success)
+
+        # THE assertion. The server has no reader for any of it.
+        source = pathlib.Path(seam.__file__).read_text(encoding="utf-8")
+        check("RET the seam never reads an `outcome` back",
+              'outcome"' not in source.replace('"outcome"', "", 1)
+              or source.count('"outcome"') == 0,
+              "an outcome reader appeared in the seam")
+        check("RET `continue_success_url` is only ever WRITTEN, never parsed",
+              "continue_success_url=return_url_for" in source
+              or "continue_success_url=" in source)
+
+        # And behaviourally: a transaction sitting at AWAITING_PAYMENT stays
+        # there no matter what the browser was told, because the gateway still
+        # says PENDING.
+        view = await seam.start_checkout(user_id=USER, sku="pack_10",
+                                         attempt_key="att-ret")
+        GATEWAY.status_for[view["tran_id"]] = _status(
+            payment_status_code=payway.STATUS_PENDING, payment_status="PENDING")
+        row = await seam._load(view["tran_id"])          # noqa: SLF001
+        settled = await seam.verify_and_settle(row, force=True)
+        check("RET returning from a 'success' URL grants nothing while PayWay "
+              "says PENDING",
+              settled["state"] == seam.AWAITING_PAYMENT, str(settled.get("state")))
+        check("RET and no grant reached the engine",
+              not [g for g in ENGINE.grants if g["tran_id"] == view["tran_id"]])
+    finally:
+        os.environ.pop("PAYWAY_RETURN_BASE_URL", None)
+
+
+async def test_checkout_token_goes_stale() -> None:
+    """TTL — a checkout link dies in 180s; the transaction does not.
+
+    Measured on the sandbox: the checkout URL carries `expire_in_sec: "180"`
+    while the request asked for `lifetime = 30` minutes. Two different clocks,
+    and conflating them is how a live payment gets presented through a dead
+    link. The row must stay payable and the LINK must be marked stale.
+    """
+    section("TTL  the checkout link expires long before the transaction")
+
+    view = await seam.start_checkout(user_id=USER, sku="pack_10",
+                                     attempt_key="att-ttl")
+    tran = view["tran_id"]
+    check("TTL a fresh checkout is not stale", view["checkout_stale"] is False,
+          str(view["checkout_stale"]))
+    check("TTL the client is told the token's life",
+          view["checkout_ttl_s"] == payway.CHECKOUT_TOKEN_TTL_S,
+          str(view.get("checkout_ttl_s")))
+
+    # Age the issue time past PayWay's token life, leaving everything else alone.
+    row = DB.tables["pwa_staging.payway_transactions"]
+    target = [r for r in row if r["tran_id"] == tran][0]
+    target["qr_issued_at"] = seam._iso(                       # noqa: SLF001
+        seam._now() - timedelta(seconds=payway.CHECKOUT_TOKEN_TTL_S + 30))
+
+    stale_view = seam.public_view(await seam._load(tran))     # noqa: SLF001
+    check("TTL an aged checkout link is reported stale",
+          stale_view["checkout_stale"] is True, str(stale_view["checkout_stale"]))
+    check("TTL the PAYMENT is still open — stale is not failed",
+          stale_view["state"] == seam.AWAITING_PAYMENT, stale_view["state"])
+    check("TTL and it is not terminal, so nothing is written off",
+          stale_view["terminal"] is False)
+    check("TTL the expiry of the TRANSACTION is untouched",
+          stale_view["expires_at"] == view["expires_at"])
+
+
+async def test_generate_qr_is_unreachable() -> None:
+    """DEP — the deprecated rail is still in the tree and reachable from nothing.
+
+    §5 of the brief: keep `generate-qr` until the Purchase suite is green, but
+    the active PWA journey must not use it. "Must not" is a claim about the call
+    graph, so it is asserted against the call graph rather than trusted.
+    """
+    section("DEP  generate-qr survives, and nothing calls it")
+
+    source = pathlib.Path(seam.__file__).read_text(encoding="utf-8")
+    check("DEP the seam calls payway.purchase", "payway.purchase(" in source)
+    check("DEP the seam calls generate_qr NOWHERE",
+          "generate_qr(" not in source, "a generate-qr call is still in the seam")
+
+    rail = pathlib.Path(payway.__file__).read_text(encoding="utf-8")
+    check("DEP the deprecated path is still defined (not deleted)",
+          "PATH_GENERATE_QR" in rail)
+    check("DEP and it is documented as deprecated where it is defined",
+          "DEPRECATED" in rail)
+    check("DEP the Purchase path is the one the seam's endpoint answers with",
+          payway.PATH_PURCHASE == "/api/payment-gateway/v1/payments/purchase",
+          payway.PATH_PURCHASE)
+
+
 async def main_async() -> int:
     _install()
     await test_identity()
@@ -924,6 +1061,9 @@ async def main_async() -> int:
     await test_aba12_aba13_durability()
     await test_aba14_terminal()
     await test_aba18_bypass()
+    await test_return_is_navigation_not_evidence()
+    await test_checkout_token_goes_stale()
+    await test_generate_qr_is_unreachable()
     await test_public_surface()
     await test_unconfigured()
 

@@ -456,6 +456,212 @@ def test_real_envelope_shapes() -> None:
         payway._post = real_post  # noqa: SLF001
 
 
+def test_purchase_contract() -> None:
+    """PW13 — the PURCHASE hash, which is NOT the QR hash with extras.
+
+    ABA confirmed on 2026-08-19 that a website integration uses
+    `/payments/purchase`. Its hash covers twenty-four fields in an order that
+    quietly differs from the QR API's nineteen in four separate ways, and every
+    one of them is a silent `status.code = 1` if you assume they match:
+
+        `shipping`          is inserted between `items` and the names
+        `firstname`         loses the underscore `first_name` had
+        `type`              replaces `purchase_type`
+        `skip_success_page` comes LAST, after `google_pay_token`
+
+    So the order is asserted as data, against the documented list, rather than
+    against a digest that would encode a mistake just as happily as a fact.
+    """
+    section("PW13  the Purchase hash is the official field order")
+
+    official = (
+        "req_time", "merchant_id", "tran_id", "amount", "items", "shipping",
+        "firstname", "lastname", "email", "phone", "type", "payment_option",
+        "return_url", "cancel_url", "continue_success_url", "return_deeplink",
+        "currency", "custom_fields", "return_params", "payout", "lifetime",
+        "additional_params", "google_pay_token", "skip_success_page",
+    )
+    check("PW13 PURCHASE_HASH_FIELDS matches the Developer Suite order EXACTLY",
+          payway.PURCHASE_HASH_FIELDS == official,
+          str(payway.PURCHASE_HASH_FIELDS))
+    check("PW13 it is twenty-four fields, not the QR API's nineteen",
+          len(payway.PURCHASE_HASH_FIELDS) == 24)
+    check("PW13 it is NOT the QR order (the two must never be shared)",
+          payway.PURCHASE_HASH_FIELDS != payway.QR_HASH_FIELDS)
+
+    named = {name: name.upper() for name in official}
+    check("PW13 the payload is the values concatenated in that order",
+          payway.purchase_hash_payload(named) == "".join(n.upper() for n in official))
+    check("PW13 absent optional fields contribute the EMPTY string",
+          payway.purchase_hash_payload(
+              {"req_time": "20260819120000", "merchant_id": "m", "tran_id": "t"})
+          == "20260819120000mt")
+
+    cfg = _configured(PAYWAY_RETURN_BASE_URL="https://app.example.com")
+    now = datetime(2026, 8, 19, 12, 0, 0, tzinfo=timezone.utc)
+    body = payway.build_purchase_request(
+        cfg=cfg, tran_id="A0123456789abcdef012", amount=7.99, currency="USD",
+        continue_success_url="https://app.example.com/ok",
+        cancel_url="https://app.example.com/no", now=now)
+
+    check("PW13 payment_gate=0 selects the Checkout service",
+          body["payment_gate"] == payway.PAYMENT_GATE_CHECKOUT, str(body.get("payment_gate")))
+    check("PW13 type is 'purchase'", body["type"] == "purchase", body.get("type"))
+    check("PW13 hosted_view is the default presentation",
+          body["view_type"] == "hosted_view", body.get("view_type"))
+    check("PW13 no payment_option is sent by default (PayWay's own chooser)",
+          "payment_option" not in body, str(body.get("payment_option")))
+    check("PW13 no personal data is sent",
+          not any(k in body for k in ("firstname", "lastname", "email", "phone")))
+    check("PW13 the return URLs are sent PLAIN, as the page documents them",
+          body["continue_success_url"] == "https://app.example.com/ok"
+          and body["cancel_url"] == "https://app.example.com/no",
+          str(body.get("continue_success_url")))
+
+    # The digest, recomputed from the documented rule and nothing else.
+    expected = ("20260819120000" + FAKE_MERCHANT + "A0123456789abcdef012"
+                + "7.99" + "" + "" + "" + "" + "" + "" + "purchase" + ""
+                + "" + "https://app.example.com/no"
+                + "https://app.example.com/ok" + "" + "USD" + "" + "" + ""
+                + "30" + "" + "" + "")
+    independent = base64.b64encode(
+        hmac.new(FAKE_KEY.encode(), expected.encode(), hashlib.sha512).digest()
+    ).decode()
+    check("PW13 the hash is base64(hmac_sha512(payload, api_key))",
+          body["hash"] == independent, "digest mismatch")
+    check("PW13 payment_gate and view_type are NOT part of the hash",
+          "payment_gate" not in payway.PURCHASE_HASH_FIELDS
+          and "view_type" not in payway.PURCHASE_HASH_FIELDS)
+
+    # A configured public callback becomes `return_url`, base64 as documented.
+    cfg2 = _configured(PAYWAY_CALLBACK_URL="https://api.example.com/cb")
+    body2 = payway.build_purchase_request(cfg=cfg2, tran_id="A1", amount=1.99, now=now)
+    check("PW13 a public callback is sent as base64 return_url",
+          body2.get("return_url")
+          == base64.b64encode(b"https://api.example.com/cb").decode())
+    cfg3 = _configured()
+    body3 = payway.build_purchase_request(cfg=cfg3, tran_id="A1", amount=1.99, now=now)
+    check("PW13 no callback configured -> no return_url field at all",
+          "return_url" not in body3)
+
+    # Undocumented enum values are refused at BOOT, not signed and sent.
+    for var, bad in (("PAYWAY_VIEW_TYPE", "inline"),
+                     ("PAYWAY_PAYMENT_OPTION", "bitcoin")):
+        try:
+            _configured(**{var: bad})
+            check(f"PW13 {var}={bad!r} is refused at configuration time", False)
+        except ValueError:
+            check(f"PW13 {var}={bad!r} is refused at configuration time", True)
+
+    check("PW13 the documented payment options are the allowed set",
+          set(payway.PAYMENT_OPTIONS) == {"", "cards", "abapay_khqr",
+                                          "abapay_khqr_deeplink", "alipay",
+                                          "wechat", "google_pay"})
+
+
+def test_purchase_responses() -> None:
+    """PW14 — the three answers `/payments/purchase` really gives.
+
+    All three measured against the sandbox on 2026-08-19 with a signed request.
+    The endpoint is not a JSON API: it answers 302 for the hosted presentations
+    and 200/JSON only for `abapay_khqr_deeplink`, so a client written against
+    "it returns JSON" would work in exactly one configuration.
+    """
+    import asyncio  # noqa: PLC0415
+
+    section("PW14  the three shapes the Purchase endpoint answers with")
+
+    class _Res:
+        def __init__(self, status, headers=None, payload=None, text=""):
+            self.status_code = status
+            self.headers = headers or {}
+            self._payload = payload
+            self.text = text
+
+        def json(self):
+            if self._payload is None:
+                raise ValueError("no json")
+            return self._payload
+
+    captured = {}
+
+    async def _fake(cfg, path, body):  # noqa: ANN001
+        captured["path"] = path
+        captured["body"] = body
+        return captured["reply"]
+
+    real = payway._post_multipart  # noqa: SLF001
+    payway._post_multipart = _fake  # noqa: SLF001
+    try:
+        cfg = _configured()
+
+        # 1) hosted_view / popup — HTTP 302, the Location IS the checkout.
+        captured["reply"] = _Res(
+            302, {"location": "https://checkout-sandbox.payway.com.kh/eyJzdGVw"})
+        out = asyncio.run(payway.purchase(cfg=cfg, tran_id="A1", amount=1.99))
+        check("PW14 a 302 yields the Location as the checkout url",
+              out.checkout_url == "https://checkout-sandbox.payway.com.kh/eyJzdGVw"
+              and out.mode == "redirect", str(out))
+        check("PW14 it POSTs to the Purchase path",
+              captured["path"] == payway.PATH_PURCHASE, captured["path"])
+        check("PW14 no QR is invented for a redirect answer",
+              out.qr_string == "" and out.deeplink == "")
+
+        # 2) abapay_khqr_deeplink — HTTP 200 JSON, verbatim sandbox shape.
+        captured["reply"] = _Res(200, {"content-type": "application/json"}, {
+            "qr_string": "00020101021230510016abaakhppxxx@abaa",
+            "abapay_deeplink": "abamobilebank://ababank.com?type=payway",
+            "description": "success",
+            "checkout_qr_url": "https://checkout-sandbox.payway.com.kh/eyJxcl9",
+            "status": {"version": "v3", "code": "00", "message": "Success!",
+                       "tran_id": "A2", "trace_id": "2d10b18a"},
+        })
+        out = asyncio.run(payway.purchase(cfg=cfg, tran_id="A2", amount=1.99))
+        check("PW14 a JSON answer yields checkout_qr_url as the checkout url",
+              out.checkout_url == "https://checkout-sandbox.payway.com.kh/eyJxcl9"
+              and out.mode == "json", str(out))
+        check("PW14 the KHQR string and the ABA deeplink come through",
+              out.qr_string.startswith("0002")
+              and out.deeplink.startswith("abamobilebank://"), str(out))
+
+        # 3) HTML — no URL to hand over. An error, never a proxied page.
+        captured["reply"] = _Res(200, {"content-type": "text/html"}, None,
+                                 "<html>error</html>")
+        try:
+            asyncio.run(payway.purchase(cfg=cfg, tran_id="A3", amount=1.99))
+            check("PW14 an HTML answer is an error, not a page we proxy", False)
+        except payway.PayWayError:
+            check("PW14 an HTML answer is an error, not a page we proxy", True)
+
+        # A JSON refusal must never read as a checkout.
+        captured["reply"] = _Res(200, {"content-type": "application/json"}, {
+            "status": {"code": "1", "message": "Invalid hash", "tran_id": "A4"}})
+        try:
+            asyncio.run(payway.purchase(cfg=cfg, tran_id="A4", amount=1.99))
+            check("PW14 a refusal envelope raises rather than returning ''", False)
+        except payway.PayWayError as exc:
+            check("PW14 a refusal envelope raises rather than returning ''",
+                  str(exc.code) == "1", str(exc.code))
+
+        # 5xx is retryable, not a refusal.
+        captured["reply"] = _Res(503, {}, None, "")
+        try:
+            asyncio.run(payway.purchase(cfg=cfg, tran_id="A5", amount=1.99))
+            check("PW14 a 5xx is unreachable (retryable), not a refusal", False)
+        except payway.PayWayUnreachable:
+            check("PW14 a 5xx is unreachable (retryable), not a refusal", True)
+
+        # A 302 with no Location cannot be silently treated as success.
+        captured["reply"] = _Res(302, {})
+        try:
+            asyncio.run(payway.purchase(cfg=cfg, tran_id="A6", amount=1.99))
+            check("PW14 a 302 with no Location raises", False)
+        except payway.PayWayError:
+            check("PW14 a 302 with no Location raises", True)
+    finally:
+        payway._post_multipart = real  # noqa: SLF001
+
+
 def main() -> int:
     print("ABA PayWay rail — OFFLINE contract (no network, no database)\n")
     test_config()
@@ -466,6 +672,8 @@ def main() -> int:
     test_no_secret_leak()
     test_status_semantics()
     test_real_envelope_shapes()
+    test_purchase_contract()
+    test_purchase_responses()
 
     print()
     if _failed:

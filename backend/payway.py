@@ -102,6 +102,15 @@ SANDBOX_BASE = "https://checkout-sandbox.payway.com.kh"
 # Present so the refusal below can be specific. NOTHING here may dial it.
 PRODUCTION_BASE = "https://checkout.payway.com.kh"
 
+#: THE endpoint for the Ayden PWA, confirmed by ABA in writing on 2026-08-19:
+#: "For website app or native app integration please use this endpoint to match
+#: the guidelines". Everything the browser is sent to now comes from here.
+PATH_PURCHASE = "/api/payment-gateway/v1/payments/purchase"
+
+#: DEPRECATED for the PWA. `generate-qr` was how the rail was first proven, and
+#: it still works — but it makes AYDEN the checkout, and ABA's guideline is that
+#: ABA is. Kept because deleting a proven adapter to prove a point is how you
+#: lose the ability to compare two behaviours. Nothing in the PWA path calls it.
 PATH_GENERATE_QR = "/api/payment-gateway/v1/payments/generate-qr"
 PATH_CHECK_TRANSACTION = "/api/payment-gateway/v1/payments/check-transaction-2"
 
@@ -109,9 +118,46 @@ PATH_CHECK_TRANSACTION = "/api/payment-gateway/v1/payments/check-transaction-2"
 # Starlette lowercases and treats `-`/`_` as distinct, so both are looked up.
 SIGNATURE_HEADERS = ("x-payway-hmac-sha512", "x_payway_hmac_sha512")
 
-#: `payment_option` for a KHQR payment. The one value this integration sends —
-#: it is what makes the response carry both a KHQR string and an ABA deeplink.
+#: `payment_option` for a KHQR payment on the DEPRECATED generate-qr path.
 PAYMENT_OPTION_KHQR = "abapay_khqr"
+
+#: `payment_option` values the Purchase API documents. Sending NOTHING is also
+#: documented and is what this integration does by default: PayWay then shows
+#: its own payment-option chooser, which is precisely the piece of UI ABA's
+#: guideline says belongs to ABA and not to us.
+PAYMENT_OPTION_KHQR_DEEPLINK = "abapay_khqr_deeplink"
+PAYMENT_OPTIONS = ("", "cards", "abapay_khqr", "abapay_khqr_deeplink",
+                   "alipay", "wechat", "google_pay")
+
+#: `view_type` values the Purchase API documents.
+#:   hosted_view — PayWay's own checkout page, full navigation
+#:   popup       — bottom sheet on mobile, modal on desktop, hosted by PayWay's
+#:                 own JavaScript inside the merchant page
+VIEW_TYPE_HOSTED = "hosted_view"
+VIEW_TYPE_POPUP = "popup"
+VIEW_TYPES = (VIEW_TYPE_HOSTED, VIEW_TYPE_POPUP)
+
+#: `payment_gate = 0` selects the Checkout service, per the Purchase page.
+PAYMENT_GATE_CHECKOUT = 0
+
+#: How long a PayWay CHECKOUT URL stays usable — measured, not documented.
+#:
+#: A checkout token is NOT the transaction. The sandbox answered, inside the
+#: base64 payload of the checkout URL itself on 2026-08-19:
+#:
+#:     "token_time": 1787716747, "expire_in": 1787716927, "expire_in_sec": "180"
+#:
+#: — 180 seconds, on a request that asked for `lifetime = 30` MINUTES. The two
+#: numbers measure different things: `lifetime` is how long PayWay will accept a
+#: payment for the transaction, and this is how long the LINK to the payment page
+#: survives. Confusing them hands a customer a dead URL and calls it a live
+#: payment, which looks exactly like a bug in Ayden.
+#:
+#: The value is not parsed out of the URL: that blob is opaque, undocumented, and
+#: not a contract. It is used as an age limit on our own issue time instead, which
+#: is conservative in the right direction — a checkout we call stale might still
+#: work, and one we call live never surprises the customer.
+CHECKOUT_TOKEN_TTL_S = 180
 
 #: `payment_status_code` values from Check Transaction, named.
 STATUS_APPROVED = 0
@@ -164,6 +210,18 @@ class PayWayConfig:
     lifetime_minutes: int
     qr_template: str
     currency: str
+    #: Purchase API presentation. Empty `payment_option` = PayWay shows its own
+    #: chooser, which is the default and what ABA's guideline asks for.
+    payment_option: str = ""
+    view_type: str = VIEW_TYPE_HOSTED
+    #: Where PayWay sends the BROWSER back to. Not a callback: no money decision
+    #: is ever made from a redirect. Empty is allowed — the customer then lands
+    #: on PayWay's own end page and the PWA reconciles on its next poll.
+    return_base_url: str = ""
+
+    @property
+    def has_return_target(self) -> bool:
+        return bool(self.return_base_url)
 
     @property
     def has_public_callback(self) -> bool:
@@ -237,6 +295,25 @@ def load_config() -> PayWayConfig:
     if currency not in ("USD", "KHR"):
         raise ValueError(f"PAYWAY_CURRENCY must be USD or KHR (got {currency!r})")
 
+    # Both are validated against the DOCUMENTED sets rather than passed through.
+    # An unrecognised value would be signed, sent, and refused by PayWay with a
+    # generic error — far harder to read than a refusal at boot that names it.
+    payment_option = _env("PAYWAY_PAYMENT_OPTION", "").lower()
+    if payment_option not in PAYMENT_OPTIONS:
+        raise ValueError(
+            f"PAYWAY_PAYMENT_OPTION={payment_option!r} is not documented. "
+            f"Use one of {PAYMENT_OPTIONS!r} (empty = PayWay's own chooser).")
+
+    view_type = _env("PAYWAY_VIEW_TYPE", VIEW_TYPE_HOSTED).lower()
+    if view_type not in VIEW_TYPES:
+        raise ValueError(
+            f"PAYWAY_VIEW_TYPE={view_type!r} is not documented. "
+            f"Use one of {VIEW_TYPES!r}.")
+
+    return_base_url = _env("PAYWAY_RETURN_BASE_URL")
+    if return_base_url:
+        _assert_browser_reachable(return_base_url)
+
     return PayWayConfig(
         merchant_id=merchant_id,
         api_key=api_key,
@@ -248,7 +325,28 @@ def load_config() -> PayWayConfig:
         lifetime_minutes=lifetime,
         qr_template=_env("PAYWAY_QR_TEMPLATE", "template3_color"),
         currency=currency,
+        payment_option=payment_option,
+        view_type=view_type,
+        return_base_url=return_base_url.rstrip("/"),
     )
+
+
+def _assert_browser_reachable(url: str) -> None:
+    """The return target is walked by a BROWSER, not by PayWay's servers.
+
+    So loopback is legitimate here in a way it never is for `callback_url`: the
+    person paying is sitting at the machine serving `127.0.0.1:8103`, and PayWay
+    only has to hand their browser the address. The check is therefore about
+    shape — an absolute http(s) URL with a host — and not about reachability
+    from the public internet.
+    """
+    from urllib.parse import urlparse  # noqa: PLC0415
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError(
+            f"PAYWAY_RETURN_BASE_URL must be an absolute http(s) URL "
+            f"(got {url!r}).")
 
 
 def _assert_public_callback(url: str) -> None:
@@ -297,6 +395,13 @@ def redacted_config() -> dict:
             "required" if cfg.require_callback_signature else "optional"),
         "lifetime_minutes": cfg.lifetime_minutes,
         "currency": cfg.currency,
+        # The ACTIVE acquisition endpoint, stated rather than assumed. A
+        # deployment still on `generate-qr` would say so here.
+        "acquisition": "purchase",
+        "view_type": cfg.view_type,
+        # Empty is the normal answer and means "PayWay shows its own chooser".
+        "payment_option": cfg.payment_option,
+        "return_configured": cfg.has_return_target,
     }
 
 
@@ -398,6 +503,95 @@ def build_qr_request(
     if return_params:
         body["return_params"] = return_params
     body["hash"] = sign(qr_hash_payload(body), cfg.api_key)
+    return body
+
+
+#: The PURCHASE hash, in the documented order — twenty-four fields, and note
+#: that it is NOT the QR order with extras appended: `shipping` sits between
+#: `items` and `firstname`, the name fields lose their underscores, `type`
+#: replaces `purchase_type`, and `skip_success_page` comes LAST, after
+#: `google_pay_token`. Reordering any of it yields status code 1, wrong hash.
+PURCHASE_HASH_FIELDS = (
+    "req_time", "merchant_id", "tran_id", "amount", "items", "shipping",
+    "firstname", "lastname", "email", "phone", "type", "payment_option",
+    "return_url", "cancel_url", "continue_success_url", "return_deeplink",
+    "currency", "custom_fields", "return_params", "payout", "lifetime",
+    "additional_params", "google_pay_token", "skip_success_page",
+)
+
+
+def purchase_hash_payload(body: dict) -> str:
+    """Concatenate the Purchase fields in the documented order.
+
+    Absent fields contribute the empty string, exactly as for the QR API: the
+    official sample builds one string from all twenty-four unconditionally.
+    """
+    return "".join(str(body.get(name, "")) for name in PURCHASE_HASH_FIELDS)
+
+
+def build_purchase_request(
+    *,
+    cfg: PayWayConfig,
+    tran_id: str,
+    amount: float | int | str,
+    currency: str = "",
+    lifetime_minutes: Optional[int] = None,
+    return_params: str = "",
+    continue_success_url: str = "",
+    cancel_url: str = "",
+    now: Optional[datetime] = None,
+) -> dict:
+    """The signed Purchase body. Pure — no I/O, so a test can read the hash.
+
+    Encoding, and why each field is treated differently
+    ---------------------------------------------------
+    The Purchase page is specific and inconsistent, so this follows it literally
+    rather than tidying it into a rule:
+
+        return_url            "encrypted with Base64"   -> base64
+        return_deeplink       "must be base64-encoded"  -> base64
+        cancel_url            no encoding stated        -> sent plain
+        continue_success_url  no encoding stated        -> sent plain
+
+    Inventing base64 for the last two would be exactly the kind of guess §10 of
+    the brief forbids, and the hash is computed over whatever is SENT — so a
+    wrong guess is a wrong signature, not a cosmetic difference.
+
+    What is deliberately not sent
+    -----------------------------
+    firstname / lastname / email / phone. PayWay marks all four optional, the
+    KHQR journey does not need them, and a payment is not a reason to hand a
+    third party someone's name. They still take part in the hash, as empty
+    strings, because the concatenation is positional.
+    """
+    body: dict[str, Any] = {
+        "req_time": req_time(now),
+        "merchant_id": cfg.merchant_id,
+        "tran_id": tran_id,
+        "amount": format_amount(amount, currency or cfg.currency),
+        "type": "purchase",
+        "currency": (currency or cfg.currency).upper(),
+        "lifetime": int(lifetime_minutes or cfg.lifetime_minutes),
+        # Documented as "set to 0 to use Checkout service", which is the whole
+        # point of this migration: ABA's checkout, not ours.
+        "payment_gate": PAYMENT_GATE_CHECKOUT,
+    }
+    # Empty means "let PayWay show its own chooser" — a documented mode, and the
+    # default here. Sending a value narrows the customer's options, so it is a
+    # deployment decision rather than something baked into the code.
+    if cfg.payment_option:
+        body["payment_option"] = cfg.payment_option
+    if cfg.view_type:
+        body["view_type"] = cfg.view_type
+    if cfg.has_public_callback:
+        body["return_url"] = _b64(cfg.callback_url)
+    if continue_success_url:
+        body["continue_success_url"] = continue_success_url
+    if cancel_url:
+        body["cancel_url"] = cancel_url
+    if return_params:
+        body["return_params"] = return_params
+    body["hash"] = sign(purchase_hash_payload(body), cfg.api_key)
     return body
 
 
@@ -504,6 +698,42 @@ async def _post(cfg: PayWayConfig, path: str, body: dict) -> dict:
     return data
 
 
+async def _post_multipart(cfg: PayWayConfig, path: str,
+                          body: dict) -> "httpx.Response":
+    """POST `multipart/form-data` and return the RAW response.
+
+    Purchase is not a JSON endpoint. Its page says `multipart/form-data`, and its
+    answer is not one shape but three — measured against the sandbox on
+    2026-08-19, with a signed request in each mode:
+
+        payment_option=abapay_khqr_deeplink  -> HTTP 200, application/json,
+                                                {qr_string, abapay_deeplink,
+                                                 checkout_qr_url, status}
+        view_type=hosted_view                -> HTTP 302, Location: <checkout>
+        view_type=popup                      -> HTTP 302, Location: <checkout>
+
+    So the raw response is what comes back here, redirects deliberately NOT
+    followed: the `Location` is the answer. Following it would fetch PayWay's
+    checkout HTML into our process, which is both useless and the beginning of
+    proxying somebody else's payment page.
+
+    `httpx` sends a multipart body when every part is a `(None, value)` tuple —
+    that is what makes these fields form parts rather than file uploads.
+    """
+    url = cfg.base_url.rstrip("/") + path
+    safe = {k: v for k, v in body.items() if k != "hash"}
+    log.info("[payway] POST %s tran_id=%s fields=%s", path,
+             body.get("tran_id", "-"), sorted(safe))
+    files = {key: (None, str(value)) for key, value in body.items()}
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT,
+                                     follow_redirects=False) as client:
+            return await client.post(url, files=files)
+    except httpx.HTTPError as exc:
+        raise PayWayUnreachable(
+            f"PayWay {path} unreachable: {type(exc).__name__}") from exc
+
+
 def _status(data: dict) -> tuple[Any, str, str]:
     """(code, message, trace/tran id) from PayWay's `status` envelope."""
     status = data.get("status")
@@ -511,6 +741,117 @@ def _status(data: dict) -> tuple[Any, str, str]:
         return (None, "", "")
     return (status.get("code"), str(status.get("message") or ""),
             str(status.get("trace_id") or status.get("tran_id") or ""))
+
+
+@dataclass(frozen=True)
+class PurchaseCheckout:
+    """Where to send the BROWSER, and nothing more.
+
+    The single field that matters is [checkout_url]: an address on PayWay's own
+    domain, hosting PayWay's own checkout. Ayden's job ends when it hands that
+    over. `qr_string` and `deeplink` are populated only in the
+    `abapay_khqr_deeplink` mode and are carried for continuity with the KHQR rail
+    — they are the payment request itself, public by nature, and never a reason
+    for Ayden to draw its own version of ABA's screen.
+
+    There is deliberately no `paid`, no `status` and no `approved` here. A
+    checkout is a place to pay, not a payment; the only thing that may say money
+    moved is Check Transaction, called by the server.
+    """
+
+    tran_id: str
+    checkout_url: str
+    mode: str                # 'redirect' | 'json' — how PayWay answered
+    qr_string: str = ""
+    deeplink: str = ""
+    trace_id: str = ""
+
+    @property
+    def public(self) -> dict:
+        return {
+            "checkout_url": self.checkout_url,
+            "qr_string": self.qr_string,
+            "deeplink": self.deeplink,
+        }
+
+
+async def purchase(
+    *,
+    cfg: PayWayConfig,
+    tran_id: str,
+    amount: float | int | str,
+    currency: str = "",
+    lifetime_minutes: Optional[int] = None,
+    return_params: str = "",
+    continue_success_url: str = "",
+    cancel_url: str = "",
+) -> PurchaseCheckout:
+    """Open a PayWay checkout for `tran_id`. THE acquisition call for the PWA.
+
+    One call per `tran_id`, ever — PayWay refuses a repeat with "Duplicated
+    Transaction ID", which is not an obstacle but the gateway enforcing the same
+    exactly-once rule the seam does, one layer lower.
+
+    Three answers are accepted because the gateway gives three, all measured:
+
+      * **302** — the documented `hosted_view` / `popup` path. `Location` is the
+        checkout. This is the default mode.
+      * **200 + JSON** — the `abapay_khqr_deeplink` path. `checkout_qr_url` is
+        the checkout; `qr_string` and `abapay_deeplink` come with it.
+      * **200 + HTML** — no checkout URL to extract. Treated as an error rather
+        than returned, because the alternative is proxying PayWay's page through
+        Ayden, which is exactly what ABA's guideline says not to do.
+    """
+    body = build_purchase_request(
+        cfg=cfg, tran_id=tran_id, amount=amount, currency=currency,
+        lifetime_minutes=lifetime_minutes, return_params=return_params,
+        continue_success_url=continue_success_url, cancel_url=cancel_url)
+    res = await _post_multipart(cfg, PATH_PURCHASE, body)
+
+    if res.status_code in (301, 302, 303, 307, 308):
+        location = res.headers.get("location", "")
+        if not location:
+            raise PayWayError(
+                f"PayWay purchase returned {res.status_code} with no Location")
+        log.info("[payway] checkout opened tran_id=%s mode=redirect", tran_id)
+        return PurchaseCheckout(tran_id=tran_id, checkout_url=location,
+                                mode="redirect")
+
+    if res.status_code >= 500:
+        raise PayWayUnreachable(f"PayWay purchase returned {res.status_code}")
+
+    content_type = res.headers.get("content-type", "")
+    if "json" not in content_type.lower():
+        # An HTML body here is usually PayWay rendering an error page. Its text
+        # is not a contract, so it is not parsed — only its absence of a URL is
+        # reported, and the seam turns that into a refusal the client can act on.
+        raise PayWayError(
+            f"PayWay purchase returned {content_type or 'no content-type'} "
+            f"(HTTP {res.status_code}) — no checkout URL to hand over")
+
+    try:
+        data = res.json()
+    except ValueError as exc:
+        raise PayWayError("PayWay purchase returned unparseable JSON") from exc
+    if not isinstance(data, dict):
+        raise PayWayError("PayWay purchase returned a non-object")
+
+    code, message, trace = _status(data)
+    checkout_url = str(data.get("checkout_qr_url") or "")
+    if str(code) not in ("0", "00") or not checkout_url:
+        raise PayWayError(
+            f"PayWay purchase refused: {message or 'no checkout url'}",
+            code=code, trace_id=trace)
+
+    log.info("[payway] checkout opened tran_id=%s mode=json", tran_id)
+    return PurchaseCheckout(
+        tran_id=tran_id,
+        checkout_url=checkout_url,
+        mode="json",
+        qr_string=str(data.get("qr_string") or ""),
+        deeplink=str(data.get("abapay_deeplink") or ""),
+        trace_id=trace,
+    )
 
 
 @dataclass(frozen=True)
