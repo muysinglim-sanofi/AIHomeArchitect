@@ -193,6 +193,45 @@ for flag in ("0", "1"):
           not bad, str(bad[:4]))
 os.environ.pop("AYDEN_FACADE_DESIGN", None)
 
+print("\n=== ITÉRATION 2 — HERO sur le régime CUSTOMIZED ===")
+H_REMOVE = [{"role": "user", "content": "remove the dining table"},
+            {"role": "assistant", "content": "ok"}]
+H_LSHAPE = [{"role": "user", "content": "make the sofa L-shaped"},
+            {"role": "assistant", "content": "ok"}]
+H_MOVE = [{"role": "user", "content": "move the armchair near the window"},
+          {"role": "assistant", "content": "ok"}]
+
+check("H1 — FRESH reçoit toujours le HERO",
+      HERO in switch("living_room", "japandi_calm"))
+for a in ATMO:
+    p = switch("living_room", a, customized=True, hist=H_PLANT)
+    check(f"H2 [{a}] CUSTOMIZED reçoit désormais le HERO", HERO in p)
+check("H3 — « add plant » survit au HERO",
+      "plant" in switch("living_room", "japandi_calm",
+                        customized=True, hist=H_PLANT).lower())
+check("H4 — « remove dining table » survit au HERO",
+      "dining table" in switch("living_room", "japandi_calm",
+                               customized=True, hist=H_REMOVE).lower())
+p_l = switch("living_room", "japandi_calm", customized=True, hist=H_LSHAPE)
+check("H5 — la contrainte « canapé en L » est portée", "l-shaped" in p_l.lower())
+check("H6 — le déplacement explicite est porté",
+      "armchair" in switch("living_room", "japandi_calm",
+                           customized=True, hist=H_MOVE).lower())
+check("H7/H8 — le garde anti-annulation suit le HERO",
+      "never use them to undo something the user asked for" in p_l
+      and "an L-shaped sofa stays L-shaped" in p_l)
+check("H7 — le garde vient APRÈS le HERO (dernière lecture)",
+      p_l.index(HERO) < p_l.index("never use them to undo"))
+check("H9 — architecture / prise de vue inchangées en CUSTOMIZED",
+      "same photographed architecture" in p_l)
+leak2 = [f"{r}/{a}" for r in INTERIOR if r != "living_room" for a in ATMO
+         if HERO in switch(r, a, customized=True, hist=H_PLANT)]
+check("H10 — le HERO CUSTOMIZED ne fuit sur AUCUNE pièce non-salon",
+      not leak2, str(leak2[:4]))
+leak3 = [f"{r}/{a}" for r in INTERIOR for a in ATMO if HERO in v1(r, a)]
+check("H10 — aucun chemin V1 ne reçoit le HERO par cette route",
+      not leak3, str(leak3[:4]))
+
 ok = sum(1 for r, _ in _res if r)
 tot = len(_res)
 print(f"\n{'=' * 66}\nRESULTAT : {ok}/{tot}\n{'=' * 66}")

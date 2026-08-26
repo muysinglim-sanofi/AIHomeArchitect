@@ -62,6 +62,9 @@ from .atmosphere_dna import (
     label_to_atmosphere_id,
 )
 from .atmosphere_dna.bimodal_classifier import apply_bimodal, inject_creative_revival  # Wave 5.5.14c/d — no-op unless BIMODAL_ENABLED=1
+# ITÉRATION 2 (2026-08-26) — MÊME source HERO que composer.py Path D : on
+# réutilise, on ne duplique pas. Voir _build_switch_header.
+from .switch_redesign import build_switch_hero_block
 # Wave 5.5.15c — trimmed retry of emotional_realism (see composer.py imports
 # block for rationale). Same gate applies — BIMODAL_ENABLED unset → "".
 from .emotional_realism import build_emotional_realism_signal
@@ -451,6 +454,7 @@ def _build_switch_header(
     prev_atmosphere_id: str,
     new_atmosphere_label: str,
     room_type: str,
+    atmosphere_id: str = "",
 ) -> str:
     """Short contradiction-free header for atmosphere-switch V2/V3. Replaces
     the frozen build_style_refinement_header (which says 'incremental
@@ -473,7 +477,7 @@ def _build_switch_header(
     prev = (prev_atmosphere_id.replace("_", " ").title()
             if prev_atmosphere_id else "the previous atmosphere")
     room = (room_type or "space").strip()
-    return (
+    base = (
         f"ATMOSPHERE SWITCH — same apartment, replacing the previous {prev} "
         f"styling of this {room} with {new_atmosphere_label}. Fresh "
         f"atmospheric identity; same photographed architecture. "
@@ -483,6 +487,39 @@ def _build_switch_header(
         f"identity for {new_atmosphere_label}: silhouette, proportions, frame, "
         f"materials and finish become this atmosphere's own language, never the "
         f"previous one's."
+    )
+
+    # ── ITÉRATION 2 (2026-08-26) — HERO sur le régime CUSTOMIZED ────────────
+    # Le banc visuel de cc20690 a montré que l'AUTORISATION de redesign ne
+    # suffit pas : le rendu CUSTOMIZED restait « même canapé + lanterne ». Ce qui
+    # donne sa force à REBOOT_FRESH n'est pas la permission, c'est le bloc HERO —
+    # des FORMES cibles concrètes par atmosphère (« low oak-frame sofa… »).
+    # On réutilise donc la MÊME source (`build_switch_hero_block`), sans dupliquer
+    # de texte, avec le MÊME garde que composer.py : le HERO nomme des pièces de
+    # salon (canapé, table basse, tapis) et ne doit jamais atteindre une chambre
+    # ou une cuisine.
+    #
+    # La phrase de garde vient APRÈS le HERO, donc en dernière lecture sur ce
+    # point : le HERO décrit un LANGAGE, il ne peut pas servir à défaire un choix
+    # de l'utilisateur. C'est la différence entre CUSTOMIZED et FRESH, et elle
+    # doit rester explicite.
+    hero = ""
+    if atmosphere_id:
+        _dna = get_room_dna(atmosphere_id, room_type)
+        if _dna is not None and _dna.room_type == "living_room":
+            hero = build_switch_hero_block(
+                atmosphere_id,
+                compact=os.environ.get("SWITCH_BLOCK_COMPACT", "0") == "1",
+            )
+    if not hero:
+        return base
+    return (
+        base + " " + hero
+        + " These signature pieces describe the TARGET DESIGN LANGUAGE only: "
+        "never use them to undo something the user asked for. Do not bring back "
+        "furniture they removed, do not drop anything they added, and keep any "
+        "shape they specified — an L-shaped sofa stays L-shaped, in its zone, "
+        "redesigned in this atmosphere's language."
     )
 
 
@@ -1344,6 +1381,8 @@ def compose_generation_prompt(
                 prev_atmosphere_id,
                 get_style(style_label).name,
                 room_type,
+                # ITÉRATION 2 — nécessaire au HERO : il est indexé par atmosphère.
+                atmosphere_id=atmosphere_id,
             )
         else:
             dna = get_style(style_label)
