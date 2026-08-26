@@ -30,12 +30,19 @@ _SWITCH_HERO_SIGNATURES: dict[str, str] = {
         # budget (4300) and evicts dna_room_context — i.e. the living-room TV
         # anchors. Measured: 615-char variant -> 4481 -> TV block dropped. One
         # grammar, both variants, no footgun.
+        #
+        # No lighting clause here, on purpose. Lighting was never part of the
+        # under-specification: it already transformed 6/6 on 3f03d6d, and the
+        # atmosphere DNA ships its own "LIGHT: Paper lantern pendant + concealed
+        # warm floor slot" line into the same prompt. Naming it again here bought
+        # nothing and cost 32 chars of the budget headroom that protects
+        # dna_room_context. The six roles below are the ones that had NO form
+        # guidance anywhere; keep them.
         "HERO FURNISHING — Japandi: FRAME-FIRST — exposed squared timber frames, "
         "thin flat inset cushions, nothing plump or rolled: post-and-rail sofa "
         "frame outlining slim pads; open-frame armchairs, cane or paper-cord "
         "backs, no tubs; slab low table on a recessed plinth; trestle dining "
-        "slab, spindle-back chairs; low console, flush or slatted fronts; washi "
-        "pendant, slim floor lamp."
+        "slab, spindle-back chairs; low console, flush or slatted fronts."
     ),
     "soft_luxury": (
         "HERO FURNISHING — Soft Luxury: replace the seating with a DEEP, CURVED "
@@ -86,8 +93,7 @@ _SWITCH_HERO_SIGNATURES_COMPACT: dict[str, str] = {
         "thin flat inset cushions, nothing plump or rolled: post-and-rail sofa "
         "frame outlining slim pads; open-frame armchairs, cane or paper-cord "
         "backs, no tubs; slab low table on a recessed plinth; trestle dining "
-        "slab, spindle-back chairs; low console, flush or slatted fronts; washi "
-        "pendant, slim floor lamp."
+        "slab, spindle-back chairs; low console, flush or slatted fronts."
     ),
     "soft_luxury": (
         "HERO FURNISHING — Soft Luxury: deep curved channel-tufted taupe-velvet "

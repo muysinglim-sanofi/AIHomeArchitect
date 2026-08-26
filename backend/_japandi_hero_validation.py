@@ -155,9 +155,17 @@ ROLES: list[tuple[str, tuple[str, ...]]] = [
     ("media/TV console", (r"\bmedia consoles?\b", r"\btv consoles?\b",
                           r"\bconsoles?\b", r"\bmedia cabinets?\b",
                           r"\bmedia units?\b")),
-    ("lighting", (r"\blighting\b", r"\bpendants?\b", r"\bfloor lamps?\b",
-                  r"\blamps?\b")),
 ]
+
+# L'ECLAIRAGE N'EST PAS DANS CETTE LISTE, ET C'EST VOULU. Il n'a jamais fait
+# partie de la sous-specification : il se transformait deja 6/6 sur 3f03d6d, et
+# la DNA d'atmosphere ship sa propre ligne LIGHT dans le MEME prompt. Le nommer
+# aussi dans le HERO ne gagnait rien et coutait 32 caracteres de la marge
+# budgetaire qui protege dna_room_context. C9 verifie donc l'inverse : que la
+# consigne d'eclairage EXISTE toujours dans le prompt compose (via la DNA) et
+# que le HERO ne la duplique PAS.
+LIGHTING_PATTERNS = (r"\blighting\b", r"\bpendants?\b", r"\bfloor lamps?\b",
+                     r"\blamps?\b", r"\blanterns?\b")
 
 VARIANTS = (("pleine", False), ("compacte", True))
 
@@ -248,7 +256,7 @@ print("CONFIG      : APP_ENV=" + os.environ["APP_ENV"]
       + " SWITCH_BLOCK_COMPACT=" + os.environ["SWITCH_BLOCK_COMPACT"])
 
 # =============================================================================
-print("\n=== C1 — COUVERTURE SEMANTIQUE : 7 roles x 2 variantes ===")
+print("\n=== C1 — COUVERTURE SEMANTIQUE : 6 roles x 2 variantes ===")
 print("     un role passe si UNE clause porte a la fois un terme de role ET un")
 print("     terme de CONSTRUCTION (aucune phrase exacte n'est testee).")
 for _vname, _compact in VARIANTS:
@@ -360,6 +368,23 @@ for _compact, _base_sha in JAPANDI_BASE_SHA.items():
     check("HERO japandi_calm  variante %-8s a bien CHANGE vs BASE"
           % ("compacte" if _compact else "pleine"),
           sha(HERO("japandi_calm", compact=_compact)) != _base_sha)
+
+# =============================================================================
+print("\n=== C9 — ECLAIRAGE : couvert par la DNA, PAS duplique dans le HERO ===")
+# Le prompt compose doit toujours porter une consigne d'eclairage — elle vient
+# de la ligne LIGHT de la DNA d'atmosphere, pas du HERO.
+_p_light = pure_switch()
+check("le prompt compose porte toujours une consigne d'eclairage",
+      any(re.search(_p, _p_light, re.I) for _p in LIGHTING_PATTERNS))
+_m = re.search(r"LIGHT:[^\n]*", _p_light)
+check("cette consigne vient bien de la section LIGHT de la DNA", _m is not None)
+if _m:
+    print("            -> " + _m.group(0)[:88])
+for _vname, _compact in VARIANTS:
+    _h = HERO("japandi_calm", compact=_compact)
+    check("[%-8s] le HERO ne duplique PAS l'eclairage" % _vname,
+          not any(re.search(_p, _h, re.I) for _p in LIGHTING_PATTERNS),
+          "le HERO renomme l'eclairage — 32 car. de marge budgetaire perdus")
 
 # =============================================================================
 _total = len(_res)
