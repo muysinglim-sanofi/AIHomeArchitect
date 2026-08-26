@@ -385,6 +385,13 @@ def _install() -> None:
     billing.grant_purchase = ENGINE.grant_purchase
     billing.ProductNotMapped = _FakeEngine.ProductNotMapped
     sys.modules["billing"] = billing
+    # `pwa_staging_billing.catalogue()` resolves its client through `main.supa`
+    # rather than through the seam's `_supa()`, so the CATALOGUE payload needs
+    # its own seam onto the fake database. Stubbed here rather than in the test
+    # that needs it, so both payloads are always read from the same rows.
+    main_mod = types.ModuleType("main")
+    main_mod.supa = DB
+    sys.modules["main"] = main_mod
 
 
 def _seed_catalogue() -> None:
@@ -1028,8 +1035,14 @@ async def test_catalogue_is_the_price_authority() -> None:
           GATEWAY.last_body["amount"] == "47.99", GATEWAY.last_body["amount"])
     check("CAT 79.99 appears NOWHERE in the signed PayWay request",
           "79.99" not in json.dumps(GATEWAY.last_body), str(GATEWAY.last_body))
-    check("CAT and nowhere in what the browser is handed",
+    # NOTE the precise claim. The browser DOES receive 79.99 — from the
+    # CATALOGUE (`GET /entitlement`), which is how the crossed-out price gets
+    # rendered at all. What it must never appear in is the PAYMENT ATTEMPT:
+    # two different payloads, and only one of them is anywhere near the money.
+    check("CAT 79.99 is absent from the PAYMENT payload (not the catalogue)",
           "79.99" not in json.dumps(view), str(view))
+    check("CAT the payment payload has no list price field at all",
+          "list_price_usd" not in view, str(sorted(view)))
 
     order = [o for o in DB.tables["public.orders"]
              if o.get("idempotency_key") == seam.order_key_for(view["tran_id"])]
@@ -1075,6 +1088,91 @@ async def test_catalogue_is_the_price_authority() -> None:
             check(f"CAT a request carrying `{forbidden}` is REJECTED", False)
         except Exception:  # noqa: BLE001 — pydantic raises its own type
             check(f"CAT a request carrying `{forbidden}` is REJECTED", True)
+
+
+async def test_metadata_is_presentation_only() -> None:
+    """PRES — the browser MAY see 79.99, and it still cannot be charged it.
+
+    THE DISTINCTION this whole design rests on, and the one my own report
+    initially blurred: there are TWO payloads.
+
+        GET  /entitlement                 the CATALOGUE — presentation.
+                                          Carries `list_price_usd` and `badge`,
+                                          because a crossed-out price cannot be
+                                          rendered without them.
+
+        POST /payments/checkout           the PAYMENT ATTEMPT — money.
+                                          Carries `amount` and no list price at
+                                          all.
+
+    "The browser never sees 79.99" would be false, and building toward it would
+    mean hardcoding the reference price in Dart — which is worse, because then
+    a price change needs an app release. The true invariant is narrower and
+    stronger: 79.99 is never PAYMENT AUTHORITY. It reaches the browser through a
+    read-only catalogue, it is absent from the payment payload, and no code path
+    exists that could turn it into an amount.
+
+    So this proves the absence of that path even when `metadata` is hostile.
+    """
+    section("PRES  metadata renders a price; it can never charge one")
+
+    # 1) The catalogue DOES carry it — that is its job.
+    import pwa_staging_billing as pwa_billing  # noqa: PLC0415
+
+    rows = await pwa_billing.catalogue()
+    best = [r for r in rows if r["sku"] == "pack_300"][0]
+    check("PRES the CATALOGUE carries the reference price for rendering",
+          best["list_price_usd"] == 79.99, str(best))
+    check("PRES and the badge code, for the client to translate",
+          best["badge"] == "best_value", str(best["badge"]))
+    check("PRES the catalogue's payable price is still the discounted one",
+          best["price_usd"] == 47.99, str(best["price_usd"]))
+    check("PRES the discount is NOT sent — it is derived from the two prices",
+          "discount" not in json.dumps(best).lower(), str(best))
+
+    # 2) `resolve_web_product` — the ONE function the payment path uses to turn
+    #    a sku into money — must not read `metadata` at all.
+    source = pathlib.Path(seam.__file__).read_text(encoding="utf-8")
+    resolver = source[source.index("async def resolve_web_product"):
+                      source.index("# ── public projection")]
+    check("PRES resolve_web_product never mentions metadata",
+          "metadata" not in resolver, "the payment resolver reads metadata")
+    check("PRES it does not even SELECT the column",
+          "metadata" not in resolver.split("select(")[1].split(")")[0]
+          if "select(" in resolver else True)
+
+    # 3) HOSTILE metadata: a list price crafted to look like a bargain, a
+    #    negative, a string, an injected "amount". None of it may move a cent.
+    original = copy.deepcopy(DB.tables["public.products"])
+    try:
+        for hostile in (
+            {"list_price_usd": 0.01},
+            {"list_price_usd": -100},
+            {"list_price_usd": "47.99'; drop table orders;--"},
+            {"price_usd": 0.01},
+            {"amount": 0.01},
+            {"credits_granted": 999999},
+            {"unlimited": True},
+        ):
+            for row in DB.tables["public.products"]:
+                if row["sku"] == "pack_300":
+                    row["metadata"] = hostile
+            product = await seam.resolve_web_product("pack_300")
+            check(f"PRES metadata {list(hostile)[0]!r} cannot move the price",
+                  product.price == 47.99, f"{hostile} -> {product.price}")
+            check(f"PRES metadata {list(hostile)[0]!r} cannot move the credits",
+                  product.credits == 300, f"{hostile} -> {product.credits}")
+    finally:
+        DB.tables["public.products"] = original
+
+    # 4) A malformed reference price degrades to "no discount shown", never to
+    #    a crash that would take the whole paywall down over a marketing field.
+    for junk in ("banana", "", None, -5, 0):
+        check(f"PRES a malformed list price {junk!r} renders as absent",
+              pwa_billing._display_price(junk) is None,   # noqa: SLF001
+              str(pwa_billing._display_price(junk)))      # noqa: SLF001
+    check("PRES a well-formed one comes through as a number",
+          pwa_billing._display_price("79.99") == 79.99)   # noqa: SLF001
 
 
 async def test_checkout_token_goes_stale() -> None:
@@ -1149,6 +1247,7 @@ async def main_async() -> int:
     await test_aba18_bypass()
     await test_return_is_navigation_not_evidence()
     await test_catalogue_is_the_price_authority()
+    await test_metadata_is_presentation_only()
     await test_checkout_token_goes_stale()
     await test_generate_qr_is_unreachable()
     await test_public_surface()
