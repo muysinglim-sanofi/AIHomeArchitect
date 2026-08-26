@@ -35,7 +35,7 @@ the fault is in the payment, not in us — which is a genuinely useful thing to
 know before asking anyone to stand in front of a QR.
 
 Run:  cd backend && PYTHONPATH=. python pwa_staging_payway_grant_probe.py
-Safe: staging only, sandbox merchant, disposable identity, $1.99 never charged.
+Safe: staging only, sandbox merchant, disposable identity, $4.99 never charged.
 """
 from __future__ import annotations
 
@@ -167,7 +167,7 @@ async def run() -> int:  # noqa: PLR0915
           (view["checkout_url"] or "").startswith(
               "https://checkout-sandbox.payway.com.kh/"),
           view["checkout_url"][:60])
-    check("the amount is the CATALOGUE price", view["amount"] == 1.99,
+    check("the amount is the CATALOGUE price", view["amount"] == 4.99,
           str(view["amount"]))
     check("the credits are the CATALOGUE credits", view["credits"] == 10,
           str(view["credits"]))
@@ -190,7 +190,7 @@ async def run() -> int:  # noqa: PLR0915
     approved_envelope = {
         # Verbatim nesting, as measured on 2026-08-19.
         "data": {"payment_status_code": 0, "payment_status": "APPROVED",
-                 "total_amount": 1.99, "payment_amount": 1.99,
+                 "total_amount": 4.99, "payment_amount": 4.99,
                  "payment_currency": "USD", "apv": "832865",
                  "refund_amount": 0, "discount_amount": 0,
                  "transaction_date": "2026-08-19 02:00:00"},

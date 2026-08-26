@@ -378,6 +378,26 @@ def billing_state_for(reason: Optional[str]) -> str:
     return _BILLING_STATE.get(reason or "", "FREE_EXHAUSTED")
 
 
+def _display_price(raw) -> Optional[float]:
+    """A reference price from `metadata`, or None. Never raises, never guesses.
+
+    `metadata` is free-form jsonb, so this is the boundary where a value someone
+    typed by hand becomes a number — or does not. A malformed entry yields None
+    and the row simply renders without a crossed-out price, which is the correct
+    degradation: a missing discount badge is a cosmetic loss, and a catalogue
+    read that 500s over a marketing field would take the whole paywall down.
+    """
+    if raw is None or raw == "":
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    # A reference price that is not above the real one is not a discount. Zero
+    # and negatives are nonsense; equal is a "discount" of nothing.
+    return value if value > 0 else None
+
+
 async def catalogue() -> list:
     """The purchasable products, READ from the canonical `products` table.
 
@@ -401,7 +421,8 @@ async def catalogue() -> list:
         res = await asyncio.to_thread(
             lambda: supa.table("products")
             .select("sku, type, credits_granted, duration_days, price_usd, "
-                    "currency, khqr_enabled, apple_product_id, revenuecat_product_id")
+                    "currency, khqr_enabled, apple_product_id, "
+                    "revenuecat_product_id, metadata")
             .eq("active", True).order("price_usd").execute()
         )
         rows = getattr(res, "data", None) or []
@@ -412,13 +433,32 @@ async def catalogue() -> list:
     out = []
     for r in rows:
         store_only = bool(r.get("apple_product_id") or r.get("revenuecat_product_id"))
+        meta = r.get("metadata") if isinstance(r.get("metadata"), dict) else {}
         out.append({
             "sku": r.get("sku"),
             "type": r.get("type"),
             "credits": r.get("credits_granted"),
             "duration_days": r.get("duration_days"),
+            # THE payable price. The only number in this payload that any part
+            # of the payment path reads.
             "price_usd": float(r["price_usd"]) if r.get("price_usd") is not None else None,
             "currency": r.get("currency") or "USD",
+            # ── display-only, from `products.metadata` ──────────────────────
+            #
+            # `list_price_usd` is a CROSSED-OUT number: bigger than the price,
+            # never charged, and read by nothing but a widget. It is carried in
+            # a separate key from `price_usd` rather than as a second "price"
+            # so that no caller can plausibly confuse the two, and the PayWay
+            # amount is resolved by `pwa_staging_payments.resolve_web_product`
+            # from `price_usd` alone — this payload is not even in that path.
+            #
+            # `badge` is a MACHINE code ('starter' / 'popular' / 'best_value'),
+            # never a label. The client translates it, the same way it already
+            # translates `billing_state` and `error_code`. A database is the one
+            # place a translator will never look, so no English marketing word
+            # is stored in one.
+            "list_price_usd": _display_price(meta.get("list_price_usd")),
+            "badge": str(meta.get("badge") or ""),
             # True when this row exists to be bought in an app store. The Web
             # cannot sell it until a web provider is configured for it.
             "store_only": store_only,

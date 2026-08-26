@@ -167,9 +167,29 @@ def main() -> int:  # noqa: PLR0915 — one linear narrative
           json.dumps(web)[:200])
     check("ABA00 the subscription passes stay app-store products",
           len(store) == 2, json.dumps([p.get("sku") for p in store]))
-    sku = (web[0] if web else {}).get("sku") or "pack_10"
-    price = (web[0] if web else {}).get("price_usd")
-    credits = (web[0] if web else {}).get("credits")
+
+    # THE commercial catalogue, asserted against the live server rather than
+    # against a migration file. 10/$4.99, 30/$7.99, 300/$47.99 — and nothing
+    # else, because a retired pack that is still purchasable is a real defect.
+    offered = sorted((p["credits"], p["price_usd"], p.get("badge") or "")
+                     for p in web)
+    check("ABA00 the web catalogue is EXACTLY 10 / 30 / 300 spaces",
+          offered == [(10, 4.99, "starter"), (30, 7.99, "popular"),
+                      (300, 47.99, "best_value")], json.dumps(offered))
+    best = next((p for p in web if p["credits"] == 300), {})
+    check("ABA00 the 300 pack carries a display-only reference price",
+          best.get("list_price_usd") == 79.99, str(best.get("list_price_usd")))
+    check("ABA00 and its PAYABLE price is the discounted one",
+          best.get("price_usd") == 47.99, str(best.get("price_usd")))
+    check("ABA00 no product claims an unlimited entitlement",
+          all(isinstance(p.get("credits"), int) and p["credits"] > 0
+              for p in products), json.dumps(products)[:200])
+    # Deliberately the discounted product: it is the only one where a wrong
+    # answer (79.99 instead of 47.99) is possible at all.
+    chosen = best or (web[0] if web else {})
+    sku = chosen.get("sku") or "pack_10"
+    price = chosen.get("price_usd")
+    credits = chosen.get("credits")
     print(f"  INFO  buying {sku}: {credits} spaces for ${price}")
 
     # ── everything that does not need ABA ───────────────────────────────────

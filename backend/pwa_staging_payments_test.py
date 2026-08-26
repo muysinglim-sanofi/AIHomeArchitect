@@ -69,6 +69,8 @@ os.environ.update({
 os.environ.pop("PWA_PAYMENT_PROVIDER", None)
 os.environ.pop("PAYWAY_CALLBACK_URL", None)
 
+from fastapi import HTTPException  # noqa: E402
+
 import payway  # noqa: E402
 import pwa_staging_payments as seam  # noqa: E402
 
@@ -371,6 +373,7 @@ ENGINE = _FakeEngine()
 USER = str(uuid.uuid4())
 OTHER_USER = str(uuid.uuid4())
 PRODUCT_ID = str(uuid.uuid4())
+PRODUCT_300 = str(uuid.uuid4())
 
 
 def _install() -> None:
@@ -386,10 +389,19 @@ def _install() -> None:
 
 def _seed_catalogue() -> None:
     DB.tables["public.products"] = [
-        # The web-sellable pack: no store id, khqr enabled, no duration.
+        # STARTER — the web-sellable pack: no store id, khqr enabled, perpetual.
         {"id": PRODUCT_ID, "sku": "pack_10", "type": "CREDIT_PACK",
-         "credits_granted": 10, "duration_days": None, "price_usd": 1.99,
+         "credits_granted": 10, "duration_days": None, "price_usd": 4.99,
          "currency": "USD", "khqr_enabled": True, "active": True,
+         "metadata": {"badge": "starter"},
+         "apple_product_id": None, "revenuecat_product_id": None},
+        # BEST VALUE — discounted. `price_usd` is 47.99 and `metadata` carries
+        # the crossed-out 79.99. The whole point of the pair is that only the
+        # first one can ever reach PayWay.
+        {"id": PRODUCT_300, "sku": "pack_300", "type": "CREDIT_PACK",
+         "credits_granted": 300, "duration_days": None, "price_usd": 47.99,
+         "currency": "USD", "khqr_enabled": True, "active": True,
+         "metadata": {"badge": "best_value", "list_price_usd": 79.99},
          "apple_product_id": None, "revenuecat_product_id": None},
         # A store product: real, priced, and NOT sellable here.
         {"id": str(uuid.uuid4()), "sku": "weekly_pass", "type": "PASS",
@@ -401,6 +413,7 @@ def _seed_catalogue() -> None:
         {"id": str(uuid.uuid4()), "sku": "pack_25", "type": "CREDIT_PACK",
          "credits_granted": 25, "duration_days": None, "price_usd": 3.99,
          "currency": "USD", "khqr_enabled": False, "active": True,
+         "metadata": {},
          "apple_product_id": None, "revenuecat_product_id": None},
     ]
 
@@ -426,7 +439,7 @@ def _row(tran_id: str) -> dict:
     return rows[0] if rows else {}
 
 
-def _approved(tran_id: str, *, amount=1.99, currency="USD") -> None:
+def _approved(tran_id: str, *, amount=4.99, currency="USD") -> None:
     GATEWAY.status_for[tran_id] = _status(
         tran_id=tran_id, payment_status_code=payway.STATUS_APPROVED,
         payment_status="APPROVED", payment_amount=amount, total_amount=amount,
@@ -481,7 +494,7 @@ async def test_aba01_checkout() -> None:
     check("ABA01 the answer mode is recorded for support",
           view["checkout_mode"] == "redirect", view["checkout_mode"])
 
-    check("ABA01 the amount comes from the CATALOGUE", view["amount"] == 1.99,
+    check("ABA01 the amount comes from the CATALOGUE", view["amount"] == 4.99,
           str(view["amount"]))
     check("ABA01 the credits come from the CATALOGUE", view["credits"] == 10,
           str(view["credits"]))
@@ -501,7 +514,7 @@ async def test_aba01_checkout() -> None:
           "payment_option" not in GATEWAY.last_body,
           str(GATEWAY.last_body.get("payment_option")))
     check("ABA01 the signed amount is the catalogue price, formatted once",
-          GATEWAY.last_body["amount"] == "1.99", GATEWAY.last_body["amount"])
+          GATEWAY.last_body["amount"] == "4.99", GATEWAY.last_body["amount"])
 
     # A product the Web may not sell, and one no rail is enabled for.
     for sku, why in (("weekly_pass", "app-store product"),
@@ -545,7 +558,7 @@ async def test_aba02_aba03_tampering() -> None:
     _approved(view["tran_id"])
     await seam.verify_and_settle(_row(view["tran_id"]), force=True)
     grant = ENGINE.credited_grants[0]
-    check("ABA02 the GRANT charged the catalogue amount", grant["amount"] == 1.99,
+    check("ABA02 the GRANT charged the catalogue amount", grant["amount"] == 4.99,
           str(grant["amount"]))
     check("ABA03 the GRANT names the catalogue SKU, not a client value",
           grant["sku"] == "pack_10", grant["sku"])
@@ -847,7 +860,7 @@ async def test_aba18_bypass() -> None:
     GATEWAY.status_for[tran_id] = _status(
         tran_id=tran_id, envelope_code="6", envelope_message="not found",
         payment_status_code=payway.STATUS_APPROVED, payment_status="APPROVED",
-        payment_amount=1.99, currency="USD")
+        payment_amount=4.99, currency="USD")
     settled = await seam.verify_and_settle(_row(tran_id), force=True)
     check("ABA18 APPROVED inside a NOT-FOUND envelope grants nothing",
           ENGINE.grants == [] and settled["state"] != seam.GRANTED, settled["state"])
@@ -962,7 +975,7 @@ async def test_return_is_navigation_not_evidence() -> None:
               "outcome=success" in success and "outcome=cancel" in cancel)
         check("RET the URL carries no amount, no credits, no user, no token",
               not any(word in success for word in
-                      ("amount", "credits", "user", "token", "1.99", USER)),
+                      ("amount", "credits", "user", "token", "4.99", USER)),
               success)
 
         # THE assertion. The server has no reader for any of it.
@@ -991,6 +1004,77 @@ async def test_return_is_navigation_not_evidence() -> None:
               not [g for g in ENGINE.grants if g["tran_id"] == view["tran_id"]])
     finally:
         os.environ.pop("PAYWAY_RETURN_BASE_URL", None)
+
+
+async def test_catalogue_is_the_price_authority() -> None:
+    """CAT — 10/$4.99, 30/$7.99, 300/$47.99, and the crossed-out price is inert.
+
+    The dangerous number in this release is `79.99`. It exists to be struck
+    through on a card, it is bigger than what anyone pays, and it sits one
+    `metadata` lookup away from the code that signs a PayWay request. So the
+    assertions below are not about rendering — they are about the ABSENCE of a
+    path from that number to the gateway.
+    """
+    section("CAT  the catalogue is the only price authority")
+
+    # BEST VALUE — the discounted product, end to end.
+    view = await seam.start_checkout(user_id=USER, sku="pack_300",
+                                     attempt_key="att-cat")
+    check("CAT 300 spaces resolve to the CATALOGUE price, not the reference one",
+          view["amount"] == 47.99, str(view["amount"]))
+    check("CAT the spaces come from the catalogue", view["credits"] == 300,
+          str(view["credits"]))
+    check("CAT the PayWay request is SIGNED for 47.99",
+          GATEWAY.last_body["amount"] == "47.99", GATEWAY.last_body["amount"])
+    check("CAT 79.99 appears NOWHERE in the signed PayWay request",
+          "79.99" not in json.dumps(GATEWAY.last_body), str(GATEWAY.last_body))
+    check("CAT and nowhere in what the browser is handed",
+          "79.99" not in json.dumps(view), str(view))
+
+    order = [o for o in DB.tables["public.orders"]
+             if o.get("idempotency_key") == seam.order_key_for(view["tran_id"])]
+    check("CAT the canonical order is opened at 47.99",
+          len(order) == 1 and float(order[0]["amount"]) == 47.99, str(order))
+
+    # A callback claiming the REFERENCE price is a wrong-amount callback.
+    GATEWAY.status_for[view["tran_id"]] = _status(
+        payment_status_code=payway.STATUS_APPROVED, payment_status="APPROVED",
+        payment_amount=79.99, total_amount=79.99, currency="USD")
+    row = await seam._load(view["tran_id"])                   # noqa: SLF001
+    settled = await seam.verify_and_settle(row, force=True)
+    check("CAT a payment of the CROSSED-OUT price does not grant",
+          settled["state"] == seam.FAILED, str(settled.get("state")))
+    check("CAT and it is named an amount mismatch",
+          settled.get("failure_reason") == "AMOUNT_MISMATCH",
+          str(settled.get("failure_reason")))
+    check("CAT nothing reached the Billing Engine",
+          not [g for g in ENGINE.grants if g["tran_id"] == view["tran_id"]])
+
+    # STARTER, at its new price.
+    starter = await seam.start_checkout(user_id=OTHER_USER, sku="pack_10",
+                                        attempt_key="att-cat-10")
+    check("CAT 10 spaces cost 4.99", starter["amount"] == 4.99
+          and starter["credits"] == 10, str(starter["amount"]))
+
+    # A retired pack cannot be bought, and an invented one cannot either.
+    for sku in ("pack_25", "pack_1000", "unlimited"):
+        try:
+            await seam.start_checkout(user_id=USER, sku=sku,
+                                      attempt_key=f"att-{sku}")
+            check(f"CAT {sku!r} cannot be bought", False, "it was accepted")
+        except HTTPException as exc:
+            check(f"CAT {sku!r} cannot be bought", exc.status_code in (404, 409),
+                  str(exc.status_code))
+
+    # THE structural claim: no client field can express "unlimited".
+    for forbidden in ("credits", "unlimited", "price_usd", "amount",
+                      "list_price_usd", "entitlement"):
+        try:
+            seam.CheckoutRequest(sku="pack_10", attempt_key="x" * 12,
+                                 **{forbidden: 999999})
+            check(f"CAT a request carrying `{forbidden}` is REJECTED", False)
+        except Exception:  # noqa: BLE001 — pydantic raises its own type
+            check(f"CAT a request carrying `{forbidden}` is REJECTED", True)
 
 
 async def test_checkout_token_goes_stale() -> None:
@@ -1064,6 +1148,7 @@ async def main_async() -> int:
     await test_aba14_terminal()
     await test_aba18_bypass()
     await test_return_is_navigation_not_evidence()
+    await test_catalogue_is_the_price_authority()
     await test_checkout_token_goes_stale()
     await test_generate_qr_is_unreachable()
     await test_public_surface()
