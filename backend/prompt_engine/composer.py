@@ -950,7 +950,13 @@ def compose_generation_prompt(
         and atmosphere_id in HIGH_FIDELITY_ATMOSPHERES
     )
     mode_contract = build_mode_contract(
-        generation_mode, user_instruction, pixel_anchored=_pixel_anchored
+        generation_mode, user_instruction, pixel_anchored=_pixel_anchored,
+        # PURE SWITCH (2026-08-26) — le contrat doit libérer le DESIGN du mobilier
+        # sur le switch, sinon sa clause « same pieces, same footprint » contredit
+        # le « REPLACE each piece's design » ajouté quelques lignes plus bas.
+        # `switch_redesign` est déjà résolu ici (utilisé au bloc suivant) et n'est
+        # jamais vrai sur un V1 réel.
+        switch_redesign=switch_redesign,
     )
 
     # SWITCH_REDESIGN_PILOT (R1+R3) — switch-only (forwarded True ONLY by

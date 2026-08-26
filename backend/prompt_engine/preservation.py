@@ -354,6 +354,41 @@ _FURNITURE_CLAUSE = (
     "furniture, lighting, decor, textiles, colours, and atmosphere styling."
 )
 
+# ── PURE SWITCH (2026-08-26) — variante de la clause meuble, switch UNIQUEMENT.
+#
+# LE DÉFAUT. `_FURNITURE_CLAUSE` ci-dessus a été écrite le 2026-06-15 (cb55ce9)
+# pour lever une ambiguïté de V1 : la DNA disait « on the existing sofa » pendant
+# que le contrat listait « furniture » parmi les choses à redessiner. La décision
+# était juste — mais elle n'a jamais été scopée. Huit jours plus tard, cdf3dda a
+# ajouté le bloc Switch « REPLACE each piece's design » SANS neutraliser la clause.
+# Depuis, tout Pure Switch porte deux ordres mutuellement exclusifs :
+#     pos 421  « Absolute priority … Restyle ONLY through materials, lighting,
+#                decor, textiles, colours … on the existing furniture
+#                (same pieces, same footprint). »
+#     pos 943  « REPLACE each piece's design … »
+# Le mot « only » rend l'énumération EXHAUSTIVE : forme et silhouette en sont
+# exclues. La clause arrive 522 caractères plus tôt et se déclare priorité absolue.
+# Résultat mesuré : matériaux, éclairage, décor, textiles et couleurs changent —
+# les formes non. C'est exactement le symptôme rapporté (même famille de canapé,
+# mêmes fauteuils, meuble TV quasi identique) ; son instabilité vient de ce qu'un
+# modèle arbitre différemment une contradiction littérale d'un run à l'autre.
+#
+# LA CORRECTION. Sur le switch UNIQUEMENT, « même pièce, même empreinte » devient
+# « même RÔLE, même ZONE ». La préservation reste le mot d'ordre : architecture,
+# ouvertures, cadrage et perspective viennent du contrat PRESERVE et de STRUCTURAL
+# IDENTITY, intacts. La position reste doublement garantie — par cette clause et
+# par le bloc Switch qui dit déjà « keep every piece in its existing position ».
+# Seule l'identité VISUELLE du mobilier est libérée.
+#
+# PAS DE FLAG (décision produit 2026-08-26) : correction technique, pas capacité
+# optionnelle. Le rollback est le redéploiement de 5ef0589.
+_FURNITURE_CLAUSE_SWITCH = (
+    "Keep each piece's ROLE and ZONE — a sofa stays a sofa in the sofa zone, a "
+    "coffee table stays a coffee table, the TV stays where it is. Their DESIGN is "
+    "yours to change: silhouette, proportions, frame, materials and finish must "
+    "become this atmosphere's own furniture language, not the previous one's."
+)
+
 _PRESERVE_MODE_CONTRACT = (
     "PRESERVE MODE — SAME APARTMENT CONTRACT:\n"
     "Preserve the exact photographed architecture and the full proportions "
@@ -1022,6 +1057,7 @@ def build_mode_contract(
     generation_mode: str = "preserve",
     user_instruction: str = "",
     pixel_anchored: bool = False,
+    switch_redesign: bool = False,
 ) -> str:
     """
     Wave 5.13f — single authoritative MODE_CONTRACT for FIRST_VISION.
@@ -1050,6 +1086,13 @@ def build_mode_contract(
         and _os.environ.get("PROMPT_CONTRACT_LIGHT", "1") != "0"
     )
     _base = _PRESERVE_MODE_CONTRACT_LIGHT if _use_light else _PRESERVE_MODE_CONTRACT
+    # PURE SWITCH (2026-08-26) — sur le switch SEUL, la clause meuble passe de
+    # « même pièce / même empreinte » à « même rôle / même zone ». `switch_redesign`
+    # n'est vrai que via la délégation REBOOT_FRESH de composer_v2 (jamais sur un
+    # vrai V1, jamais sur Refine, jamais sur STAGE/extérieur) : hors switch, aucune
+    # opération de chaîne n'est exécutée et la sortie est byte-identique à 5ef0589.
+    if switch_redesign:
+        _base = _base.replace(_FURNITURE_CLAUSE, _FURNITURE_CLAUSE_SWITCH, 1)
     if _temporal_override_requested(user_instruction):
         # User explicitly asked for a temporal transformation : MODE_CONTRACT
         # stays minimal (architecture preservation only), the model is free

@@ -455,14 +455,34 @@ def _build_switch_header(
     """Short contradiction-free header for atmosphere-switch V2/V3. Replaces
     the frozen build_style_refinement_header (which says 'incremental
     evolution only — do not reimagine or replace the design') — those words
-    are genuinely wrong for an explicit atmosphere switch."""
+    are genuinely wrong for an explicit atmosphere switch.
+
+    PURE SWITCH (2026-08-26) — ce chemin est le régime REBOOT_CUSTOMIZED, et lui
+    seul : REBOOT_FRESH sort plus tôt (délégation composer.py Path D) et
+    INCREMENTAL prend la branche SR standard. Or ce régime n'émettait AUCUNE
+    autorité de redesign — ni « REPLACE each piece », ni HERO. Un projet ayant
+    connu un seul refine perdait donc définitivement le vrai Pure Switch, ce qui
+    n'est pas le comportement produit voulu : la lignée décide de CE QU'IL FAUT
+    PRÉSERVER, jamais de SI le mobilier peut être redessiné.
+
+    Difficulté propre à ce régime, assumée : l'entrée image est le rendu LATEST
+    (pour que les personnalisations survivent), donc les pixels portent encore le
+    mobilier de l'atmosphère précédente. L'instruction doit être d'autant plus
+    explicite — mais elle ne doit jamais autoriser à défaire un choix de
+    l'utilisateur. D'où l'ordre de priorité écrit noir sur blanc ci-dessous."""
     prev = (prev_atmosphere_id.replace("_", " ").title()
             if prev_atmosphere_id else "the previous atmosphere")
     room = (room_type or "space").strip()
     return (
         f"ATMOSPHERE SWITCH — same apartment, replacing the previous {prev} "
         f"styling of this {room} with {new_atmosphere_label}. Fresh "
-        f"atmospheric identity; same photographed architecture."
+        f"atmospheric identity; same photographed architecture. "
+        f"Keep each piece's ROLE and ZONE, and keep every change the user "
+        f"explicitly asked for — what they added, removed or moved stays that "
+        f"way. Within those constraints, redesign the furniture's VISUAL "
+        f"identity for {new_atmosphere_label}: silhouette, proportions, frame, "
+        f"materials and finish become this atmosphere's own language, never the "
+        f"previous one's."
     )
 
 
