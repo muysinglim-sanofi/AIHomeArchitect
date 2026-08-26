@@ -22,11 +22,20 @@ _SWITCH_HERO_SIGNATURES: dict[str, str] = {
         "warm-wood accents. Understated, grounded, daytime-warm."
     ),
     "japandi_calm": (
-        "HERO FURNISHING — Japandi: replace the seating with a low oak-frame "
-        "sofa with natural-linen cushions; the table with a minimalist solid-"
-        "wood low table; the lighting with a rice-paper / washi pendant + a "
-        "slim wooden floor lamp; the rug with a flat-weave jute / tatami-tone "
-        "mat; ceramic, bamboo and paper accents. Restrained, handcrafted, calm."
+        # Deliberately identical to the COMPACT entry below. This signature is
+        # already telegraphic — it carries no verbose parenthetical or duplicate
+        # mood adjective for a compact variant to strip. Writing it out in the
+        # longer "replace the X with Y" style of its siblings costs ~110 chars,
+        # which pushes the SWITCH_BLOCK_COMPACT=0 prompt past the FIRST_VISION
+        # budget (4300) and evicts dna_room_context — i.e. the living-room TV
+        # anchors. Measured: 615-char variant -> 4481 -> TV block dropped. One
+        # grammar, both variants, no footgun.
+        "HERO FURNISHING — Japandi: FRAME-FIRST — exposed squared timber frames, "
+        "thin flat inset cushions, nothing plump or rolled: post-and-rail sofa "
+        "frame outlining slim pads; open-frame armchairs, cane or paper-cord "
+        "backs, no tubs; slab low table on a recessed plinth; trestle dining "
+        "slab, spindle-back chairs; low console, flush or slatted fronts; washi "
+        "pendant, slim floor lamp."
     ),
     "soft_luxury": (
         "HERO FURNISHING — Soft Luxury: replace the seating with a DEEP, CURVED "
@@ -73,10 +82,12 @@ _SWITCH_HERO_SIGNATURES_COMPACT: dict[str, str] = {
         "warm-wood accents — understated, grounded, daytime-warm."
     ),
     "japandi_calm": (
-        "HERO FURNISHING — Japandi: low oak-frame sofa with natural-linen "
-        "cushions; minimalist solid-wood low table; rice-paper/washi pendant + "
-        "slim wooden floor lamp; flat-weave jute/tatami mat; ceramic, bamboo and "
-        "paper accents — restrained, handcrafted, calm."
+        "HERO FURNISHING — Japandi: FRAME-FIRST — exposed squared timber frames, "
+        "thin flat inset cushions, nothing plump or rolled: post-and-rail sofa "
+        "frame outlining slim pads; open-frame armchairs, cane or paper-cord "
+        "backs, no tubs; slab low table on a recessed plinth; trestle dining "
+        "slab, spindle-back chairs; low console, flush or slatted fronts; washi "
+        "pendant, slim floor lamp."
     ),
     "soft_luxury": (
         "HERO FURNISHING — Soft Luxury: deep curved channel-tufted taupe-velvet "
