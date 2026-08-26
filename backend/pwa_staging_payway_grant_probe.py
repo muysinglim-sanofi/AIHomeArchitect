@@ -3,8 +3,9 @@
 What is real here, and what is not
 ----------------------------------
     the PayWay transaction    REAL. Signed, sent, and accepted by
-                              checkout-sandbox.payway.com.kh. A genuine KHQR and
-                              a genuine ABA Mobile deeplink come back.
+                              checkout-sandbox.payway.com.kh via /payments/
+                              purchase. A genuine ABA-hosted checkout URL comes
+                              back.
     the rail row              REAL, in pwa_staging.payway_transactions.
     the canonical order       REAL, in public.orders, on provider='khqr'.
     the seam                  REAL. `verify_and_settle` and `_grant` are the
@@ -158,11 +159,14 @@ async def run() -> int:  # noqa: PLR0915
     view = await seam.start_checkout(user_id=user_id, sku="pack_10",
                                      attempt_key=attempt)
     tran_id = view["tran_id"]
-    check("the gateway issued a KHQR for a canonical Web product",
-          view["state"] == seam.AWAITING_PAYMENT and view["qr_string"].startswith("0002"),
-          f"{view['state']} {view['qr_string'][:24]}")
-    check("an ABA Mobile deeplink came back",
-          view["deeplink"].startswith("abamobilebank://"), view["deeplink"][:40])
+    check("the gateway opened a checkout for a canonical Web product",
+          view["state"] == seam.AWAITING_PAYMENT
+          and "payway.com.kh" in (view["checkout_url"] or ""),
+          f"{view['state']} {view['checkout_url'][:48]}")
+    check("the checkout is hosted by ABA, not drawn by Ayden",
+          (view["checkout_url"] or "").startswith(
+              "https://checkout-sandbox.payway.com.kh/"),
+          view["checkout_url"][:60])
     check("the amount is the CATALOGUE price", view["amount"] == 1.99,
           str(view["amount"]))
     check("the credits are the CATALOGUE credits", view["credits"] == 10,

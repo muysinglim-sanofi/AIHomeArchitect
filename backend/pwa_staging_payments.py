@@ -527,8 +527,12 @@ def return_url_for(cfg: payway.PayWayConfig, tran_id: str, outcome: str) -> str:
     """
     if not cfg.has_return_target:
         return ""
-    return (f"{cfg.return_base_url}/#/pwa/pay/return"
-            f"?tran_id={quote(tran_id, safe='')}&outcome={quote(outcome, safe='')}")
+    # A PATH, not a fragment. The PWA's history bridge reads
+    # `location.pathname + location.search` and ignores `#` entirely, so a
+    # hash-routed return URL would arrive as a bare "/" with the tran_id lost —
+    # recoverable (the server still remembers the attempt) but needlessly blind.
+    return (f"{cfg.return_base_url}/?pay_return=1"
+            f"&tran_id={quote(tran_id, safe='')}&outcome={quote(outcome, safe='')}")
 
 
 def _config_or_refuse() -> payway.PayWayConfig:

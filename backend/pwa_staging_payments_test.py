@@ -953,7 +953,9 @@ async def test_return_is_navigation_not_evidence() -> None:
         success = seam.return_url_for(cfg, tran, "success")
         cancel = seam.return_url_for(cfg, tran, "cancel")
         check("RET the return URL points at the PWA, not at the API",
-              success.startswith("https://app.example.com/#/pwa/pay/return"), success)
+              success.startswith("https://app.example.com/?pay_return=1"), success)
+        check("RET it is a PATH+QUERY, not a fragment the router cannot see",
+              "#" not in success, success)
         check("RET it carries the tran_id so the sheet can re-open",
               f"tran_id={tran}" in success, success)
         check("RET success and cancel are distinguishable to the CLIENT",
