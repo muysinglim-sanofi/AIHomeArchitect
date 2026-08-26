@@ -579,3 +579,48 @@ no sentinel, so a null parses to `0` (grants nothing) rather than to everything.
 * the live E2E now buys `pack_300` specifically — the only product where a wrong
   amount is possible at all — and asserts the served catalogue is exactly
   `10@4.99, 30@7.99, 300@47.99`.
+
+
+---
+
+## 13 — BILL05: what it actually was (correcting two earlier claims)
+
+On 2026-08-26 four `BILL05` assertions failed. I reported the cause twice, and
+was wrong both times — first "a fake-httpx harness defect", then "test-order
+pollution". Recording the real answer, because the wrong ones are the kind that
+get repeated.
+
+**Measured, in order:**
+
+1. `billing_grant_purchase` for a weekly pass is correct — pass `ACTIVE`, wallet
+   30, ledger `GRANT` scoped to the pass. (Direct SQL.)
+2. The real Python gate returns `has_active_pass=True, pass_credits=30` for a
+   pass holder. (Direct call, real client.)
+3. `BILL05` **passes in isolation**, and passes with each of its predecessors.
+4. The full suite then passed too — 81/81 — with no code change in between.
+
+So it was **transient**, and the shape of the failure names the mechanism:
+
+```
+observed:  pass_credits=0  free_credits=1  has_active_pass=False  watermark=True
+           ...while BILL06 simultaneously saw the hold land on the PASS bucket
+```
+
+`billing._active_pass_id` swallows any read error and returns `None`
+(*"best-effort : pas de debit plutot qu'un crash"*). With `pass_id = None` the
+gate projects the trial (`free_credits = 1`) and reports no pass — while
+`billing_try_hold`, a **separate** RPC call, still saw the pass and debited the
+pass bucket. One dropped PostgREST read on `passes` produces exactly that split,
+and nothing else does.
+
+This is the same family as the HTTP/2-after-idle stall that commit `79a7693`
+already hardened PostgREST against.
+
+**Worth stating plainly, and not changed here:** that fail-open means a
+transient read error silently downgrades a paying customer to the free tier *for
+that request* — they still generate, but the image carries a watermark. It errs
+toward letting people work, which is the right direction, and Billing Engine
+semantics are out of scope for this task. Recorded as an observation for the
+production hardening review, not as a defect to patch mid-flight.
+
+**No harness fix was made, because there was no harness defect.**
