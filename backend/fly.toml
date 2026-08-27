@@ -19,6 +19,12 @@ primary_region = "sin"
   # THE browser origins allowed to make credentialed calls to this API.
   # Everything else is refused at the preflight. Add a host here, redeploy.
   PWA_ALLOWED_ORIGINS = "https://ayden-studio.web.app,https://ayden-studio.firebaseapp.com,https://aydenstudio.app,https://www.aydenstudio.app"
+  # Firebase preview channels get a generated hostname per channel, so a fixed
+  # list refuses every review deployment. Narrow on purpose: this project's own
+  # preview subdomains, https only, anchored — not a wildcard.
+  # TOML LITERAL string (single quotes): a basic "..." string rejects \. as an
+  # invalid escape, and the deploy fails at parse time.
+  PWA_ALLOWED_ORIGIN_REGEX = '^https://ayden-studio--[a-z0-9-]+\.web\.app$'
   # Where PayWay sends the BROWSER back after a checkout. Navigation only — the
   # server never reads the outcome, and Check Transaction remains the authority.
   PAYWAY_RETURN_BASE_URL = "https://ayden-studio.web.app"

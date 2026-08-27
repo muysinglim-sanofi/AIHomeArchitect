@@ -224,7 +224,21 @@ def main() -> None:
     # change and not a code change.
     origins = [o.strip() for o in
                os.environ.get('PWA_ALLOWED_ORIGINS', '').split(',') if o.strip()]
-    if origins:
+    # PREVIEW CHANNELS need a pattern, not a list.
+    #
+    # Firebase generates a fresh hostname per preview channel
+    # (`ayden-studio--<channel>-<hash>.web.app`), so a fixed allowlist refuses
+    # every review deployment — measured: the Phase 2 preview got a 400 on its
+    # preflight, which is the CORS policy working exactly as intended and also
+    # blocking the review it was built for.
+    #
+    # The regex is deliberately narrow: this project's own preview subdomains
+    # on `web.app`, https only, anchored at both ends. It is NOT a wildcard —
+    # `https://evil.com/?x=ayden-studio--a.web.app` does not match, and neither
+    # does another Firebase project's preview.
+    origin_regex = os.environ.get('PWA_ALLOWED_ORIGIN_REGEX', '').strip()
+
+    if origins or origin_regex:
         from starlette.middleware.cors import CORSMiddleware  # noqa: PLC0415
 
         # Starlette applies middleware in reverse-add order, so this one wraps
@@ -232,13 +246,15 @@ def main() -> None:
         canonical.app.add_middleware(
             CORSMiddleware,
             allow_origins=origins,
+            allow_origin_regex=origin_regex or None,
             allow_credentials=True,
             allow_methods=['GET', 'POST', 'OPTIONS'],
             allow_headers=['Authorization', 'Content-Type'],
             max_age=600,
         )
         print(f'[pwa-staging] CORS      : {len(origins)} allowed origin(s) — '
-              + ', '.join(origins))
+              + ', '.join(origins)
+              + (f'  + regex {origin_regex}' if origin_regex else ''))
     else:
         print('[pwa-staging] CORS      : no PWA_ALLOWED_ORIGINS set — the '
               'canonical permissive policy applies (local dev only)')
