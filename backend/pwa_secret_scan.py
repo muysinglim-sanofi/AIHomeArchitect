@@ -251,7 +251,13 @@ def main() -> int:  # noqa: PLR0915
         dotenvs = [p for p in WEB_BUILD.rglob("*")
                    if p.is_file() and (p.name == ".env" or p.name.startswith(".env."))
                    and p.name != ".env.example"]
-        verdict("the web bundle ships NO .env file at all",
+        # LABEL MATTERS HERE. `answer()` below decides the API-KEY verdicts by
+        # substring, and the first version of this line said "the web bundle
+        # ships NO .env file" — which flipped "ABA API KEY IN WEB BUNDLE" to
+        # YES over a file of placeholders. That is precisely the cry-wolf the
+        # comment above `answer()` warns about, committed by the check added to
+        # prevent a different one. It gets its own question instead.
+        verdict("hygiene: no dotenv file is delivered",
                 not dotenvs,
                 ", ".join(str(p.relative_to(WEB_BUILD)) for p in dotenvs))
         if secrets:
@@ -317,6 +323,10 @@ def main() -> int:  # noqa: PLR0915
           f"{answer('tracked file', 'commit', 'git history')}")
     print(f"  ABA API KEY IN WEB BUNDLE = {answer('web bundle')}")
     print(f"  ABA API KEY IN LOGS       = {answer('log')}")
+    # A separate question, because a delivered .env is a hygiene failure even
+    # when it holds nothing secret — and conflating the two makes the serious
+    # answer unreadable.
+    print(f"  DOTENV IN WEB BUNDLE      = {answer('hygiene: no dotenv')}")
     print("=" * 72)
     return 1 if _FAIL else 0
 
