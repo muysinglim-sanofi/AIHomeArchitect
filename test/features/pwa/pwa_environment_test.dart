@@ -347,17 +347,42 @@ void main() {
       expect(e.stagingBackendUrl, isNull);
     });
 
-    test('the allowlist itself holds no remote entry', () {
-      // A remote staging domain is added here deliberately, in review — never
-      // inferred at runtime from something that merely looks like staging.
+    test('every allowlist entry is loopback, or a reviewed HTTPS host', () {
+      // This used to assert the list held NOTHING remote, which was true until
+      // a public staging API existed. The rule was never "stay local" — it was
+      // "a remote entry is added deliberately, in review, and never inferred at
+      // runtime from something that merely looks like staging". So the shape
+      // that matters is asserted instead of the emptiness that was incidental.
       for (final origin in kStagingBackendOriginAllowlist) {
-        final host = Uri.parse(origin).host;
-        expect(
-          host == '127.0.0.1' || host == 'localhost',
-          isTrue,
-          reason: '$origin is not local',
-        );
+        final uri = Uri.parse(origin);
+        final isLoopback = uri.host == '127.0.0.1' || uri.host == 'localhost';
+
+        expect(uri.hasPort || uri.scheme == 'https' || isLoopback, isTrue,
+            reason: '$origin is neither a local dev origin nor https');
+
+        if (!isLoopback) {
+          // A generation request carries the user's session token. There is no
+          // version of that which may travel in clear.
+          expect(uri.scheme, 'https',
+              reason: '$origin is remote and not https');
+          // Defence in depth: the production denylist must never appear here,
+          // even by accident, even as a substring.
+          for (final banned in kProductionHostDenylist) {
+            expect(uri.host.contains(banned), isFalse,
+                reason: '$origin matches the production denylist ("$banned")');
+          }
+        }
       }
+    });
+
+    test('a plain-http remote backend is refused even if allowlisted', () {
+      // The allowlist is exact-origin, so this can only fail closed — but the
+      // guarantee is worth pinning, because the day someone pastes an http://
+      // host into that list is the day it matters.
+      expect(
+        () => PwaEnvironment.assertBackendUrlAllowed('http://api.example.com'),
+        throwsA(isA<PwaConfigError>()),
+      );
     });
   });
 }
