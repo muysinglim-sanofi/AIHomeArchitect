@@ -65,3 +65,6 @@ android/build/assets/_source/
 android/build/
 _signing_cert_key.pem
 *.pem
+
+# Firebase Hosting deploy cache — machine-local, regenerated on every deploy.
+.firebase/
