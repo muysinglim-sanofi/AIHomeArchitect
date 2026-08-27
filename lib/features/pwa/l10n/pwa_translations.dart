@@ -64,6 +64,11 @@ const Map<String, String> pwaEnTranslations = {
   'pwaUploadCta': 'Upload a photo',
   'pwaDragAndDropHint': 'or drag & drop it here',
   'pwaFileConstraints': 'JPG, PNG or WebP · up to 10 MB',
+  // Step 4 — see PwaL10n.step4Sub / .step4Hint for why these two are the only
+  // Create strings the web does not forward from the mobile dictionary.
+  'pwaStep4Sub': 'Brief the architect in your own words.',
+  'pwaStep4Hint':
+      'More natural light, warm colors, cozy, minimalist, modern…',
   'pwaTipsForBestResults': 'Tips for best results',
   'pwaTipBody': 'Use a clear, well-lit photo of the room you want to transform.',
   'pwaAutoDetect': 'Auto-detect',
@@ -425,6 +430,9 @@ const Map<String, String> pwaKmTranslations = {
   'pwaUploadCta': 'ផ្ទុក​រូបថត',
   'pwaDragAndDropHint': 'ឬ​អូស​ទម្លាក់​នៅ​ទីនេះ',
   'pwaFileConstraints': 'JPG, PNG ឬ WebP · រហូត​ដល់ 10 MB',
+  'pwaStep4Sub': 'ប្រាប់​ស្ថបត្យករ​តាម​ពាក្យ​របស់​អ្នក។',
+  'pwaStep4Hint':
+      'ពន្លឺ​ធម្មជាតិ​ច្រើន​ជាង, ពណ៌​ក្តៅ, កក់ក្តៅ, សាមញ្ញ, ទំនើប…',
   'pwaTipsForBestResults': 'គន្លឹះ​សម្រាប់​លទ្ធផល​ល្អ​បំផុត',
   'pwaTipBody':
       'ប្រើ​រូបថត​ច្បាស់ និង​មាន​ពន្លឺ​គ្រប់គ្រាន់​នៃ​បន្ទប់​ដែល​អ្នក​ចង់​បំប្លែង។',
@@ -792,6 +800,9 @@ const Map<String, String> pwaFrTranslations = {
   'pwaUploadCta': 'Importer une photo',
   'pwaDragAndDropHint': 'ou glissez-déposez-la ici',
   'pwaFileConstraints': "JPG, PNG ou WebP · jusqu'à 10 Mo",
+  'pwaStep4Sub': "Briefez l'architecte avec vos propres mots.",
+  'pwaStep4Hint':
+      "Plus de lumière naturelle, couleurs chaudes, cosy, minimaliste, moderne…",
   'pwaTipsForBestResults': 'Conseils pour un meilleur résultat',
   'pwaTipBody':
       'Utilisez une photo nette et bien éclairée de la pièce à transformer.',

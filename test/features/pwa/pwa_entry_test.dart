@@ -9,9 +9,13 @@ import 'package:ai_home_architect/features/pwa/application/pwa_controller.dart';
 import 'package:ai_home_architect/features/pwa/data/mock_pwa_experience_repository.dart';
 import 'package:ai_home_architect/features/pwa/presentation/hero/pwa_hero_sequence.dart';
 import 'package:ai_home_architect/features/pwa/presentation/hero/pwa_hero_video.dart';
+import 'package:ai_home_architect/features/cards/card_catalog.dart';
+import 'package:ai_home_architect/features/cards/widgets/ai_action_card.dart';
+import 'package:ai_home_architect/features/cards/widgets/atmosphere_hero_card.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_create_ios.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_entry_screen.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_primitives.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_experience.dart';
-import 'package:ai_home_architect/features/pwa/presentation/pwa_select_card.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_theme.dart';
 import 'package:ai_home_architect/features/pwa/l10n/pwa_l10n.dart';
 import 'package:flutter/material.dart';
@@ -71,11 +75,6 @@ Future<void> _enterWorkspace(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-double _pageOffset(WidgetTester tester) => tester
-    .state<ScrollableState>(find.byType(Scrollable).first)
-    .position
-    .pixels;
-
 class _FakeHeroVideo implements PwaHeroVideo {
   _FakeHeroVideo(this.onReady, this.onEnded, this.onError);
   final VoidCallback onReady;
@@ -99,16 +98,6 @@ class _FakeHeroVideo implements PwaHeroVideo {
 void main() {
   // No per-test reset: the cinematic is scoped to each PwaHeroSequence INSTANCE
   // (no process-wide static flag), so tests never leak state into each other.
-
-  // ── Role-keyed finders (robust: never anchored to a card that scrolls away).
-  Finder carousel(String key) => find.byKey(ValueKey(key));
-  Finder rowScroll(String key) => find
-      .descendant(of: carousel(key), matching: find.byType(Scrollable))
-      .first;
-  Finder cardByTitle(String title) =>
-      find.byWidgetPredicate((w) => w is PwaSelectCard && w.title == title);
-  double rowPixels(WidgetTester t, String key) =>
-      t.state<ScrollableState>(rowScroll(key)).position.pixels;
 
   group('typography (no underline)', () {
     test('every PWA text style is explicitly non-underlined', () {
@@ -134,6 +123,7 @@ void main() {
 
     test('PWA presentation does not import web-only Dart (mobile-safe)', () {
       for (final p in const [
+        'lib/features/pwa/presentation/pwa_create_ios.dart',
         'lib/features/pwa/presentation/pwa_entry_screen.dart',
         'lib/features/pwa/presentation/pwa_select_card.dart',
       ]) {
@@ -159,563 +149,367 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  // ── DEFAULT / regression (§12.29) ───────────────────────────────────────────
-  testWidgets('DEFAULT post-upload layout — one row per level, preselected', (
-    tester,
-  ) async {
-    final c = await _pumpEntry(tester, size: const Size(1440, 900));
-    await _enterWorkspace(tester);
-    expect(find.text('1. ROOM'), findsOneWidget);
-    expect(find.text('2. ATMOSPHERE'), findsOneWidget);
-    // ROOM has optional rooms → a More toggle. ATMOSPHERE shows its whole
-    // catalog (incl. Nordic Warmth) → no More toggle (nothing more to reveal).
-    expect(find.text('More rooms'), findsOneWidget);
-    expect(find.text('More atmospheres'), findsNothing);
-    expect(find.text('Generate my vision'), findsOneWidget);
-    expect(
-      find.text('First vision free · No account required'),
-      findsOneWidget,
-    );
-    // Exactly one popular row per level; no optional (second) row yet.
-    expect(carousel('room-popular'), findsOneWidget);
-    expect(carousel('atmos-popular'), findsOneWidget);
-    expect(carousel('room-optional'), findsNothing);
-    expect(carousel('atmos-optional'), findsNothing);
-    // Ayden Decide + Ayden Signature preselected, full labels.
-    expect(find.text('Ayden Decide'), findsOneWidget);
-    expect(find.text('AYDEN DECIDE'), findsNothing);
-    expect(
-      tester.widget<PwaSelectCard>(cardByTitle('Ayden Decide')).selected,
-      isTrue,
-    );
-    final s = c.read(pwaControllerProvider);
-    expect(s.selectedRoomId, isNull);
-    expect(s.selectedAtmosphereId, 'ayden_signature');
-    expect(tester.takeException(), isNull);
-  });
+  // ══ CREATE, aligned to iOS (Phase 3) ═════════════════════════════════════
+  //
+  // What these replaced, and why the old assertions did not simply move.
+  //
+  // Until Phase 3 the web's Create was a dark two-pane composition with its own
+  // mechanic: two horizontal carousels, a "More rooms / Fewer rooms" accordion,
+  // desktop arrow buttons that paged by whole cards, and a promotion rule that
+  // moved a selected optional card to the end of the popular row. Roughly
+  // twenty tests here described THAT mechanic in detail.
+  //
+  // None of it exists on iOS, and iOS is now the source of truth. The phone
+  // shows a grid of hero rooms plus a "More spaces" strip, and a page-snapped
+  // atmosphere carousel — so the tests that pinned the accordion were not
+  // migrated: there is nothing left for them to describe. What IS carried
+  // across is every invariant that outlived the mechanic — the defaults, the
+  // pre-upload legibility, the Generate wiring, the offline assets, and no
+  // overflow at the mandated breakpoints — restated against the new screen.
 
-  testWidgets('Ayden Decide uses the mandated ayden_decide.png asset', (
-    tester,
-  ) async {
-    await _pumpEntry(tester, size: const Size(1440, 900));
-    await _enterWorkspace(tester);
-    final decide = tester.widget<PwaSelectCard>(cardByTitle('Ayden Decide'));
-    expect(decide.asset, 'assets/cards/rooms/ayden_decide.png');
-    expect(decide.subtitle, 'Auto-detect');
-    expect(tester.takeException(), isNull);
-  });
-
-  // ── ROOM second-row disclosure (§12.1–8) ────────────────────────────────────
-  testWidgets(
-    'More rooms reveals a SECOND row; Fewer hides it; selection kept',
-    (tester) async {
-      final c = await _pumpEntry(tester, size: const Size(1440, 900));
-      await _enterWorkspace(tester);
-      // §1 default: one row.
-      expect(carousel('room-optional'), findsNothing);
-      // §2 More rooms → exactly one second row.
-      await tester.tap(find.text('More rooms'));
-      await tester.pumpAndSettle();
-      expect(find.text('Fewer rooms'), findsOneWidget);
-      expect(carousel('room-optional'), findsOneWidget);
-      // §3 popular row still present & unchanged (Ayden Decide first).
-      expect(carousel('room-popular'), findsOneWidget);
-      expect(
-        find.descendant(
-          of: carousel('room-popular'),
-          matching: find.text('Ayden Decide'),
-        ),
-        findsOneWidget,
-      );
-      // §4 optional cards ONLY in the second row (Dining Room here).
-      expect(
-        find.descendant(
-          of: carousel('room-optional'),
-          matching: find.text('Dining Room'),
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(
-          of: carousel('room-popular'),
-          matching: find.text('Dining Room'),
-        ),
-        findsNothing,
-      );
-      // §5 no Wrap/grid in either row.
-      expect(
-        find.descendant(
-          of: carousel('room-popular'),
-          matching: find.byType(Wrap),
-        ),
-        findsNothing,
-      );
-      expect(
-        find.descendant(
-          of: carousel('room-optional'),
-          matching: find.byType(Wrap),
-        ),
-        findsNothing,
-      );
-      // Select the optional Dining Room (no generation). The Fast-Path editorial
-      // intro can push the selectors into their scroll area, so bring the card
-      // into view first (behaviour unchanged, position robustness only).
-      final diningOptional = find.descendant(
-        of: carousel('room-optional'),
-        matching: find.text('Dining Room'),
-      );
-      await tester.ensureVisible(diningOptional);
-      await tester.pumpAndSettle();
-      await tester.tap(diningOptional);
-      await tester.pumpAndSettle();
-      expect(c.read(pwaControllerProvider).selectedRoomId, 'diningRoom');
-      expect(c.read(pwaControllerProvider).phase, PwaPhase.entry);
-      expect(c.read(pwaControllerProvider).versions, isEmpty);
-      // §6 Fewer rooms hides the second row.
-      await tester.ensureVisible(find.text('Fewer rooms'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Fewer rooms'));
-      await tester.pumpAndSettle();
-      expect(carousel('room-optional'), findsNothing);
-      // §7 selection survives collapse …
-      expect(c.read(pwaControllerProvider).selectedRoomId, 'diningRoom');
-      // §8 … and the selected optional card is PROMOTED into the popular row.
-      expect(
-        find.descendant(
-          of: carousel('room-popular'),
-          matching: find.text('Dining Room'),
-        ),
-        findsOneWidget,
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  // ── ATMOSPHERE catalogue: all visible incl. Nordic Warmth (single row) ──────
-  testWidgets(
-    'ATMOSPHERE shows the whole catalogue (incl. Nordic Warmth) in one row',
-    (tester) async {
-      final c = await _pumpEntry(tester, size: const Size(1440, 900));
-      await _enterWorkspace(tester);
-      // No More/Fewer toggle, no second row for ATMOSPHERE (whole catalogue fits
-      // in the single popular row).
-      expect(find.text('More atmospheres'), findsNothing);
-      expect(find.text('Fewer atmospheres'), findsNothing);
-      expect(carousel('atmos-optional'), findsNothing);
-      // Ayden Signature still preselected by default.
-      expect(
-        c.read(pwaControllerProvider).selectedAtmosphereId,
-        'ayden_signature',
-      );
-      // Every atmosphere lives in the SINGLE popular row — Nordic Warmth
-      // included (reachable by scrolling that row).
-      for (final name in const [
-        'Ayden Signature',
-        'Warm Modern',
-        'Soft Luxury',
-        'Japandi Calm',
-        'Tropical Escape',
-        'Nordic Warmth',
-      ]) {
-        await tester.scrollUntilVisible(
-          find.descendant(
-            of: carousel('atmos-popular'),
-            matching: find.text(name),
-          ),
-          200,
-          scrollable: rowScroll('atmos-popular'),
-        );
-        expect(
-          find.descendant(
-            of: carousel('atmos-popular'),
-            matching: find.text(name),
-          ),
-          findsOneWidget,
-          reason: name,
-        );
-      }
-      // Selecting Nordic Warmth works and does not generate.
-      await tester.tap(find.text('Nordic Warmth'));
-      await tester.pumpAndSettle();
-      expect(
-        c.read(pwaControllerProvider).selectedAtmosphereId,
-        'nordic_warmth',
-      );
-      expect(c.read(pwaControllerProvider).versions, isEmpty);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  // ── Scroll isolation (§12.16–21) ────────────────────────────────────────────
-  testWidgets('independent controllers; rows scroll independently', (
-    tester,
-  ) async {
-    await _pumpEntry(tester, size: const Size(1440, 900));
-    await _enterWorkspace(tester);
-    await tester.tap(find.text('More rooms'));
-    await tester.pumpAndSettle();
-    // The three live rows (ROOM has a popular + optional row; ATMOSPHERE has a
-    // single popular row), each with its own controller.
-    for (final k in const ['room-popular', 'room-optional', 'atmos-popular']) {
-      expect(carousel(k), findsOneWidget, reason: k);
-    }
-    expect(carousel('atmos-optional'), findsNothing);
-    // §17/§18 scrolling ROOM popular moves ONLY that row.
-    final beforeRoomOpt = rowPixels(tester, 'room-optional');
-    final beforeAtmosPop = rowPixels(tester, 'atmos-popular');
-    await tester.drag(rowScroll('room-popular'), const Offset(-160, 0));
-    await tester.pumpAndSettle();
-    expect(rowPixels(tester, 'room-popular'), greaterThan(0));
-    expect(
-      rowPixels(tester, 'room-optional'),
-      moreOrLessEquals(beforeRoomOpt, epsilon: 0.5),
-    );
-    expect(
-      rowPixels(tester, 'atmos-popular'),
-      moreOrLessEquals(beforeAtmosPop, epsilon: 0.5),
-    );
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('horizontal scroll does not move the vertical page (§19)', (
-    tester,
-  ) async {
-    await _pumpEntry(tester, size: const Size(1440, 900));
-    await _enterWorkspace(tester);
-    final page = _pageOffset(tester);
-    await tester.drag(rowScroll('room-popular'), const Offset(-200, 0));
-    await tester.pumpAndSettle();
-    expect(rowPixels(tester, 'room-popular'), greaterThan(0)); // row moved
-    expect(
-      _pageOffset(tester),
-      moreOrLessEquals(page, epsilon: 0.5),
-    ); // page did not
-    expect(find.byType(PwaEntryScreen), findsOneWidget); // §24 no route change
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('vertical drag still scrolls the page (§20, mobile)', (
+  testWidgets('the four steps are present, in iOS order, on one page', (
     tester,
   ) async {
     await _pumpEntry(tester, size: const Size(390, 844));
     await _enterWorkspace(tester);
-    final before = _pageOffset(tester);
-    // A vertical drag over the workspace scrolls the PAGE (not a horizontal row).
-    // Drag the editorial title (a page-level element) so the gesture cannot be
-    // absorbed by a card row.
-    await tester.drag(
-      find.text('Shape your space with Ayden.'),
-      const Offset(0, -240),
-    );
-    await tester.pumpAndSettle();
-    expect(_pageOffset(tester), greaterThan(before));
+    // One page, not four routes: every badge is in the SAME scrollable.
+    for (var n = 1; n <= 4; n++) {
+      expect(find.text('STEP $n OF 4'), findsOneWidget, reason: 'step $n');
+    }
+    expect(find.text('Upload your space'), findsOneWidget);
+    expect(find.text('What type of space are we transforming?'), findsOneWidget);
+    expect(find.text('Choose your atmosphere'), findsOneWidget);
+    expect(find.text('Describe your vision'), findsOneWidget);
+    // Step 4 announces itself as skippable.
+    expect(find.text('Optional'), findsOneWidget);
+    expect(find.byKey(const ValueKey('pwa-create-stepper')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('expanding More preserves horizontal offsets (§21)', (
+  test('the step copy is the mobile wording, not a second translation', () {
+    // The point of the forwarding getters: what the phone says in Khmer is what
+    // the browser says in Khmer, because it is literally the same string.
+    final km = pwaL10nFor(const Locale('km'));
+    expect(km.uplStep2Title, km.shared.uplStep2Title);
+    expect(km.uplStep3Title, km.shared.uplStep3Title);
+    expect(km.uplStep4Title, km.shared.uplStep4Title);
+    expect(km.uplStepBadge(2), km.shared.uplStepBadge(2));
+    // …with exactly one deliberate exception, and it is a SUBTRACTION: the web
+    // must not offer the microphone iOS has.
+    expect(km.shared.uplStep4Sub, contains('និយាយ')); // "speak"
+    expect(km.step4Sub, isNot(contains('និយាយ')));
+    for (final code in const ['en', 'fr', 'km']) {
+      final l = pwaL10nFor(Locale(code));
+      // A missing key falls back to the key itself — assert both resolved.
+      expect(l.step4Sub, isNot('pwaStep4Sub'), reason: code);
+      expect(l.step4Hint, isNot('pwaStep4Hint'), reason: code);
+      expect(l.step4Sub, isNotEmpty);
+      expect(l.step4Hint, isNotEmpty);
+    }
+  });
+
+  testWidgets('defaults: Ayden Decide + Ayden Signature, already chosen', (
     tester,
   ) async {
-    await _pumpEntry(tester, size: const Size(1440, 900));
+    final c = await _pumpEntry(tester, size: const Size(1440, 900));
     await _enterWorkspace(tester);
-    await tester.drag(rowScroll('room-popular'), const Offset(-120, 0));
-    await tester.pumpAndSettle();
-    final before = rowPixels(tester, 'room-popular');
-    expect(before, greaterThan(0));
-    await tester.tap(find.text('More rooms'));
-    await tester.pumpAndSettle();
+    final s = c.read(pwaControllerProvider);
+    expect(s.selectedRoomId, isNull); // Ayden Decide
+    expect(s.selectedAtmosphereId, 'ayden_signature');
+    final decide = tester.widget<AiActionCard>(
+      find.byKey(const ValueKey('pwa-room-ayden-decide')),
+    );
+    expect(decide.selected, isTrue);
+    expect(decide.title, 'Ayden Decide');
+    // The pre-composed card art iOS uses for this tile, offline.
+    expect(decide.backgroundImageAsset, 'assets/branding/ayden_decide_card.png');
     expect(
-      rowPixels(tester, 'room-popular'),
-      moreOrLessEquals(before, epsilon: 1),
+      File('assets/branding/ayden_decide_card.png').existsSync(),
+      isTrue,
+      reason: 'the Ayden Decide card art must be bundled, never fetched',
     );
-    expect(tester.takeException(), isNull);
-  });
-
-  // ── Arrows land on whole-card increments (§12.22) ───────────────────────────
-  testWidgets('desktop arrow moves in whole-card increments', (tester) async {
-    await _pumpEntry(tester, size: const Size(1440, 900));
-    await _enterWorkspace(tester);
-    await tester.tap(find.text('More rooms'));
-    await tester.pumpAndSettle();
-    final rightArrow = find
-        .descendant(
-          of: carousel('room-optional'),
-          matching: find.byIcon(Icons.chevron_right_rounded),
-        )
-        .first;
-    expect(rightArrow, findsOneWidget);
-    await tester.tap(rightArrow);
-    await tester.pumpAndSettle();
-    // The card footprint is responsive on the two-pane composition, so measure
-    // it instead of assuming the full-size constant.
-    final extent = tester.getSize(cardByTitle('Living Room')).width + 12;
-    final offset = rowPixels(tester, 'room-optional');
-    final max = tester
-        .state<ScrollableState>(rowScroll('room-optional'))
-        .position
-        .maxScrollExtent;
-    final onBoundary =
-        (offset / extent - (offset / extent).round()).abs() < 0.02;
-    final atEnd = (offset - max).abs() < 1.0;
-    expect(offset, greaterThan(0));
-    expect(onBoundary || atEnd, isTrue, reason: 'offset=$offset max=$max');
-    expect(tester.takeException(), isNull);
-  });
-
-  // ── Selecting a clipped card reveals it minimally (§12.23) ──────────────────
-  testWidgets('selecting a clipped optional card reveals it fully', (
-    tester,
-  ) async {
-    final c = await _pumpEntry(tester, size: const Size(1440, 900));
-    await _enterWorkspace(tester);
-    await tester.tap(find.text('More rooms'));
-    await tester.pumpAndSettle();
-    // Park the row at its END (builds the last card), then step back until
-    // Driveway is clipped at the right edge while its left half stays on-screen
-    // and tappable. Driven through the ScrollPosition rather than by small drags:
-    // increments below the touch slop move nothing, and the exact pixel geometry
-    // of the column is incidental to what this test proves.
-    final pos = tester
-        .state<ScrollableState>(rowScroll('room-optional'))
-        .position;
-    pos.jumpTo(pos.maxScrollExtent);
-    await tester.pumpAndSettle();
-    final view = tester.getRect(rowScroll('room-optional'));
-    final card = cardByTitle('Driveway'); // last optional room card
-    expect(card, findsOneWidget);
-    var clipped = false;
-    for (var i = 0; i < 60 && !clipped; i++) {
-      final r = tester.getRect(card);
-      if (r.right > view.right + 20 && r.left > view.left + 44) {
-        clipped = true;
-        break;
-      }
-      if (pos.pixels <= 0) break;
-      pos.jumpTo((pos.pixels - 24).clamp(0.0, pos.maxScrollExtent));
-      await tester.pump();
-    }
-    expect(clipped, isTrue, reason: 'failed to clip Driveway moderately');
-    final pre = tester.getRect(card);
-    final tapX = ((pre.left + view.right) / 2)
-        .clamp(view.left + 44, view.right - 44)
-        .toDouble();
-    await tester.tapAt(Offset(tapX, view.top + 18));
-    await tester.pumpAndSettle();
-    expect(c.read(pwaControllerProvider).selectedRoomId, 'driveway');
-    final r = tester.getRect(card);
-    expect(r.right, lessThanOrEqualTo(view.right + 1)); // now fully visible
-    expect(r.left, greaterThanOrEqualTo(view.left - 1));
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('first popular card is not clipped at rest', (tester) async {
-    await _pumpEntry(tester, size: const Size(1440, 900));
-    await _enterWorkspace(tester);
-    final view = tester.getRect(rowScroll('room-popular'));
-    final first = tester.getRect(cardByTitle('Ayden Decide'));
-    expect(first.left, greaterThanOrEqualTo(view.left - 1));
-    expect(first.right, lessThanOrEqualTo(view.right + 1));
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('card labels are never ellipsized (scaled to fit)', (
-    tester,
-  ) async {
-    await _pumpEntry(tester, size: const Size(1440, 900));
-    await _enterWorkspace(tester);
-    for (final label in const [
-      'Ayden Decide',
-      'Living Room',
-      'Ayden Signature',
-    ]) {
-      final t = find.text(label).first;
-      expect(t, findsOneWidget);
-      expect(tester.widget<Text>(t).overflow, isNot(TextOverflow.ellipsis));
-      expect(
-        find.ancestor(of: t, matching: find.byType(FittedBox)),
-        findsOneWidget,
-      );
+    final signature = tester.widget<AtmosphereHeroCard>(
+      find.byKey(const ValueKey('pwa-atmos-ayden_signature')),
+    );
+    expect(signature.selected, isTrue);
+    // The lead card of Step 3 rendered as a black rectangle on the deployed
+    // build: Ayden Signature is not in `kAtmosphereCardById` — it is a
+    // delegation, not an atmosphere — so the generic
+    // `assets/cards/atmospheres/<id>.png` fallback resolved to a file that
+    // does not exist. Both halves are asserted: the path the card asks for,
+    // and that the path is really in the bundle.
+    expect(signature.asset, kPwaSignatureCardAsset);
+    expect(
+      File(kPwaSignatureCardAsset).existsSync(),
+      isTrue,
+      reason: '$kPwaSignatureCardAsset must be bundled',
+    );
+    // Every OTHER atmosphere must resolve to a file that exists too, so a new
+    // atmosphere cannot ship with a silently missing card.
+    for (final a in c.read(pwaControllerProvider).atmospheres) {
+      if (a.id == 'ayden_signature') continue;
+      final asset = kAtmosphereCardById[a.id]?.asset ??
+          'assets/cards/atmospheres/${a.id}.png';
+      expect(File(asset).existsSync(), isTrue, reason: '${a.id} → $asset');
     }
     expect(tester.takeException(), isNull);
   });
 
-  // ── Selection does not generate ─────────────────────────────────────────────
-  testWidgets('selecting a popular card updates selection, no generate', (
+  testWidgets('selecting a room updates the selection and generates nothing', (
     tester,
   ) async {
     final c = await _pumpEntry(tester, size: const Size(1440, 900));
     await _enterWorkspace(tester);
-    // Bring each card into view first (the editorial intro can push the
-    // selectors into their scroll area; selection behaviour is unchanged).
-    // The DISPLAYED label is the mobile dictionary's ("Master Bedroom"); the
-    // ROUTED id is unchanged and is asserted a few lines down.
-    final bedroom = pwaL10nFor(const Locale('en')).roomCardLabel(
-      'masterBedroom',
-      'Bedroom',
-    );
-    await tester.ensureVisible(find.text(bedroom));
+    final kitchen = find.byKey(const ValueKey('pwa-room-kitchen'));
+    await tester.ensureVisible(kitchen);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(bedroom));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Warm Modern'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Warm Modern'));
+    await tester.tap(kitchen);
     await tester.pumpAndSettle();
     final s = c.read(pwaControllerProvider);
-    expect(s.selectedRoomId, 'masterBedroom');
-    expect(s.selectedAtmosphereId, 'warm_modern');
-    expect(s.phase, PwaPhase.entry);
+    expect(s.selectedRoomId, 'kitchen');
+    expect(s.phase, PwaPhase.entry, reason: 'a choice is not a generation');
     expect(s.versions, isEmpty);
     expect(tester.takeException(), isNull);
   });
 
-  // ── Fast-Path editorial introduction (§4/§6) ────────────────────────────────
-  testWidgets(
-    'Fast Path shows the editorial introduction + selection summary',
-    (tester) async {
-      final c = await _pumpEntry(tester, size: const Size(1440, 900));
-      await _enterWorkspace(tester);
-      // Editorial intro only — the readiness pills are gone in every state:
-      // the selection cards already show what is chosen.
-      expect(find.text('CREATE YOUR FIRST VISION'), findsOneWidget);
-      expect(find.text('Shape your space with Ayden.'), findsOneWidget);
-      expect(find.text('Photo ready'), findsNothing);
-      expect(find.text('Ayden Decide active'), findsNothing);
-      expect(find.text('Ayden Signature selected'), findsNothing);
-      // §6 — one-line selection summary above Generate.
-      expect(
-        find.textContaining('Ayden will create your first vision using'),
-        findsOneWidget,
-      );
-      // Defaults intact; no generation from the editorial band.
-      expect(
-        c.read(pwaControllerProvider).selectedAtmosphereId,
-        'ayden_signature',
-      );
-      expect(c.read(pwaControllerProvider).versions, isEmpty);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  // ── Generate wiring (§12.30) ────────────────────────────────────────────────
-  testWidgets('Generate button is present and wired', (tester) async {
-    await _pumpEntry(tester, size: const Size(1440, 900));
-    await _enterWorkspace(tester);
-    final btn = find.widgetWithText(InkWell, 'Generate my vision');
-    expect(btn, findsOneWidget);
-    expect(tester.widget<InkWell>(btn).onTap, isNotNull);
-    expect(tester.takeException(), isNull);
-  });
-
-  test(
-    'generateFirstVision unveils the first vision, then opens architect',
-    () async {
-      final c = _container();
-      addTearDown(c.dispose);
-      // The app now opens on the dashboard; Create is entered deliberately.
-      expect(c.read(pwaControllerProvider).phase, PwaPhase.home);
-      c.read(pwaControllerProvider.notifier).newProject();
-      c
-          .read(pwaControllerProvider.notifier)
-          .setSource(_fake(), origin: PwaImageOrigin.userUpload);
-      expect(c.read(pwaControllerProvider).phase, PwaPhase.entry);
-      await c.read(pwaControllerProvider.notifier).generateFirstVision();
-      // Generate lands on the one-off unveiling, not straight in the chat.
-      expect(c.read(pwaControllerProvider).phase, PwaPhase.firstReveal);
-      c.read(pwaControllerProvider.notifier).continueToArchitect();
-      expect(c.read(pwaControllerProvider).phase, PwaPhase.architect);
-      expect(c.read(pwaControllerProvider).versions, hasLength(1));
-    },
-  );
-
-  // ── UX-A1 — Create is immediate, and one skeleton serves both states ────────
-  testWidgets('Create is usable at the first frame — no scroll, no CTA', (
+  testWidgets('every atmosphere in the catalogue is in the carousel', (
     tester,
   ) async {
-    await _pumpEntry(tester, size: const Size(390, 844));
-    // The old viewport-tall hero forced a scroll before anything was reachable.
-    expect(find.text('Upload your room'), findsNothing);
-    expect(find.byKey(const ValueKey('pwa-slim-bar')), findsOneWidget);
-    expect(find.byKey(const ValueKey('pwa-create')), findsOneWidget);
-    expect(_pageOffset(tester), 0.0);
-    expect(find.byType(PwaEntryScreen), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('before-upload copy follows the approved mockup', (tester) async {
-    await _pumpEntry(tester, size: const Size(1440, 900), withSource: null);
+    final c = await _pumpEntry(tester, size: const Size(1440, 900));
     await _enterWorkspace(tester);
-    // Same headline as after upload — one screen, one purpose.
-    expect(find.text('CREATE YOUR FIRST VISION'), findsOneWidget);
-    expect(find.text('Shape your space with Ayden.'), findsOneWidget);
-    // One instruction, one CTA — no redundant title above the button.
-    // ONE visible action; drag & drop is the stated alternative, not a rival
-    // control.
-    expect(find.text('Upload a photo'), findsOneWidget);
-    expect(find.text('or drag & drop it here'), findsOneWidget);
-    expect(find.text('Browse files'), findsNothing);
-    expect(find.text('Add your photo'), findsNothing);
-    // The bundled example rooms are offered alongside the drop zone.
-    expect(find.text('Or start with an example'), findsOneWidget);
-    final l = pwaL10nFor(const Locale('en'));
-    expect(find.text(l.roomCardLabel('livingRoom', 'Living Room')), findsWidgets);
-    expect(find.text(l.roomCardLabel('masterBedroom', 'Bedroom')), findsWidgets);
-    // The formats the staging bucket actually accepts (no HEIC — it is rejected
-    // by the bucket MIME allowlist).
-    expect(find.text('JPG, PNG or WebP · up to 10 MB'), findsOneWidget);
-    expect(find.text('JPG, PNG or HEIC'), findsNothing);
-    // Retired from the UI in this batch (absent from the mockup).
-    expect(find.text('Try an example'), findsNothing);
+    // The carousel is a PageView, so only the pages near the viewport are
+    // BUILT — the same laziness iOS has. Asserting `findsOneWidget` per id
+    // would therefore test the scroll position, not the catalogue. The
+    // catalogue is `itemCount`, and it is what must stay whole: Nordic Warmth
+    // included, not behind a disclosure, exactly as before Phase 3.
+    final ids = c.read(pwaControllerProvider).atmospheres.map((a) => a.id);
+    expect(ids, containsAll(kPwaPopularAtmosphereIds));
+    final pager = tester.widget<PageView>(find.byType(PageView));
     expect(
-      find.text('First vision free · No account required'),
+      (pager.childrenDelegate as SliverChildBuilderDelegate).childCount,
+      ids.length,
+      reason: 'the carousel must offer the whole catalogue',
+    );
+    // Ayden Signature leads and is the default, as on the phone.
+    expect(
+      find.byKey(const ValueKey('pwa-atmos-ayden_signature')),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('before upload: choices are visible but genuinely inert', (
+  // ── Step 4 — the new surface, over the contract that already existed ───────
+  group('step 4 — describe your vision', () {
+    testWidgets('is empty by default and skippable', (tester) async {
+      await _pumpEntry(tester, size: const Size(390, 844));
+      await _enterWorkspace(tester);
+      final field = find.byKey(const ValueKey('pwa-create-brief'));
+      expect(field, findsOneWidget);
+      expect(tester.widget<TextField>(field).controller!.text, isEmpty);
+      // Generate is live with a photo and NO brief — skipping is the default
+      // path, not a degraded one.
+      final gen = find.byKey(const ValueKey('pwa-generate'));
+      expect(
+        tester.widget<PwaPrimaryButton>(gen).onPressed,
+        isNotNull,
+        reason: 'an empty Step 4 must never block Generate',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    test('an empty brief sends exactly what the web sent before', () async {
+      // The regression this guards: a Step 4 that quietly starts sending a
+      // whitespace `user_instruction` would change every first generation.
+      final c = _container();
+      addTearDown(c.dispose);
+      final n = c.read(pwaControllerProvider.notifier);
+      n.newProject();
+      n.setSource(_fake(), origin: PwaImageOrigin.userUpload);
+      await n.generateFirstVision(userInstruction: '   \n  ');
+      expect(c.read(pwaControllerProvider).versions, hasLength(1));
+    });
+
+    testWidgets('what is typed is what is sent', (tester) async {
+      final c = await _pumpEntry(tester, size: const Size(390, 844));
+      await _enterWorkspace(tester);
+      final field = find.byKey(const ValueKey('pwa-create-brief'));
+      await tester.ensureVisible(field);
+      await tester.enterText(field, '  a reading corner by the window  ');
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(field).controller!.text,
+        '  a reading corner by the window  ',
+      );
+      final gen = find.byKey(const ValueKey('pwa-generate'));
+      await tester.ensureVisible(gen);
+      await tester.tap(gen);
+      await tester.pumpAndSettle();
+      // It generated, and the surrounding whitespace never left the screen.
+      expect(c.read(pwaControllerProvider).versions, hasLength(1));
+      // Generate lands on the First Reveal, whose shared RevealHero arms an
+      // 800ms auto-sweep that outlives disposal. Advance past it here rather
+      // than weakening an animation the frozen mobile app also uses.
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('there is no microphone — the web has no speech service', (
+      tester,
+    ) async {
+      await _pumpEntry(tester, size: const Size(390, 844));
+      await _enterWorkspace(tester);
+      expect(find.byIcon(Icons.mic), findsNothing);
+      expect(find.byIcon(Icons.mic_none), findsNothing);
+      // …and the copy does not offer one either.
+      expect(find.textContaining('speak'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  // ── Generate wiring ───────────────────────────────────────────────────────
+  testWidgets('Generate is disabled without a photo and live with one', (
     tester,
   ) async {
     await _pumpEntry(tester, size: const Size(1440, 900), withSource: null);
     await _enterWorkspace(tester);
-    // Visible — the journey is legible before the photo exists.
-    expect(find.text('1. ROOM'), findsOneWidget);
-    expect(find.text('2. ATMOSPHERE'), findsOneWidget);
-    expect(cardByTitle('Ayden Decide'), findsOneWidget);
-    expect(cardByTitle('Ayden Signature'), findsOneWidget);
-    // …and preselected, so the default path is already expressed.
     expect(
-      tester.widget<PwaSelectCard>(cardByTitle('Ayden Decide')).selected,
-      isTrue,
+      tester
+          .widget<PwaPrimaryButton>(find.byKey(const ValueKey('pwa-generate')))
+          .onPressed,
+      isNull,
+      reason: 'Generate must be disabled pre-upload',
     );
+
+    await _pumpEntry(tester, size: const Size(1440, 900));
+    await _enterWorkspace(tester);
     expect(
-      tester.widget<PwaSelectCard>(cardByTitle('Ayden Signature')).selected,
-      isTrue,
+      tester
+          .widget<PwaPrimaryButton>(find.byKey(const ValueKey('pwa-generate')))
+          .onPressed,
+      isNotNull,
     );
-    // Inert: no pointer, no focus traversal, and Generate cannot fire.
-    expect(find.byType(ExcludeFocus), findsWidgets);
-    final gen = tester.widget<InkWell>(
-      find.byKey(const ValueKey('pwa-generate')),
-    );
-    expect(gen.onTap, isNull, reason: 'Generate must be disabled pre-upload');
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('after upload: same skeleton, choices and Generate live', (
+  testWidgets(
+      'before upload: the choices are visible, and the zone claims nothing false',
+      (tester) async {
+    await _pumpEntry(tester, size: const Size(1440, 900), withSource: null);
+    await _enterWorkspace(tester);
+    // Visible — the whole journey is legible before the photo exists, which is
+    // what made the fast path readable and is kept.
+    expect(find.text('STEP 2 OF 4'), findsOneWidget);
+    expect(find.byKey(const ValueKey('pwa-room-ayden-decide')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('pwa-atmos-ayden_signature')),
+      findsOneWidget,
+    );
+    // …and the upload zone offers only what the bucket accepts.
+    expect(find.text('JPG, PNG or WebP · up to 10 MB'), findsOneWidget);
+    expect(find.text('JPG, PNG or HEIC'), findsNothing);
+    // The old zone claimed a gesture this build has never implemented: there is
+    // no DropTarget anywhere in it, and there never was.
+    expect(find.text('or drag & drop it here'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('after upload: the photo replaces the zone in place', (
     tester,
   ) async {
     await _pumpEntry(tester, size: const Size(1440, 900));
     await _enterWorkspace(tester);
-    expect(find.text('CREATE YOUR FIRST VISION'), findsOneWidget);
-    expect(find.text('Shape your space with Ayden.'), findsOneWidget);
-    // The photo replaced the drop zone in place — no screen swap.
-    expect(find.text('Add your photo'), findsNothing);
-    expect(find.text('Replace photo'), findsOneWidget);
-    expect(find.text('Remove photo'), findsOneWidget);
-    expect(find.byType(ExcludeFocus), findsNothing);
-    final gen = tester.widget<InkWell>(
-      find.byKey(const ValueKey('pwa-generate')),
+    expect(find.byKey(const ValueKey('pwa-create-upload')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pwa-create-replace')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pwa-create-remove')), findsOneWidget);
+    // The examples strip leaves with the empty zone — it is an alternative to
+    // uploading, not a second source once a photo exists.
+    expect(find.byKey(const ValueKey('pwa-examples')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'an undecodable photo renders an empty frame, never an exception',
+      (tester) async {
+    // The fake source in these tests is four bytes. On the web that is not a
+    // hypothetical: a truncated read or a mislabelled file reaches Image.memory
+    // the same way, and it must not throw into the framework.
+    await _pumpEntry(tester, size: const Size(390, 844));
+    await _enterWorkspace(tester);
+    expect(find.byKey(const ValueKey('pwa-create-upload')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the flow starts at the top of a tall viewport, never floating',
+      (tester) async {
+    // The regression: the content column was wrapped in `Center`, which
+    // centres on BOTH axes. A SingleChildScrollView under a loose vertical
+    // constraint shrinks to its content, so on any viewport taller than the
+    // page — a desktop window, a tall phone in landscape — the whole flow
+    // floated in the middle with dead canvas above Step 1.
+    await _pumpEntry(tester, size: const Size(900, 2400));
+    await _enterWorkspace(tester);
+    final rail = tester.getRect(find.byKey(const ValueKey('pwa-create-stepper')));
+    final badge = tester.getRect(find.text('STEP 1 OF 4'));
+    expect(
+      badge.top - rail.bottom,
+      lessThan(120),
+      reason: 'Step 1 must follow the chrome, not float below it',
     );
-    expect(gen.onTap, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tapping a step brings that step to the top', (tester) async {
+    // The regression this exists for: the first port used iOS's
+    // `Scrollable.ensureVisible(alignment: 0.05)`, which reveals LESS than the
+    // leading edge when the target is taller than the viewport. On the web the
+    // sections routinely are — the copy wraps to more lines and the rooms are
+    // a grid — so tapping "4" moved the page a couple of hundred pixels and
+    // left Step 1 filling the screen. Asserting merely "pixels > 0" passed
+    // that bug happily, so this asserts WHERE it lands.
+    await _pumpEntry(tester, size: const Size(390, 844));
+    await _enterWorkspace(tester);
+    final scrollable = find
+        .descendant(
+          of: find.byKey(const ValueKey('pwa-create')),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    final view = tester.getRect(scrollable);
+    expect(tester.state<ScrollableState>(scrollable).position.pixels, 0.0);
+
+    for (final step in const [4, 2, 3]) {
+      await tester.tap(find.widgetWithText(InkWell, '$step'));
+      await tester.pumpAndSettle();
+      final pos = tester.state<ScrollableState>(scrollable).position;
+      final badge = tester.getRect(find.text('STEP $step OF 4'));
+      final atEnd = pos.pixels >= pos.maxScrollExtent - 1;
+      if (!atEnd) {
+        expect(
+          badge.top - view.top,
+          lessThan(kPwaStepReadingLine),
+          reason: 'step $step must land inside the reading area',
+        );
+      }
+      expect(badge.top, greaterThanOrEqualTo(view.top),
+          reason: 'step $step must not land scrolled past');
+      // Whether or not the page could travel that far, the rail must agree
+      // with where the reader now is. The LAST step cannot reach the top —
+      // there is nothing beneath it — and a rail that kept highlighting 3
+      // would read as a control that did nothing.
+      final node = tester.widget<AnimatedContainer>(
+        find
+            .ancestor(
+              of: find.text('$step'),
+              matching: find.byType(AnimatedContainer),
+            )
+            .first,
+      );
+      expect(
+        (node.decoration! as BoxDecoration).color,
+        pwaInk,
+        reason: 'the rail must mark step $step as current',
+      );
+    }
     expect(tester.takeException(), isNull);
   });
 
@@ -725,7 +519,7 @@ void main() {
       (tester) async {
         await _pumpEntry(tester, size: size);
         await _enterWorkspace(tester);
-        final gen = find.text('Generate my vision');
+        final gen = find.byKey(const ValueKey('pwa-generate'));
         expect(gen, findsOneWidget);
         final r = tester.getRect(gen);
         expect(r.top, greaterThanOrEqualTo(0.0));
@@ -735,7 +529,7 @@ void main() {
     );
   }
 
-  group('no overflow across breakpoints (ROOM second row expanded)', () {
+  group('no overflow across breakpoints (whole page scrolled)', () {
     for (final size in const [
       Size(390, 844),
       Size(768, 1024),
@@ -748,14 +542,13 @@ void main() {
         await _pumpEntry(tester, size: size);
         await _enterWorkspace(tester);
         expect(tester.takeException(), isNull);
-        await tester.ensureVisible(find.text('More rooms'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('More rooms'));
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
-        // ROOM second row present; ATMOSPHERE has none (single-row catalogue).
-        expect(carousel('room-optional'), findsOneWidget);
-        expect(carousel('atmos-optional'), findsNothing);
+        // Every step, not just the one above the fold: the room grid and the
+        // atmosphere carousel are the two that resize with the viewport.
+        for (final key in const ['pwa-room-ayden-decide', 'pwa-create-brief']) {
+          await tester.ensureVisible(find.byKey(ValueKey(key)));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull, reason: '$key at $size');
+        }
       });
     }
   });
@@ -769,7 +562,11 @@ void main() {
       // the overlay is never mounted at all — nothing to skip, nothing to scroll.
       expect(find.text('Tap to skip'), findsNothing);
       expect(find.byKey(const ValueKey('pwa-create')), findsOneWidget);
-      expect(find.text('Upload a photo'), findsOneWidget);
+      // The phase router mounts the iOS-aligned screen, not the retained dark
+      // one — the single assertion that proves Phase 3 is actually wired in.
+      expect(find.byType(PwaCreateIos), findsOneWidget);
+      expect(find.byType(PwaEntryScreen), findsNothing);
+      expect(find.text('Upload your space'), findsOneWidget);
       expect(kHeroMp4, 'media/hero/ayden-cinematic-v1-desktop.mp4');
       expect(tester.takeException(), isNull);
     },
@@ -931,9 +728,10 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pump();
     // Same page instance across the breakpoint change: exactly one Create and
-    // one slim bar, no duplicate, no exception.
+    // one step rail, no duplicate, no exception. The rail SWAPS orientation at
+    // 720 (side above, top below) — one is mounted at a time, never both.
     expect(find.byKey(const ValueKey('pwa-create')), findsOneWidget);
-    expect(find.byKey(const ValueKey('pwa-slim-bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pwa-create-stepper')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -951,17 +749,23 @@ void main() {
         );
         await tester.pump();
         expect(find.byKey(const ValueKey('pwa-create')), findsOneWidget);
-        expect(find.byKey(const ValueKey('pwa-slim-bar')), findsOneWidget);
-        expect(find.text('Upload a photo'), findsOneWidget);
+        expect(find.byKey(const ValueKey('pwa-create-stepper')), findsOneWidget);
+        expect(find.byKey(const ValueKey('pwa-create-upload')), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
   }
 
-  // ── The photo card follows the SOURCE ratio (no charcoal bands) ─────────────
-  group('photo card ratio', () {
-    const barH = 46.0;
-
+  // ── The photo frame ────────────────────────────────────────────────────────
+  //
+  // `pwaPhotoImageHeight` sized the OLD dark photo panel, which fitted the
+  // card to the source's own ratio. The iOS-aligned zone is a fixed 4:3 that
+  // LETTERBOXES the photo instead — iOS's choice, and the one that never crops
+  // the part of the room being redesigned out of view. The helper still ships
+  // with the retained screen and its arithmetic is still worth pinning, so the
+  // pure tests stay; the widget test that measured the old panel's action bar
+  // is replaced by one for the frame that actually renders.
+  group('photo frame', () {
     test('a landscape source gets the height its ratio needs', () {
       // 16:9 at 600px wide → ~338px of image, not the whole column.
       final h = pwaPhotoImageHeight(width: 600, aspect: 16 / 9, available: 700);
@@ -996,7 +800,7 @@ void main() {
       expect(h, 180); // the floor wins over a starved column
     });
 
-    testWidgets('the actions bar stays inside the card at every breakpoint', (
+    testWidgets('the actions stay inside the frame at every breakpoint', (
       tester,
     ) async {
       for (final size in const [
@@ -1007,13 +811,22 @@ void main() {
       ]) {
         await _pumpEntry(tester, size: size);
         await _enterWorkspace(tester);
-        final card = tester.getRect(find.byKey(const ValueKey('pwaPhoto')));
-        final replace = tester.getRect(find.text('Replace photo'));
-        expect(
-          card.bottom - replace.center.dy,
-          lessThanOrEqualTo(barH),
-          reason: 'actions must sit on the card foot at $size',
-        );
+        final zone = find.byKey(const ValueKey('pwa-create-upload'));
+        await tester.ensureVisible(zone);
+        await tester.pumpAndSettle();
+        final frame = tester.getRect(zone);
+        // 4:3, exactly — the constant the letterboxing depends on.
+        expect(frame.width / frame.height, closeTo(4 / 3, 0.02),
+            reason: 'the photo frame must stay 4:3 at $size');
+        for (final k in const ['pwa-create-replace', 'pwa-create-remove']) {
+          final action = tester.getRect(find.byKey(ValueKey(k)));
+          expect(frame.contains(action.topLeft), isTrue, reason: '$k at $size');
+          expect(
+            frame.contains(action.bottomRight - const Offset(0.5, 0.5)),
+            isTrue,
+            reason: '$k at $size',
+          );
+        }
         expect(tester.takeException(), isNull);
       }
     });

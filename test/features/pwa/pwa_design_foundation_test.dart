@@ -366,6 +366,84 @@ void main() {
       expect(pwaL10nFor(const Locale('en')).homeHeadline, contains('\n'));
     });
   });
+
+  group('FOUND07  the step markers of the creation flow', () {
+    // Both badges were measured off `upload_screen.dart`, and the step pill was
+    // CORRECTED here in Phase 3: Phase 1 had built it on a soft-gold ground
+    // from a reading of the design language rather than of the screen. iOS
+    // fills it with ink. It had no call site until Phase 3, so nothing changed
+    // underneath an existing screen.
+    testWidgets('the step pill is ink-filled with surface text, as iOS is',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: pwaTheme(),
+        localizationsDelegates: GlobalMaterialLocalizationsShim.delegates,
+        home: const Scaffold(body: PwaStepPill('STEP 1 OF 4')),
+      ));
+      final box = tester.widget<Container>(
+        find.descendant(
+            of: find.byType(PwaStepPill), matching: find.byType(Container)),
+      );
+      final deco = box.decoration! as BoxDecoration;
+      expect(deco.color, pwaInk, reason: 'iOS _StepBadge fills with textPrimary');
+      expect(deco.borderRadius, BorderRadius.circular(PwaGap.radiusPill));
+      expect(box.padding,
+          const EdgeInsets.symmetric(horizontal: 10, vertical: 5));
+
+      final text = tester.widget<Text>(find.byType(Text));
+      expect(text.data, 'STEP 1 OF 4');
+      expect(text.style!.color, pwaSurface);
+      expect(text.style!.fontSize, 10);
+      expect(text.style!.fontWeight, FontWeight.w600);
+      expect(text.style!.letterSpacing, 1.0);
+    });
+
+    testWidgets('the optional badge is a hairlined well, not a second CTA',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: pwaTheme(),
+        home: const Scaffold(body: PwaOptionalBadge('Optional')),
+      ));
+      final box = tester.widget<Container>(
+        find.descendant(
+            of: find.byType(PwaOptionalBadge), matching: find.byType(Container)),
+      );
+      final deco = box.decoration! as BoxDecoration;
+      expect(deco.color, pwaWell);
+      expect((deco.border! as Border).top.color, pwaHairline);
+      expect(box.padding,
+          const EdgeInsets.symmetric(horizontal: 8, vertical: 3));
+      final text = tester.widget<Text>(find.byType(Text));
+      expect(text.style!.fontSize, 11);
+      expect(text.style!.fontWeight, FontWeight.w500);
+      expect(text.style!.color, pwaFaint);
+      // Not uppercased — iOS says "Optional", and shouting it would make a
+      // skippable step look like the loudest thing on the screen.
+      expect(text.data, 'Optional');
+    });
+
+    test('the step wording is the mobile dictionary, in all three locales', () {
+      for (final code in ['en', 'fr', 'km']) {
+        final l = pwaL10nFor(Locale(code));
+        expect(l.uplStepBadge(1), l.shared.uplStepBadge(1), reason: code);
+        expect(l.uplStepBadge(4), contains('4'), reason: code);
+        for (final s in [
+          l.uploadYourSpace,
+          l.uplStep1Sub,
+          l.uplStep2Title,
+          l.uplStep2Sub,
+          l.uplStep3Title,
+          l.uplStep3Sub,
+          l.uplStep4Title,
+          l.uplOptional,
+          l.uplPrivacy,
+          l.uplGenerateDesign,
+        ]) {
+          expect(s, isNotEmpty, reason: code);
+        }
+      }
+    });
+  });
 }
 
 /// The PWA l10n facade resolves through `AppLocalizations`, which needs the

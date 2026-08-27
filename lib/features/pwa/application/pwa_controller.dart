@@ -1415,7 +1415,17 @@ class PwaController extends StateNotifier<PwaState> {
   /// The primary action: one photo, one click → the first REAL vision. The
   /// image comes from the engine; nothing is revealed until it exists and is
   /// durably stored.
-  Future<void> generateFirstVision() async {
+  ///
+  /// [userInstruction] is the optional free-text brief of Create's Step 4 —
+  /// the SAME field mobile's upload screen sends as `desc`, and the same
+  /// `user_instruction` the request contract has always carried. It is a
+  /// one-shot input for THIS generation, not session state: mobile keeps it in
+  /// a local `TextEditingController` and so does the web, which is why it
+  /// arrives as an argument rather than as a new field on [PwaState].
+  ///
+  /// Empty is the normal case — Step 4 is skippable, and an empty string is
+  /// exactly what every caller sent before this parameter existed.
+  Future<void> generateFirstVision({String userInstruction = ''}) async {
     if (state.generating) return;
     // Returning from "Back to Studio" (versions already exist) → resume the
     // Architect instead of duplicating the first vision.
@@ -1450,6 +1460,10 @@ class PwaController extends StateNotifier<PwaState> {
           atmosphereId: atmosphereId,
           originalStoragePath: upload.originalStoragePath,
           visionNumber: 1,
+          // Trimmed, and empty when skipped — mobile's own rule (`desc` is
+          // only sent when non-empty), so a blank Step 4 produces byte-for-byte
+          // the request the web already sent.
+          userInstruction: userInstruction.trim(),
         ),
       );
     } catch (e) {

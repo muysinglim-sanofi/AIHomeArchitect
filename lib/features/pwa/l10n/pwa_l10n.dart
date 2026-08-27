@@ -114,6 +114,44 @@ class PwaL10n {
   String get uplAiDecide => _mobile.uplAiDecide;
   String get uplStepperRoom => _mobile.uplStepperRoom;
   String get uplStepperAtmosphere => _mobile.uplStepperAtmosphere;
+
+  // ── iOS Create — the four steps, forwarded ────────────────────────────────
+  // Every one of these already ships in en/fr/km inside the mobile dictionary
+  // and is the wording a customer sees on the phone. Re-translating "Choose
+  // your atmosphere" for the web would have produced a second Khmer sentence
+  // for the same instruction — the failure this facade exists to prevent.
+  //
+  // `uplStepBadge` composes STEP + n + OF 4 in the mobile dictionary, so the
+  // numeral sits where each language puts it rather than where English does.
+  String uplStepBadge(int n) => _mobile.uplStepBadge(n);
+  String get uplStep1Sub => _mobile.uplStep1Sub;
+  String get uplStep2Title => _mobile.uplStep2Title;
+  String get uplStep2Sub => _mobile.uplStep2Sub;
+  String get uplStep3Title => _mobile.uplStep3Title;
+  String get uplStep3Sub => _mobile.uplStep3Sub;
+  String get uplStep4Title => _mobile.uplStep4Title;
+  String get uplOptional => _mobile.uplOptional;
+  String get uplPrivacy => _mobile.uplPrivacy;
+  String get uplMoreSpaces => _mobile.uplMoreSpaces;
+  String get uplGenerateDesign => _mobile.uplGenerateDesign;
+  String get uplWillCreate => _mobile.uplWillCreate;
+  String get uploadPrompt => _mobile.uploadPrompt;
+  String get uploadTitle => _mobile.uploadTitle;
+
+  /// Step 4's subtitle, and the ONE step string the web does not forward.
+  ///
+  /// Mobile says "Brief the architect in your own words. You can speak or
+  /// type." — the second sentence is an offer of `VoiceService`, an iOS
+  /// speech-to-text capability the web build does not have and that Phase 3 is
+  /// not adding. Forwarding it verbatim would advertise a microphone that is
+  /// not on the screen. Same instruction, same register, minus the promise the
+  /// web cannot keep.
+  String get step4Sub => _get('pwaStep4Sub');
+
+  /// Placeholder inside the Step 4 field. Mobile hardcodes this one in English
+  /// (`upload_screen.dart` builds it inline, not through the dictionary), so
+  /// there is nothing to forward and the web supplies its own three locales.
+  String get step4Hint => _get('pwaStep4Hint');
   String get settingsLanguage => _mobile.settingsLanguage;
   String get chooseLanguage => _mobile.chooseLanguage;
   String get english => _mobile.english;

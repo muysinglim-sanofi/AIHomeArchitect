@@ -23,7 +23,6 @@ import 'dart:typed_data';
 import 'package:ai_home_architect/core/media/ayden_image_source.dart';
 import 'package:ai_home_architect/features/pwa/application/pwa_controller.dart';
 import 'package:ai_home_architect/features/pwa/data/mock_pwa_experience_repository.dart';
-import 'package:ai_home_architect/features/pwa/presentation/pwa_entry_screen.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_experience.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_section_nav.dart';
 import 'package:flutter/material.dart';
@@ -401,13 +400,18 @@ void main() {
     });
   });
 
-  // ── 3. Create is framed by the slim bar, with nothing to scroll to ─────────
+  // ── 3. Create opens ON step 1, with nothing to scroll to ──────────────────
   //
-  // UX-A1 retired the viewport-tall pinned hero and the CTA scroll it required,
-  // so the old "block framed just below the header after tapping the CTA" group
-  // no longer describes the product. What still matters is that Create starts
-  // immediately under the slim bar at rest — asserted here without any scroll.
-  group('Create starts directly under the slim bar', () {
+  // History of this group. It began as "the showroom is framed below the pinned
+  // hero after tapping the CTA"; UX-A1 retired the hero, and it became "Create
+  // starts flush under the slim bar". Phase 3 retired the slim bar too — the
+  // iOS-aligned Create carries a header and a step rail instead.
+  //
+  // What has survived all three shapes, and is the only thing worth asserting,
+  // is the INVARIANT underneath: opening Create puts you at the top of Step 1
+  // with the page unscrolled. That is what the original bug broke, and it is
+  // independent of which chrome sits above it.
+  group('Create opens on step 1, unscrolled', () {
     Future<void> expectFramed(
       WidgetTester tester, {
       required Size size,
@@ -418,20 +422,27 @@ void main() {
         size: size,
         withSource: withPhoto ? PwaImageOrigin.userUpload : null,
       );
-      final barBottom = tester
-          .getRect(find.byKey(const ValueKey('pwa-slim-bar')))
-          .bottom;
-      final top = tester
-          .getTopLeft(find.byKey(const ValueKey('pwa-create')))
-          .dy;
-      expect(
-        top,
-        closeTo(barBottom, 1.0),
-        reason:
-            'Create top ${top.toStringAsFixed(1)} must sit flush under the slim '
-            'bar (${barBottom.toStringAsFixed(1)}) at $size photo=$withPhoto',
+      // Nothing has been scrolled past.
+      final scrollable = find.descendant(
+        of: find.byKey(const ValueKey('pwa-create')),
+        matching: find.byType(Scrollable),
       );
-      expect(barBottom, closeTo(pwaCollapsedHeaderExtent(size.width < 700), 1));
+      expect(
+        tester.state<ScrollableState>(scrollable.first).position.pixels,
+        0.0,
+        reason: 'Create must open at rest at $size photo=$withPhoto',
+      );
+      // Step 1 is the current step, and its badge is on screen without a
+      // gesture — the upload affordance is reachable at the first frame.
+      expect(find.byKey(const ValueKey('pwa-create-stepper')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pwa-create-upload')), findsOneWidget);
+      final upload =
+          tester.getRect(find.byKey(const ValueKey('pwa-create-upload')));
+      expect(
+        upload.top,
+        lessThan(size.height),
+        reason: 'the upload zone must be visible without scrolling at $size',
+      );
     }
 
     testWidgets('no photo @1536×864', (t) async {

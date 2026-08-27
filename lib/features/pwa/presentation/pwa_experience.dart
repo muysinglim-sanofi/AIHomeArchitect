@@ -19,7 +19,7 @@ import '../application/pwa_controller.dart';
 import '../billing/pwa_entitlement_controller.dart';
 import 'pwa_paywall.dart';
 import 'pwa_architect_screen.dart';
-import 'pwa_entry_screen.dart';
+import 'pwa_create_ios.dart';
 import 'pwa_loading_screen.dart';
 import 'pwa_home_ios.dart';
 import 'pwa_projects_screen.dart';
@@ -40,7 +40,11 @@ class PwaExperience extends ConsumerWidget {
       // the fastest way back if this needs reverting, and the archive tag is
       // the slower one.
       PwaPhase.home => const PwaHomeIos(),
-      PwaPhase.entry => const PwaEntryScreen(),
+      // Phase 3 — the iOS-aligned Create. `PwaEntryScreen` (the dark original)
+      // is retained, unreferenced, on the same terms as `PwaHomeScreen`: it
+      // still owns the shared catalogue constants this screen imports, and it
+      // is the fast way back if this needs reverting.
+      PwaPhase.entry => const PwaCreateIos(),
       PwaPhase.loading => const PwaLoadingScreen(),
       PwaPhase.architect => const PwaArchitectScreen(),
       PwaPhase.firstReveal => const PwaFirstRevealScreen(),

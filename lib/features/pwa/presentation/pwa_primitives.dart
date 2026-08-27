@@ -132,6 +132,14 @@ class PwaEyebrow extends StatelessWidget {
 /// It takes the WHOLE label ("STEP 1 OF 4") rather than a number, so the
 /// localisation layer owns the wording and word order. Khmer does not
 /// necessarily put the numeral where English does.
+///
+/// CORRECTED IN PHASE 3. Phase 1 built this pill on a soft-gold ground from a
+/// reading of the design language rather than of the screen. iOS's own
+/// `_StepBadge` is INK-filled with surface text — h10/v5, size 10, w600,
+/// tracking 1.0 — which is what a step marker has to be to sit next to a gold
+/// "Optional" badge without the two competing. Measured off
+/// `upload_screen.dart` and reproduced, not re-derived. The pill had no call
+/// site before this phase, so nothing changed underneath an existing screen.
 class PwaStepPill extends StatelessWidget {
   const PwaStepPill(this.label, {super.key});
 
@@ -139,13 +147,48 @@ class PwaStepPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: pwaGoldSoft,
+          color: pwaInk,
           borderRadius: BorderRadius.circular(PwaGap.radiusPill),
         ),
-        child: Text(label.toUpperCase(),
-            style: pwaEyebrow(color: pwaInk, fontSize: 10)),
+        child: Text(
+          label.toUpperCase(),
+          style: PwaType.caption(color: pwaSurface).copyWith(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            // Collapses to zero for Khmer — a cluster script spaced out stops
+            // reading as one word. `pwaTracking` reads the ambient flag, so
+            // the primitive stays free of an l10n dependency.
+            letterSpacing: pwaTracking(1.0),
+          ),
+        ),
+      );
+}
+
+/// The gold-hairline "Optional" badge iOS puts beside Step 4's title.
+///
+/// iOS `_OptionalBadge`: surfaceVariant ground, hairline border, radius 999,
+/// h8/v3, tertiary text at 11/w500. It is the whole reason a customer knows
+/// the step is skippable without being told in a sentence.
+class PwaOptionalBadge extends StatelessWidget {
+  const PwaOptionalBadge(this.label, {super.key});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: pwaWell,
+          borderRadius: BorderRadius.circular(PwaGap.radiusPill),
+          border: Border.all(color: pwaHairline),
+        ),
+        child: Text(
+          label,
+          style: PwaType.caption()
+              .copyWith(fontSize: 11, fontWeight: FontWeight.w500),
+        ),
       );
 }
 
