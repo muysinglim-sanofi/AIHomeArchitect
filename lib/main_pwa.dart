@@ -40,6 +40,7 @@ import 'features/pwa/data/pwa_image_url_resolver.dart';
 import 'features/pwa/data/pwa_pending_generation.dart';
 import 'features/pwa/data/pwa_staging_supabase_client.dart';
 import 'features/pwa/data/pwa_web_navigation.dart';
+import 'features/pwa/data/pwa_fonts.dart';
 import 'features/pwa/data/pwa_khmer_font.dart';
 import 'features/pwa/data/supabase_pwa_persistence_repository.dart';
 import 'features/pwa/domain/pwa_project.dart';
@@ -55,7 +56,16 @@ Future<void> main() async {
   // A Cambodia-first product cannot open on tofu. Awaited because it is a
   // local file (~114 KB, no network), and non-fatal by construction: if it
   // fails the app still boots and the remote fallback still applies.
-  await loadPwaKhmerFont();
+  // The product typefaces alongside it, in the same round. Cormorant Garamond
+  // is the editorial face iOS uses and the single biggest reason the PWA did
+  // not read as the same product; Inter is everything functional.
+  //
+  // Loaded TOGETHER with Khmer and awaited for the same reason: with CanvasKit
+  // a face that arrives after the first paint causes a visible reflow, and the
+  // three files are local (~300 KB subset to Latin, plus 114 KB Khmer) with no
+  // network involved. Non-fatal by construction — a failed load degrades to the
+  // platform default, which is exactly what this build looked like yesterday.
+  await Future.wait([loadPwaKhmerFont(), loadPwaFonts()]);
 
   // Single environment authority for the web app. Fails CLOSED on production /
   // misconfigured staging BEFORE anything else runs (no remote side effects).

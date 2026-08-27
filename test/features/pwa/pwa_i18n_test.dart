@@ -524,6 +524,15 @@ void main() {
       'center 35%',
       'Georgia',               // font family names
       'Times New Roman',
+      'Helvetica Neue',
+      'Arial',
+      'CormorantGaramond',     // the bundled product typefaces. Same rule as
+      'Inter',                 // NotoSansKhmer below: a FONT id, matched
+                               // byte-for-byte against the FontLoader
+                               // registration in pwa_fonts.dart. Translating
+                               // one would not change a word on screen — it
+                               // would silently drop the family and render the
+                               // whole product in the platform default.
       'NotoSansKhmer',         // the bundled Khmer family — a FONT id, and it
                                // must match the FontLoader registration
                                // byte-for-byte, so translating it would
