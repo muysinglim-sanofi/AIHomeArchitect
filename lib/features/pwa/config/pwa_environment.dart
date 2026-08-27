@@ -60,11 +60,25 @@ const List<String> kProductionHostDenylist = <String>[
 ///
 /// An exact-ORIGIN allowlist, not a host one: the scheme and the port are part
 /// of the decision, so `http://127.0.0.1:9999` and `https://127.0.0.1:8000` are
-/// both rejected. There is deliberately no remote entry: when a real staging
-/// domain exists it is added here, reviewed, rather than inferred at runtime.
+/// both rejected. A remote entry is added here BY REVIEW when a real staging
+/// host exists — never inferred at runtime from the page's own origin, which is
+/// the shortcut that turns a compromised host into a credential exfiltrator.
 const List<String> kStagingBackendOriginAllowlist = <String>[
   'http://127.0.0.1:8000',
   'http://localhost:8000',
+  // The PUBLIC staging API (Fly.io, deployed 2026-08-26). Added deliberately
+  // and reviewed, which is the entire point of this list existing rather than a
+  // `startsWith('https://')` check.
+  //
+  // It is safe to name here for the same reason the Supabase URL is: it is an
+  // address, not a credential. Every secret it needs — the service-role key,
+  // the OpenAI key, the PayWay signing key — lives in that host's own secret
+  // store and has no path into this bundle.
+  //
+  // It is HTTPS-only. A plain-http remote entry would still be rejected below
+  // even if someone added one, because a generation request carries the user's
+  // session token and there is no version of that which may travel in clear.
+  'https://ayden-api-staging.fly.dev',
 ];
 
 /// Resolved, validated environment configuration.
