@@ -1,0 +1,68 @@
+# AYDEN STUDIO — PWA STAGING backend on Fly.io.
+# STAGING ONLY. No production credential belongs in this app's secrets, and the
+# launcher refuses to boot against the production Supabase project regardless.
+
+app = "ayden-api-staging"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Read by run_pwa_staging.py. The presence of PORT is ALSO what makes the
+  # launcher bind 0.0.0.0 instead of loopback — see its comment.
+  PORT = "8080"
+  APP_ENV = "staging"
+  # The validated engine configuration. Launching without it serves a config
+  # that was never benched.
+  BIMODAL_ENABLED = "1"
+  # THE browser origins allowed to make credentialed calls to this API.
+  # Everything else is refused at the preflight. Add a host here, redeploy.
+  PWA_ALLOWED_ORIGINS = "https://ayden-studio.web.app,https://ayden-studio.firebaseapp.com,https://aydenstudio.app,https://www.aydenstudio.app"
+  # Where PayWay sends the BROWSER back after a checkout. Navigation only — the
+  # server never reads the outcome, and Check Transaction remains the authority.
+  PAYWAY_RETURN_BASE_URL = "https://ayden-studio.web.app"
+  PAYWAY_ENV = "sandbox"
+  # THE UNLOCK OF THIS DEPLOYMENT. PayWay could never reach 127.0.0.1, so the
+  # rail ran poll-only: correct, but it learned about a payment when it asked
+  # rather than when it was told. A public HTTPS host can finally receive the
+  # server-to-server pushback.
+  #
+  # It changes nothing about AUTHORITY. A pushback is still a doorbell: the
+  # callback verifies its signature, then Check Transaction decides, then the
+  # Billing Engine grants. Faster, not more trusting.
+  PAYWAY_CALLBACK_URL = "https://ayden-api-staging.fly.dev/pwa/staging/payments/payway/callback"
+  PAYWAY_VIEW_TYPE = "hosted_view"
+  PAYWAY_CURRENCY = "USD"
+
+[http_service]
+  internal_port = 8080
+  # A public staging API is still a public API: no plaintext hop, ever.
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  # Zero would make the first request of the day wait for a cold boot that
+  # imports the whole engine. One machine keeps the phone test honest.
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 20
+    hard_limit = 40
+
+[[vm]]
+  # A generation holds a request open for ~2 minutes while OpenAI works, and the
+  # image pipeline decodes JPEGs in-process. 1 GB is the floor that does not
+  # OOM on a 1536x1024 re-encode.
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[checks.health]
+  type = "http"
+  port = 8080
+  method = "GET"
+  path = "/pwa/staging/health"
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "60s"

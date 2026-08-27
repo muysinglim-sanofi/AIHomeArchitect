@@ -1,0 +1,27 @@
+# The build context is 2.8 GB without this; 2.2 GB of it is logs.
+# Everything excluded here is either enormous, local-only, or a secret.
+
+# ── SECRETS — never in an image layer ───────────────────────────────────────
+.env
+.env.*
+!.env.pwa-staging.local.example
+
+# ── local-only, enormous, or regenerated ────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.pyc
+logs/
+benchmarks/
+*.log
+
+# ── development artefacts the server never reads ────────────────────────────
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+_*_validation.py
+_*_bench.py
+_*_test.py
+*_test.py
+validate_*.py
+sql/

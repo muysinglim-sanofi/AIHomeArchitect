@@ -61,15 +61,33 @@ def _assert_staging(url: str, where: str) -> None:
 
 
 def main() -> None:
-    if not STAGING_ENV.exists():
-        _die(f'{STAGING_ENV.name} does not exist.')
+    # WHERE THE CONFIGURATION COMES FROM — a file locally, the environment in a
+    # container, and never a mixture the operator did not intend.
+    #
+    # A deployed image must not carry `.env.pwa-staging.local`: baking secrets
+    # into a layer is how they end up in a registry. On a host they arrive as
+    # injected environment variables instead (`flyctl secrets set`), which is
+    # the same values by a safer route.
+    #
+    # What does NOT relax is the fail-closed part. Both modes require the same
+    # three variables, and both run `_assert_staging` on the RESOLVED value — so
+    # a container pointed at production dies at boot exactly as a laptop would.
+    if STAGING_ENV.exists():
+        values = _parse(STAGING_ENV)
+        source = STAGING_ENV.name
+    else:
+        values = {k: os.environ[k] for k in REQUIRED if os.environ.get(k)}
+        source = 'the process environment'
+        if not values:
+            _die(f'{STAGING_ENV.name} does not exist and the environment '
+                 f'carries none of {", ".join(REQUIRED)}.')
 
-    values = _parse(STAGING_ENV)
     missing = [k for k in REQUIRED if not values.get(k)]
     if missing:
-        _die(f'{STAGING_ENV.name} is missing values for: {", ".join(missing)}')
+        _die(f'{source} is missing values for: {", ".join(missing)}')
 
-    _assert_staging(values['SUPABASE_URL'], 'staging secrets file')
+    _assert_staging(values['SUPABASE_URL'], source)
+    print(f'[pwa-staging] config     : {source}')
 
     # 1) Seed the process environment from the staging file.
     for k, v in values.items():
@@ -123,6 +141,13 @@ def main() -> None:
     _real_load = dotenv.load_dotenv
 
     def _staging_only_load(*_args, **kwargs):  # noqa: ANN002, ANN003
+        # No file in a container: the environment IS the configuration and has
+        # already been seeded above. Returning False rather than pointing
+        # `load_dotenv` at a path that does not exist keeps `main.py`'s
+        # import-time call a no-op instead of a silent miss that could later be
+        # mistaken for "the file was read and was empty".
+        if not STAGING_ENV.exists():
+            return False
         kwargs.pop('dotenv_path', None)
         kwargs['override'] = True
         return _real_load(str(STAGING_ENV), **kwargs)
@@ -182,11 +207,59 @@ def main() -> None:
     print(f'[pwa-staging] APP_ENV={os.environ.get("APP_ENV")} '
           f'BIMODAL_ENABLED={os.environ.get("BIMODAL_ENABLED")}')
 
+    # 6) CORS — TIGHTENED HERE, not in main.py, and that placement is the point.
+    #
+    # `main.py` mounts CORSMiddleware with `allow_origins=["*"]` and
+    # `allow_credentials=True`. That is the canonical app, shared with production
+    # and with the mobile backend, and a native app does not do CORS at all — so
+    # narrowing it there would change production's behaviour to fix a browser
+    # problem production does not have. This launcher already owns every other
+    # staging-only decision (which router is mounted, which env file is read), so
+    # it owns this one too.
+    #
+    # A public staging origin makes this real rather than theoretical: once the
+    # PWA is served from an https:// host, any page on the internet can attempt
+    # a credentialed cross-origin call to this API. The allowlist is the answer,
+    # and it is read from the environment so a new deployment host is a config
+    # change and not a code change.
+    origins = [o.strip() for o in
+               os.environ.get('PWA_ALLOWED_ORIGINS', '').split(',') if o.strip()]
+    if origins:
+        from starlette.middleware.cors import CORSMiddleware  # noqa: PLC0415
+
+        # Starlette applies middleware in reverse-add order, so this one wraps
+        # the permissive stack from main.py and answers the preflight first.
+        canonical.app.add_middleware(
+            CORSMiddleware,
+            allow_origins=origins,
+            allow_credentials=True,
+            allow_methods=['GET', 'POST', 'OPTIONS'],
+            allow_headers=['Authorization', 'Content-Type'],
+            max_age=600,
+        )
+        print(f'[pwa-staging] CORS      : {len(origins)} allowed origin(s) — '
+              + ', '.join(origins))
+    else:
+        print('[pwa-staging] CORS      : no PWA_ALLOWED_ORIGINS set — the '
+              'canonical permissive policy applies (local dev only)')
+
     import uvicorn  # noqa: PLC0415
+
+    # WHERE THIS PROCESS LISTENS.
+    #
+    # Loopback locally, which is what every earlier phase assumed and what keeps
+    # a developer machine from serving the internet by accident. A host that
+    # sets PORT (Fly, Render, Cloud Run, Heroku) is telling us it terminates TLS
+    # in front of us and routes to that port, and there 127.0.0.1 would make the
+    # container look dead to the health check — so the presence of PORT, not a
+    # flag we set ourselves, is what opens the bind.
+    port = int(os.environ.get('PORT', '8000'))
+    host = '0.0.0.0' if os.environ.get('PORT') else '127.0.0.1'  # noqa: S104
+    print(f'[pwa-staging] listening  : {host}:{port}')
 
     # Single process, NO --reload (Windows --reload orphans workers that then
     # serve stale DNA — same rule as the canonical run.sh).
-    uvicorn.run(canonical.app, host='127.0.0.1', port=8000, log_level='info')
+    uvicorn.run(canonical.app, host=host, port=port, log_level='info')
 
 
 if __name__ == '__main__':

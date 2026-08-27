@@ -32,6 +32,7 @@ can reach production — `run_pwa_staging` refuses to start against it, and
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import sys
 import time
@@ -50,7 +51,9 @@ for _stream in (sys.stdout, sys.stderr):
 
 STAGING_REF = "eedcahzekpgxvvfxufbk"
 SUPA = f"https://{STAGING_REF}.supabase.co"
-API = "http://127.0.0.1:8000"
+# Local by default; point it at the public staging host to prove the same
+# matrix over the internet:  AYDEN_API=https://ayden-api-staging.fly.dev
+API = os.environ.get("AYDEN_API", "http://127.0.0.1:8000").rstrip("/")
 
 #: How long to wait for a human to pay the sandbox QR before reporting BLOCKED.
 #: Long enough to open ABA Mobile and scan; short enough that an unattended run

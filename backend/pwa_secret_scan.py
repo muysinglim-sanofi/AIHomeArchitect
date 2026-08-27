@@ -215,9 +215,24 @@ def main() -> int:  # noqa: PLR0915
                 f"{WEB_BUILD} does not exist — run `flutter build web` first")
         unknown("the web bundle holds no PayWay credential", "no bundle")
     else:
+        # EVERY delivered file, filtered by what it CANNOT be rather than by
+        # what we expect it to be.
+        #
+        # This used to be an allowlist of suffixes — .js, .json, .html, .wasm,
+        # .map, .dart — and on 2026-08-27 that allowlist walked straight past
+        # `build/web/assets/.env`, a file Flutter bundles because `pubspec.yaml`
+        # declares it as an asset, and which Firebase Hosting then served at a
+        # guessable URL with HTTP 200. It held placeholders, so nothing leaked;
+        # the scan reporting "NO" while an unread `.env` sat in the payload is
+        # the part worth fixing.
+        #
+        # A scanner that only looks where it expects secrets is a scanner that
+        # certifies the places it did not look. So: read everything, and skip
+        # only binaries that cannot carry a readable credential.
+        _BINARY = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico",
+                   ".ttf", ".otf", ".woff", ".woff2", ".mp4", ".webm"}
         bundle = [p for p in WEB_BUILD.rglob("*")
-                  if p.is_file() and p.suffix in (".js", ".json", ".html",
-                                                  ".wasm", ".map", ".dart")]
+                  if p.is_file() and p.suffix.lower() not in _BINARY]
         found = []
         for path in bundle:
             try:
@@ -229,6 +244,16 @@ def main() -> int:  # noqa: PLR0915
                     found.append(f"{path.name}: {needle}")
         verdict(f"the web bundle ({len(bundle)} files) speaks NO PayWay protocol",
                 not found, "; ".join(found[:5]))
+
+        # A NAMED check, because "no PayWay key in it" is not the only thing
+        # wrong with shipping a .env to a public host. This one answers the
+        # question directly rather than hoping a needle search covers it.
+        dotenvs = [p for p in WEB_BUILD.rglob("*")
+                   if p.is_file() and (p.name == ".env" or p.name.startswith(".env."))
+                   and p.name != ".env.example"]
+        verdict("the web bundle ships NO .env file at all",
+                not dotenvs,
+                ", ".join(str(p.relative_to(WEB_BUILD)) for p in dotenvs))
         if secrets:
             leaks = _scan(bundle, secrets, label="bundle")
             verdict("the web bundle holds NO PayWay credential", not leaks,
