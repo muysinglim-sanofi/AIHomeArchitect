@@ -40,6 +40,10 @@ Future<(ProviderContainer, FakePwaUrlBridge)> _pump(
     ),
   );
   await tester.pump(); // first frame + post-frame URL normalization
+  // The Home hero is a RevealHero; its auto-sweep arms a Future.delayed that
+  // outlives disposal unless real time advances. The delay lives in the
+  // shared, frozen reveal widget, so the harness moves rather than the product.
+  await tester.pump(const Duration(seconds: 1));
   return (container, bridge);
 }
 
@@ -108,6 +112,7 @@ void main() {
       hasLength(1),
     );
     expect(bridge.ops.length, lessThanOrEqualTo(before + 1));
+    await tester.pump(const Duration(seconds: 1)); // hero sweep, see _pump
   });
 
   testWidgets(
@@ -142,6 +147,7 @@ void main() {
       await tester.pump();
       expect(container.read(pwaControllerProvider).phase, PwaPhase.home);
       expect(bridge.current().path, '/');
+      await tester.pump(const Duration(seconds: 1)); // hero sweep, see _pump
     },
   );
 
@@ -179,48 +185,36 @@ void main() {
     },
   );
 
-  testWidgets('INTRO06: the dashboard offers a "See how it works" control', (
+  testWidgets('INTRO06: the "See how it works" control is RETIRED from Home', (
     tester,
   ) async {
-    await _pump(tester);
-    await tester.pump(const Duration(milliseconds: 400)); // settle opacity
-    expect(find.byKey(_replayKey), findsOneWidget);
-    expect(find.text('See how it works'), findsOneWidget);
-  });
-
-  testWidgets('INTRO07: tapping Replay stays on Home and keeps projects', (
-    tester,
-  ) async {
+    // Phase 2 gives the Home hero slot to the Featured Vision, which the
+    // approved brief requires. `PwaHeroSequence` was the thing "See how it
+    // works" replayed, so the control has nothing left to play and is gone.
+    //
+    // Pinned rather than deleted: a product loss awaiting a decision on where
+    // an explainer should live. If it returns, replace this with a test that
+    // exercises it.
     final (container, bridge) = await _pump(tester);
-    await tester.pump(const Duration(milliseconds: 400));
-    final libBefore = container.read(pwaControllerProvider).library.length;
-    await tester.tap(find.byKey(_replayKey));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(_replayKey), findsNothing);
+    expect(find.text('See how it works'), findsNothing);
+    // Home itself is unaffected: immediate, on '/', nothing covering it.
     expect(container.read(pwaControllerProvider).phase, PwaPhase.home);
-    expect(container.read(pwaControllerProvider).library, hasLength(libBefore));
-    expect(bridge.current().path, '/'); // never leaves Home
-    // Repeatable — a second replay must not throw.
-    await tester.tap(find.byKey(_replayKey));
-    await tester.pump();
-    expect(find.byKey(_replayKey), findsOneWidget);
+    expect(bridge.current().path, '/');
   });
 
-  testWidgets('INTRO09: Replay does NOT clear the once-per-tab marker', (
-    tester,
-  ) async {
-    final store = MemoryPwaSessionStore()
-      ..write(
-        PwaIntroGate.kMarkerKey,
-        '1',
-      ); // marker already present (post-first-play)
-    final gate = PwaIntroGate(store);
-    await _pump(tester, gate: gate);
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.tap(find.byKey(_replayKey));
-    await tester.pump();
-    // The explicit replay must leave the marker intact → next boot won't autoplay.
+  test('INTRO09: the once-per-tab marker semantics are unchanged', () {
+    // The gate is NOT retired — only its Home entry point. Its contract is
+    // still the thing that decides autoplay on a real boot, so it keeps being
+    // asserted, now directly instead of through a control that no longer
+    // exists.
+    final store = MemoryPwaSessionStore();
+    final fresh = PwaIntroGate(store);
+    expect(fresh.shouldAutoplay(), isTrue, reason: 'first arrival in a tab');
+
+    store.write(PwaIntroGate.kMarkerKey, '1');
+    final returning = PwaIntroGate(store);
+    expect(returning.shouldAutoplay(), isFalse, reason: 'F5 in the same tab');
     expect(store.read(PwaIntroGate.kMarkerKey), isNotNull);
-    expect(gate.shouldAutoplay(), isFalse);
   });
 }

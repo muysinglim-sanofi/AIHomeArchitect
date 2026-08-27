@@ -1,3 +1,11 @@
+/// SUPERSEDED by `pwa_home_ios.dart` (Phase 2 of the iOS alignment).
+///
+/// Retained, unreferenced, for ONE more phase. Not sentiment: `_ContinueDesigning`
+/// and `_ProjectCard` below are the closest thing the codebase has to a spec for
+/// the Projects surface, and the Projects phase will want to read them before
+/// replacing them. The archive tag `pwa-web-staging-pre-ios-alignment-2026-08`
+/// is the durable copy; delete this file once Projects has migrated.
+///
 /// The Home dashboard — the front door of Ayden Studio (`/`).
 ///
 /// It follows the mobile mental model, widened for desktop:

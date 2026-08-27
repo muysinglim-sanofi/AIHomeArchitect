@@ -136,6 +136,10 @@ void main() {
     await tester.tap(find.text('Back home'));
     await tester
         .pumpAndSettle(); // entry mounts, skips cinematic, lands on hero
+    // The Home hero is a RevealHero: its auto-sweep arms a Future.delayed that
+    // pumpAndSettle cannot drain. Advance real time so no timer outlives the
+    // tree. (The delay lives in the shared, frozen reveal widget.)
+    await tester.pump(const Duration(seconds: 1));
     final s = container.read(pwaControllerProvider);
     // Home is the dashboard: the generated project is saved and listed, while
     // the in-memory creation session is dropped.

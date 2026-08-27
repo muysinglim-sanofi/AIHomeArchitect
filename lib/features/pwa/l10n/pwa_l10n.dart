@@ -90,6 +90,13 @@ class PwaL10n {
   String get newProject => _mobile.newProject;
   String get noProjects => _mobile.noProjects;
   String get continueDesigning => _mobile.continueDesigning;
+
+  // ── iOS Home — the approved mobile wording, forwarded not re-translated ────
+  // All three already exist in en/fr/km. Writing PWA copies would have created
+  // a second Khmer vocabulary for the product's most-read screen.
+  String get homeHeadline => _mobile.homeHeadline;
+  String get newDesignSession => _mobile.newDesignSession;
+  String get featuredVision => _mobile.featuredVision;
   String get recentTransformations => _mobile.recentTransformations;
   String get uploadYourSpace => _mobile.uploadYourSpace;
   String get uploadFileTypes => _mobile.uploadFileTypes;

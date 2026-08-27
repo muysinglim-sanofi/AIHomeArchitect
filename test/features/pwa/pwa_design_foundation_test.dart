@@ -12,6 +12,7 @@ library;
 
 import 'package:ai_home_architect/core/constants/app_colors.dart';
 import 'package:ai_home_architect/core/constants/app_spacing.dart';
+import 'package:ai_home_architect/features/pwa/l10n/pwa_l10n.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_nav_shell.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_primitives.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_theme.dart';
@@ -326,6 +327,43 @@ void main() {
       final decoration = container.decoration! as BoxDecoration;
       expect(decoration.color, pwaCardSurface);
       expect((decoration.border! as Border).top.color, pwaHairline);
+    });
+  });
+
+  group('FOUND06  Home speaks the foundation', () {
+    test('the Home headline is iOS Home, not the generic hero role', () {
+      // iOS uses displayEditorial(27, w500, height 1.12, -0.4) on Home
+      // specifically — looser leading and tracking than the 38pt hero, because
+      // the Home headline runs to two lines. Reusing displayHero at a smaller
+      // size would set those two lines too tight.
+      final home = PwaType.homeHeadline();
+      expect(home.fontFamily, kPwaDisplayFamily);
+      expect(home.fontSize, 27);
+      expect(home.fontWeight, FontWeight.w500);
+      expect(home.height, 1.12);
+      expect(home.letterSpacing, -0.4);
+
+      final hero = PwaType.displayHero();
+      expect(home.height, isNot(hero.height));
+      expect(home.letterSpacing, isNot(hero.letterSpacing));
+    });
+
+    test('the headline copy comes from the shared dictionary, in 3 locales',
+        () {
+      // `homeHeadline` already existed in en/fr/km for iOS. The PWA forwards to
+      // it rather than writing web copies — one Khmer vocabulary, not two.
+      for (final code in ['en', 'fr', 'km']) {
+        final l = pwaL10nFor(Locale(code));
+        expect(l.homeHeadline, isNotEmpty, reason: code);
+        expect(l.newDesignSession, isNotEmpty, reason: code);
+        expect(l.featuredVision, isNotEmpty, reason: code);
+        // A missing key falls back to the key itself.
+        expect(l.homeHeadline, isNot('homeHeadline'), reason: code);
+        expect(l.newDesignSession, isNot('newDesignSession'), reason: code);
+        expect(l.featuredVision, isNot('featuredVision'), reason: code);
+      }
+      // English is iOS's exact wording, including the deliberate line break.
+      expect(pwaL10nFor(const Locale('en')).homeHeadline, contains('\n'));
     });
   });
 }

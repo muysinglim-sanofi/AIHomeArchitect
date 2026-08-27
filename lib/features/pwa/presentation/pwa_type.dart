@@ -138,6 +138,20 @@ abstract final class PwaType {
           letterSpacing: -0.5,
           color: color);
 
+  /// iOS Home, verbatim — `displayEditorial(27, w500, height 1.12, -0.4)`.
+  ///
+  /// Deliberately NOT `displayHero` at a smaller size: the Home headline runs
+  /// to two lines, and iOS loosens the leading (1.12 vs 1.08) and the tracking
+  /// (-0.4 vs -0.5) for exactly that reason. Reusing the hero role would have
+  /// set two lines too tight.
+  static TextStyle homeHeadline({Color color = AppColors.textPrimary}) =>
+      _display(
+          fontSize: 27,
+          fontWeight: FontWeight.w500,
+          height: 1.12,
+          letterSpacing: -0.4,
+          color: color);
+
   /// iOS `AppTheme.atmosphereTitle()` — 20 / w600 / 0 / 1.15.
   /// The product's signature element: an atmosphere name over imagery.
   static TextStyle atmosphereTitle({

@@ -20,8 +20,8 @@ import '../billing/pwa_entitlement_controller.dart';
 import 'pwa_paywall.dart';
 import 'pwa_architect_screen.dart';
 import 'pwa_entry_screen.dart';
-import 'pwa_home_screen.dart';
 import 'pwa_loading_screen.dart';
+import 'pwa_home_ios.dart';
 import 'pwa_projects_screen.dart';
 import 'pwa_first_reveal_screen.dart';
 import 'pwa_reveal_screen.dart';
@@ -35,7 +35,11 @@ class PwaExperience extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final phase = ref.watch(pwaControllerProvider.select((s) => s.phase));
     final screen = switch (phase) {
-      PwaPhase.home => const PwaHomeScreen(),
+      // Phase 2 — the iOS-aligned Home. `PwaHomeScreen` (the dark original)
+      // is retained, unreferenced, until the remaining screens migrate: it is
+      // the fastest way back if this needs reverting, and the archive tag is
+      // the slower one.
+      PwaPhase.home => const PwaHomeIos(),
       PwaPhase.entry => const PwaEntryScreen(),
       PwaPhase.loading => const PwaLoadingScreen(),
       PwaPhase.architect => const PwaArchitectScreen(),
