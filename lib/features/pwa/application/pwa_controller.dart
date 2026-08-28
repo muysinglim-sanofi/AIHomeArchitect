@@ -35,7 +35,16 @@ import '../l10n/pwa_l10n.dart';
 import '../../../core/providers/locale_provider.dart';
 
 /// `entry` is the CREATE session (`/create`); `home` is the dashboard (`/`).
-enum PwaPhase { home, entry, loading, architect, firstReveal, reveal, projects }
+enum PwaPhase {
+  home,
+  entry,
+  loading,
+  architect,
+  firstReveal,
+  reveal,
+  projects,
+  profile,
+}
 
 /// Where the current source image came from. Governs mock honesty: only the
 /// bundled example may claim a known room type; an arbitrary user upload must
@@ -161,7 +170,13 @@ Future<PwaBootRestore> pwaResolveBootRestore(
     if (library.isEmpty) {
       return PwaBootRestore(
         library: const [],
-        route: route == null ? null : PwaRoute.home,
+        // With nothing durable to open, a project URL has to fall back to the
+        // Hero. Profile does not: it depends on no project, so a person who
+        // opens `/profile` before making anything lands on Profile — the same
+        // rule `PwaRoute.normalize` already states for it.
+        route: route == null
+            ? null
+            : (route.page == PwaPage.profile ? PwaRoute.profile : PwaRoute.home),
         legacyHidden: legacyHidden,
       );
     }
@@ -442,6 +457,8 @@ class PwaState {
         return PwaRoute.home;
       case PwaPhase.projects:
         return PwaRoute.projects;
+      case PwaPhase.profile:
+        return PwaRoute.profile;
       case PwaPhase.architect:
         final v = previewVisionId;
         final vid = (v != null && v != currentVisionId) ? v : null;
@@ -761,6 +778,9 @@ class PwaController extends StateNotifier<PwaState> {
       }
       if (restore?.route?.page == PwaPage.create) {
         return base.copyWith(phase: PwaPhase.entry);
+      }
+      if (restore?.route?.page == PwaPage.profile) {
+        return base.copyWith(phase: PwaPhase.profile);
       }
       return base; // Home
     }
@@ -2346,6 +2366,23 @@ class PwaController extends StateNotifier<PwaState> {
     );
   }
 
+  /// Open Profile. Same shape as [openLibrary] — it persists an in-progress
+  /// project first, because leaving the studio by the bottom navigation must
+  /// never be the thing that loses work — and then simply changes phase.
+  ///
+  /// It reads no identity, no entitlement and no account state: those live in
+  /// their own providers and the screen watches them directly. This method
+  /// exists so the tab is a real destination rather than a modal.
+  void openProfile() {
+    if (state.versions.isNotEmpty) _syncActiveProject(bumpUpdated: false);
+    state = state.copyWith(
+      phase: PwaPhase.profile,
+      clearPreview: true,
+      clearPending: true,
+      library: _repo.listProjects(),
+    );
+  }
+
   /// RESUME a saved project — restore its photo, Room, Atmosphere, every Vision,
   /// the current Vision and the full conversation, and land in the Architect.
   /// Creates NO vision and starts NO generation.
@@ -2442,6 +2479,8 @@ class PwaController extends StateNotifier<PwaState> {
         }
       case PwaPage.projects:
         if (state.phase != PwaPhase.projects) openLibrary();
+      case PwaPage.profile:
+        if (state.phase != PwaPhase.profile) openProfile();
       case PwaPage.reveal:
         final rid = route.projectId;
         final rv = route.visionId;

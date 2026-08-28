@@ -19,7 +19,7 @@ library;
 
 import '../domain/pwa_project.dart';
 
-enum PwaPage { home, create, projects, draft, architect, reveal }
+enum PwaPage { home, create, projects, profile, draft, architect, reveal }
 
 class PwaRoute {
   const PwaRoute(
@@ -40,6 +40,7 @@ class PwaRoute {
   static const PwaRoute home = PwaRoute(PwaPage.home);
   static const PwaRoute create = PwaRoute(PwaPage.create);
   static const PwaRoute projects = PwaRoute(PwaPage.projects);
+  static const PwaRoute profile = PwaRoute(PwaPage.profile);
 
   /// Parse a browser [uri] into a route. Unknown shapes fall back to the nearest
   /// safe page (unknown top-level → Home; malformed under /projects → Projects).
@@ -47,6 +48,7 @@ class PwaRoute {
     final segs = uri.pathSegments.where((s) => s.isNotEmpty).toList();
     if (segs.isEmpty) return home;
     if (segs.first == 'create') return create;
+    if (segs.first == 'profile') return profile;
     if (segs.first != 'projects') return home;
     if (segs.length == 1) return projects;
     final id = segs[1];
@@ -84,6 +86,8 @@ class PwaRoute {
         return '/create';
       case PwaPage.projects:
         return '/projects';
+      case PwaPage.profile:
+        return '/profile';
       case PwaPage.draft:
         return '/projects/$projectId/draft';
       case PwaPage.architect:
@@ -116,6 +120,10 @@ class PwaRoute {
         return create;
       case PwaPage.projects:
         return projects;
+      case PwaPage.profile:
+        // Profile depends on nothing durable — no project, no vision — so it
+        // is always a valid destination, exactly like Create.
+        return profile;
       case PwaPage.draft:
       case PwaPage.architect:
       case PwaPage.reveal:

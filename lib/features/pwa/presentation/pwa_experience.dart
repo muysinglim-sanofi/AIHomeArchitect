@@ -22,6 +22,7 @@ import 'pwa_architect_screen.dart';
 import 'pwa_create_ios.dart';
 import 'pwa_design_session_screen.dart';
 import 'pwa_home_ios.dart';
+import 'pwa_profile_ios.dart';
 import 'pwa_projects_ios.dart';
 import 'pwa_first_reveal_screen.dart';
 import 'pwa_reveal_screen.dart';
@@ -56,6 +57,7 @@ class PwaExperience extends ConsumerWidget {
       // original) is retained, unreferenced, on the same terms as the other
       // originals — and it still owns the project action menu this one calls.
       PwaPhase.projects => const PwaProjectsIos(),
+      PwaPhase.profile => const PwaProfileIos(),
     };
     return Stack(
       children: [

@@ -109,7 +109,7 @@ class PwaProjectsIos extends ConsumerWidget {
           case PwaNavDestination.projects:
             break; // already here
           case PwaNavDestination.profile:
-            break; // no screen yet — the shell renders it inert
+            controller.openProfile();
         }
       },
       child: PwaScreen(

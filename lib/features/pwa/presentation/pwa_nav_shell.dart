@@ -43,9 +43,10 @@ class PwaNavShell extends StatelessWidget {
     this.enabled = const {
       PwaNavDestination.home: true,
       PwaNavDestination.projects: true,
-      // Profile has no screen yet. Declared, visible, and inert — see the
-      // library comment.
-      PwaNavDestination.profile: false,
+      // Phase 8: Profile is a real destination. The `enabled` map stays —
+      // a host without the route can still pass false — but the default is
+      // now the truth for this app.
+      PwaNavDestination.profile: true,
     },
     this.background = pwaCanvas,
   });

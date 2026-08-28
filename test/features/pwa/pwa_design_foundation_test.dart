@@ -275,7 +275,12 @@ void main() {
       expect(find.text('Profile'), findsOneWidget);
     });
 
-    testWidgets('Profile is visible but INERT until its screen exists',
+    // Phase 1 asserted the opposite of this: Profile was declared, visible and
+    // INERT, because §5 said prepare the architecture and invent no
+    // functionality. Phase 8 built the screen, so the assertion inverts — the
+    // tab reports, like the other two. The escape hatch it was really testing
+    // (a host that has no Profile route) is still here, and is tested below.
+    testWidgets('all three destinations report, Profile included',
         (tester) async {
       final tapped = <PwaNavDestination>[];
       await tester.pumpWidget(MaterialApp(
@@ -293,13 +298,37 @@ void main() {
       await tester.pump();
 
       await tester.tap(find.text('Projects'));
-      expect(tapped, [PwaNavDestination.projects]);
-
-      // §5: prepare the architecture, do not introduce fake functionality.
       await tester.tap(find.text('Profile'));
-      expect(tapped, [PwaNavDestination.projects],
-          reason: 'Profile has no screen yet — tapping it must do nothing, '
-              'not navigate somewhere invented');
+      expect(tapped,
+          [PwaNavDestination.projects, PwaNavDestination.profile]);
+    });
+
+    testWidgets('a host without a destination can still disable it',
+        (tester) async {
+      final tapped = <PwaNavDestination>[];
+      await tester.pumpWidget(MaterialApp(
+        theme: pwaTheme(),
+        locale: const Locale('en'),
+        localizationsDelegates: const [
+          ...GlobalMaterialLocalizationsShim.delegates,
+        ],
+        home: PwaNavShell(
+          current: PwaNavDestination.home,
+          onSelect: tapped.add,
+          enabled: const {
+            PwaNavDestination.home: true,
+            PwaNavDestination.projects: true,
+            PwaNavDestination.profile: false,
+          },
+          child: const SizedBox.expand(),
+        ),
+      ));
+      await tester.pump();
+
+      await tester.tap(find.text('Profile'));
+      expect(tapped, isEmpty,
+          reason: 'a disabled destination must never navigate somewhere '
+              'invented');
     });
 
     testWidgets('the bar is white with a hairline top, like iOS MainShell',
