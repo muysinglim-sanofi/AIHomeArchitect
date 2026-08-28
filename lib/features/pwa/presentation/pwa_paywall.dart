@@ -39,6 +39,7 @@ import '../billing/pwa_entitlement_controller.dart';
 import '../l10n/pwa_l10n.dart';
 import 'pwa_account_sheet.dart';
 import 'pwa_payment_sheet.dart';
+import 'pwa_primitives.dart';
 import 'pwa_theme.dart';
 import 'pwa_widgets.dart' show pwaSerif;
 
@@ -67,15 +68,46 @@ Future<void> showPwaPaywall(
   );
 }
 
-class PwaPaywallSheet extends ConsumerWidget {
+class PwaPaywallSheet extends ConsumerStatefulWidget {
   const PwaPaywallSheet({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PwaPaywallSheet> createState() => _PwaPaywallSheetState();
+}
+
+class _PwaPaywallSheetState extends ConsumerState<PwaPaywallSheet> {
+  /// The pack the person is about to buy. A SKU, never an amount: the price
+  /// this screen shows is the catalogue's, and the price PayWay charges is
+  /// resolved by the server from this sku alone.
+  String? _sku;
+
+  /// The pack a first look should land on. `popular` when the catalogue says
+  /// so — the badge is a machine code from the products table, not a marketing
+  /// word this file invented — otherwise the first row.
+  PwaProduct? _defaultPack(List<PwaProduct> packs) {
+    if (packs.isEmpty) return null;
+    for (final p in packs) {
+      if (p.badge == 'popular') return p;
+    }
+    return packs.first;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l = context.pwaL10n;
     final e = ref.watch(pwaEntitlementProvider);
     final auth = ref.watch(pwaAuthProvider);
     final maxHeight = MediaQuery.sizeOf(context).height * 0.92;
+
+    // ONLY what this platform can actually sell. The app-store passes are real
+    // products in their own ecosystem and are not merchandise here: the row
+    // that says "available in the mobile app" is an advertisement for a shop
+    // the reader is not standing in. `webEnabled` is the SERVER's word for it
+    // (`khqr_enabled AND NOT store_only`), so nothing here filters by sku.
+    final packs = e.purchasableOnWeb;
+    final selected = packs.isEmpty
+        ? null
+        : (packs.where((p) => p.sku == _sku).firstOrNull ?? _defaultPack(packs));
 
     final (title, body) = switch (e.state) {
       PwaBillingState.loading => (l.paywallTitle, l.paywallLoading),
@@ -138,36 +170,61 @@ class PwaPaywallSheet extends ConsumerWidget {
                   ),
                   const SizedBox(height: PwaGap.xl),
                 ] else ...[
-                  // A pass with spaces left is shown as a fact, not a pitch.
-                  if (e.hasActivePass && e.passCredits > 0) ...[
+                  // A balance is shown as a fact, not a pitch — and it is the
+                  // SAME number Profile shows. `creditsAvailable` is the
+                  // server's `credits_available`, free bucket plus pass bucket;
+                  // this used to render `passCredits` alone, so a person with
+                  // both read one figure here and a larger one on Profile for
+                  // the same account, from the same object.
+                  if (e.hasActivePass && e.creditsAvailable > 0) ...[
                     const SizedBox(height: PwaGap.md),
-                    _Badge(l.paywallSpaces(e.passCredits)),
+                    _Badge(l.paywallSpaces(e.creditsAvailable)),
                   ],
 
                   if (e.requiresPurchase) ...[
                     const SizedBox(height: PwaGap.lg),
                     _PaymentNotice(entitlement: e),
-                    const SizedBox(height: PwaGap.md),
-                    for (final p in e.productsForDisplay)
-                      _ProductRow(
-                        product: p,
-                        // Buyable only when the SERVER says a rail is open AND
-                        // the catalogue says this row belongs to the web.
-                        purchasable: e.paymentConfigured && p.webEnabled,
-                        onBuy: () async {
-                          final granted =
-                              await showPwaPaymentSheet(context, ref, p);
-                          // A completed purchase closes the paywall behind the
-                          // sheet: leaving someone on a purchase screen for
-                          // something they have just bought reads as a bug.
-                          if (granted && context.mounted) {
-                            Navigator.of(context).maybePop();
-                          }
-                        },
+                    if (packs.isNotEmpty) ...[
+                      const SizedBox(height: PwaGap.md),
+                      for (final p in packs)
+                        _PackCard(
+                          key: ValueKey('pwa-pack-${p.sku}'),
+                          product: p,
+                          selected: p.sku == selected?.sku,
+                          // Choosing is free. Nothing is ordered, nothing is
+                          // charged, and no request leaves the page until the
+                          // one CTA below is pressed.
+                          onTap: () => setState(() => _sku = p.sku),
+                        ),
+                      const SizedBox(height: PwaGap.md),
+                      // ONE call to action, for the pack that is selected. The
+                      // old screen put a Buy button on every row, which asked a
+                      // person to compare three prices and three buttons at
+                      // once; and its label was painted ink-on-ink, so all
+                      // three read as empty black rectangles.
+                      PwaPrimaryButton(
+                        key: const ValueKey('pwa-paywall-continue'),
+                        label: selected == null
+                            ? l.payBuy
+                            : '${l.payBuy} · ${selected.priceLabel}',
+                        onPressed: (!e.paymentConfigured || selected == null)
+                            ? null
+                            : () async {
+                                final granted = await showPwaPaymentSheet(
+                                    context, ref, selected);
+                                // A completed purchase closes the paywall
+                                // behind the sheet: leaving someone on a
+                                // purchase screen for something they have just
+                                // bought reads as a bug.
+                                if (granted && context.mounted) {
+                                  Navigator.of(context).maybePop();
+                                }
+                              },
                       ),
-                    const SizedBox(height: PwaGap.md),
-                    Text(l.paywallSecureNote,
-                        style: pwaSans(fontSize: 12, color: pwaFaint)),
+                      const SizedBox(height: PwaGap.md),
+                      Text(l.paywallSecureNote,
+                          style: pwaSans(fontSize: 12, color: pwaFaint)),
+                    ],
                   ],
 
                   const SizedBox(height: PwaGap.lg),
@@ -249,110 +306,137 @@ class _PaymentNotice extends StatelessWidget {
   }
 }
 
-/// One catalogue row, with a Buy button only when there is genuinely something
-/// to press it for.
-class _ProductRow extends StatelessWidget {
-  const _ProductRow({
+/// One pack, as a thing you can choose.
+///
+/// The old row was a read-only line with its own Buy button. This is a card:
+/// the whole surface is the tap target, the selected one is stated in gold and
+/// with a tick, and the price ladder reads top to bottom — badge, what you get,
+/// what it costs, and (only when the catalogue says so) what it would otherwise
+/// have cost.
+///
+/// The struck price and the percentage are DISPLAY, and they are kept visibly
+/// subordinate to the payable one for that reason: `list_price_usd` lives in
+/// `products.metadata`, the amount PayWay charges is resolved server-side from
+/// `price_usd`, and this widget is not in that path.
+class _PackCard extends StatelessWidget {
+  const _PackCard({
+    super.key,
     required this.product,
-    this.purchasable = false,
-    this.onBuy,
+    required this.selected,
+    required this.onTap,
   });
 
   final PwaProduct product;
-
-  /// True when this deployment can complete a purchase of THIS row.
-  final bool purchasable;
-  final Future<void> Function()? onBuy;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final l = context.pwaL10n;
-    return Container(
-      margin: const EdgeInsets.only(bottom: PwaGap.sm),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: PwaGap.sm),
+      child: Material(
+        color: selected ? pwaGoldSoft.withValues(alpha: 0.35) : pwaSurface,
         borderRadius: BorderRadius.circular(PwaGap.radius),
-        border: Border.all(color: pwaHairline),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(PwaGap.radius),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(PwaGap.radius),
+              border: Border.all(
+                color: selected ? pwaGold : pwaHairline,
+                width: selected ? 1.5 : 1,
+              ),
+            ),
+            child: Row(
               children: [
-                // The marketing label, translated from a machine code. Absent
-                // for the app-store rows, which carry no badge.
-                if (product.badge.isNotEmpty) ...[
-                  _BadgeChip(label: l.productBadge(product.badge),
-                      highlight: product.isDiscounted),
-                  const SizedBox(height: 6),
-                ],
-                Text(l.paywallSpaces(product.credits),
-                    style: pwaSans(fontSize: 15, fontWeight: FontWeight.w600)),
-                if (product.durationDays != null) ...[
-                  const SizedBox(height: 2),
-                  Text(l.paywallDays(product.durationDays!),
-                      style: pwaSans(fontSize: 12, color: pwaFaint)),
-                ],
-                // The catalogue row exists to be sold in an app store. Saying so
-                // beats implying a web checkout that will never appear.
-                if (product.storeOnly) ...[
-                  const SizedBox(height: 4),
-                  Text(l.paywallStoreOnly,
-                      style: pwaSans(fontSize: 12, color: pwaMuted)),
-                ],
+                _SelectionDot(selected: selected),
+                const SizedBox(width: PwaGap.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // The marketing label, translated from a machine code.
+                      if (product.badge.isNotEmpty) ...[
+                        _BadgeChip(
+                          label: l.productBadge(product.badge),
+                          highlight: product.isDiscounted,
+                        ),
+                        const SizedBox(height: 6),
+                      ],
+                      Text(l.paywallSpaces(product.credits),
+                          style: pwaSans(
+                              fontSize: 16, fontWeight: FontWeight.w600)),
+                      if (product.durationDays != null) ...[
+                        const SizedBox(height: 2),
+                        Text(l.paywallDays(product.durationDays!),
+                            style: pwaSans(fontSize: 12, color: pwaFaint)),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: PwaGap.md),
+                if (product.priceLabel.isNotEmpty)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      // Above the real one and struck through, so the number a
+                      // person acts on is the one they will be charged.
+                      if (product.isDiscounted) ...[
+                        Text(product.listPriceLabel,
+                            style: pwaSans(fontSize: 12, color: pwaFaint)
+                                .copyWith(
+                                    decoration: TextDecoration.lineThrough)),
+                        const SizedBox(height: 1),
+                      ],
+                      Text(product.priceLabel,
+                          style: pwaSans(
+                              fontSize: 18, fontWeight: FontWeight.w700)),
+                      if (product.isDiscounted) ...[
+                        const SizedBox(height: 2),
+                        Text(l.paywallDiscount(product.discountPercent),
+                            style: pwaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: pwaGold)),
+                      ],
+                    ],
+                  ),
               ],
             ),
           ),
-          const SizedBox(width: PwaGap.md),
-          if (product.priceLabel.isNotEmpty)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // The crossed-out reference price. Rendered ABOVE the real one
-                // and struck through, so the number a person acts on is the
-                // one they will actually be charged. It comes from a separate
-                // field precisely so it can never be mistaken for the price.
-                if (product.isDiscounted) ...[
-                  Text(product.listPriceLabel,
-                      style: pwaSans(
-                        fontSize: 12,
-                        color: pwaFaint,
-                      ).copyWith(decoration: TextDecoration.lineThrough)),
-                  const SizedBox(height: 1),
-                ],
-                Text(product.priceLabel,
-                    style: pwaSans(fontSize: 16, fontWeight: FontWeight.w600)),
-                if (product.isDiscounted) ...[
-                  const SizedBox(height: 2),
-                  Text(l.paywallDiscount(product.discountPercent),
-                      style: pwaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: pwaGold)),
-                ],
-              ],
-            ),
-          if (purchasable && onBuy != null) ...[
-            const SizedBox(width: PwaGap.sm),
-            FilledButton(
-              onPressed: onBuy,
-              style: FilledButton.styleFrom(
-                backgroundColor: pwaInk,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(PwaGap.radius),
-                ),
-              ),
-              child: Text(l.payBuy,
-                  style: pwaSans(fontSize: 14, fontWeight: FontWeight.w600)),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
+}
+
+/// The selection mark — a gold ring, filled with a tick when chosen. Shape as
+/// well as colour, so the choice survives a screenshot in greyscale and a
+/// reader who does not see the gold.
+class _SelectionDot extends StatelessWidget {
+  const _SelectionDot({required this.selected});
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 22,
+        height: 22,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: selected ? pwaGold : Colors.transparent,
+          border: Border.all(
+            color: selected ? pwaGold : pwaHairline,
+            width: 1.5,
+          ),
+        ),
+        child: selected
+            ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
+            : null,
+      );
 }
 
 /// The marketing label on a product row — a translated word, never a code.

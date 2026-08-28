@@ -44,6 +44,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/pwa_layout.dart';
 import '../billing/pwa_entitlement.dart';
+import '../billing/pwa_entitlement_controller.dart';
 import '../billing/pwa_payment.dart';
 import '../billing/pwa_payment_controller.dart';
 import '../data/pwa_external_launcher.dart';
@@ -76,6 +77,48 @@ Future<PwaPaymentExit> showPwaPaymentSheetFor(
   PwaProduct product,
 ) async {
   ref.read(pwaPaymentProvider.notifier).start(product.sku);
+  final exit = await showModalBottomSheet<PwaPaymentExit>(
+    context: context,
+    isScrollControlled: true,
+    isDismissible: false,
+    enableDrag: false,
+    backgroundColor: pwaSurface,
+    barrierColor: Colors.black.withValues(alpha: 0.72),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (_) => PwaPaymentSheet(product: product),
+  );
+  return exit ?? PwaPaymentExit.none;
+}
+
+/// Show the outcome of a payment that is ALREADY in flight — the return from
+/// PayWay's checkout.
+///
+/// It starts nothing. `showPwaPaymentSheetFor` opens by calling `start(sku)`,
+/// which mints a new attempt; doing that on a return would create a second
+/// order for a payment that has already been made. Here the controller has
+/// been restored from the server and the sheet simply renders the state it is
+/// in.
+///
+/// The product it needs for its header is PROJECTED from the payment itself —
+/// the same sku, credit count and amount the server just reported — rather
+/// than looked up in the catalogue, because the truth about what was bought is
+/// the order, not a price list that may have changed since.
+Future<PwaPaymentExit> showPwaPaymentReturn(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final payment = ref.read(pwaPaymentProvider);
+  final product = PwaProduct(
+    sku: payment.sku,
+    type: '',
+    credits: payment.credits,
+    priceUsd: payment.amount,
+    currency: payment.currency,
+    storeOnly: false,
+    webEnabled: true,
+  );
   final exit = await showModalBottomSheet<PwaPaymentExit>(
     context: context,
     isScrollControlled: true,
@@ -222,6 +265,12 @@ class _Body extends StatelessWidget {
           tone: pwaGold,
           title: l.payDoneTitle,
           body: l.payDoneBody(payment.credits),
+          // What was ADDED is on the line above; this is what the account NOW
+          // HOLDS — and it is asked for, never added up here. The two are
+          // different numbers whenever anything was left over, and a purchase
+          // screen that only ever showed the grant left a person to do the
+          // arithmetic themselves.
+          footer: const _BalanceAfterPurchase(),
         ),
       PwaPaymentState.expired => _Outcome(
           icon: Icons.hourglass_disabled_outlined,
@@ -368,8 +417,16 @@ class _ContinueToAbaButton extends ConsumerWidget {
           ? null
           : () => ref.read(pwaExternalLauncherProvider).open(url),
       icon: const Icon(Icons.open_in_new_rounded, size: 18),
+      // The colour is stated HERE, not left to `foregroundColor`. `pwaSans`
+      // defaults to ink, and an explicit style on the child beats the button's
+      // foreground — which is how the paywall's Buy buttons came to be black
+      // labels on black pills. The icon looked white because an Icon DOES read
+      // the foreground; only the text did not.
       label: Text(l.payContinueToAba,
-          style: pwaSans(fontSize: 15, fontWeight: FontWeight.w600)),
+          style: pwaSans(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Colors.white)),
       style: FilledButton.styleFrom(
         backgroundColor: pwaInk,
         foregroundColor: Colors.white,
@@ -500,12 +557,17 @@ class _Outcome extends StatelessWidget {
     required this.tone,
     required this.title,
     required this.body,
+    this.footer,
   });
 
   final IconData icon;
   final Color tone;
   final String title;
   final String body;
+
+  /// An optional line under the message. Used by the success state to state
+  /// the balance the account is left holding.
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -521,9 +583,41 @@ class _Outcome extends StatelessWidget {
             Text(body,
                 textAlign: TextAlign.center,
                 style: pwaSans(fontSize: 13, color: pwaMuted, height: 1.55)),
+            if (footer != null) ...[
+              const SizedBox(height: PwaGap.md),
+              footer!,
+            ],
           ],
         ),
       );
+}
+
+/// The balance after a purchase, read from the entitlement.
+///
+/// It renders NOTHING until the server has answered. A number that appeared
+/// instantly here would be one this screen worked out from the grant and the
+/// balance it remembered — which is exactly the local arithmetic the whole
+/// billing layer is built to avoid, and which would be wrong the moment a
+/// second tab, a refund or a promo touched the same ledger.
+class _BalanceAfterPurchase extends ConsumerWidget {
+  const _BalanceAfterPurchase();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final e = ref.watch(pwaEntitlementProvider);
+    if (!e.isKnown || e.creditsAvailable <= 0) return const SizedBox.shrink();
+    final l = context.pwaL10n;
+    return Container(
+      key: const ValueKey('pwa-pay-balance'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: pwaGoldSoft.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(l.passSpacesLeft(e.creditsAvailable),
+          style: pwaSans(fontSize: 13, fontWeight: FontWeight.w600)),
+    );
+  }
 }
 
 class _Actions extends ConsumerWidget {

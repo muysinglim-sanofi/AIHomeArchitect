@@ -627,11 +627,13 @@ void main() {
       expect(e.products.length, 2);
       expect(e.products.first.credits, 10);
       expect(e.products.last.storeOnly, isTrue);
+      // The store-only row is PARSED — the client must be able to tell that it
+      // exists, and the server's `store_only` is how — but it is not
+      // merchandise here. Phase 9: the purchase surface is exactly
+      // `purchasableOnWeb`, and `productsForDisplay`, which grouped the App
+      // Store passes to the bottom of the same list rather than removing them,
+      // is gone.
       expect(e.purchasableOnWeb.map((p) => p.sku), ['pack_10']);
-      // Display order groups what the web CAN sell before what it cannot. The
-      // server orders by price, which puts the $7.99 store-only pass between
-      // the $6.99 and $11.99 web packs — a ladder with a hole in it.
-      expect(e.productsForDisplay.map((p) => p.sku), ['pack_10', 'weekly_pass']);
     });
 
     test('PAY09 the client holds NO gateway credential and speaks NO gateway '

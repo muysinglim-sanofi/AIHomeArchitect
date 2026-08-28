@@ -32,6 +32,7 @@ import 'package:ai_home_architect/features/pwa/l10n/pwa_l10n.dart';
 import 'package:ai_home_architect/features/pwa/l10n/pwa_translations.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_payment_sheet.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_paywall.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_primitives.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -579,14 +580,23 @@ void main() {
         await tester.pumpAndSettle();
 
         final l = pwaL10nFor(const Locale('en'));
-        expect(find.widgetWithText(FilledButton, l.payBuy),
-            configured ? findsOneWidget : findsNothing,
-            reason: 'configured=$configured — exactly one buyable row, and no '
-                'button at all when no rail is open');
+        // Phase 9 changed the SHAPE of this answer, not its rule. There is one
+        // CTA for the selected pack instead of a Buy button per row, and it is
+        // disabled rather than absent when no rail is open — a person who
+        // cannot pay should see what is on offer and be told why, not find the
+        // control missing.
+        final cta = tester.widget<PwaPrimaryButton>(
+            find.byKey(const ValueKey('pwa-paywall-continue')));
+        expect(cta.onPressed, configured ? isNotNull : isNull,
+            reason: 'configured=$configured — the SERVER decides whether a '
+                'purchase can complete');
         expect(find.text(l.paywallUnavailableTitle),
             configured ? findsNothing : findsOneWidget);
-        // The store-only pass is never buyable here, whatever the rail says.
-        expect(find.text(l.paywallStoreOnly), findsOneWidget);
+        // The store-only pass is not merchandise here at all any more: it is
+        // absent from the purchase surface rather than listed with an excuse.
+        expect(find.text(l.paywallStoreOnly), findsNothing);
+        expect(find.byKey(const ValueKey('pwa-pack-weekly_pass')), findsNothing);
+        expect(find.byKey(const ValueKey('pwa-pack-pack_10')), findsOneWidget);
       }
       await _teardown(tester);
     });

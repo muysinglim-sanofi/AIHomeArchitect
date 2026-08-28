@@ -128,6 +128,7 @@ class PwaGenerationFailure implements Exception {
     required this.userMessage,
     required this.retryable,
     this.billingState = '',
+    this.paywall = false,
   });
 
   final String code;
@@ -140,10 +141,28 @@ class PwaGenerationFailure implements Exception {
   /// the client made from a counter it kept itself.
   final String billingState;
 
+  /// The backend answered on its OWN billing seam: a 402 carrying `paywall`.
+  /// Narrower than [isBillingRefusal], which also accepts a bare
+  /// `QUOTA_EXHAUSTED` code from anywhere.
+  final bool paywall;
+
   /// Whether this failure is the one thing allowed to open a paywall. A timeout
   /// or an unreachable backend must never look like a sale.
   bool get isBillingRefusal =>
       code == 'QUOTA_EXHAUSTED' || billingState.isNotEmpty;
+
+  /// The refusal is AUTHORITATIVE: the Billing Engine refused, said so on its
+  /// own 402 seam, and stated the attempt is not retryable. Its payload also
+  /// carries `render_started: false` — nothing was made, so there is nothing to
+  /// recover and no charge to protect.
+  ///
+  /// This is the ONLY condition under which a recorded generation may be
+  /// discarded rather than kept for retry. A timeout, a 5xx, an unparseable
+  /// body or a cancelled request are all `retryable` or carry no `paywall`, and
+  /// every one of them keeps its record: the person may already have paid for
+  /// work the backend is still holding.
+  bool get isAuthoritativeBillingRefusal =>
+      paywall && isBillingRefusal && !retryable;
 
   @override
   String toString() => 'PwaGenerationFailure($code, retryable: $retryable)';
@@ -292,6 +311,9 @@ class PwaStagingGenerationService implements PwaGenerationService {
         userMessage: e.userMessage,
         retryable: e.retryable,
         billingState: e.billingState,
+        // Carried, not dropped: it is the difference between "the Billing
+        // Engine refused" and "something said QUOTA_EXHAUSTED".
+        paywall: e.paywall,
       );
     }
   }

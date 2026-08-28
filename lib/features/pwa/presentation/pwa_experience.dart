@@ -17,6 +17,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../application/pwa_controller.dart';
 import '../billing/pwa_entitlement_controller.dart';
+import '../billing/pwa_payment.dart';
+import '../billing/pwa_payment_controller.dart';
+import 'pwa_payment_sheet.dart';
 import 'pwa_paywall.dart';
 import 'pwa_architect_screen.dart';
 import 'pwa_create_ios.dart';
@@ -69,8 +72,88 @@ class PwaExperience extends ConsumerWidget {
           child: SafeArea(child: _PwaGenerationErrorBar()),
         ),
         const _PwaBillingWatcher(),
+        const _PwaPaymentReturnWatcher(),
       ],
     );
+  }
+}
+
+/// Re-joins a payment the browser walked away from.
+///
+/// THE GAP THIS CLOSES
+///
+/// Paying replaces the page: `WebPwaExternalLauncher` assigns
+/// `location.href` to PayWay's checkout, deliberately, because a custom scheme
+/// opened in a new tab leaves an empty tab behind on mobile. So the tab that
+/// started the purchase is gone, its poll is gone with it, and coming back is
+/// a COLD BOOT. Nothing knew a payment had happened; the person landed on the
+/// Hero, and the next refusal showed them the packs again — for something they
+/// had already bought.
+///
+/// `PwaPaymentController.restore()` was written for exactly this and had no
+/// caller in production. It asks the server — `GET /payments/open` — which
+/// verifies the open attempt with PayWay before answering, so a payment made
+/// while the browser was away is settled by the question itself.
+///
+/// WHAT IT WILL AND WILL NOT DO
+///
+/// It presents the outcome ONLY when money actually moved (`verified` or
+/// `granted`). An abandoned attempt still sitting at `awaitingPayment` opens
+/// nothing: someone who chose not to pay must not be met by a payment sheet on
+/// every visit, which is the same mistake the replayed pending generation was
+/// making. Nothing here writes payment state — the server is asked, and the
+/// answer is shown.
+class _PwaPaymentReturnWatcher extends ConsumerStatefulWidget {
+  const _PwaPaymentReturnWatcher();
+
+  @override
+  ConsumerState<_PwaPaymentReturnWatcher> createState() =>
+      _PwaPaymentReturnWatcherState();
+}
+
+class _PwaPaymentReturnWatcherState
+    extends ConsumerState<_PwaPaymentReturnWatcher> {
+  bool _asked = false;
+  bool _shown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _asked) return;
+      _asked = true;
+      // Fire-and-forget: a boot must not wait on it, and there is nothing to
+      // do if it fails — the paywall still works and the entitlement read
+      // still tells the truth about the balance.
+      ref.read(pwaPaymentProvider.notifier).restore();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<PwaPaymentState>(
+      pwaPaymentProvider.select((p) => p.state),
+      (_, next) {
+        if (_shown) return;
+        if (next != PwaPaymentState.verified &&
+            next != PwaPaymentState.granted) {
+          return;
+        }
+        _shown = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          if (!mounted) return;
+          // The payment sheet already renders both of these states — the
+          // spinner while the grant runs, then the success outcome with its
+          // own two actions. Reusing it keeps one description of a payment in
+          // the product rather than a second success screen that could drift.
+          await showPwaPaymentReturn(context, ref);
+          if (!mounted) return;
+          // The balance changed. Ask, never assume by how much.
+          await ref.read(pwaEntitlementProvider.notifier).refresh();
+        });
+      },
+    );
+    return const SizedBox.shrink();
   }
 }
 
@@ -126,7 +209,13 @@ class _PwaBillingWatcherState extends ConsumerState<_PwaBillingWatcher> {
         if (!finished) return;
         // Only a generation that produced something spent a credit; a failure
         // released its hold, and the server will say so on the next read.
-        final failed = ref.read(pwaControllerProvider).generationError != null;
+        //
+        // BOTH outcomes count as "did not produce": since Phase 9 a billing
+        // refusal writes `billingRefusal` and deliberately leaves
+        // `generationError` null, so testing the error field alone would have
+        // read a refusal as a success.
+        final s = ref.read(pwaControllerProvider);
+        final failed = s.generationError != null || s.billingRefusal.isNotEmpty;
         if (!failed) {
           ref.read(pwaEntitlementProvider.notifier).onGenerationSettled();
         }

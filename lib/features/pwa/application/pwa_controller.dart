@@ -1258,15 +1258,38 @@ class PwaController extends StateNotifier<PwaState> {
   );
 
   /// Surface a failure without inventing anything: the loading placeholder is
-  /// removed, no vision is created, no cover changes, and the error is shown.
+  /// removed, no vision is created, no cover changes, and the outcome is shown.
   ///
-  /// The recorded intent is also stamped as settled. It stays on disk — Retry
-  /// needs the same idempotency key — but a later boot will now read it as
-  /// "already answered" and leave the decision to the person.
+  /// ONE SURFACE PER OUTCOME
+  ///
+  /// A refusal for money is not an error, it is an answer — and the paywall
+  /// states it completely: which state the ledger is in, what a pack costs, how
+  /// to buy one. Setting the generic error fields as well put a second,
+  /// vaguer sentence on top of it ("Something went wrong. Try again.") for a
+  /// request that did not go wrong and must not be tried again unchanged. So a
+  /// billing refusal writes ONLY [billingRefusal]; every other failure writes
+  /// only the error fields. Nothing writes both.
+  ///
+  /// WHAT HAPPENS TO THE RECORDED INTENT
+  ///
+  /// Normally it is stamped as settled and kept: Retry needs the same
+  /// idempotency key, and a later boot reads it as "already answered" and
+  /// leaves the decision to the person.
+  ///
+  /// An AUTHORITATIVE billing refusal is the one case where keeping it is
+  /// wrong. The backend refused on its 402 seam, declared the attempt
+  /// non-retryable, and reported `render_started: false` — no work exists, no
+  /// money moved, and replaying the same key can only ever be refused again.
+  /// Kept, the record re-raised the paywall on every single cold start, for
+  /// ever. It is discarded, and only in that exact case.
   Future<void> _failGeneration(
     PwaGenerationFailure f, {
     String? removeMessageId,
   }) async {
+    final billing = f.isBillingRefusal;
+    // `copyWith` reads a null as "unchanged", so the error fields cannot be
+    // blanked by passing null. Clear the whole outcome group first, then write
+    // back exactly one surface.
     state = state.copyWith(
       generating: false,
       messages: removeMessageId == null
@@ -1275,15 +1298,24 @@ class PwaController extends StateNotifier<PwaState> {
               for (final m in state.messages)
                 if (m.id != removeMessageId) m,
             ],
-      generationError: f.userMessage,
-      generationErrorCode: f.code,
-      generationRetryable: f.retryable,
-      // Only a refusal for money sets this, so nothing but the Billing Engine
-      // can put a paywall on screen.
-      billingRefusal: f.isBillingRefusal
-          ? (f.billingState.isEmpty ? 'FREE_EXHAUSTED' : f.billingState)
-          : '',
+      clearGenerationError: true,
     );
+    state = billing
+        ? state.copyWith(
+            // Only a refusal for money sets this, so nothing but the Billing
+            // Engine can put a paywall on screen.
+            billingRefusal:
+                f.billingState.isEmpty ? 'FREE_EXHAUSTED' : f.billingState,
+          )
+        : state.copyWith(
+            generationError: f.userMessage,
+            generationErrorCode: f.code,
+            generationRetryable: f.retryable,
+          );
+    if (f.isAuthoritativeBillingRefusal) {
+      await _pending.clear();
+      return;
+    }
     final p = await _pending.read();
     if (p != null && !p.failed) await _pending.write(p.asFailed());
   }

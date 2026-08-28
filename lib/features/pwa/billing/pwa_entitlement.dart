@@ -224,23 +224,21 @@ class PwaEntitlement {
       state == PwaBillingState.passExhausted ||
       state == PwaBillingState.passRequired;
 
-  /// Products the Web can actually sell right now. Empty in staging, which is
-  /// the truthful answer and the one the paywall renders.
+  /// Products the Web can actually sell right now — and, since Phase 9, the
+  /// only ones the paywall shows.
+  ///
+  /// `webEnabled` is the SERVER's verdict (`khqr_enabled AND NOT store_only`),
+  /// so no sku is named here and no marketing string is matched. The same rule
+  /// is enforced again where it matters: `resolve_web_product` refuses a
+  /// store-only sku with 409 PRODUCT_NOT_WEB_SELLABLE, so a client that showed
+  /// one anyway could still never charge for it.
+  ///
+  /// There used to be a `productsForDisplay` beside this, which grouped rather
+  /// than filtered and so put the two App Store passes at the bottom of the
+  /// web purchase list under the line "available in the mobile app". Honest,
+  /// and still an advertisement for a shop the reader is not standing in.
   List<PwaProduct> get purchasableOnWeb =>
       [for (final p in products) if (p.webEnabled) p];
-
-  /// The catalogue in the order a person should read it: what this platform can
-  /// sell, then what it cannot.
-  ///
-  /// The server orders by price, which interleaves the two app-store passes
-  /// among the web credit packs — so a $7.99 row marked "available in the
-  /// mobile app" lands between $6.99 and $11.99 rows that are not. Grouping
-  /// keeps the price ladder intact inside each group and stops the list from
-  /// reading as a single confusing ladder with holes in it.
-  List<PwaProduct> get productsForDisplay => [
-        ...products.where((p) => !p.storeOnly),
-        ...products.where((p) => p.storeOnly),
-      ];
 
   static PwaEntitlement parse(Map<String, Object?>? body) {
     if (body == null) return const PwaEntitlement.unavailable();
