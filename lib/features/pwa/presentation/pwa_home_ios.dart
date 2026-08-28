@@ -38,6 +38,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../data/mock/mock_projects.dart' show featuredShowcase;
 import '../../../shared/widgets/reveal_hero.dart';
 import '../application/pwa_controller.dart';
+import '../application/pwa_layout.dart';
 import '../domain/pwa_models.dart' show PwaProject;
 import '../domain/pwa_project.dart';
 import '../l10n/pwa_l10n.dart';
@@ -68,6 +69,7 @@ class PwaHomeIos extends ConsumerWidget {
     final featured = state.visibleProjects.isEmpty
         ? null
         : state.visibleProjects.first;
+    final columnWidth = pwaHomeColumnWidth(MediaQuery.sizeOf(context).width);
 
     return PwaNavShell(
       key: const ValueKey('pwa-home'),
@@ -85,13 +87,30 @@ class PwaHomeIos extends ConsumerWidget {
       child: PwaScreen(
         // The nav owns the bottom inset; the footer sits directly above it.
         bottom: false,
-        footer: PwaPrimaryButton(
-          key: const ValueKey('pwa-home-new-session'),
-          label: l.newDesignSession,
-          icon: Icons.add,
-          onPressed: controller.newProject,
+        // The footer is the scaffold's, so it sits OUTSIDE the column below
+        // and has to be bounded on its own — otherwise the button runs the
+        // full width of the monitor under a 900-wide composition.
+        footer: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: columnWidth),
+            child: PwaPrimaryButton(
+              key: const ValueKey('pwa-home-new-session'),
+              label: l.newDesignSession,
+              icon: Icons.add,
+              onPressed: controller.newProject,
+            ),
+          ),
         ),
-        child: CustomScrollView(
+        // Home ran to both edges of a monitor while Projects and Profile were
+        // already bounded. A single composition — a headline, one picture, one
+        // button — spread across 1920 stops being a composition; and the
+        // ceiling is narrower than the Projects grid's for the same reason
+        // Profile's is: a grid EARNS width by fitting more work into it, and
+        // this screen has exactly one thing to show.
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: columnWidth),
+            child: CustomScrollView(
           slivers: [
             const SliverToBoxAdapter(child: _HomeHeader()),
             SliverToBoxAdapter(
@@ -125,6 +144,8 @@ class PwaHomeIos extends ConsumerWidget {
             ),
             const SliverToBoxAdapter(child: SizedBox(height: PwaGap.lg)),
           ],
+            ),
+          ),
         ),
       ),
     );
@@ -169,6 +190,20 @@ class _HomeHeader extends StatelessWidget {
 
 /// The hero: a real before/after, or the shared showcase when there is nothing
 /// of the person's own to show yet.
+/// How wide Home's single column may become.
+///
+/// The product's shared ceiling (`pwaMaxContentWidth`) first — so Home widens
+/// exactly as far as the rest of the web app is allowed to — then narrower
+/// still, because this screen is one picture and one sentence. 900 keeps the
+/// Featured Vision near a natural landscape proportion at any desktop size; a
+/// phone is unchanged and full-bleed.
+double pwaHomeColumnWidth(double screenWidth) {
+  final ceiling = pwaMaxContentWidth(pwaFormFactorForWidth(screenWidth));
+  const composition = 900.0;
+  final bounded = ceiling < screenWidth ? ceiling : screenWidth;
+  return bounded < composition ? bounded : composition;
+}
+
 class _FeaturedVision extends StatelessWidget {
   const _FeaturedVision({super.key, required this.project, this.onOpen});
 
@@ -184,8 +219,18 @@ class _FeaturedVision extends StatelessWidget {
     // iOS: height * 0.45, clamped [260, 460]. Copied rather than re-derived —
     // the proportion is what makes the hero dominant without pushing the CTA
     // off a small phone.
-    final height =
-        (MediaQuery.sizeOf(context).height * 0.45).clamp(260.0, 460.0);
+    //
+    // That is a PHONE rule: it ties the picture to the height of the window,
+    // which is right when width is the scarce dimension and wrong when it is
+    // not. Bounded to a column on a desktop it produced a 3.4:1 letterbox —
+    // the same mistake the Full Reveal made in Phase 6, and the same fix: away
+    // from a phone the hero takes its height from its OWN width, so it stays a
+    // landscape composition instead of a banner. Phone geometry is untouched.
+    final size = MediaQuery.sizeOf(context);
+    final form = pwaFormFactorForWidth(size.width);
+    final height = form == PwaFormFactor.mobile
+        ? (size.height * 0.45).clamp(260.0, 460.0)
+        : (pwaHomeColumnWidth(size.width) / 1.6).clamp(320.0, 560.0);
 
     final p = project;
     final Widget after;

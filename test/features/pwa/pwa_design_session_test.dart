@@ -501,7 +501,12 @@ void main() {
       for (final path in const [
         '/main.dart.js',
         '/flutter_bootstrap.js',
+        // Phase 10: the loader itself was uncovered, and it is mutable by
+        // name like the rest of the shell. Left out, it kept a returning
+        // browser on last year's bootstrap.
+        '/flutter.js',
         '/version.json',
+        '/index.html',
         '/',
       ]) {
         final value = cacheFor(path);

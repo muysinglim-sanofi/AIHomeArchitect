@@ -154,6 +154,17 @@ PwaProjectSnapshot? pwaFindProject(List<PwaProjectSnapshot> lib, String id) {
 /// as the last-active one, and fetch its original photo bytes. Best-effort — any
 /// failure yields an EMPTY restore (Hero), never blocks boot. Shared by main's
 /// staging boot AND the boot tests so both exercise the SAME routing decision.
+/// Where a route lands when the durable library is EMPTY.
+///
+/// Home and Projects are the library's own pages; Create and Profile depend on
+/// nothing durable and survive. Anything naming a project cannot: there is no
+/// project to open.
+PwaRoute _bootRouteFor(PwaRoute route) => switch (route.page) {
+      PwaPage.create => PwaRoute.create,
+      PwaPage.profile => PwaRoute.profile,
+      _ => PwaRoute.home,
+    };
+
 Future<PwaBootRestore> pwaResolveBootRestore(
   PwaPersistenceRepository p, {
   PwaRoute? route,
@@ -170,13 +181,16 @@ Future<PwaBootRestore> pwaResolveBootRestore(
     if (library.isEmpty) {
       return PwaBootRestore(
         library: const [],
-        // With nothing durable to open, a project URL has to fall back to the
-        // Hero. Profile does not: it depends on no project, so a person who
-        // opens `/profile` before making anything lands on Profile — the same
-        // rule `PwaRoute.normalize` already states for it.
-        route: route == null
-            ? null
-            : (route.page == PwaPage.profile ? PwaRoute.profile : PwaRoute.home),
+        // With nothing durable to open, a PROJECT url has to fall back to the
+        // Hero. The routes that depend on no project do not, and there are two
+        // of them: `normalize` already says so for both, in its own words —
+        // "a creation session is purely local … always a valid destination".
+        //
+        // Phase 8 exempted /profile and left /create behind. A first-time
+        // visitor — whose library is empty BY DEFINITION — could not open a
+        // link to the Create screen, which is the one link worth sending
+        // someone who has never used the product.
+        route: route == null ? null : _bootRouteFor(route),
         legacyHidden: legacyHidden,
       );
     }

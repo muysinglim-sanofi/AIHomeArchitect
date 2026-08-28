@@ -50,6 +50,7 @@ import 'pwa_working_indicator.dart';
 import '../l10n/pwa_l10n.dart';
 import 'pwa_account_chip.dart';
 import 'pwa_theme.dart';
+import 'pwa_widgets.dart' show pwaRoomDisplayLabel;
 import 'pwa_type.dart';
 import 'pwa_language_switcher.dart';
 
@@ -714,7 +715,14 @@ class _V7ConversationHeader extends StatelessWidget {
     final title =
         state.activeTitleOverride ?? snap?.title ?? state.project.title;
     final bits = <String>[
-      if ((snap?.roomLabel ?? '').isNotEmpty) snap!.roomLabel,
+      // The STORED room is canonical English — it keys the prompt engine's DNA
+      // and is routed, never translated — so it is localised at display time,
+      // through the same resolver Home and Projects use. This header was the
+      // last place printing it raw, which put "Master Bedroom" at the top of a
+      // Khmer conversation.
+      if ((snap?.roomLabel ?? '').isNotEmpty)
+        pwaRoomDisplayLabel(context.pwaL10n,
+            roomId: snap!.roomId, roomLabel: snap.roomLabel),
       if ((snap?.atmosphereLabel ?? '').isNotEmpty) snap!.atmosphereLabel,
       if (state.currentVision != null)
         context.pwaL10n.visionN(state.currentVision!.visionNumber),

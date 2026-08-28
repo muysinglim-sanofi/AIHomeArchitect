@@ -108,6 +108,15 @@ class PwaL10n {
   String get yourTransformation => _mobile.yourTransformation;
   String get historyTitle => _mobile.historyTitle;
   String get transformations => _mobile.transformations;
+
+  /// "3 redesigns", and "1 redesign" rather than "1 redesigns".
+  ///
+  /// The plural word is the mobile dictionary's, because it is the approved
+  /// terminology of record in all three languages. Only the SINGULAR is owned
+  /// here — that dictionary has none, and it belongs to the frozen mobile app.
+  String transformationsCount(int n) => n == 1
+      ? _get('pwaRedesignOne')
+      : '$n ${_mobile.transformations}';
   String get navHome => _mobile.navHome;
   String get navProjects => _mobile.navProjects;
   String get chatPlaceholder => _mobile.chatPlaceholder;
@@ -523,7 +532,10 @@ class PwaL10n {
     if (days < 7) return updatedDaysAgo(days);
     if (days < 14) return _get('pwaUpdatedLastWeek');
     if (days < 31) return _get('pwaUpdatedWeeksAgo').replaceAll('{n}', '${days ~/ 7}');
-    return _get('pwaUpdatedMonthsAgo').replaceAll('{n}', '${days ~/ 30}');
+    final months = days ~/ 30;
+    // 31 days is "1 months ago" without this, and 31 days is common.
+    if (months <= 1) return _get('pwaUpdatedMonthAgoOne');
+    return _get('pwaUpdatedMonthsAgo').replaceAll('{n}', '$months');
   }
 
   /// [updatedRelative] when the timestamp is known, the stored English label
@@ -540,8 +552,15 @@ class PwaL10n {
   String get billingPassRequired => _get('pwaBillingPassRequired');
   String get billingPassExhausted => _get('pwaBillingPassExhausted');
   String get billingUnavailable => _get('pwaBillingUnavailable');
-  String passSpacesLeft(int n) =>
-      _get('pwaPassSpacesLeft').replaceAll('{n}', '$n');
+  /// COUNTS ARE NOT INTERPOLATION.
+  ///
+  /// '{n} spaces left' with n = 1 reads "1 spaces left", and it was doing so on
+  /// a real wallet. Khmer has no grammatical plural, so its singular and plural
+  /// are the same sentence — written out rather than left as a gap, because a
+  /// missing key falls back to English and that is worse than a duplicate.
+  String passSpacesLeft(int n) => n == 1
+      ? _get('pwaPassSpaceLeftOne')
+      : _get('pwaPassSpacesLeft').replaceAll('{n}', '$n');
 
   /// A backend `billing_state` code -> the sentence a person reads.
   ///
@@ -631,8 +650,9 @@ class PwaL10n {
   String get paywallErrorBody => _get('pwaPaywallErrorBody');
   String get paywallActiveTitle => _get('pwaPaywallActiveTitle');
   String get paywallActiveBody => _get('pwaPaywallActiveBody');
-  String paywallSpaces(int n) =>
-      _get('pwaPaywallSpaces').replaceAll('{n}', '$n');
+  String paywallSpaces(int n) => n == 1
+      ? _get('pwaPaywallSpaceOne')
+      : _get('pwaPaywallSpaces').replaceAll('{n}', '$n');
   String paywallDays(int n) => _get('pwaPaywallDays').replaceAll('{n}', '$n');
   String get paywallUnavailableTitle => _get('pwaPaywallUnavailableTitle');
   String get paywallUnavailableBody => _get('pwaPaywallUnavailableBody');

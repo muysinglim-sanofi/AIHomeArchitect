@@ -652,8 +652,15 @@ class _Actions extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(PwaGap.radius),
               ),
             ),
+            // The THIRD instance of the ink-on-ink label, and the worst
+            // placed: the primary action offered the moment a purchase
+            // succeeds. `pwaSans` defaults to ink and an explicit style on the
+            // child beats the button's `foregroundColor`.
             child: Text(l.payStartDesigning,
-                style: pwaSans(fontSize: 15, fontWeight: FontWeight.w600)),
+                style: pwaSans(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white)),
           ),
           TextButton(
             onPressed: () {

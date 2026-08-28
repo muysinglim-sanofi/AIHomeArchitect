@@ -17,6 +17,7 @@ import '../domain/pwa_models.dart';
 import 'pwa_brand.dart';
 import 'pwa_stored_image.dart';
 import 'pwa_theme.dart';
+import 'pwa_type.dart';
 import '../l10n/pwa_l10n.dart';
 
 const Color kPwaGold = AppColors.accent; // #C8A86A
@@ -31,8 +32,18 @@ TextStyle pwaSerif({
   double height = 1.15,
   double letterSpacing = -0.2,
 }) => TextStyle(
+  // It named NO family. Every headline it set — the paywall, the payment
+  // sheet, the payment success, all three account-sheet titles, the loading
+  // screen — inherited the app's DefaultTextStyle, whose fallback begins with
+  // Inter. So the one helper called "serif" was rendering the entire money
+  // path in the body typeface, and had been since it was written. Same class
+  // of bug as `av7Sans` in Phase 6: a style that describes a face without
+  // naming one.
+  fontFamily: kPwaDisplayFamily,
+  fontFamilyFallback: kPwaDisplayFallback,
   fontSize: fontSize,
   fontWeight: fontWeight,
+  fontVariations: pwaWeightAxis(fontWeight),
   color: color,
   height: height,
   letterSpacing: letterSpacing,

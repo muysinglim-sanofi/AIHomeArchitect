@@ -100,3 +100,15 @@ case "$MODE" in
     exit 2
     ;;
 esac
+
+# The marker the DEPLOY guard reads (tool/verify_pwa_build.mjs, wired into
+# firebase.json's predeploy). Written last, so it can only exist if the build
+# above actually finished. It holds no secret.
+cat > build/web/ayden-build.json <<JSON
+{
+  "entrypoint": "$ENTRY",
+  "mode": "$MODE",
+  "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+JSON
+echo "==> build marker written (entrypoint $ENTRY, mode $MODE)"

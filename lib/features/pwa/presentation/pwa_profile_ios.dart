@@ -608,7 +608,16 @@ class _PwaGuideSheetState extends State<_PwaGuideSheet> {
   Widget build(BuildContext context) {
     final l = context.pwaL10n;
     final seq = _seq!;
-    return SafeArea(
+    // The media is 3:2 and takes its height from the sheet's WIDTH, so on a
+    // phone held sideways the poster alone is taller than the viewport and the
+    // caption and the replay button were simply unreachable — no scroll view,
+    // no height cap. Both are here now, and the media is additionally capped
+    // so it can never eat the whole sheet.
+    final viewport = MediaQuery.sizeOf(context);
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: viewport.height * 0.9),
+      child: SafeArea(
+      child: SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(PwaGap.lg),
         child: AnimatedBuilder(
@@ -625,12 +634,17 @@ class _PwaGuideSheetState extends State<_PwaGuideSheet> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ClipRRect(
+                ConstrainedBox(
+                  constraints:
+                      BoxConstraints(maxHeight: viewport.height * 0.55),
+                  child: ClipRRect(
                   borderRadius: BorderRadius.circular(PwaGap.radiusLg),
                   child: AspectRatio(
                     aspectRatio: 3 / 2,
                     child: ColoredBox(
-                      color: pwaCharcoal,
+                      // The product's own image frame. `pwaCharcoal` is the
+                      // retired dark screen's, and the token file says so.
+                      color: pwaImageFrame,
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
@@ -652,6 +666,7 @@ class _PwaGuideSheetState extends State<_PwaGuideSheet> {
                       ),
                     ),
                   ),
+                  ),
                 ),
                 const SizedBox(height: PwaGap.md),
                 Text(l.heroSub, style: PwaType.bodyMuted()),
@@ -665,6 +680,8 @@ class _PwaGuideSheetState extends State<_PwaGuideSheet> {
             );
           },
         ),
+      ),
+      ),
       ),
     );
   }

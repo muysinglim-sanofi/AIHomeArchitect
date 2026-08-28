@@ -134,7 +134,7 @@ void main() {
       final l = pwaL10nFor(const Locale('en'));
       final n = c.read(pwaControllerProvider).visibleProjects.length;
       expect(find.text(l.historyTitle), findsOneWidget);
-      expect(find.text('$n ${l.transformations}'), findsOneWidget);
+      expect(find.text(l.transformationsCount(n)), findsOneWidget);
       // No second back button, no editorial introduction, no controls.
       expect(find.byType(TextField), findsNothing);
       expect(tester.takeException(), isNull);
@@ -240,7 +240,7 @@ void main() {
       // No demo projects in a person's own library, ever.
       expect(find.byType(Image), findsNothing);
       final l = pwaL10nFor(const Locale('en'));
-      expect(find.text('0 ${l.transformations}'), findsOneWidget);
+      expect(find.text(l.transformationsCount(0)), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 

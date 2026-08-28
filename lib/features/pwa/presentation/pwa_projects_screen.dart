@@ -11,10 +11,12 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/constants/app_colors.dart';
 import '../application/pwa_controller.dart';
 import '../domain/pwa_project.dart';
 import 'pwa_architect_tokens.dart';
 import 'pwa_brand.dart';
+import 'pwa_theme.dart' show pwaSurface, pwaGold, pwaWell, pwaHairline;
 import 'pwa_entry_screen.dart' show pwaRoomById;
 import 'pwa_widgets.dart';
 import '../l10n/pwa_l10n.dart';
@@ -798,6 +800,16 @@ enum _CardAction { rename, duplicate, delete }
 /// Rename, duplicate, delete — the project actions, and the ONE part of this
 /// retired screen the Phase 7 rebuild still uses.
 ///
+/// PHASE 10: and therefore the one part of it that had to stop looking like
+/// the screen it came from. Phase 7 reused the menu without following where
+/// its actions LED — the ⋯ on a cream project card dropped a near-black
+/// sheet, and Rename and Delete opened near-black dialogs with gold buttons.
+/// One tap from the portfolio into a different product.
+///
+/// Only the COLOURS changed. The typeface was already the product's (Phase 6
+/// gave `av7Sans` its Inter), and the actions, the keys and every controller
+/// call are untouched. The ⋯ disc stays dark: it sits on the person's render.
+///
 /// It is public for that reason. Deleting somebody's work is not a
 /// presentation decision, so the new surface calls this widget rather than
 /// re-implementing a confirm dialog beside it: one menu, one set of
@@ -840,28 +852,31 @@ class PwaProjectCardMenu extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         key: const ValueKey('pwa-rename-dialog'),
-        backgroundColor: av7CardDark,
+        backgroundColor: pwaSurface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text(
           context.pwaL10n.renameProject,
-          style: av7Sans(fontSize: 18, color: av7OnDark),
+          style: av7Sans(fontSize: 18, color: AppColors.textPrimary),
         ),
         content: TextField(
           key: const ValueKey('pwa-rename-field'),
           controller: controller,
           autofocus: true,
-          style: av7Sans(fontSize: 15, color: av7OnDark),
-          cursorColor: av7Gold,
+          style: av7Sans(fontSize: 15, color: AppColors.textPrimary),
+          cursorColor: pwaGold,
           decoration: InputDecoration(
             filled: true,
-            fillColor: const Color(0xFF1A1712),
+            // Hard-coded literals, so the token sweep above did not reach
+            // them: the field stayed a near-black box inside a white dialog,
+            // with its own text painted ink on ink.
+            fillColor: pwaWell,
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0x22D3B064)),
+              borderSide: const BorderSide(color: pwaHairline),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: av7Gold),
+              borderSide: const BorderSide(color: pwaGold),
             ),
           ),
         ),
@@ -870,7 +885,7 @@ class PwaProjectCardMenu extends ConsumerWidget {
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
               context.pwaL10n.cancel,
-              style: av7Sans(fontSize: 14, color: av7Muted),
+              style: av7Sans(fontSize: 14, color: AppColors.textSecondary),
             ),
           ),
           TextButton(
@@ -884,7 +899,7 @@ class PwaProjectCardMenu extends ConsumerWidget {
               style: av7Sans(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: av7Gold,
+                color: pwaGold,
               ),
             ),
           ),
@@ -900,22 +915,22 @@ class PwaProjectCardMenu extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         key: const ValueKey('pwa-delete-dialog'),
-        backgroundColor: av7CardDark,
+        backgroundColor: pwaSurface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Text(
           context.pwaL10n.deleteProjectTitle,
-          style: av7Sans(fontSize: 18, color: av7OnDark),
+          style: av7Sans(fontSize: 18, color: AppColors.textPrimary),
         ),
         content: Text(
           context.pwaL10n.deleteProjectBody(project.title),
-          style: av7Sans(fontSize: 14, color: av7OnDarkSoft, height: 1.4),
+          style: av7Sans(fontSize: 14, color: AppColors.textSecondary, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
               context.pwaL10n.cancel,
-              style: av7Sans(fontSize: 14, color: av7Muted),
+              style: av7Sans(fontSize: 14, color: AppColors.textSecondary),
             ),
           ),
           TextButton(
@@ -929,7 +944,7 @@ class PwaProjectCardMenu extends ConsumerWidget {
               style: av7Sans(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: const Color(0xFFE0857A),
+                color: AppColors.error,
               ),
             ),
           ),
@@ -941,7 +956,7 @@ class PwaProjectCardMenu extends ConsumerWidget {
   Future<void> _openMobileSheet(BuildContext context, WidgetRef ref) async {
     final picked = await showModalBottomSheet<_CardAction>(
       context: context,
-      backgroundColor: av7CardDark,
+      backgroundColor: pwaSurface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -958,7 +973,7 @@ class PwaProjectCardMenu extends ConsumerWidget {
               style: av7Sans(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: av7OnDark,
+                color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 6),
@@ -993,7 +1008,7 @@ class PwaProjectCardMenu extends ConsumerWidget {
     _CardAction action, {
     bool danger = false,
   }) {
-    final color = danger ? const Color(0xFFE0857A) : av7OnDark;
+    final color = danger ? AppColors.error : AppColors.textPrimary;
     return ListTile(
       leading: Icon(icon, color: color, size: 20),
       title: Text(label, style: av7Sans(fontSize: 15, color: color)),
@@ -1015,6 +1030,7 @@ class PwaProjectCardMenu extends ConsumerWidget {
         shape: BoxShape.circle,
         border: Border.all(color: const Color(0x1FFFFDFC)),
       ),
+      // The disc itself STAYS dark: it sits on the person's own render.
       child: const Icon(Icons.more_vert_rounded, size: 17, color: av7OnDark),
     );
     final target = SizedBox(width: 44, height: 44, child: Center(child: disc));
@@ -1042,7 +1058,7 @@ class PwaProjectCardMenu extends ConsumerWidget {
       child: PopupMenuButton<_CardAction>(
         key: ValueKey('project-menu-${project.projectId}'),
         tooltip: context.pwaL10n.projectOptions,
-        color: av7CardDark,
+        color: pwaSurface,
         padding: EdgeInsets.zero,
         onSelected: (a) => _run(context, ref, a),
         itemBuilder: (ctx) => [
@@ -1072,7 +1088,7 @@ class PwaProjectCardMenu extends ConsumerWidget {
     String label, {
     bool danger = false,
   }) {
-    final color = danger ? const Color(0xFFE0857A) : av7OnDark;
+    final color = danger ? AppColors.error : AppColors.textPrimary;
     return PopupMenuItem<_CardAction>(
       value: action,
       child: Row(

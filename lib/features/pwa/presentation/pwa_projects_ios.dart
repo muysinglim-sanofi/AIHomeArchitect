@@ -132,7 +132,7 @@ class PwaProjectsIos extends ConsumerWidget {
                     Text(l.historyTitle, style: PwaType.screenTitle()),
                     const SizedBox(height: 4),
                     Text(
-                      '${projects.length} ${l.transformations}',
+                      l.transformationsCount(projects.length),
                       style: PwaType.bodyMuted(),
                     ),
                   ],

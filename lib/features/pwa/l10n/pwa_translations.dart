@@ -239,6 +239,7 @@ const Map<String, String> pwaEnTranslations = {
   'pwaUpdatedLastWeek': 'Last week',
   'pwaUpdatedWeeksAgo': '{n} weeks ago',
   'pwaUpdatedMonthsAgo': '{n} months ago',
+  'pwaUpdatedMonthAgoOne': 'Last month',
 
   // ── Billing access states ──────────────────────────────────────────────────
   'pwaFreeVisionAvailable': '1 free vision',
@@ -251,8 +252,10 @@ const Map<String, String> pwaEnTranslations = {
   'pwaBillingUnavailable':
       "We're finishing an update. Please try again in a moment.",
   'pwaPassSpacesLeft': '{n} spaces left',
+  'pwaPassSpaceLeftOne': '1 space left',
 
   // -- Paywall + account (Auth/Paywall foundation) ---------------------------
+  'pwaRedesignOne': '1 redesign',
   'pwaPaywallTitle': 'Keep designing',
   'pwaPaywallFreeUsedTitle': 'Your free vision is used',
   'pwaPaywallFreeUsedBody':
@@ -272,6 +275,7 @@ const Map<String, String> pwaEnTranslations = {
   'pwaPaywallActiveTitle': 'Your pass is active',
   'pwaPaywallActiveBody': 'No watermark. Design as much as you like.',
   'pwaPaywallSpaces': '{n} spaces',
+  'pwaPaywallSpaceOne': '1 space',
   'pwaPaywallDays': '{n} days',
   'pwaPaywallUnavailableTitle': 'Payments are not open yet',
   'pwaPaywallUnavailableBody':
@@ -607,6 +611,7 @@ const Map<String, String> pwaKmTranslations = {
   'pwaUpdatedLastWeek': 'សប្ដាហ៍​មុន',
   'pwaUpdatedWeeksAgo': '{n} សប្ដាហ៍​មុន',
   'pwaUpdatedMonthsAgo': '{n} ខែ​មុន',
+  'pwaUpdatedMonthAgoOne': 'ខែ​មុន',
 
   // ── Billing access states ──────────────────────────────────────────────────
   'pwaFreeVisionAvailable': 'ទស្សនៈ​ឥត​គិត​ថ្លៃ 1',
@@ -619,8 +624,10 @@ const Map<String, String> pwaKmTranslations = {
   'pwaBillingUnavailable':
       'យើង​កំពុង​បញ្ចប់​ការ​ធ្វើ​បច្ចុប្បន្នភាព។ សូម​ព្យាយាម​ម្ដង​ទៀត​ក្នុង​ពេល​ឆាប់ៗ។',
   'pwaPassSpacesLeft': 'នៅ​សល់ {n} Spaces',
+  'pwaPassSpaceLeftOne': 'នៅ​សល់ 1 Space',
 
   // -- Paywall + account (Auth/Paywall foundation) ---------------------------
+  'pwaRedesignOne': 'ការ​រចនា​ឡើង​វិញ 1',
   'pwaPaywallTitle': 'បន្ត​រចនា​ត​ទៅ​ទៀត',
   'pwaPaywallFreeUsedTitle': 'ទស្សនៈ​ឥត​គិត​ថ្លៃ​របស់​អ្នក​ត្រូវ​បាន​ប្រើ​អស់​ហើយ',
   'pwaPaywallFreeUsedBody':
@@ -640,6 +647,7 @@ const Map<String, String> pwaKmTranslations = {
   'pwaPaywallActiveTitle': 'Pass របស់​អ្នក​កំពុង​សកម្ម',
   'pwaPaywallActiveBody': 'គ្មាន​ហត្ថលេខា​ទឹក។ រចនា​បាន​តាម​ចិត្ត។',
   'pwaPaywallSpaces': '{n} Spaces',
+  'pwaPaywallSpaceOne': '1 Space',
   'pwaPaywallDays': '{n} ថ្ងៃ',
   'pwaPaywallUnavailableTitle': 'ការ​ទូទាត់​មិន​ទាន់​បើក​នៅ​ឡើយ​ទេ',
   'pwaPaywallUnavailableBody':
@@ -980,6 +988,7 @@ const Map<String, String> pwaFrTranslations = {
   'pwaUpdatedLastWeek': 'La semaine dernière',
   'pwaUpdatedWeeksAgo': 'Il y a {n} semaines',
   'pwaUpdatedMonthsAgo': 'Il y a {n} mois',
+  'pwaUpdatedMonthAgoOne': 'Le mois dernier',
 
   // ── Billing access states ──────────────────────────────────────────────────
   'pwaFreeVisionAvailable': '1 vision gratuite',
@@ -992,8 +1001,10 @@ const Map<String, String> pwaFrTranslations = {
   'pwaBillingUnavailable':
       'Nous terminons une mise à jour. Veuillez réessayer dans un instant.',
   'pwaPassSpacesLeft': '{n} Spaces restants',
+  'pwaPassSpaceLeftOne': '1 Space restant',
 
   // -- Paywall + account (Auth/Paywall foundation) ---------------------------
+  'pwaRedesignOne': '1 redesign',
   'pwaPaywallTitle': 'Continuer à créer',
   'pwaPaywallFreeUsedTitle': 'Votre vision gratuite est utilisée',
   'pwaPaywallFreeUsedBody':
@@ -1014,6 +1025,7 @@ const Map<String, String> pwaFrTranslations = {
   'pwaPaywallActiveTitle': 'Votre pass est actif',
   'pwaPaywallActiveBody': 'Sans filigrane. Créez autant que vous voulez.',
   'pwaPaywallSpaces': '{n} Spaces',
+  'pwaPaywallSpaceOne': '1 Space',
   'pwaPaywallDays': '{n} jours',
   'pwaPaywallUnavailableTitle': 'Les paiements ne sont pas encore ouverts',
   'pwaPaywallUnavailableBody':
