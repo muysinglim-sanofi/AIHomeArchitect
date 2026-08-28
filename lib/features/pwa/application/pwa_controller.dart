@@ -328,6 +328,7 @@ class PwaState {
     this.generationErrorCode,
     this.generationRetryable = false,
     this.billingRefusal = '',
+    this.visionBrief = '',
   });
 
   final PwaPhase phase;
@@ -335,6 +336,21 @@ class PwaState {
   final List<PwaAtmosphere> atmospheres;
   final AydenImageSource? source;
   final PwaImageOrigin? sourceOrigin;
+
+  /// The free text this session was STARTED with — Create's Step 4, recorded
+  /// once at submit so the Design Session can show the person their own words
+  /// while Ayden works.
+  ///
+  /// It is a RECORD, not an editing surface: Step 4's `TextEditingController`
+  /// remains the only place the text is typed, and this is written exactly
+  /// once, by [generateFirstVision]. Empty when the step was skipped, which is
+  /// the normal case. `_freshSession` resets it with everything else.
+  ///
+  /// The generation request does NOT read this — it takes the argument it was
+  /// called with, and a retry replays the persisted `PwaPendingGeneration`,
+  /// which has always carried `userInstruction`. So this field can never
+  /// change what is sent.
+  final String visionBrief;
 
   /// Pre-generation room choice on the fast path. null = Ayden auto-detect.
   final String? selectedRoomId;
@@ -590,6 +606,7 @@ class PwaState {
     bool? generationRetryable,
     String? billingRefusal,
     bool clearGenerationError = false,
+    String? visionBrief,
   }) {
     return PwaState(
       phase: phase ?? this.phase,
@@ -637,6 +654,7 @@ class PwaState {
       billingRefusal: clearGenerationError
           ? ''
           : (billingRefusal ?? this.billingRefusal),
+      visionBrief: clearSource ? '' : (visionBrief ?? this.visionBrief),
     );
   }
 }
@@ -1442,6 +1460,10 @@ class PwaController extends StateNotifier<PwaState> {
       phase: PwaPhase.loading,
       generating: true,
       clearGenerationError: true,
+      // Recorded for the Design Session to show, in the same synchronous write
+      // that starts the generation — so the session can never render a beat
+      // before it knows what it was asked for.
+      visionBrief: userInstruction.trim(),
     );
     final atmosphereId = state.selectedAtmosphereId ?? 'ayden_signature';
     // Kept across a retry of THIS generation, minted fresh for a new one.

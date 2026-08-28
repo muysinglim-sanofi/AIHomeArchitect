@@ -20,12 +20,13 @@ import '../billing/pwa_entitlement_controller.dart';
 import 'pwa_paywall.dart';
 import 'pwa_architect_screen.dart';
 import 'pwa_create_ios.dart';
-import 'pwa_loading_screen.dart';
+import 'pwa_design_session_screen.dart';
 import 'pwa_home_ios.dart';
 import 'pwa_projects_screen.dart';
 import 'pwa_first_reveal_screen.dart';
 import 'pwa_reveal_screen.dart';
-import 'pwa_widgets.dart';
+import 'pwa_theme.dart';
+import 'pwa_type.dart';
 import '../l10n/pwa_l10n.dart';
 
 class PwaExperience extends ConsumerWidget {
@@ -45,7 +46,9 @@ class PwaExperience extends ConsumerWidget {
       // still owns the shared catalogue constants this screen imports, and it
       // is the fast way back if this needs reverting.
       PwaPhase.entry => const PwaCreateIos(),
-      PwaPhase.loading => const PwaLoadingScreen(),
+      // Phase 4 — the wait is a SESSION, not a spinner. `PwaLoadingScreen` is
+      // retained, unreferenced, on the same terms as the other two originals.
+      PwaPhase.loading => const PwaDesignSessionScreen(),
       PwaPhase.architect => const PwaArchitectScreen(),
       PwaPhase.firstReveal => const PwaFirstRevealScreen(),
       PwaPhase.reveal => const PwaRevealScreen(),
@@ -182,8 +185,12 @@ class _PwaGenerationErrorBar extends ConsumerWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
+                  // Phase 4 — the type role only. A failure message is body
+                  // copy, and on iOS body copy is Inter; the serif here was a
+                  // holdover from before the foundation existed. Every word,
+                  // every code path, every retry semantic is untouched.
                   message,
-                  style: pwaSerif(fontSize: 14, letterSpacing: 0),
+                  style: PwaType.bodyMuted(color: pwaOnCanvas),
                 ),
               ),
               if (retryable && !busy)
