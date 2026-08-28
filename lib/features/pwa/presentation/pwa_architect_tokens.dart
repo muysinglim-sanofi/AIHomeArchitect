@@ -11,6 +11,7 @@ library;
 
 import 'package:flutter/widgets.dart';
 import 'pwa_theme.dart' show pwaTextFallback, pwaTracking;
+import 'pwa_type.dart' show kPwaTextFamily;
 
 // ── Warm charcoal design surfaces ────────────────────────────────────────────
 const Color av7HeaderBlack = Color(0xFF080806); // global header bar
@@ -56,6 +57,20 @@ abstract final class Av7Motion {
 // a remote Noto download lands. See `web/fonts/README.md`.
 
 /// Functional / conversational copy.
+///
+/// PHASE 6 — it now names the family.
+///
+/// These two helpers set only a `fontFamilyFallback`, never a `fontFamily`, so
+/// every screen still using them rendered in the platform's default sans while
+/// the rest of the product had been on Inter since Phase 1. On a CanvasKit
+/// build that is not a subtle difference: it is a different typeface on the
+/// Full Reveal and on Projects than on Home, Create, the session and the
+/// result. The fallback chain is untouched — Khmer still resolves through it —
+/// and nothing here fetches a font at runtime.
+///
+/// Collateral, and approved: Projects picks up the correction too. That is a
+/// typography fix, not a redesign; its layout is untouched and its own phase
+/// still owns it.
 TextStyle av7Sans({
   required double fontSize,
   FontWeight fontWeight = FontWeight.w400,
@@ -63,6 +78,7 @@ TextStyle av7Sans({
   double height = 1.4,
   double letterSpacing = 0,
 }) => TextStyle(
+  fontFamily: kPwaTextFamily,
   fontSize: fontSize,
   fontWeight: fontWeight,
   color: color,
@@ -79,6 +95,7 @@ TextStyle av7Eyebrow({
   double letterSpacing = 2.1,
   FontWeight fontWeight = FontWeight.w600,
 }) => TextStyle(
+  fontFamily: kPwaTextFamily,
   fontSize: fontSize,
   fontWeight: fontWeight,
   color: color,

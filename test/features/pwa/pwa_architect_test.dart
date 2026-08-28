@@ -327,24 +327,66 @@ void main() {
 
   // ── The Full Reveal owns exploration ───────────────────────────────────────
   group('Full Reveal', () {
-    testWidgets('shows the Before/After, metadata, details and atmospheres', (
+    testWidgets('it SHOWS: the transformation, and almost nothing else', (
       tester,
     ) async {
+      // PHASE 6 rebuild. This used to assert the presence of a VISION DETAILS
+      // panel and an ATMOSPHERES eyebrow above a metadata strip — a reading
+      // surface with a picture on it. Nearly all of that text had already been
+      // said on the Result screen a tap earlier.
       final c = await _pumpArchitect(tester, const Size(1440, 900));
       await _openReveal(tester, c);
-      expect(find.byKey(_revealHeaderKey), findsOneWidget);
-      expect(find.byType(PwaRevealCard), findsOneWidget);
-      expect(find.byType(RevealHero), findsOneWidget);
-      // The before/after labels are now the APPROVED MOBILE wording
-      // ("Original" / "Vision"), reused rather than re-invented — which is why
-      // this asserts against the dictionary instead of a literal. The rule is
-      // the same: the Full Reveal names both sides.
       final l = pwaL10nFor(const Locale('en'));
+
+      // The transformation, and both sides named. The "after" label is the
+      // RESOLVED atmosphere, not a generic word.
+      expect(find.byType(RevealHero), findsOneWidget);
       expect(find.text(l.beforeLabel), findsOneWidget);
-      expect(find.text(l.afterLabel), findsOneWidget);
-      expect(find.text('VISION DETAILS'), findsOneWidget);
-      expect(find.text('ATMOSPHERES'), findsOneWidget);
-      expect(find.textContaining('Vision 1 of'), findsOneWidget);
+      expect(find.text('Warm Modern'), findsWidgets);
+
+      // The editorial structure is gone.
+      expect(find.text('VISION DETAILS'), findsNothing);
+      expect(find.text(l.visionDetails.toUpperCase()), findsNothing);
+      expect(find.textContaining('Created'), findsNothing);
+
+      // And the Result's paragraph is NOT repeated here.
+      expect(find.textContaining('direction is in'), findsNothing);
+
+      // What is left: the alternatives, and one action.
+      expect(find.text(l.exploreOtherAtmospheres), findsOneWidget);
+      expect(find.text(l.refineWithAyden), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the render is uncropped, at the shape the engine returns', (
+      tester,
+    ) async {
+      await _pumpArchitect(tester, const Size(390, 844)).then(
+        (c) => _openReveal(tester, c),
+      );
+      final frame = find
+          .descendant(
+            of: find.byKey(const ValueKey('pwa-full-reveal')),
+            matching: find.byType(AspectRatio),
+          )
+          .first;
+      expect(tester.widget<AspectRatio>(frame).aspectRatio, kPwaRenderAspect);
+      final r = tester.getRect(frame);
+      expect(r.width / r.height, closeTo(kPwaRenderAspect, 0.01));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the transformation dominates the screen', (tester) async {
+      const size = Size(390, 844);
+      final c = await _pumpArchitect(tester, size);
+      await _openReveal(tester, c);
+      // The hero block is the largest thing on the screen, and the atmospheres
+      // sit below it rather than beside a panel.
+      final hero = tester.getRect(find.byType(RevealHero));
+      expect(hero.width, greaterThan(size.width * 0.8));
+      final rail =
+          tester.getRect(find.byKey(const ValueKey('pwa-reveal-atmospheres')));
+      expect(hero.bottom, lessThanOrEqualTo(rail.top + 1));
       expect(tester.takeException(), isNull);
     });
 
@@ -425,14 +467,22 @@ void main() {
       expect(find.byKey(const ValueKey('av7-refine-context')), findsNothing);
     });
 
-    testWidgets('Try another atmosphere stays in the Reveal', (tester) async {
+    testWidgets('the atmospheres are always visible — nothing to reveal', (
+      tester,
+    ) async {
+      // There used to be a "Try another atmosphere" row inside the details
+      // panel whose whole job was to scroll the rail into view. The rail is
+      // the second half of the screen now, so the action it existed for has
+      // nothing left to do.
       final c = await _pumpArchitect(tester, const Size(1440, 900));
       await _openReveal(tester, c);
-      await tester.tap(find.text('Try another atmosphere'));
-      await tester.pumpAndSettle();
-      // It reveals the rail; it does NOT go back to the conversation.
+      final l = pwaL10nFor(const Locale('en'));
+      expect(find.text(l.tryAnotherAtmosphere), findsNothing);
+      expect(
+        find.byKey(const ValueKey('pwa-reveal-atmospheres')),
+        findsOneWidget,
+      );
       expect(c.read(pwaControllerProvider).phase, PwaPhase.reveal);
-      expect(find.text('ATMOSPHERES'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -459,19 +509,30 @@ void main() {
     ) async {
       final c = await _pumpArchitect(tester, const Size(1440, 900));
       await _openReveal(tester, c);
-      // Target the rail's own card (semantics labels need an explicit
-      // ensureSemantics handle, and the name alone is not unique on screen).
-      final card = find.descendant(
-        of: find.byKey(const ValueKey('pwa-reveal-atmospheres')),
-        matching: find.text('Soft Luxury'),
+      // Targeted by KEY. The rail now uses iOS's own AtmosphereHeroCard, whose
+      // name is one of several Texts it composes and which a horizontal
+      // ListView may not have built yet — a label is not a handle.
+      final card = find.byKey(const ValueKey('pwa-reveal-atmo-soft_luxury'));
+      // The rail is a lazy horizontal ListView holding cards ~86% of the
+      // viewport wide, so a card three along has not been built yet —
+      // `ensureVisible` needs an element that exists. Scroll to it the way a
+      // person would.
+      await tester.scrollUntilVisible(
+        card,
+        240,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey('pwa-reveal-atmospheres')),
+          matching: find.byType(Scrollable),
+        ),
       );
-      await tester.ensureVisible(card);
       await tester.pumpAndSettle();
       await tester.tap(card);
       await tester.pump();
       await tester.pumpAndSettle();
       expect(find.text('Soft Luxury selected'), findsOneWidget);
       expect(find.text('Create vision'), findsOneWidget);
+      // Staging alone must not have touched the session's atmosphere history.
+      expect(c.read(pwaControllerProvider).pendingAtmosphereId, 'soft_luxury');
       expect(c.read(pwaControllerProvider).versions, hasLength(1));
       expect(tester.takeException(), isNull);
     });
@@ -485,9 +546,9 @@ void main() {
       testWidgets(
         'no overflow at ${size.width.toInt()}x${size.height.toInt()}',
         (tester) async {
-          final c = await _pumpArchitect(tester, size);
+              final c = await _pumpArchitect(tester, size);
           await _openReveal(tester, c);
-          expect(find.byKey(_revealHeaderKey), findsOneWidget);
+          expect(find.byKey(const ValueKey('pwa-full-reveal')), findsOneWidget);
           expect(tester.takeException(), isNull);
         },
       );

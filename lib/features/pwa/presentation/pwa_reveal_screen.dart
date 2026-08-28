@@ -1,37 +1,99 @@
-/// The Full Reveal — the secondary, exploration-only view of ONE vision.
+/// THE FULL REVEAL — rebuilt against iOS. Phase 6.
 ///
 /// Route: `/projects/{projectId}/reveal?vision={visionId}`.
 ///
-/// It is deliberately the visual opposite of the conversation: a dark, immersive
-/// gold-on-charcoal room for looking at the image, where Architect is a warm,
-/// light place for talking. It holds the large Before/After, the vision details,
-/// the atmosphere rail and the vision-to-vision navigation — everything that used
-/// to compete with the chat for attention on one screen.
+/// What this replaced, and why it is a rebuild rather than a restyle
+/// ------------------------------------------------------------------
+/// The old screen was a reading surface with a picture on it. Above the fold
+/// it had a header bar, a metadata strip ("Vision 1 • Warm Modern • Created
+/// just now"), a VISION DETAILS panel carrying an eyebrow, a title, a reason
+/// label, a paragraph from Ayden and two stacked action rows with subtitles —
+/// and, somewhere in there, the transformation the person came to see.
 ///
-/// It never contains a second conversation. `Back to conversation` and `Open in
-/// conversation` are the only ways back, and both return to the SAME chat.
+/// Almost all of that was already said on the Result screen a tap earlier. The
+/// Full Reveal is not where the product explains itself. It is where it shows.
 ///
-/// The Before/After itself is [PwaRevealCard] → the production `RevealHero`,
-/// which is shared with the frozen mobile app and is used strictly read-only:
-/// everything here composes AROUND it.
+/// So: the panel is gone, the metadata strip is gone, the header bar is gone,
+/// and the render is the screen.
+///
+///     ┌─────────────────────────────┐
+///     │ ←            Original│Vision│   the transformation, 3:2, uncropped,
+///     │        the render           │   floating in its own blurred halo
+///     │                             │
+///     └─────────────────────────────┘
+///     Explore other atmospheres
+///     ▐ Soft Luxury ▌▐ Japandi ▌▐ …     immersive cards, horizontal
+///     [ Soft Luxury selected · Create ] only once one is chosen
+///
+/// IT IS DARK, AND THAT IS PARITY
+/// ------------------------------
+/// Every other migrated screen moved to the cream canvas. This one does not,
+/// because iOS's own Full Reveal does not: `before_after_screen.dart` paints a
+/// warm walnut gradient (#3F3220 → #181410) and calls it "galleria, not
+/// dashboard". A gallery dims the room to light the picture. The cream canvas
+/// would be lighting the room instead.
+///
+/// THE MATTE
+/// ---------
+/// iOS's locked 5.15d decision, reproduced: the render is CONTAINed — zero
+/// crop, the promise the screen's name makes — and the letterbox around it is
+/// not dead space but a heavily blurred `cover` copy of the render itself. The
+/// image extends into its own halo rather than sitting in a box.
+///
+/// WHAT IS NOT HERE, DELIBERATELY
+/// ------------------------------
+/// No hold-to-peek. iOS long-presses the render to flash the original upload;
+/// `RevealHero` is shared with the frozen mobile app and exposes no way to
+/// drive its divider from outside, so imitating that gesture would mean either
+/// forking the widget or remounting it — a fragile copy of a native gesture,
+/// which the brief explicitly prefers not to have. Dragging compares, the two
+/// sides are labelled, and one short line says so.
 library;
+
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../cards/card_catalog.dart';
+import '../../cards/widgets/atmosphere_hero_card.dart';
+import '../../../shared/widgets/reveal_hero.dart';
 import '../application/pwa_controller.dart';
 import '../domain/pwa_models.dart';
-import 'pwa_architect_tokens.dart';
-import 'pwa_brand.dart';
-import 'pwa_widgets.dart';
 import '../l10n/pwa_l10n.dart';
+import 'pwa_architect_screen.dart' show kPwaRenderAspect;
+import 'pwa_architect_tokens.dart';
+import 'pwa_stored_image.dart';
+import 'pwa_widgets.dart' show pwaAfterImage, pwaBeforeImage;
 
-/// Desktop puts the details panel beside the image; below this the panel drops
-/// under it and the atmospheres become a full-width rail.
-bool pwaRevealIsWide(double w) => w >= 1200;
+/// iOS `before_after_screen.dart`: the hero takes half the screen, clamped, and
+/// gives back exactly the height of the section header beneath it.
+const double kPwaRevealHeroFactor = 0.50;
+const double kPwaRevealHeroMin = 340;
+const double kPwaRevealHeroMax = 500;
+const double kPwaRevealSectionHeaderH = 34;
 
-/// Width of the right-hand details panel on a wide viewport.
-const double kPwaRevealPanelW = 380;
+/// The floor the atmosphere section keeps for itself: header, a card, and the
+/// action slot. The hero yields rather than pushing it off a short window.
+const double kPwaRevealSectionMin = 190;
+
+/// The blur that turns the letterbox into the render's own halo. iOS's sigma.
+const double kPwaRevealMatteBlur = 36;
+
+/// The band under the render holding the instruction line and the one action.
+/// Reserved, so the picture is never laid out underneath them.
+const double kPwaRevealFootH = 84;
+
+/// A restrained ceiling so a 27" monitor gets a bigger picture, not a poster.
+const double kPwaRevealMaxWidth = 1080;
+
+/// iOS's walnut body — the gallery wall the render hangs on.
+const List<Color> kPwaRevealCanvas = [
+  Color(0xFF3F3220),
+  Color(0xFF2F2519),
+  Color(0xFF221C14),
+  Color(0xFF181410),
+];
 
 class PwaRevealScreen extends ConsumerStatefulWidget {
   const PwaRevealScreen({super.key});
@@ -41,31 +103,7 @@ class PwaRevealScreen extends ConsumerStatefulWidget {
 }
 
 class _PwaRevealScreenState extends ConsumerState<PwaRevealScreen> {
-  final _atmosphereKey = GlobalKey(debugLabel: 'reveal-atmospheres');
-  final _scroll = ScrollController();
-
   PwaController get _c => ref.read(pwaControllerProvider.notifier);
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  /// "Try another atmosphere" from the chat lands here — bring the rail into
-  /// view so the action the user asked for is the thing they see.
-  Future<void> _focusAtmospheres() async {
-    final ctx = _atmosphereKey.currentContext;
-    if (ctx == null || !ctx.mounted) return;
-    await Scrollable.ensureVisible(
-      ctx,
-      alignment: 0.6,
-      duration: MediaQuery.of(context).disableAnimations
-          ? Duration.zero
-          : Av7Motion.component,
-      curve: Av7Motion.curve,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,140 +119,108 @@ class _PwaRevealScreenState extends ConsumerState<PwaRevealScreen> {
     }
 
     return Scaffold(
+      key: const ValueKey('pwa-full-reveal'),
       backgroundColor: av7DarkBg,
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, c) {
-            final wide = pwaRevealIsWide(c.maxWidth);
-            return Column(
-              children: [
-                PwaRevealHeader(
-                  shownNumber: state.previewedIndex + 1,
-                  total: state.versionCount,
-                  hasPrev: state.hasPreviousVision,
-                  hasNext: state.hasNextVision,
-                  compact: !wide,
-                  onBack: () =>
-                      _c.backToConversation(focusVisionId: vision.versionId),
-                  onPrev: _c.previewPrevious,
-                  onNext: _c.previewNext,
-                ),
-                Expanded(
-                  child: wide ? _wide(state, vision) : _narrow(state, vision),
-                ),
-                if (state.pendingAtmosphereId != null)
-                  PwaRevealPendingBar(state: state, controller: _c),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  // ── Wide: image left, details right, atmospheres beneath ───────────────────
-  Widget _wide(PwaState state, PwaVision vision) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            controller: _scroll,
-            padding: const EdgeInsets.fromLTRB(24, 18, 12, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                LayoutBuilder(
-                  builder: (context, c) {
-                    // Keep the hero large but never taller than the viewport.
-                    final h = (MediaQuery.sizeOf(context).height * 0.62).clamp(
-                      380.0,
-                      720.0,
-                    );
-                    return PwaRevealFrame(
-                      child: PwaRevealCard(
-                        vision: vision,
-                        source: state.source,
-                        versions: state.versions,
-                        project: state.project,
-                        aspectRatio: (c.maxWidth - 16) / h,
-                        onDark: true,
-                        showCaption: false,
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 12),
-                PwaVisionMeta(
-                  vision: vision,
-                  atmosphereName: pwaAtmosphereNameOf(
-                    state,
-                    vision.atmosphereId,
-                  ),
-                ),
-                const SizedBox(height: 22),
-                PwaAtmosphereRail(
-                  key: _atmosphereKey,
-                  state: state,
-                  controller: _c,
-                  cardWidth: 156,
-                ),
-              ],
-            ),
-          ),
-        ),
-        SizedBox(
-          width: kPwaRevealPanelW,
-          child: PwaVisionDetailsPanel(
-            state: state,
-            vision: vision,
-            controller: _c,
-            onTryAtmosphere: _focusAtmospheres,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── Narrow: image, then details, then the rail ─────────────────────────────
-  Widget _narrow(PwaState state, PwaVision vision) {
-    final mobile = MediaQuery.sizeOf(context).width < 768;
-    return SingleChildScrollView(
-      controller: _scroll,
-      padding: EdgeInsets.fromLTRB(mobile ? 12 : 20, 14, mobile ? 12 : 20, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Stack(
+        fit: StackFit.expand,
         children: [
-          PwaRevealFrame(
-            child: PwaRevealCard(
-              vision: vision,
-              source: state.source,
-                        versions: state.versions,
-              project: state.project,
-              aspectRatio: mobile ? 4 / 3 : 16 / 10,
-              onDark: true,
-              showCaption: false,
+          // The gallery wall, full-bleed and behind everything — including the
+          // space under the render, so the picture floats on one continuous
+          // surface instead of ending at a seam.
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0.0, 0.30, 0.65, 1.0],
+                  colors: kPwaRevealCanvas,
+                ),
+              ),
             ),
           ),
-          const SizedBox(height: 12),
-          PwaVisionMeta(
-            vision: vision,
-            atmosphereName: pwaAtmosphereNameOf(state, vision.atmosphereId),
-          ),
-          const SizedBox(height: 16),
-          PwaVisionDetailsPanel(
-            state: state,
-            vision: vision,
-            controller: _c,
-            onTryAtmosphere: _focusAtmospheres,
-            boxed: true,
-          ),
-          const SizedBox(height: 22),
-          PwaAtmosphereRail(
-            key: _atmosphereKey,
-            state: state,
-            controller: _c,
-            cardWidth: mobile ? 132 : 156,
+          SafeArea(
+            // The action slot carries the bottom inset itself, so the section
+            // can run to the edge of the glass.
+            bottom: false,
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final contentW =
+                    box.maxWidth < kPwaRevealMaxWidth
+                        ? box.maxWidth
+                        : kPwaRevealMaxWidth;
+
+                // TWO CANDIDATES, and the bigger wins.
+                //
+                // iOS's 0.50-of-the-screen rule is a PHONE rule: there, the
+                // column is narrow, so height is what limits the render. On a
+                // desktop it is the opposite — the column is wide and the
+                // 0.50 rule leaves a small picture adrift in a large blurred
+                // halo, which is the opposite of "an even larger comparison
+                // surface". So the hero also asks what height the render would
+                // need to use the full column width, and takes whichever is
+                // larger.
+                final fromHeight =
+                    (box.maxHeight * kPwaRevealHeroFactor).clamp(
+                          kPwaRevealHeroMin,
+                          kPwaRevealHeroMax,
+                        ) -
+                        kPwaRevealSectionHeaderH;
+                final fromWidth = (contentW - 24) / kPwaRenderAspect +
+                    kPwaRevealFootH +
+                    24;
+
+                // …bounded by what the atmospheres need. A floor in pixels for
+                // a short window, and a share of the screen on a tall one, so
+                // the cards never collapse to a strip on a large display.
+                final sectionH = box.maxHeight * 0.28 < kPwaRevealSectionMin
+                    ? kPwaRevealSectionMin
+                    : box.maxHeight * 0.28;
+                final heroH = (fromHeight > fromWidth ? fromHeight : fromWidth)
+                    .clamp(
+                      160.0,
+                      (box.maxHeight - sectionH).clamp(160.0, double.infinity),
+                    )
+                    .toDouble();
+
+                return Center(
+                  child: ConstrainedBox(
+                    constraints:
+                        const BoxConstraints(maxWidth: kPwaRevealMaxWidth),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(
+                          height: heroH,
+                          child: _RevealHeroBlock(
+                            state: state,
+                            vision: vision,
+                            onBack: () => _c.backToConversation(
+                              focusVisionId: vision.versionId,
+                            ),
+                            onPrev: _c.previewPrevious,
+                            onNext: _c.previewNext,
+                            // Untouched semantics: it records which vision the
+                            // next message is about and hands the person back
+                            // to the conversation. It generates nothing.
+                            onRefine: () =>
+                                _c.startRefineContext(vision.versionId),
+                          ),
+                        ),
+                        _SectionHeader(context.pwaL10n.exploreOtherAtmospheres),
+                        Expanded(
+                          child: _AtmosphereCarousel(
+                            state: state,
+                            onSelect: _c.stageAtmosphere,
+                          ),
+                        ),
+                        _ActionSlot(state: state, controller: _c),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -231,778 +237,219 @@ String pwaAtmosphereNameOf(PwaState state, String? id) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// HEADER
+// THE TRANSFORMATION
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Reveal header: leave, identity, and the vision-to-vision navigation — which
-/// lives HERE and nowhere else, so the conversation keeps a single purpose.
-class PwaRevealHeader extends StatelessWidget {
-  const PwaRevealHeader({
-    super.key,
-    required this.shownNumber,
-    required this.total,
-    required this.hasPrev,
-    required this.hasNext,
-    required this.compact,
+class _RevealHeroBlock extends StatelessWidget {
+  const _RevealHeroBlock({
+    required this.state,
+    required this.vision,
     required this.onBack,
     required this.onPrev,
     required this.onNext,
+    required this.onRefine,
   });
-  final int shownNumber;
-  final int total;
-  final bool hasPrev;
-  final bool hasNext;
-  final bool compact;
+
+  final PwaState state;
+  final PwaVision vision;
   final VoidCallback onBack;
   final VoidCallback onPrev;
   final VoidCallback onNext;
+  final VoidCallback onRefine;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      key: const ValueKey('pwa-reveal-header'),
-      height: compact ? 60 : 72,
-      padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 24),
-      decoration: const BoxDecoration(
-        color: av7HeaderBlack,
-        border: Border(bottom: BorderSide(color: Color(0x29D3B064))),
-      ),
-      child: Row(
-        children: [
-          Semantics(
-            button: true,
-            label: context.pwaL10n.backToConversation,
-            child: Tooltip(
-              message: context.pwaL10n.backToConversation,
-              child: Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(999),
-                child: InkWell(
-                  key: const ValueKey('pwa-back-to-conversation'),
-                  onTap: onBack,
-                  borderRadius: BorderRadius.circular(999),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.arrow_back_rounded,
-                          size: 20,
-                          color: av7OnDark,
-                        ),
-                        if (!compact) ...[
-                          const SizedBox(width: 10),
-                          Text(
-                            context.pwaL10n.backToConversation,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: av7Sans(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: av7OnDark,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
+    final l = context.pwaL10n;
+    final atmosphere = pwaAtmosphereNameOf(state, vision.atmosphereId);
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // ── The halo ────────────────────────────────────────────────────────
+        // The render again, filling the block, blurred past recognition. It is
+        // what turns the letterbox from dead walnut into the picture's own
+        // extended colour. Isolated in a RepaintBoundary so the blur is
+        // rasterised once and never recomputed while the divider is dragged.
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: ImageFiltered(
+              imageFilter: ui.ImageFilter.blur(
+                sigmaX: kPwaRevealMatteBlur,
+                sigmaY: kPwaRevealMatteBlur,
+              ),
+              child: PwaStoredImage(
+                key: ValueKey('reveal-matte-${vision.versionId}'),
+                reference: vision.afterAsset,
+                placeholderColor: av7DarkBg,
+              ),
+            ),
+          ),
+        ),
+        // A little ink over the halo: it is a backdrop, and the render in front
+        // of it has to stay the brightest thing on the screen.
+        const Positioned.fill(
+          child: ColoredBox(color: Color(0x59181410)),
+        ),
+
+        // ── The render ──────────────────────────────────────────────────────
+        Center(
+          child: Padding(
+            // The bottom inset is the hint + CTA block's own height. Without
+            // it the render's lower edge and the instruction line share the
+            // same six pixels, and the words sit ON the picture — the exact
+            // contrast bet this screen avoids everywhere else.
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, kPwaRevealFootH),
+            child: AspectRatio(
+              // CONTAIN, at the shape the engine returns. The screen is called
+              // Full Reveal; cropping it here would be the one place the name
+              // is a lie.
+              aspectRatio: kPwaRenderAspect,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: RevealHero(
+                  key: ValueKey('full-reveal-${vision.versionId}'),
+                  afterImage: pwaAfterImage(vision),
+                  beforeImage: pwaBeforeImage(
+                    state.source,
+                    state.project,
+                    vision: vision,
+                    versions: state.versions,
                   ),
+                  initialFraction: 0.30,
+                  autoSweep: true,
+                  // SURFACE, not handle. Everywhere else in this product the
+                  // handle owns the drag so it cannot fight a scrolling page —
+                  // and this is the one screen that does not scroll, which is
+                  // exactly the condition the shared widget documents for
+                  // giving the whole surface to the gesture.
+                  dragMode: RevealDragMode.surface,
+                  beforeLabel: l.beforeLabel,
+                  afterLabel: atmosphere,
+                  showLabels: true,
                 ),
               ),
             ),
           ),
-          const Spacer(),
-          if (!compact)
-            Text(
-              context.pwaL10n.fullReveal,
-              style: av7Eyebrow(fontSize: 10, letterSpacing: 4),
-            ),
-          const Spacer(),
-          PwaVisionNav(
-            shownNumber: shownNumber,
-            total: total,
-            hasPrev: hasPrev,
-            hasNext: hasNext,
-            onPrev: onPrev,
-            onNext: onNext,
-            arrowSize: compact ? 34 : 40,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// "Vision N of M ‹ ›" — the ONLY vision navigator in the product.
-class PwaVisionNav extends StatelessWidget {
-  const PwaVisionNav({
-    super.key,
-    required this.shownNumber,
-    required this.total,
-    required this.hasPrev,
-    required this.hasNext,
-    required this.onPrev,
-    required this.onNext,
-    required this.arrowSize,
-  });
-  final int shownNumber;
-  final int total;
-  final bool hasPrev;
-  final bool hasNext;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
-  final double arrowSize;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = total <= 0
-        ? context.pwaL10n.visionOfTotal(0, 0)
-        : context.pwaL10n.visionOfTotal(shownNumber, total);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Flexible(
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: av7Sans(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: av7OnDark,
-            ),
-          ),
         ),
-        const SizedBox(width: 10),
-        _NavArrow(
-          icon: Icons.chevron_left_rounded,
-          size: arrowSize,
-          enabled: hasPrev,
-          onTap: onPrev,
-          semantic: context.pwaL10n.previousVision,
-        ),
-        const SizedBox(width: 8),
-        _NavArrow(
-          icon: Icons.chevron_right_rounded,
-          size: arrowSize,
-          enabled: hasNext,
-          onTap: onNext,
-          semantic: context.pwaL10n.nextVision,
-        ),
-      ],
-    );
-  }
-}
 
-class _NavArrow extends StatelessWidget {
-  const _NavArrow({
-    required this.icon,
-    required this.size,
-    required this.enabled,
-    required this.onTap,
-    required this.semantic,
-  });
-  final IconData icon;
-  final double size;
-  final bool enabled;
-  final VoidCallback onTap;
-  final String semantic;
-
-  @override
-  Widget build(BuildContext context) {
-    final border = av7Gold.withValues(alpha: 0.5);
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: semantic,
-      child: Material(
-        color: Colors.transparent,
-        shape: CircleBorder(
-          side: BorderSide(
-            color: enabled ? border : border.withValues(alpha: 0.4),
-          ),
-        ),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: enabled ? onTap : null,
-          child: SizedBox(
-            width: size,
-            height: size,
-            child: Icon(
-              icon,
-              size: size * 0.46,
-              color: enabled ? av7OnDark : av7OnDark.withValues(alpha: 0.28),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// IMAGE FRAME + METADATA
-// ════════════════════════════════════════════════════════════════════════════
-
-/// Dark, gold-edged frame around the Before/After.
-class PwaRevealFrame extends StatelessWidget {
-  const PwaRevealFrame({super.key, required this.child});
-  final Widget child;
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(8),
-    decoration: BoxDecoration(
-      color: av7Reveal,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: av7Gold.withValues(alpha: 0.35)),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x40000000),
-          blurRadius: 26,
-          offset: Offset(0, 12),
-        ),
-      ],
-    ),
-    child: child,
-  );
-}
-
-/// One clean metadata strip beneath the reveal.
-class PwaVisionMeta extends StatelessWidget {
-  const PwaVisionMeta({
-    super.key,
-    required this.vision,
-    required this.atmosphereName,
-  });
-  final PwaVision vision;
-  final String atmosphereName;
-
-  @override
-  Widget build(BuildContext context) {
-    Widget dot() => Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Text(
-        '•',
-        style: av7Sans(fontSize: 13, color: av7Gold.withValues(alpha: 0.75)),
-      ),
-    );
-    return Container(
-      height: 46,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: av7MetaBg,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          const PwaLogoBadge(size: 24),
-          const SizedBox(width: 10),
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    context.pwaL10n.visionN(vision.visionNumber),
-                    maxLines: 1,
-                    style: av7Sans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: av7Gold,
-                    ),
-                  ),
-                  dot(),
-                  Text(
-                    atmosphereName,
-                    maxLines: 1,
-                    style: av7Sans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: av7OnDarkSoft,
-                    ),
-                  ),
-                  dot(),
-                  Text(
-                    context.pwaL10n.createdJustNow,
-                    maxLines: 1,
-                    style: av7Sans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: av7OnDarkSoft,
-                    ),
-                  ),
-                ],
+        // ── Chrome, kept to the corners ─────────────────────────────────────
+        Positioned(
+          top: 8,
+          left: 8,
+          right: 8,
+          child: Row(
+            key: const ValueKey('pwa-reveal-header'),
+            children: [
+              _GlassButton(
+                key: const ValueKey('pwa-back-to-conversation'),
+                icon: Icons.arrow_back_rounded,
+                tooltip: l.backToConversation,
+                onTap: onBack,
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// DETAILS PANEL
-// ════════════════════════════════════════════════════════════════════════════
-
-/// Vision details + the actions that belong to exploring a render. Deliberately
-/// NOT a conversation: it links back to the one that exists.
-class PwaVisionDetailsPanel extends StatelessWidget {
-  const PwaVisionDetailsPanel({
-    super.key,
-    required this.state,
-    required this.vision,
-    required this.controller,
-    required this.onTryAtmosphere,
-    this.boxed = false,
-  });
-  final PwaState state;
-  final PwaVision vision;
-  final PwaController controller;
-  final VoidCallback onTryAtmosphere;
-
-  /// Narrow layouts render the panel as a card inside the scroll flow.
-  final bool boxed;
-
-  /// The Ayden line that introduced this vision, if the conversation has one.
-  String? get _aydenNote {
-    for (final m in state.messages) {
-      if (m.kind == PwaMessageKind.reveal &&
-          m.visionId == vision.versionId &&
-          m.text.isNotEmpty) {
-        return m.text;
-      }
-    }
-    return null;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final note = _aydenNote;
-    final body = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(context.pwaL10n.visionDetails, style: av7Eyebrow(fontSize: 11)),
-        const SizedBox(height: 14),
-        Text(
-          context.pwaL10n.visionN(vision.visionNumber),
-          style: av7Sans(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: av7OnDark,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          vision.reasonLabel,
-          style: av7Sans(fontSize: 13, color: av7OnDarkSoft),
-        ),
-        if (note != null) ...[
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: av7MetaBg,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: av7Gold.withValues(alpha: 0.18)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const PwaLogoBadge(size: 26),
-                const SizedBox(width: 10),
-                Expanded(
+              const Spacer(),
+              // Only when there is more than one vision to step between. A
+              // navigator that can never move is chrome for its own sake.
+              if (state.versionCount > 1) ...[
+                _GlassButton(
+                  icon: Icons.chevron_left_rounded,
+                  tooltip: l.previousVision,
+                  onTap: state.hasPreviousVision ? onPrev : null,
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                   child: Text(
-                    note,
+                    l.visionOfTotal(
+                      state.previewedIndex + 1,
+                      state.versionCount,
+                    ),
                     style: av7Sans(
-                      fontSize: 13.5,
-                      height: 1.5,
-                      color: av7OnDarkSoft,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: av7OnDark,
                     ),
                   ),
                 ),
-              ],
-            ),
-          ),
-        ],
-        const SizedBox(height: 20),
-        // "Back to conversation" in the header already covers a plain return —
-        // this action exists only because it carries an intent with it.
-        _RevealAction(
-          icon: Icons.tune_rounded,
-          label: context.pwaL10n.refineWithAyden,
-          subtitle: context.pwaL10n.continueInConversation,
-          onTap: () => controller.startRefineContext(vision.versionId),
-        ),
-        const SizedBox(height: 10),
-        _RevealAction(
-          icon: Icons.auto_awesome,
-          label: context.pwaL10n.tryAnotherAtmosphere,
-          subtitle: context.pwaL10n.exploreDifferentStyle,
-          onTap: onTryAtmosphere,
-        ),
-        if (state.isPreviewingOther) ...[
-          const SizedBox(height: 18),
-          PwaRevealPreviewActions(state: state, controller: controller),
-        ],
-      ],
-    );
-
-    if (boxed) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: av7Reveal,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: av7Gold.withValues(alpha: 0.18)),
-        ),
-        child: body,
-      );
-    }
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        border: Border(left: BorderSide(color: Color(0x29D3B064))),
-      ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-        child: body,
-      ),
-    );
-  }
-}
-
-class _RevealAction extends StatelessWidget {
-  const _RevealAction({
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    const fg = av7OnDark;
-    return Semantics(
-      button: true,
-      label: label,
-      child: Material(
-        color: av7RevealRaised.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: av7Gold.withValues(alpha: 0.22)),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, size: 18, color: av7Gold),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: av7Sans(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                          color: fg,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: av7Sans(
-                          fontSize: 11.5,
-                          color: av7OnDark.withValues(alpha: 0.5),
-                        ),
-                      ),
-                    ],
-                  ),
+                _GlassButton(
+                  icon: Icons.chevron_right_rounded,
+                  tooltip: l.nextVision,
+                  onTap: state.hasNextVision ? onNext : null,
                 ),
               ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// "Previewing an older vision" affordance — set as current / continue from.
-class PwaRevealPreviewActions extends StatelessWidget {
-  const PwaRevealPreviewActions({
-    super.key,
-    required this.state,
-    required this.controller,
-  });
-  final PwaState state;
-  final PwaController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final v = state.previewedVision!;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(
-        color: av7RevealRaised.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: av7Gold.withValues(alpha: 0.28)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            context.pwaL10n.previewingVisionN(v.visionNumber),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: av7Sans(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: av7OnDark,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: () => controller.setCurrentVision(v.versionId),
-                icon: const Icon(
-                  Icons.check_circle_outline,
-                  size: 15,
-                  color: av7OnDark,
-                ),
-                label: Text(context.pwaL10n.setAsCurrent),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: av7OnDark,
-                  side: BorderSide(color: av7Gold.withValues(alpha: 0.4)),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => controller.continueFromVision(v.versionId),
-                icon: const Icon(
-                  Icons.alt_route_rounded,
-                  size: 15,
-                  color: av7OnDark,
-                ),
-                label: Text(context.pwaL10n.continueFromThisVision),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: av7OnDark,
-                  side: BorderSide(color: av7Gold.withValues(alpha: 0.4)),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// ATMOSPHERE RAIL  (lives here, and only here)
-// ════════════════════════════════════════════════════════════════════════════
-
-class PwaAtmosphereRail extends StatelessWidget {
-  const PwaAtmosphereRail({
-    super.key,
-    required this.state,
-    required this.controller,
-    required this.cardWidth,
-  });
-  final PwaState state;
-  final PwaController controller;
-  final double cardWidth;
-
-  @override
-  Widget build(BuildContext context) {
-    final imgH = cardWidth * (106 / 156);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(context.pwaL10n.atmospheresSection, style: av7Eyebrow()),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: imgH + 64,
-          child: ListView.separated(
-            key: const ValueKey('pwa-reveal-atmospheres'),
-            scrollDirection: Axis.horizontal,
-            primary: false,
-            physics: const ClampingScrollPhysics(),
-            itemCount: state.atmospheres.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 12),
-            itemBuilder: (context, i) {
-              final a = state.atmospheres[i];
-              final appliedId =
-                  state.currentVision?.atmosphereId ??
-                  state.selectedAtmosphereId;
-              final selected = a.id == appliedId;
-              return _AtmosphereCard(
-                atmosphere: a,
-                selected: selected,
-                pending: state.pendingAtmosphereId == a.id && !selected,
-                width: cardWidth,
-                imageHeight: imgH,
-                enabled: !state.generating,
-                onTap: () => controller.stageAtmosphere(a.id),
-              );
-            },
-          ),
         ),
-      ],
-    );
-  }
-}
 
-class _AtmosphereCard extends StatelessWidget {
-  const _AtmosphereCard({
-    required this.atmosphere,
-    required this.selected,
-    required this.pending,
-    required this.width,
-    required this.imageHeight,
-    required this.enabled,
-    required this.onTap,
-  });
-  final PwaAtmosphere atmosphere;
-  final bool selected;
-  final bool pending;
-  final double width;
-  final double imageHeight;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final borderColor = selected
-        ? av7Gold
-        : pending
-        ? av7Gold.withValues(alpha: 0.55)
-        : Colors.white.withValues(alpha: 0.08);
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: context.pwaL10n.selectAtmosphere(atmosphere.name),
-      child: GestureDetector(
-        onTap: enabled ? onTap : null,
-        child: Container(
-          width: width,
-          decoration: BoxDecoration(
-            color: av7CardDark,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: borderColor,
-              width: selected || pending ? 2 : 1,
-            ),
-          ),
+        // ── The one action, and the one line of instruction ────────────────
+        //
+        // iOS keeps a SINGLE in-hero CTA at the foot of the render. Here it is
+        // "Refine with Ayden", and it is not decoration: `startRefineContext`
+        // is a real capability that was reachable only from this screen — it
+        // returns to the conversation carrying THIS vision, so the composer
+        // opens already pointed at it. The details panel that used to hold it
+        // is gone; the capability is not.
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 12,
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(13),
-                    ),
-                    child: SizedBox(
-                      height: imageHeight,
-                      width: double.infinity,
-                      child: Image.asset(
-                        atmosphere.asset,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) =>
-                            const ColoredBox(color: av7RevealRaised),
-                      ),
-                    ),
+              IgnorePointer(
+                child: Text(
+                  l.shared.dragToReveal,
+                  textAlign: TextAlign.center,
+                  style: av7Sans(
+                    fontSize: 11,
+                    color: av7OnDark.withValues(alpha: 0.62),
+                    letterSpacing: 0.2,
                   ),
-                  if (selected)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        width: 28,
-                        height: 28,
-                        decoration: const BoxDecoration(
-                          color: av7Surface,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.check_rounded,
-                          size: 18,
-                          color: av7Ink,
-                        ),
-                      ),
-                    ),
-                ],
+                ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      atmosphere.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: av7Sans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: av7OnDark,
-                        height: 1.3,
-                      ),
-                    ),
-                    if (atmosphere.descriptor.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        atmosphere.descriptor,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: av7Sans(
-                          fontSize: 10.5,
-                          color: av7OnDark.withValues(alpha: 0.62),
-                          height: 1.3,
-                        ),
-                      ),
-                    ],
-                  ],
+              const SizedBox(height: 8),
+              Center(child: _HeroCta(label: l.refineWithAyden, onTap: onRefine)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The single in-hero call to action. Glass, so it reads over a bright kitchen
+/// and a dark bedroom alike — the label never sits bare on an image nobody
+/// chose.
+class _HeroCta extends StatelessWidget {
+  const _HeroCta({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      key: const ValueKey('pwa-reveal-refine'),
+      color: const Color(0xFF181410).withValues(alpha: 0.66),
+      shape: const StadiumBorder(
+        side: BorderSide(color: Color(0x59D3B064)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.tune_rounded, size: 15, color: av7Gold),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: av7Sans(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: av7OnDark,
                 ),
               ),
             ],
@@ -1013,123 +460,320 @@ class _AtmosphereCard extends StatelessWidget {
   }
 }
 
-/// Atmosphere pending confirmation — a full-width footer bar on the Reveal.
+/// A control that reads on any render: dark glass, never a bare glyph over an
+/// unpredictable photograph.
+class _GlassButton extends StatelessWidget {
+  const _GlassButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = onTap != null;
+    return Semantics(
+      button: true,
+      enabled: on,
+      label: tooltip,
+      child: Tooltip(
+        message: tooltip,
+        child: Material(
+          color: const Color(0xFF181410).withValues(alpha: on ? 0.62 : 0.30),
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: SizedBox(
+              width: 40,
+              height: 40,
+              child: Icon(
+                icon,
+                size: 20,
+                color: av7OnDark.withValues(alpha: on ? 1 : 0.35),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// EXPLORE OTHER ATMOSPHERES
+// ════════════════════════════════════════════════════════════════════════════
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: kPwaRevealSectionHeaderH,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+          child: Align(
+            alignment: Alignment.bottomLeft,
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: av7Sans(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: av7OnDark,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
+/// The alternatives, as pictures rather than swatches.
+///
+/// Uses iOS's own `AtmosphereHeroCard` in its `fillPhoto` form — the same
+/// widget Create's Step 3 shows — so an atmosphere looks the same wherever the
+/// product offers it.
+class _AtmosphereCarousel extends StatelessWidget {
+  const _AtmosphereCarousel({required this.state, required this.onSelect});
+
+  final PwaState state;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.pwaL10n;
+    final screenW = MediaQuery.sizeOf(context).width;
+    // What is APPLIED, not what is staged: the tick marks the direction the
+    // render on screen was made in.
+    final appliedId =
+        state.currentVision?.atmosphereId ?? state.selectedAtmosphereId;
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        // iOS's proportions: the card's width follows the section's full
+        // height, the card itself is a little shorter so the strip reads as
+        // calm rather than packed.
+        final cardW = (c.maxHeight * 1.35).clamp(150.0, screenW * 0.86);
+        final cardH = c.maxHeight * 0.82;
+        return Align(
+          child: SizedBox(
+            height: cardH,
+            child: ListView.separated(
+              key: const ValueKey('pwa-reveal-atmospheres'),
+              scrollDirection: Axis.horizontal,
+              primary: false,
+              physics: const ClampingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              itemCount: state.atmospheres.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, i) {
+                final a = state.atmospheres[i];
+                final selected = a.id == appliedId;
+                final signature = a.id == 'ayden_signature';
+                return SizedBox(
+                  width: cardW,
+                  child: AtmosphereHeroCard(
+                    key: ValueKey('pwa-reveal-atmo-${a.id}'),
+                    // The Signature wordmark is baked into its art, exactly as
+                    // on Create — the card names itself.
+                    name: signature ? '' : a.name,
+                    subtitle: signature
+                        ? l.selectedByAyden
+                        : l.atmosphereSubtitle(a.id),
+                    asset: signature
+                        ? kPwaSignatureRevealAsset
+                        : (kAtmosphereCardById[a.id]?.asset ??
+                            'assets/cards/atmospheres/${a.id}.png'),
+                    selected: selected,
+                    fillPhoto: true,
+                    nameFontSize: 16,
+                    subtitleFontSize: 11,
+                    // Staging only. Which atmospheres a person may pick, when a
+                    // switch is allowed and what it costs are all decided
+                    // elsewhere and are untouched by this screen: the tap
+                    // records a choice and the slot below asks for
+                    // confirmation, exactly as before.
+                    onTap: state.generating ? null : () => onSelect(a.id),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The pre-composed AYDEN SIGNATURE art — not in the atmosphere card
+/// catalogue, because Signature is a delegation rather than an atmosphere.
+const String kPwaSignatureRevealAsset = 'assets/atmospheres/ayden_signature.jpg';
+
+// ════════════════════════════════════════════════════════════════════════════
+// THE ACTION SLOT
+// ════════════════════════════════════════════════════════════════════════════
+
+/// One reserved band under the carousel, and only ever one thing in it: the
+/// confirmation for a staged atmosphere, or the adopt/discard pair when a
+/// previous vision is being previewed. Reserved rather than animated, so
+/// choosing a card does not resize the strip above it.
+class _ActionSlot extends StatelessWidget {
+  const _ActionSlot({required this.state, required this.controller});
+
+  final PwaState state;
+  final PwaController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final inset = MediaQuery.viewPaddingOf(context).bottom;
+    final Widget child;
+    if (state.pendingAtmosphereId != null) {
+      child = PwaRevealPendingBar(state: state, controller: controller);
+    } else if (state.isPreviewingOther) {
+      child = PwaRevealPreviewActions(state: state, controller: controller);
+    } else {
+      child = const SizedBox.shrink();
+    }
+    return Padding(
+      padding: EdgeInsets.fromLTRB(16, 8, 16, 10 + inset),
+      child: child,
+    );
+  }
+}
+
+/// A staged atmosphere, awaiting the person's word.
+///
+/// EVERY semantic here is the one that was here before: staging creates
+/// nothing, Cancel drops it, and only the confirm button spends anything. The
+/// copy states the cost before it is paid.
 class PwaRevealPendingBar extends StatelessWidget {
   const PwaRevealPendingBar({
     super.key,
     required this.state,
     required this.controller,
   });
+
   final PwaState state;
   final PwaController controller;
 
   @override
   Widget build(BuildContext context) {
+    final l = context.pwaL10n;
     final atmo = state.atmospheres.firstWhere(
       (a) => a.id == state.pendingAtmosphereId,
       orElse: () => state.atmospheres.first,
     );
     final busy = state.generating;
-    final info = Row(
+
+    // Two lines, not one. "Ayden Signature sélectionnée · Crée la Vision 2 ·
+    // Utilise 1 Space" beside two buttons left the sentence about eighty
+    // pixels wide on a phone, and the cost — the one thing that must be read
+    // before it is paid — ellipsised away to "· ...".
+    return Column(
+      key: const ValueKey('pwa-reveal-pending'),
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Icon(Icons.auto_awesome, size: 18, color: av7Gold),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            children: [
-              Text(
-                context.pwaL10n.atmosphereSelected(atmo.name),
-                style: av7Sans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: av7OnDark,
-                ),
-              ),
-              Text(
-                context.pwaL10n.createsVisionN(state.versionCount + 1),
-                style: av7Sans(fontSize: 13, color: av7OnDarkSoft),
-              ),
-              Text(
-                context.pwaL10n.usesOneSpace,
-                style: av7Sans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: av7Gold,
-                ),
-              ),
-            ],
+        Text(
+          l.atmosphereSelected(atmo.name),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: av7Sans(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: av7OnDark,
           ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          // Each of these already carries its own leading "·" — they were
+          // written to be chained. Joining them with another one produced
+          // "· Crée la Vision 2 · · Utilise 1 Space".
+          '${l.createsVisionN(state.versionCount + 1)} ${l.usesOneSpace}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: av7Sans(fontSize: 12, color: av7OnDarkSoft),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              onPressed: busy ? null : controller.cancelPendingAtmosphere,
+              style: TextButton.styleFrom(foregroundColor: av7OnDarkSoft),
+              child: Text(l.cancel),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              key: const ValueKey('pwa-reveal-create'),
+              onPressed: busy ? null : controller.applyAtmosphere,
+              style: FilledButton.styleFrom(
+                backgroundColor: av7Gold,
+                foregroundColor: av7Ink,
+                shape: const StadiumBorder(),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+              ),
+              child: Text(busy ? l.creating : l.createVision),
+            ),
+          ],
         ),
       ],
     );
-    final cancel = TextButton(
-      onPressed: busy ? null : controller.cancelPendingAtmosphere,
-      style: TextButton.styleFrom(
-        foregroundColor: av7OnDarkSoft,
-        minimumSize: const Size(80, 40),
-      ),
-      child: Text(context.pwaL10n.cancel),
-    );
-    final create = FilledButton(
-      // A new vision is a conversation event: create it, then return to the
-      // chat where it will appear in the chronology.
-      onPressed: busy
-          ? null
-          : () {
-              controller.applyAtmosphere();
-              controller.backToConversation();
-            },
-      style: FilledButton.styleFrom(
-        backgroundColor: av7Gold,
-        foregroundColor: av7Ink,
-        minimumSize: const Size(120, 40),
-      ),
-      child: Text(
-        busy ? context.pwaL10n.creating : context.pwaL10n.createVision,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
-    );
+  }
+}
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: const BoxDecoration(
-        color: av7PendingBg,
-        border: Border(top: BorderSide(color: Color(0x33D3B064))),
-      ),
-      child: LayoutBuilder(
-        builder: (context, c) {
-          if (c.maxWidth < 460) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                info,
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: cancel),
-                    const SizedBox(width: 8),
-                    Expanded(flex: 2, child: create),
-                  ],
-                ),
-              ],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(child: info),
-              const SizedBox(width: 12),
-              cancel,
-              const SizedBox(width: 8),
-              create,
-            ],
-          );
-        },
-      ),
+/// Previewing a vision that is not the current one: adopt it, or leave it be.
+/// Untouched semantics — `setCurrentVision` is the only thing that changes
+/// which vision the session is working from.
+class PwaRevealPreviewActions extends StatelessWidget {
+  const PwaRevealPreviewActions({
+    super.key,
+    required this.state,
+    required this.controller,
+  });
+
+  final PwaState state;
+  final PwaController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.pwaL10n;
+    final v = state.previewedVision!;
+    return Row(
+      key: const ValueKey('pwa-reveal-preview-actions'),
+      children: [
+        Expanded(
+          child: Text(
+            l.previewingVisionN(v.visionNumber),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: av7Sans(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: av7OnDarkSoft,
+            ),
+          ),
+        ),
+        FilledButton(
+          onPressed: () => controller.setCurrentVision(v.versionId),
+          style: FilledButton.styleFrom(
+            backgroundColor: av7Gold,
+            foregroundColor: av7Ink,
+            shape: const StadiumBorder(),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+          child: Text(l.setAsCurrent),
+        ),
+      ],
     );
   }
 }
