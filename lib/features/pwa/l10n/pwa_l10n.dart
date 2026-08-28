@@ -107,6 +107,7 @@ class PwaL10n {
   String get exploreOtherAtmospheres => _mobile.exploreOtherAtmospheres;
   String get yourTransformation => _mobile.yourTransformation;
   String get historyTitle => _mobile.historyTitle;
+  String get transformations => _mobile.transformations;
   String get navHome => _mobile.navHome;
   String get navProjects => _mobile.navProjects;
   String get chatPlaceholder => _mobile.chatPlaceholder;

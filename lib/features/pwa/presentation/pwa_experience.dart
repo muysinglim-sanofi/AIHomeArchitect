@@ -22,7 +22,7 @@ import 'pwa_architect_screen.dart';
 import 'pwa_create_ios.dart';
 import 'pwa_design_session_screen.dart';
 import 'pwa_home_ios.dart';
-import 'pwa_projects_screen.dart';
+import 'pwa_projects_ios.dart';
 import 'pwa_first_reveal_screen.dart';
 import 'pwa_reveal_screen.dart';
 import 'pwa_theme.dart';
@@ -52,7 +52,10 @@ class PwaExperience extends ConsumerWidget {
       PwaPhase.architect => const PwaArchitectScreen(),
       PwaPhase.firstReveal => const PwaFirstRevealScreen(),
       PwaPhase.reveal => const PwaRevealScreen(),
-      PwaPhase.projects => const PwaProjectsScreen(),
+      // Phase 7 — Projects on the product canvas. `PwaProjectsScreen` (the dark
+      // original) is retained, unreferenced, on the same terms as the other
+      // originals — and it still owns the project action menu this one calls.
+      PwaPhase.projects => const PwaProjectsIos(),
     };
     return Stack(
       children: [

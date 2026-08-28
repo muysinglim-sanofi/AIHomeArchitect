@@ -379,6 +379,7 @@ class MockPwaExperienceRepository implements PwaExperienceRepository {
       createdOrder: 10,
       updatedOrder: 50,
       updatedLabel: 'Updated today',
+      age: const Duration(hours: 3),
     ),
     _buildSeed(
       id: 'seed-bedroom',
@@ -396,6 +397,7 @@ class MockPwaExperienceRepository implements PwaExperienceRepository {
       createdOrder: 20,
       updatedOrder: 40,
       updatedLabel: 'Yesterday',
+      age: const Duration(days: 1, hours: 2),
     ),
     _buildSeed(
       id: 'seed-kitchen',
@@ -415,6 +417,7 @@ class MockPwaExperienceRepository implements PwaExperienceRepository {
       createdOrder: 30,
       updatedOrder: 30,
       updatedLabel: '3 days ago',
+      age: const Duration(days: 3),
     ),
     _buildSeed(
       id: 'seed-terrace',
@@ -433,6 +436,7 @@ class MockPwaExperienceRepository implements PwaExperienceRepository {
       createdOrder: 5,
       updatedOrder: 20,
       updatedLabel: 'Last week',
+      age: const Duration(days: 9),
     ),
     _buildSeed(
       id: 'seed-office',
@@ -451,6 +455,7 @@ class MockPwaExperienceRepository implements PwaExperienceRepository {
       createdOrder: 2,
       updatedOrder: 10,
       updatedLabel: '2 weeks ago',
+      age: const Duration(days: 16),
     ),
   ];
 
@@ -467,6 +472,7 @@ class MockPwaExperienceRepository implements PwaExperienceRepository {
     required int createdOrder,
     required int updatedOrder,
     required String updatedLabel,
+    required Duration age,
   }) {
     final visions = <PwaVision>[];
     final messages = <PwaMessage>[];
@@ -538,6 +544,11 @@ class MockPwaExperienceRepository implements PwaExperienceRepository {
       coverVisionId: current.versionId,
       createdOrder: createdOrder,
       updatedOrder: updatedOrder,
+      // A real row carries a TIMESTAMP and the card localises it; a fixture
+      // that carries only the English sentence sends every screen down the
+      // fallback path, which is how "3 days ago" ends up under a French
+      // interface in the mock target. The label stays as the fallback it is.
+      updatedAt: DateTime.now().subtract(age),
       updatedLabel: updatedLabel,
       status: PwaProjectStatus.active,
     );

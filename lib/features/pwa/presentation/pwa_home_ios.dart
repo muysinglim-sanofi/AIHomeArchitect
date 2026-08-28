@@ -50,7 +50,7 @@ import 'pwa_primitives.dart';
 import 'pwa_scaffold.dart';
 import 'pwa_theme.dart';
 import 'pwa_type.dart';
-import 'pwa_widgets.dart' show pwaAfterImage, pwaBeforeImage;
+import 'pwa_widgets.dart' show pwaAfterImage, pwaBeforeImage, pwaRoomDisplayLabel;
 
 class PwaHomeIos extends ConsumerWidget {
   const PwaHomeIos({super.key});
@@ -217,7 +217,8 @@ class _FeaturedVision extends StatelessWidget {
       // caption falls back to the atmosphere alone.
       caption = p.roomLabel == kPwaGenericRoomLabel
           ? p.atmosphereLabel
-          : '${p.roomLabel} · ${p.atmosphereLabel}';
+          : '${pwaRoomDisplayLabel(l, roomId: p.roomId, roomLabel: p.roomLabel)}'
+              ' · ${p.atmosphereLabel}';
     } else {
       // The SAME curated list iOS's hero uses — genuine before/after pairs with
       // real room and style labels, not two unrelated photographs.

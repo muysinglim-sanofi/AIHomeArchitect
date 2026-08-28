@@ -700,7 +700,7 @@ class _ProjectCardState extends ConsumerState<_ProjectCard> {
               Positioned(
                 top: 5,
                 right: 5,
-                child: _CardMenu(project: p, hovered: lifted),
+                child: PwaProjectCardMenu(project: p, hovered: lifted),
               ),
             ],
           ),
@@ -795,14 +795,28 @@ class _DraftBadge extends StatelessWidget {
 
 enum _CardAction { rename, duplicate, delete }
 
-class _CardMenu extends ConsumerWidget {
-  const _CardMenu({
+/// Rename, duplicate, delete — the project actions, and the ONE part of this
+/// retired screen the Phase 7 rebuild still uses.
+///
+/// It is public for that reason. Deleting somebody's work is not a
+/// presentation decision, so the new surface calls this widget rather than
+/// re-implementing a confirm dialog beside it: one menu, one set of
+/// semantics, and nothing about them changed when the screen around them did.
+class PwaProjectCardMenu extends ConsumerWidget {
+  const PwaProjectCardMenu({
+    super.key,
     required this.project,
     this.hovered = false,
     this.renameOnly = false,
+    this.onDark = false,
   });
   final PwaProjectSnapshot project;
   final bool hovered;
+
+  /// The Phase 7 card lays this over the cover render, where the disc needs
+  /// its own contrast. On the retired dark screen it sat on a dark card
+  /// already, so the default keeps that behaviour byte-for-byte.
+  final bool onDark;
 
   /// A Draft has no meaningful Duplicate/Delete yet — show only Rename.
   final bool renameOnly;
@@ -992,7 +1006,7 @@ class _CardMenu extends ConsumerWidget {
     final mobile = MediaQuery.sizeOf(context).width < 700;
     // Small visible disc inside a 44×44 interaction target. Desktop: subtle by
     // default (0.60), full on hover/card-focus. Mobile: always fully visible.
-    final opacity = mobile ? 1.0 : (hovered ? 1.0 : 0.60);
+    final opacity = (mobile || onDark) ? 1.0 : (hovered ? 1.0 : 0.60);
     final disc = Container(
       width: 33,
       height: 33,
@@ -1317,7 +1331,7 @@ class _DraftProjectCardState extends State<_DraftProjectCard> {
               Positioned(
                 top: 5,
                 right: 5,
-                child: _CardMenu(
+                child: PwaProjectCardMenu(
                   project: widget.draft,
                   hovered: lifted,
                   renameOnly: true,

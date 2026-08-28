@@ -2251,6 +2251,13 @@ class PwaController extends StateNotifier<PwaState> {
       updatedOrder: bumpUpdated
           ? _repo.nextLibraryOrder()
           : (existing?.updatedOrder ?? _repo.nextLibraryOrder()),
+      // The TIMESTAMP has to survive this rebuild, because it is what the card
+      // localises. Dropping it left the active project falling back to
+      // `updatedLabel` — a stored English sentence — so a French reader saw
+      // "Updated 4 minutes ago" under their own render. `now` when this write
+      // is the one bumping the freshness (it is true, and it is what the
+      // database will store), the previous value otherwise.
+      updatedAt: bumpUpdated ? DateTime.now() : existing?.updatedAt,
       updatedLabel: bumpUpdated
           ? 'Updated today'
           : (existing?.updatedLabel ?? 'Updated today'),

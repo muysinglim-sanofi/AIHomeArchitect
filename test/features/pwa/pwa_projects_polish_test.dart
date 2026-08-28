@@ -181,98 +181,47 @@ void main() {
   });
 
   // ── SEARCH CONTEXT + ZERO STATE (§18) ──────────────────────────────────────
-  group('search context', () {
-    testWidgets(
-      '20/24/25. non-empty query shows count, term and Clear search',
-      (tester) async {
-        final c = await _pumpLibrary(tester);
-        _notifier(c).setLibrarySearch('room');
-        await tester.pump();
-        expect(
-          find.byKey(const ValueKey('pwa-search-context')),
-          findsOneWidget,
-        );
-        expect(find.textContaining('found for'), findsOneWidget);
-        expect(find.textContaining('“room”'), findsOneWidget);
-        expect(find.byKey(const ValueKey('pwa-clear-search')), findsWidgets);
-      },
-    );
-    testWidgets('21. singular grammar', (tester) async {
-      final c = await _pumpLibrary(tester);
-      _notifier(c).setLibrarySearch('kitchen'); // 1 match
-      await tester.pump();
-      expect(find.textContaining('1 project found for'), findsOneWidget);
-    });
-    testWidgets('22. plural grammar', (tester) async {
-      final c = await _pumpLibrary(tester);
-      _notifier(c).setLibrarySearch('room'); // Living Room + Bedroom(master) …
-      await tester.pump();
-      expect(find.textContaining('projects found for'), findsOneWidget);
-    });
-    testWidgets('23/28. zero result → search state, not global empty', (
-      tester,
-    ) async {
-      final c = await _pumpLibrary(tester);
-      _notifier(c).setLibrarySearch('zzznothing');
-      await tester.pump();
-      expect(
-        find.byKey(const ValueKey('pwa-projects-search-empty')),
-        findsOneWidget,
-      );
-      expect(find.text('No matching projects'), findsOneWidget);
-      expect(find.byKey(const ValueKey('pwa-projects-empty')), findsNothing);
-      expect(find.text('Create a project'), findsNothing);
-    });
-    testWidgets('26. Clear search restores the full library', (tester) async {
-      final c = await _pumpLibrary(tester);
-      _notifier(c).setLibrarySearch('kitchen');
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('pwa-clear-search')).first);
-      await tester.pumpAndSettle();
-      expect(_state(c).librarySearch, '');
-      expect(find.text('Living Room Concept'), findsOneWidget);
-      expect(find.byKey(const ValueKey('pwa-search-context')), findsNothing);
-    });
-    testWidgets('27. empty query hides the result row', (tester) async {
-      await _pumpLibrary(tester);
-      expect(find.byKey(const ValueKey('pwa-search-context')), findsNothing);
-    });
-    test('29. filtering and sorting apply together', () {
+  // ── The search SURFACE is gone; the search STATE is not (Phase 7) ─────────
+  //
+  // The old Projects screen carried a search field, a sort menu, a
+  // "3 projects found for “room”" context row, a Clear-search control and a
+  // separate search-empty state. Seven tests here described that apparatus.
+  //
+  // iOS's Projects has none of it — a title, a count, a grid, one button — and
+  // the brief names "a dense project database" as the thing to avoid. So the
+  // controls went and the CONTROLLER did not: `librarySearch` and
+  // `librarySort` still filter and order `visibleProjects` exactly as before,
+  // which is what the tests below assert. Putting a field back is a few lines.
+  group('search and sort survive as state', () {
+    test('a query still filters the canonical list', () {
       final c = _container();
       addTearDown(c.dispose);
-      _notifier(c).setLibrarySearch('room'); // matches Living + Bedroom
-      _notifier(c).setLibrarySort(PwaProjectSort.nameAsc);
+      _notifier(c).setLibrarySearch('kitchen');
       final v = _state(c).visibleProjects;
-      expect(v.first.title, 'Bedroom Retreat'); // alphabetical within filter
+      expect(v, hasLength(1));
+      expect(v.single.title, 'Kitchen Transformation');
+      _notifier(c).setLibrarySearch('');
+      expect(_state(c).visibleProjects.length, greaterThan(1));
     });
-    test(
-      '30/31/32. result count updates after rename/duplicate/delete',
-      () async {
-        final c = _container();
-        addTearDown(c.dispose);
-        // Title-only term (room label "Kitchen" would otherwise still match).
-        _notifier(c).setLibrarySearch('Transformation');
-        expect(_state(c).visibleProjects.length, 1);
-        // rename away from the query → drops to 0
-        _notifier(
-          c,
-        ).renameProject(_seed(c, 'Kitchen Transformation').projectId, 'Zephyr');
-        expect(_state(c).visibleProjects.length, 0);
-        // duplicate a matching project → count rises
-        _notifier(c).setLibrarySearch('living');
-        final before = _state(c).visibleProjects.length;
-        await _notifier(
-          c,
-        ).duplicateProject(_seed(c, 'Living Room Concept').projectId);
-        expect(_state(c).visibleProjects.length, before + 1);
-        // delete → count falls
-        _notifier(c).deleteProject(_seed(c, 'Living Room Concept').projectId);
-        expect(_state(c).visibleProjects.length, before);
-      },
-    );
+
+    test('filtering and sorting still apply together', () {
+      final c = _container();
+      addTearDown(c.dispose);
+      _notifier(c).setLibrarySearch('room');
+      _notifier(c).setLibrarySort(PwaProjectSort.nameAsc);
+      expect(_state(c).visibleProjects.first.title, 'Bedroom Retreat');
+    });
+
+    testWidgets('and the screen shows neither control', (tester) async {
+      await _pumpLibrary(tester);
+      expect(find.byKey(const ValueKey('pwa-search-context')), findsNothing);
+      expect(find.byKey(const ValueKey('pwa-sort-button')), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
   });
 
-  // ── THREE-DOT MENU (§19) ───────────────────────────────────────────────────
+
   group('three-dot menu', () {
     testWidgets('33/34. ≥44×44 target, disc glyph much smaller', (
       tester,
@@ -292,9 +241,13 @@ void main() {
       );
       expect(icon.size!, lessThan(24)); // glyph ≪ 44 target
     });
-    testWidgets('35/36. desktop opacity 0.60 default → 1.0 on hover', (
+    testWidgets('the menu stays legible on the cover, hover or not', (
       tester,
     ) async {
+      // It used to sit at 60% until the pointer entered the card. That was
+      // safe on the old dark card; the Phase 7 card is the person's own
+      // render, and dimming a control to 60% over a photograph nobody chose is
+      // the same contrast bet this alignment has been removing everywhere.
       final c = await _pumpLibrary(tester);
       final card = find.byKey(
         ValueKey('project-card-${_seed(c, 'Living Room Concept').projectId}'),
@@ -308,7 +261,7 @@ void main() {
           matching: find.byType(AnimatedOpacity),
         ),
       );
-      expect(ao().opacity, 0.60);
+      expect(ao().opacity, 1.0);
       final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
       await gesture.addPointer(location: Offset.zero);
       addTearDown(gesture.removePointer);

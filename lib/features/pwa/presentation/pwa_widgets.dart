@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/constants/room_type_images.dart';
 import '../../../core/media/ayden_image_source.dart';
 import '../../../shared/widgets/reveal_hero.dart';
 import '../domain/pwa_models.dart';
@@ -113,6 +114,31 @@ Widget pwaBeforeImage(
     reference: reference,
     placeholderColor: AppColors.surfaceVariant,
   );
+}
+
+/// The room's name AS IT IS SHOWN. One resolver, because Home and Projects
+/// print the same room for the same project and must never disagree about it.
+///
+/// The stored value is deliberately canonical English — `room_type` keys the
+/// prompt engine's DNA and is routed, never translated (see
+/// `RoomTypeImages.enLabelForId`). So a Khmer reader was being shown
+/// "Living Room" on their own project. iOS solved this display-side years ago
+/// in `ProjectCard` via `RoomTypeImages.displayLabel`; this is the same round
+/// trip — English value (or canonical id) → localized label — and it changes
+/// nothing that is stored, routed or compared.
+///
+/// An unknown or legacy value, including the `Your space` sentinel written
+/// before a room was resolved, comes back unchanged for the caller to handle.
+String pwaRoomDisplayLabel(
+  PwaL10n l, {
+  String? roomId,
+  required String roomLabel,
+}) {
+  if (roomId != null && roomId.isNotEmpty) {
+    final byId = RoomTypeImages.labelForId(l.shared, roomId);
+    if (byId != null) return byId;
+  }
+  return RoomTypeImages.displayLabel(l.shared, roomLabel);
 }
 
 /// The generated image of [vision]. Its reference is a private Storage path in
