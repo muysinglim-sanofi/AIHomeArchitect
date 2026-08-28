@@ -57,6 +57,34 @@ BUNDLE_FORBIDDEN = (
     "qr_image_template",
 )
 
+# The PayWay list above answers "does the browser speak the gateway's
+# protocol". It does not answer the OTHER question a public bundle raises:
+# does it carry a private credential of any kind. A scanner that checks one
+# family of secret certifies the families it did not look for, which is the
+# same failure the bundle-reading comment below was written about.
+#
+# These are PATTERNS, never values: a service-role JWT carries the literal
+# `"service_role"` in its base64 payload, which encodes to `InNlcnZpY2Vfcm9sZSI`
+# whatever the project. Nothing here is itself a secret, so this file stays
+# safe to read and to commit.
+#
+# DELIBERATELY ABSENT: the production Supabase and backend HOSTNAMES. They are
+# compiled into the bundle ON PURPOSE — `app_environment.dart` carries them as
+# a reject-list so a web build can refuse to talk to production — so finding
+# them proves the guard is present, not that a secret leaked.
+BUNDLE_CREDENTIALS = (
+    "InNlcnZpY2Vfcm9sZSI",      # base64("service_role") — a service-role JWT
+    "SUPABASE_SERVICE_ROLE",
+    "OPENAI_API_KEY",
+    "sk-proj-",                  # OpenAI project key prefix
+    "sk-ant-",                   # Anthropic key prefix
+    "REVENUECAT_SECRET",
+    "REVENUECAT_API_KEY",
+    "DATABASE_URL",
+    "postgresql://",
+    "postgres://",
+)
+
 _PASS: list[str] = []
 _FAIL: list[str] = []
 _INCONCLUSIVE: list[str] = []
@@ -244,6 +272,20 @@ def main() -> int:  # noqa: PLR0915
                     found.append(f"{path.name}: {needle}")
         verdict(f"the web bundle ({len(bundle)} files) speaks NO PayWay protocol",
                 not found, "; ".join(found[:5]))
+
+        # The same files, asked the other question.
+        private = []
+        for path in bundle:
+            try:
+                text = path.read_bytes().decode("utf-8", "ignore")
+            except OSError:
+                continue
+            for needle in BUNDLE_CREDENTIALS:
+                if needle in text:
+                    private.append(f"{path.name}: {needle}")
+        verdict("the web bundle holds NO private credential "
+                "(service-role, OpenAI, RevenueCat, database)",
+                not private, "; ".join(private[:5]))
 
         # A NAMED check, because "no PayWay key in it" is not the only thing
         # wrong with shipping a .env to a public host. This one answers the
