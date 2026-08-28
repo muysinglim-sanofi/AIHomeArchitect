@@ -101,6 +101,9 @@ const Map<String, String> pwaEnTranslations = {
   'pwaChipWarmer': 'Make it warmer',
   'pwaChipMoreLight': 'More natural light',
   'pwaChipOpenKitchen': 'Open the kitchen',
+  // Room-neutral, because the four default suggestions are shown under EVERY
+  // result. "Open the kitchen" under a terrace was the defect.
+  'pwaChipCalmer': 'Make it calmer',
   'pwaVisionN': 'Vision {n}',
   'pwaVisionNWithAtmosphere': 'Vision {n} · {name}',
   'pwaOpenVisionInReveal': 'Open Vision {n}, {name}, in the Full Reveal',
@@ -121,8 +124,20 @@ const Map<String, String> pwaEnTranslations = {
   'pwaAydenDisclaimer': 'Ayden can make mistakes. Always review design details.',
   'pwaSendMessage': 'Send message',
   'pwaCreatingYourVision': 'Creating your vision…',
+  // PHASE 5 — two short sentences, and TRUE ones.
+  //
+  // The old copy was three sentences and ended "Explore the atmospheres
+  // below" — but the atmosphere rail moved to the Full Reveal, so it was
+  // telling people to use something that is not on the screen. It also
+  // buried the render under a paragraph the person had to read before
+  // they could look at what they waited two minutes for.
+  //
+  // {name} is the atmosphere the ENGINE resolved, so the sentence names
+  // the direction that was actually rendered rather than the one asked
+  // for.
   'pwaFirstVisionIntro':
-      'I created your first vision. I kept the room’s architecture and introduced warmer materials, softer lighting and a more refined balance — my signature direction. Explore the atmospheres below, or tell me what you’d like to change.',
+      'Your {name} direction is in — same architecture, warmer materials '
+      'and softer light. What would you like to change?',
   'pwaSwitchTo': 'Switch to {name}',
   'pwaNoChangeUnderstood':
       "I didn't catch a change to make there — tell me what you'd like "
@@ -466,6 +481,7 @@ const Map<String, String> pwaKmTranslations = {
   'pwaChipWarmer': 'ធ្វើ​ឱ្យ​ក្ដៅ​ជាង​នេះ',
   'pwaChipMoreLight': 'ពន្លឺ​ធម្មជាតិ​បន្ថែម',
   'pwaChipOpenKitchen': 'បើក​ផ្ទះ​បាយ',
+  'pwaChipCalmer': 'ធ្វើ​ឱ្យ​ស្ងប់​ជាង​នេះ',
   'pwaVisionN': 'ទស្សនៈ {n}',
   'pwaVisionNWithAtmosphere': 'ទស្សនៈ {n} · {name}',
   'pwaOpenVisionInReveal': 'បើក​ទស្សនៈ {n}, {name}, ក្នុង​ការ​បង្ហាញ​ពេញលេញ',
@@ -488,7 +504,8 @@ const Map<String, String> pwaKmTranslations = {
   'pwaSendMessage': 'ផ្ញើ​សារ',
   'pwaCreatingYourVision': 'កំពុង​បង្កើត​ទស្សនៈ​របស់​អ្នក…',
   'pwaFirstVisionIntro':
-      'ខ្ញុំ​បាន​បង្កើត​ទស្សនៈ​ដំបូង​របស់​អ្នក។ ខ្ញុំ​បាន​រក្សា​ស្ថាបត្យកម្ម​នៃ​បន្ទប់ ហើយ​បាន​បន្ថែម​សម្ភារៈ​ក្ដៅ​ជាង ពន្លឺ​ទន់​ភ្លន់ និង​តុល្យភាព​ដ៏​ប្រណីត — ទិសដៅ​ហត្ថលេខា​របស់​ខ្ញុំ។ ស្វែងរក​បរិយាកាស​ខាង​ក្រោម ឬ​ប្រាប់​ខ្ញុំ​ថា​អ្នក​ចង់​ផ្លាស់ប្ដូរ​អ្វី។',
+      'ទិសដៅ {name} របស់​អ្នក​រួច​រាល់​ហើយ — ស្ថាបត្យកម្ម​ដដែល សម្ភារៈ​ក្ដៅ​ជាង '
+      'និង​ពន្លឺ​ទន់​ភ្លន់។ តើ​អ្នក​ចង់​ផ្លាស់ប្ដូរ​អ្វី?',
   'pwaSwitchTo': 'ប្ដូរ​ទៅ {name}',
   'pwaNoChangeUnderstood':
       'ខ្ញុំ​មិន​យល់​ច្បាស់​ពី​ការ​ផ្លាស់ប្ដូរ​ទេ — សូម​ប្រាប់​ខ្ញុំ​ថា​អ្នក​ចង់​បាន​អ្វី​ខុស​ពី​នេះ '
@@ -836,6 +853,7 @@ const Map<String, String> pwaFrTranslations = {
   'pwaChipWarmer': 'Rends-le plus chaleureux',
   'pwaChipMoreLight': 'Plus de lumière naturelle',
   'pwaChipOpenKitchen': 'Ouvre la cuisine',
+  'pwaChipCalmer': 'Rends-le plus apaisant',
   'pwaVisionN': 'Vision {n}',
   'pwaVisionNWithAtmosphere': 'Vision {n} · {name}',
   'pwaOpenVisionInReveal':
@@ -859,7 +877,8 @@ const Map<String, String> pwaFrTranslations = {
   'pwaSendMessage': 'Envoyer le message',
   'pwaCreatingYourVision': 'Création de votre vision…',
   'pwaFirstVisionIntro':
-      "J'ai créé votre première vision. J'ai conservé l'architecture de la pièce et introduit des matières plus chaleureuses, une lumière plus douce et un équilibre plus raffiné — ma direction signature. Explorez les ambiances ci-dessous, ou dites-moi ce que vous souhaitez changer.",
+      'Votre direction {name} est en place — même architecture, matières '
+      'plus chaleureuses et lumière plus douce. Que souhaitez-vous changer ?',
   'pwaSwitchTo': 'Passer à {name}',
   'pwaNoChangeUnderstood':
       "Je n'ai pas saisi le changement à faire — dites-moi ce que vous "

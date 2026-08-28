@@ -11,14 +11,26 @@
 /// It reuses [PwaRevealCard] → the production `RevealHero`, which is shared with
 /// the frozen mobile app and used strictly read-only: this screen only composes
 /// around it.
+///
+/// PHASE 5 — it is now on the PRODUCT CANVAS, not on black.
+///
+/// The black was inherited from a time when every screen after Create was dark.
+/// It is a real choice for the Full Reveal, which is a cinema and keeps it. It
+/// was the wrong one here: this is the first frame after a two-minute wait that
+/// ended on cream, and dropping to black between the session and the
+/// conversation made the result feel like it belonged to a different app. The
+/// render is still the whole screen and there is still exactly one thing to do
+/// — only the room around it changed.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/pwa_controller.dart';
-import 'pwa_architect_tokens.dart';
+import 'pwa_architect_screen.dart' show kPwaRenderAspect;
 import 'pwa_brand.dart';
+import 'pwa_theme.dart';
+import 'pwa_type.dart';
 import 'pwa_widgets.dart';
 import '../l10n/pwa_l10n.dart';
 
@@ -36,91 +48,92 @@ class PwaFirstRevealScreen extends ConsumerWidget {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) c.continueToArchitect();
       });
-      return const ColoredBox(color: av7DarkBg);
+      return const ColoredBox(color: pwaCanvas);
     }
 
     return Scaffold(
       key: const ValueKey('pwa-first-reveal'),
-      backgroundColor: Colors.black,
+      backgroundColor: pwaCanvas,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, box) {
             final mobile = box.maxWidth < 700;
             // The render takes the room it can; the CTA keeps a reserved band so
             // it is always reachable without scrolling.
-            const ctaBand = 104.0;
             final padH = mobile ? 10.0 : 28.0;
-            final padTop = mobile ? 10.0 : 20.0;
-            // Measure against what the padding actually leaves, or the card asks
-            // for more height than its box and overflows.
-            final revealH = (box.maxHeight - padTop - ctaBand).clamp(
-              160.0,
-              1200.0,
-            );
-            final revealW = (box.maxWidth - padH * 2).clamp(160.0, 4000.0);
 
-            return Stack(
-              fit: StackFit.expand,
+            // A COLUMN, not a Stack.
+            //
+            // The brand line used to be positioned OVER the render, which was
+            // safe when the render sat on black: white text, dark ground,
+            // guaranteed. On the canvas the render fills the frame and the
+            // words land on whatever the person's room happens to be — light
+            // walls, in the first case tried, and they disappeared. Overlaying
+            // text on an image you did not choose is a contrast bet; the
+            // canvas above the image is not.
+            //
+            // The readability gradient under the CTA went for the same reason
+            // in reverse: it existed to lift a pill off a black photograph,
+            // and there is no photograph under it any more.
+            return Column(
               children: [
                 Padding(
-                  padding: EdgeInsets.fromLTRB(padH, padTop, padH, ctaBand),
-                  child: Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(mobile ? 16 : 22),
-                      child: PwaRevealCard(
-                        vision: vision,
-                        source: state.source,
-                        versions: state.versions,
-                        project: state.project,
-                        aspectRatio: revealW / revealH,
-                        onDark: true,
-                        showCaption: false,
-                      ),
-                    ),
+                  padding: EdgeInsets.fromLTRB(
+                      mobile ? 16 : 34, mobile ? 10 : 16, mobile ? 16 : 34, 12),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      PwaLogoBadge(size: 30),
+                      SizedBox(width: 10),
+                      _BrandLine(),
+                    ],
                   ),
                 ),
-                // Discreet branding, top-left — it is still Ayden's moment.
-                Positioned(
-                  top: mobile ? 14 : 20,
-                  left: mobile ? 16 : 34,
-                  child: const IgnorePointer(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        PwaLogoBadge(size: 30),
-                        SizedBox(width: 10),
-                        _BrandLine(),
-                      ],
-                    ),
-                  ),
-                ),
-                // Readability gradient under the call to action.
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  height: ctaBand + 60,
-                  child: const IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [Color(0xF2000000), Color(0x00000000)],
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(padH, 0, padH, 0),
+                    // MEASURED, not estimated. The card derives its height from
+                    // the aspect it is given, so an aspect computed from a
+                    // guess at the header and CTA bands overflows by whatever
+                    // the guess was wrong by — it was four pixels. Reading the
+                    // real remaining box cannot be wrong by any.
+                    // THE RENDER'S OWN SHAPE, centred, rather than the frame's.
+                    //
+                    // It used to fill the screen edge to edge, which on a
+                    // phone means cover-cropping a 3:2 render into a 0.45
+                    // portrait — most of the room gone, at the exact moment
+                    // the room is the point. Filling the frame was the right
+                    // call when the surround was black and the crop read as
+                    // cinema; on the canvas it just reads as a mistake.
+                    //
+                    // Same shape the result screen uses, so the two frames of
+                    // the same picture do not disagree about what it is.
+                    child: Center(
+                      child: AspectRatio(
+                        aspectRatio: kPwaRenderAspect,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(
+                              mobile ? PwaGap.radius : 22),
+                          child: PwaRevealCard(
+                            vision: vision,
+                            source: state.source,
+                            versions: state.versions,
+                            project: state.project,
+                            aspectRatio: kPwaRenderAspect,
+                            onDark: false,
+                            showCaption: false,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: mobile ? 22 : 30,
-                  child: Center(
-                    child: _ContinueButton(
-                      compact: mobile,
-                      onTap: c.continueToArchitect,
-                    ),
+                Padding(
+                  padding: EdgeInsets.only(
+                      top: 18, bottom: mobile ? 22 : 30),
+                  child: _ContinueButton(
+                    compact: mobile,
+                    onTap: c.continueToArchitect,
                   ),
                 ),
               ],
@@ -141,15 +154,13 @@ class _BrandLine extends StatelessWidget {
     children: [
       Text(
         'AYDEN STUDIO',
-        style: av7Sans(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: av7OnDark,
-          letterSpacing: 3,
-        ),
+        style: PwaType.caption(color: pwaInk)
+            .copyWith(
+                fontWeight: FontWeight.w600,
+                letterSpacing: pwaTracking(2.4)),
       ),
       const SizedBox(height: 2),
-      Text(context.pwaL10n.yourFirstVision, style: av7Eyebrow(fontSize: 8.5)),
+      Text(context.pwaL10n.yourFirstVision, style: pwaEyebrow(fontSize: 9)),
     ],
   );
 }
@@ -165,17 +176,20 @@ class _ContinueButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: context.pwaL10n.continueWithAyden,
+      // The product's primary CTA: an INK pill, as everywhere else. Gold was
+      // right when it had to carry against a black photograph; on the canvas
+      // the ink pill is the same button the person pressed to get here.
       child: Material(
-        color: av7Gold,
-        borderRadius: BorderRadius.circular(999),
+        color: pwaInk,
+        borderRadius: BorderRadius.circular(PwaGap.radiusPill),
         child: InkWell(
           key: const ValueKey('pwa-first-reveal-continue'),
           onTap: onTap,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(PwaGap.radiusPill),
           child: Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: compact ? 24 : 34,
-              vertical: compact ? 14 : 17,
+              horizontal: compact ? 28 : 34,
+              vertical: compact ? 15 : 17,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -185,15 +199,11 @@ class _ContinueButton extends StatelessWidget {
                     context.pwaL10n.continueWithAyden,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: av7Sans(
-                      fontSize: compact ? 14.5 : 16,
-                      fontWeight: FontWeight.w700,
-                      color: av7DarkBg,
-                    ),
+                    style: PwaType.button(color: pwaSurface),
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Icon(Icons.arrow_forward, size: 18, color: av7DarkBg),
+                const Icon(Icons.arrow_forward, size: 18, color: pwaSurface),
               ],
             ),
           ),

@@ -1,16 +1,41 @@
-/// Batch 2.2 V7 — the definitive Ayden Architect design workspace.
+/// THE DESIGN SESSION, after the result. Phase 5.
 ///
-/// Reference: `references/REF-PWA-ARCHITECT-FINAL-V7.png`. Three principal areas
-/// only: a compact global Studio header; a dominant Full Reveal + full-width
-/// Atmosphere selector (left); and a real chronological Ayden Architect chat
-/// (right) that IS the version history. There is NO separate Versions column /
-/// filmstrip / sheet — every generated vision lives inline in the chat, and the
-/// "Vision N of M" + prev/next controls PREVIEW existing visions (no version
-/// created). Fully offline & mocked — no backend, no debit.
+/// What changed, and what deliberately did not
+/// -------------------------------------------
+/// Every line of control flow here is the one that was already here: which
+/// message renders as what, that the FIRST vision leads with its image, that a
+/// backend-sent `chips` list beats the local suggestions, that a red advisory
+/// verdict has no override, that a quick action is identical to typing it. None
+/// of that moved. What moved is the room it all sits in.
+///
+/// It used to sit in a photograph. A blurred Warm Modern living room filled the
+/// window, a warm-ivory veil lay over it, and on desktop a sheet of translucent
+/// glass floated on top carrying the conversation. It was a beautiful surface
+/// and it was the wrong one: the person has just generated a picture of THEIR
+/// room, and the app was showing them somebody else's behind it. Two rooms
+/// competing, and the one that wins is not theirs.
+///
+/// So the backdrop is gone and the canvas is the product's own cream. The
+/// render is the only photograph on the screen.
+///
+///     AYDEN STUDIO                header, ink on cream
+///     ┌──────────────────────┐
+///     │  the generated room  │    the payoff, first and largest
+///     └──────────────────────┘
+///     Vision 1 · Warm Modern      caption UNDER the image, not above it
+///     [ View Full Reveal ] …      actions
+///     Your Warm Modern direction  two short sentences
+///     What would you like to change?
+///     ( Make it warmer ) ( … )    suggestions
+///     ── ask Ayden ─────────  ▸    the composer
+///
+/// IMAGE FIRST, COMMENTARY SECOND, ACTIONS THIRD is not a new rule here — the
+/// first vision already led with its render. What Phase 5 fixed is that the
+/// image was preceded by a title strip inside its own card, so the first thing
+/// read after a two-minute wait was a label.
 library;
 
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -24,6 +49,8 @@ import 'pwa_stored_image.dart';
 import 'pwa_working_indicator.dart';
 import '../l10n/pwa_l10n.dart';
 import 'pwa_account_chip.dart';
+import 'pwa_theme.dart';
+import 'pwa_type.dart';
 import 'pwa_language_switcher.dart';
 
 // V7 responsive tiers (§4). Local to the Architect so the shared
@@ -38,177 +65,26 @@ const double kPwaChatColumnMax = 880;
 /// the thread and the composer together.
 const double kPwaChatShellMax = 1080;
 
-/// The desktop conversation plate: LIGHT warm glass — white-ivory, barely
-/// there. The room behind is the surface; the plate only warms and diffuses it.
-const Color kPwaGlassTop = Color(0xFFFFFBF7);
-const Color kPwaGlassBottom = Color(0xFFF6E8D8);
+/// The glass is gone.
+///
+/// This file used to carry sixteen constants describing a translucent plate,
+/// its blur, its two gradient stops, its border alpha and the ink to use on
+/// each side of it — because the conversation floated on a photograph of a
+/// living room. Phase 5 removed the photograph, and every one of those numbers
+/// went with it. What is left is the product's own canvas, and the tokens for
+/// that live in `pwa_theme.dart` where every other screen reads them.
 
-/// The warm dark accent used on the NARROW-window layout, where the chat sits
-/// straight on the cream veil and the pills / composer bring their own contrast.
-/// Kept separate from the plate so lightening desktop cannot touch mobile.
-const Color kPwaWarmAccent = Color(0xFF211711);
-
-/// The desktop plate, in numbers. These are the whole fix: at 0.44 the plate
-/// was still a milky rectangle whatever the blur was set to, because opacity —
-/// not blur — is what hides a room. At 0.18/0.10 the sofa reads through the
-/// middle of the glass. Do not raise them to "improve contrast": legibility
-/// belongs to the bubbles, the Vision card and the input field, each of which
-/// carries its own surface.
-const double kPwaDesktopBackdropBlur = 4.5;
-const double kPwaDesktopBackdropVeilAlpha = 0.07;
-
-const double kPwaDesktopGlassBlur = 18.0;
-const double kPwaDesktopGlassTopAlpha = 0.18;
-const double kPwaDesktopGlassBottomAlpha = 0.10;
-const double kPwaDesktopGlassBorderAlpha = 0.34;
-
-/// How much the room behind the NARROW-window layout is softened. Desktop has
-/// its own blur above; this one is mobile's and must not follow it.
-const double kPwaBackdropBlur = 6;
-
-/// Gold used for the plate edge, the divider and the pill outlines.
-const Color kPwaGlassEdge = Color(0xFFD7B968);
-
-/// What Ayden says stays cream — the bubbles carry the legibility.
-const Color kPwaWarmBubble = Color(0xFFFFF7EC);
-
-/// Ink on the warm dark accents of the narrow-window layout.
-const Color kPwaOnGlass = Color(0xFFF3E9DC);
-const Color kPwaOnGlassSoft = Color(0xB3F3E9DC);
-
-/// Ink on the light desktop plate.
-const Color kPwaOnPlate = av7Ink;
-const Color kPwaOnPlateSoft = Color(0xC2201B17);
-
-/// A hairline on glass: white, barely there. A gold or dark rule reads as a
-/// drawn border and gives the plate back the "panel" look this pass removed.
+/// The one rule in the composition: the product hairline, separating the
+/// thread from the composer and the desktop project header from the thread.
 class _V7GlassDivider extends StatelessWidget {
   const _V7GlassDivider();
 
   @override
   Widget build(BuildContext context) =>
-      Container(height: 1, color: Colors.white.withValues(alpha: 0.22));
-}
-
-/// The Warm Modern room, full-bleed, painted FIRST so the glass above it has
-/// something to refract. It is the bottom layer of the desktop Stack — nothing
-/// between it and the plate is allowed to paint a fill.
-class _DesktopWarmModernBackground extends StatelessWidget {
-  const _DesktopWarmModernBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      key: const ValueKey('av7-warm-modern-backdrop'),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // The scale hides the transparent fringe a blur leaves at the edges.
-          Transform.scale(
-            scale: 1.04,
-            child: ImageFiltered(
-              imageFilter: ui.ImageFilter.blur(
-                sigmaX: kPwaDesktopBackdropBlur,
-                sigmaY: kPwaDesktopBackdropBlur,
-              ),
-              child: Image.asset(
-                _kV7ChatBackdrop,
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-                filterQuality: FilterQuality.high,
-                errorBuilder: (_, _, _) => const ColoredBox(color: av7DarkBg),
-              ),
-            ),
-          ),
-          ColoredBox(
-            color: const Color(
-              0xFF160F0B,
-            ).withValues(alpha: kPwaDesktopBackdropVeilAlpha),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The desktop conversation plate — ONE layer of light glass, and nothing else.
-///
-/// This replaces the old brown panel outright rather than tinting it: a single
-/// leftover opaque fill anywhere between the photo and here cancels the whole
-/// effect, so the composition is deliberately flat — shadow, clip, backdrop
-/// filter, one translucent gradient, a transparent [Material] for the ink.
-class _DesktopLightGlassChatShell extends StatelessWidget {
-  const _DesktopLightGlassChatShell({required this.child});
-
-  final Widget child;
-
-  static const BorderRadius _radius = BorderRadius.all(Radius.circular(24));
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const ValueKey('av7-glass-chat-shell'),
-      decoration: BoxDecoration(
-        borderRadius: _radius,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.22),
-            blurRadius: 36,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: _radius,
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(
-            sigmaX: kPwaDesktopGlassBlur,
-            sigmaY: kPwaDesktopGlassBlur,
-          ),
-          blendMode: BlendMode.srcOver,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: _radius,
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  kPwaGlassTop.withValues(alpha: kPwaDesktopGlassTopAlpha),
-                  kPwaGlassBottom.withValues(
-                    alpha: kPwaDesktopGlassBottomAlpha,
-                  ),
-                ],
-              ),
-              border: Border.all(
-                color: Colors.white.withValues(
-                  alpha: kPwaDesktopGlassBorderAlpha,
-                ),
-                width: 1,
-              ),
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: _V7OnLightGlass(child: child),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Marks the subtree that paints on the light desktop plate. The feed, the
-/// guidance, the pills and the composer are shared verbatim with the narrow
-/// window, so the surface tells them which ink to use instead of every private
-/// builder carrying a `light:` argument down the tree.
-class _V7OnLightGlass extends InheritedWidget {
-  const _V7OnLightGlass({required super.child});
-
-  static bool of(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<_V7OnLightGlass>() != null;
-
-  @override
-  bool updateShouldNotify(_V7OnLightGlass oldWidget) => false;
+      const ColoredBox(
+        color: pwaHairlineSoft,
+        child: SizedBox(height: 1, width: double.infinity),
+      );
 }
 
 /// Left gutter of the conversation grid — the width of the Ayden avatar plus its
@@ -220,7 +96,11 @@ const double kPwaChatGutter = 42;
 /// column. Capped in height so the actions, Ayden's reply and the composer still
 /// belong to the same screen.
 const double kPwaVisionMaxWidth = 820;
-const double kPwaVisionMaxHeight = 470;
+const double kPwaVisionMaxHeight = 560;
+
+/// The shape the engine actually returns: 1536x1024. Stated once, so the result
+/// screen shows the render rather than a crop of it.
+const double kPwaRenderAspect = 3 / 2;
 
 class PwaArchitectScreen extends ConsumerStatefulWidget {
   const PwaArchitectScreen({super.key});
@@ -322,9 +202,10 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
     final state = ref.watch(pwaControllerProvider);
 
     return Scaffold(
-      // Transparent: the Warm Modern photo is the bottom layer, and no surface
-      // between it and the glass is allowed to paint over it.
-      backgroundColor: Colors.transparent,
+      key: const ValueKey('pwa-design-session-result'),
+      // The product canvas. It used to be transparent so a blurred photograph
+      // could show through from below; that photograph is gone.
+      backgroundColor: pwaCanvas,
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, c) {
@@ -407,76 +288,36 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
       );
     }
 
-    if (!desktop) {
-      // Mobile / tablet keep the single flowing column that already works.
-      return Column(
-        children: [
-          _V7GlobalHeader(
-            compact: mobile,
-            onBack: _c.openHome,
-            onProjects: _c.openLibrary,
-          ),
-          Expanded(
-            child: _V7ChatBackdrop(
-              child: Center(
-                child: SizedBox(width: columnW, child: feed()),
-              ),
-            ),
-          ),
-          Center(
-            child: SizedBox(width: columnW, child: composer()),
-          ),
-        ],
-      );
-    }
-
-    // The mandatory hierarchy: the room is painted into the SAME Stack, BELOW
-    // the plate, so the BackdropFilter has real pixels to sample. Nothing in
-    // between carries a fill.
-    return Stack(
-      fit: StackFit.expand,
+    // ONE composition at every width now. The narrow and wide layouts used to
+    // differ because one sat on a veil and the other on a sheet of glass; with
+    // both on the canvas the only real difference left was a project header the
+    // wide layout could afford, so it keeps it and nothing else forks.
+    return Column(
       children: [
-        const _DesktopWarmModernBackground(),
-        Column(
-          children: [
-            _V7GlobalHeader(
-              compact: false,
-              onBack: _c.openHome,
-              onProjects: _c.openLibrary,
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: kPwaChatShellMax,
-                    ),
-                    child: _DesktopLightGlassChatShell(
-                      child: Center(
-                        child: SizedBox(
-                          width: columnW,
-                          child: Column(
-                            children: [
-                              _V7ConversationHeader(state: state),
-                              const _V7GlassDivider(),
-                              Expanded(child: feed()),
-                              const _V7GlassDivider(),
-                              Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: composer(),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+        _V7GlobalHeader(
+          compact: mobile,
+          onBack: _c.openHome,
+          onProjects: _c.openLibrary,
+        ),
+        Expanded(
+          child: Center(
+            child: SizedBox(
+              width: columnW,
+              child: Column(
+                children: [
+                  if (desktop) ...[
+                    _V7ConversationHeader(state: state),
+                    const _V7GlassDivider(),
+                  ],
+                  Expanded(child: feed()),
+                ],
               ),
             ),
-          ],
+          ),
+        ),
+        const _V7GlassDivider(),
+        Center(
+          child: SizedBox(width: columnW, child: composer()),
         ),
       ],
     );
@@ -579,11 +420,39 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                card,
+                // IMAGE, then COMMENTARY, then ACTIONS. The three pills used to
+                // sit inside the card, between the render and Ayden's line, so
+                // a person who had waited two minutes met a row of buttons
+                // before they were told anything about what they were looking
+                // at. Same widgets, same callbacks, read in the order the
+                // moment actually has.
+                _V7VisionCard(
+                  key: _visionKey(vision.versionId),
+                  vision: vision,
+                  atmosphereName: _atmoNameOf(state, vision.atmosphereId),
+                  highlighted: _highlightVersionId == vision.versionId,
+                  maxImageHeight: visionMaxH,
+                  showActions: false,
+                  onOpenReveal: () => _c.openReveal(vision.versionId),
+                  onRefine: () {
+                    _c.continueFromVision(vision.versionId);
+                    _composerFocus.requestFocus();
+                  },
+                  onTryAtmosphere: () => _c.openReveal(vision.versionId),
+                ),
                 if (m.text.isNotEmpty) ...[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
                   _V7AydenGroup(children: [_V7AydenSpeech(text: m.text)]),
                 ],
+                const SizedBox(height: 14),
+                _VisionActions(
+                  onOpenReveal: () => _c.openReveal(vision.versionId),
+                  onRefine: () {
+                    _c.continueFromVision(vision.versionId);
+                    _composerFocus.requestFocus();
+                  },
+                  onTryAtmosphere: () => _c.openReveal(vision.versionId),
+                ),
                 ...guidance,
               ],
             ),
@@ -632,7 +501,12 @@ List<String> _defaultQuickActions(PwaL10n l) => [
   l.chipWhatDoYouThink,
   l.chipWarmer,
   l.chipMoreLight,
-  l.chipOpenKitchen,
+  // Room-NEUTRAL. These four sit under EVERY result, and "Open the kitchen"
+  // under a terrace or a bathroom was a suggestion a person could tap and pay
+  // for. All four still travel the same road — `sendUserText` → the canonical
+  // turn — so what a suggestion CAN do is unchanged; only whether it makes
+  // sense to offer it.
+  l.chipCalmer,
 ];
 
 /// §20 — a leading gold glyph per quick-action chip (matches the reference).
@@ -681,32 +555,30 @@ class _V7GlobalHeader extends StatelessWidget {
       height: compact ? 60 : 72,
       padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 32),
       decoration: const BoxDecoration(
-        color: av7HeaderBlack,
-        border: Border(bottom: BorderSide(color: Color(0x29D3B064))),
+        color: pwaCanvas,
+        border: Border(bottom: BorderSide(color: pwaHairlineSoft)),
       ),
+      // Back, then the wordmark, then the actions — the same order Create
+      // uses. They used to be back / language / account / projects all packed
+      // against the left edge with the wordmark shoved into whatever was
+      // left, which on a phone put "AYDEN STUDIO" hard against the right
+      // margin and read as a mistake.
       child: Row(
         children: [
           _V7BackButton(compact: compact, onTap: onBack),
-          // The selector belongs in EVERY chrome bar, not only on Home: a
-          // person who lands on a deep link, or who is mid-project, must be
-          // able to change language without first navigating away.
-          const PwaLanguageSwitcher(onDark: true, compact: true),
-          const PwaAccountChip(onDark: true),
-          const SizedBox(width: 10),
-          _V7ProjectsButton(onTap: onProjects),
+          const SizedBox(width: 4),
           Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
                   'AYDEN STUDIO',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: av7Sans(
-                    fontSize: compact ? 16 : 22,
-                    fontWeight: FontWeight.w400,
-                    color: av7OnDark,
-                    letterSpacing: compact ? 3.0 : 7.0,
+                  style: PwaType.cardTitle().copyWith(
+                    fontSize: compact ? 15 : 17,
+                    letterSpacing: pwaTracking(compact ? 1.2 : 2.0),
                     height: 1.05,
                   ),
                 ),
@@ -715,17 +587,19 @@ class _V7GlobalHeader extends StatelessWidget {
                   context.pwaL10n.workspaceLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: av7Eyebrow(
-                    fontSize: compact ? 8.5 : 10,
-                    letterSpacing: 4.0,
-                  ),
+                  style: pwaEyebrow(color: pwaMuted, fontSize: compact ? 9 : 10),
                 ),
               ],
             ),
           ),
+          // The selector belongs in EVERY chrome bar, not only on Home: a
+          // person who lands on a deep link, or who is mid-project, must be
+          // able to change language without first navigating away.
+          _V7ProjectsButton(onTap: onProjects),
+          const PwaLanguageSwitcher(compact: true),
+          const PwaAccountChip(),
           // No vision navigator here: the chronology IS the navigation, and the
           // prev/next stepper lives on the Full Reveal.
-          SizedBox(width: compact ? 36 : 96),
         ],
       ),
     );
@@ -760,17 +634,13 @@ class _V7BackButton extends StatelessWidget {
                   const Icon(
                     Icons.arrow_back_rounded,
                     size: 20,
-                    color: av7OnDark,
+                    color: pwaInk,
                   ),
                   if (!compact) ...[
                     const SizedBox(width: 12),
                     Text(
                       context.pwaL10n.backHome,
-                      style: av7Sans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: av7OnDark,
-                      ),
+                      style: PwaType.cardSubtitle(),
                     ),
                   ],
                 ],
@@ -804,7 +674,7 @@ class _V7ProjectsButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
             child: const Padding(
               padding: EdgeInsets.all(8),
-              child: Icon(Icons.grid_view_rounded, size: 19, color: av7OnDark),
+              child: Icon(Icons.grid_view_rounded, size: 19, color: pwaInk),
             ),
           ),
         ),
@@ -828,61 +698,6 @@ class _V7ProjectsButton extends StatelessWidget {
 /// surface stays on its own opaque fill on top. Reused by desktop + mobile so the
 /// treatment is identical and maintainable. Falls back to flat ivory if the asset
 /// is unavailable (offline test harness).
-const String _kV7ChatBackdrop = 'assets/atmospheres/ftue/ftue_warm_modern.jpg';
-
-class _V7ChatBackdrop extends StatelessWidget {
-  const _V7ChatBackdrop({required this.child});
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      key: const ValueKey('av7-warm-modern-backdrop'),
-      fit: StackFit.expand,
-      children: [
-        // Softened, never erased: the room must still read as a room behind
-        // the glass — that is the whole point of the surface.
-        Positioned.fill(
-          child: ImageFiltered(
-            // Just enough to sit behind glass: the sofa, the lamps, the wood
-            // and the shelves all have to stay recognisable.
-            imageFilter: ui.ImageFilter.blur(
-              sigmaX: kPwaBackdropBlur,
-              sigmaY: kPwaBackdropBlur,
-            ),
-            child: Image.asset(
-              _kV7ChatBackdrop,
-              fit: BoxFit.cover,
-              alignment: Alignment.center,
-              errorBuilder: (_, _, _) => const ColoredBox(color: av7Canvas),
-            ),
-          ),
-        ),
-        // 2) Warm-ivory veil (editorial paper). Keeps the surface light and the
-        //    text crisp; slightly thinner through the middle so the image is
-        //    clearly, but gently, present — never a flat block, never busy.
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  av7Canvas.withValues(alpha: 0.86),
-                  av7Canvas.withValues(alpha: 0.76),
-                  av7Canvas.withValues(alpha: 0.88),
-                ],
-                stops: const [0.0, 0.5, 1.0],
-              ),
-            ),
-          ),
-        ),
-        // 3) The conversation, on its own opaque surfaces.
-        child,
-      ],
-    );
-  }
-}
 
 /// The workspace header: which project, which direction, which vision. It reads
 /// only what the library snapshot already stores — nothing derived, nothing new.
@@ -927,19 +742,14 @@ class _V7ConversationHeader extends StatelessWidget {
                   context.pwaL10n.architectLabel,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: av7Eyebrow(fontSize: 10.5, letterSpacing: 2.2),
+                  style: pwaEyebrow(color: pwaMuted, fontSize: 10.5),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: av7Sans(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w600,
-                    color: kPwaOnGlass,
-                    height: 1.2,
-                  ),
+                  style: PwaType.subsectionTitle().copyWith(height: 1.2),
                 ),
                 if (bits.isNotEmpty) ...[
                   const SizedBox(height: 2),
@@ -947,7 +757,7 @@ class _V7ConversationHeader extends StatelessWidget {
                     bits.join('  ·  '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: av7Sans(fontSize: 12.5, color: kPwaOnGlassSoft),
+                    style: PwaType.caption(),
                   ),
                 ],
               ],
@@ -1013,19 +823,16 @@ class _V7AydenSpeech extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 520),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: kPwaWarmBubble.withValues(alpha: 0.94),
-          border: Border.all(color: av7Line),
+          color: pwaSurface,
+          border: Border.all(color: pwaHairline),
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(4),
-            topRight: Radius.circular(16),
-            bottomLeft: Radius.circular(16),
-            bottomRight: Radius.circular(16),
+            topRight: Radius.circular(PwaGap.radius),
+            bottomLeft: Radius.circular(PwaGap.radius),
+            bottomRight: Radius.circular(PwaGap.radius),
           ),
         ),
-        child: Text(
-          text,
-          style: av7Sans(fontSize: 15, height: 1.47, color: av7Ink),
-        ),
+        child: Text(text, style: PwaType.body().copyWith(fontSize: 15)),
       ),
     );
   }
@@ -1053,18 +860,18 @@ class _V7UserBubble extends StatelessWidget {
           child: Container(
             constraints: const BoxConstraints(maxWidth: 420),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF2B211C).withValues(alpha: 0.94),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-                bottomLeft: Radius.circular(16),
+            decoration: const BoxDecoration(
+              color: pwaInk,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(PwaGap.radius),
+                topRight: Radius.circular(PwaGap.radius),
+                bottomLeft: Radius.circular(PwaGap.radius),
                 bottomRight: Radius.circular(4),
               ),
             ),
             child: Text(
               text,
-              style: av7Sans(fontSize: 15, height: 1.47, color: av7UserText),
+              style: PwaType.body(color: pwaSurface).copyWith(fontSize: 15),
             ),
           ),
         ),
@@ -1127,10 +934,15 @@ class _V7VisionCard extends StatelessWidget {
     required this.onOpenReveal,
     required this.onRefine,
     required this.onTryAtmosphere,
+    this.showActions = true,
   });
   final PwaVision vision;
   final String atmosphereName;
   final bool highlighted;
+
+  /// False on the FIRST vision, where the actions are placed after Ayden's
+  /// line so the reading order is image, then commentary, then actions.
+  final bool showActions;
 
   /// Ceiling for the render, derived from the space the thread actually has.
   final double maxImageHeight;
@@ -1140,49 +952,48 @@ class _V7VisionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: Av7Motion.component,
-      decoration: BoxDecoration(
-        color: kPwaWarmBubble,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: highlighted ? av7Gold : av7Line,
-          width: highlighted ? 2 : 1,
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
-            child: Text(
-              context.pwaL10n.visionNWithAtmosphere(vision.visionNumber, atmosphereName),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: av7Sans(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: av7Ink,
-              ),
+    // THE IMAGE IS THE FIRST THING. It used to sit under a title strip inside
+    // the card, so after a two-minute wait the first thing read was a label --
+    // "Vision 1 . Warm Modern" -- and the render came second. The caption now
+    // sits UNDER the image, where a caption belongs.
+    //
+    // There is no card around it either. A border and a fill turned the payoff
+    // into a row in a feed; on the canvas the render is simply the largest
+    // thing on the screen, with its own corners.
+    return Column(
+      key: const ValueKey('pwa-result-vision'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // The render itself opens the Full Reveal -- the obvious gesture -- and
+        // an explicit expand control makes that possibility visible.
+        // Align first: the parent Column stretches its children, which gives a
+        // TIGHT width that a bare ConstrainedBox cannot shrink below.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: kPwaVisionMaxWidth,
+              maxHeight: maxImageHeight,
             ),
-          ),
-          // The render itself opens the Full Reveal — the obvious gesture — and
-          // an explicit expand control makes that possibility visible.
-          // Big and edge-to-edge in the column: `cover` fills the frame, so a
-          // landscape render is never boxed between two charcoal bands. The
-          // Full Reveal remains the place to see the image uncropped.
-          // Align first: the card's Column stretches its children, which gives a
-          // TIGHT width that a bare ConstrainedBox cannot shrink below.
-          Align(
-            alignment: Alignment.centerLeft,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: kPwaVisionMaxWidth,
-                maxHeight: maxImageHeight,
+            child: AnimatedContainer(
+              duration: Av7Motion.component,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(PwaGap.radius),
+                border: Border.all(
+                  // Only ever drawn while a returned-from-Reveal highlight is
+                  // running; at rest the render carries no frame at all.
+                  color: highlighted ? pwaGold : Colors.transparent,
+                  width: 2,
+                ),
               ),
+              clipBehavior: Clip.antiAlias,
               child: AspectRatio(
-                aspectRatio: 16 / 9,
+                // THE RENDER'S OWN SHAPE. The engine returns 1536x1024, and a
+                // 16:9 frame was cover-cropping about a tenth off the top and
+                // bottom of the one image the person waited for. That the Full
+                // Reveal shows it uncropped is not a reason for the result
+                // screen to crop it.
+                aspectRatio: kPwaRenderAspect,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -1197,7 +1008,7 @@ class _V7VisionCard extends StatelessWidget {
                           child: PwaStoredImage(
                             key: ValueKey('vision-card-${vision.versionId}'),
                             reference: vision.afterAsset,
-                            placeholderColor: av7RevealRaised,
+                            placeholderColor: pwaWell,
                           ),
                         ),
                       ),
@@ -1212,35 +1023,70 @@ class _V7VisionCard extends StatelessWidget {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _VisionAction(
-                  icon: Icons.open_in_full_rounded,
-                  label: context.pwaL10n.viewFullReveal,
-                  primary: true,
-                  onTap: onOpenReveal,
-                ),
-                _VisionAction(
-                  icon: Icons.tune_rounded,
-                  label: context.pwaL10n.refineThis,
-                  onTap: onRefine,
-                ),
-                _VisionAction(
-                  icon: Icons.auto_awesome,
-                  label: context.pwaL10n.tryAnotherAtmosphere,
-                  onTap: onTryAtmosphere,
-                ),
-              ],
-            ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          context.pwaL10n
+              .visionNWithAtmosphere(vision.visionNumber, atmosphereName),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: PwaType.bodyMuted(),
+        ),
+        if (showActions) ...[
+          const SizedBox(height: 12),
+          _VisionActions(
+            onOpenReveal: onOpenReveal,
+            onRefine: onRefine,
+            onTryAtmosphere: onTryAtmosphere,
           ),
         ],
-      ),
+      ],
     );
   }
+}
+
+/// What can be done with a vision: open it, refine it, or try another
+/// direction. Its own widget because the FIRST result places it after Ayden's
+/// line rather than directly under the render — image, commentary, actions.
+class _VisionActions extends StatelessWidget {
+  const _VisionActions({
+    required this.onOpenReveal,
+    required this.onRefine,
+    required this.onTryAtmosphere,
+  });
+
+  final VoidCallback onOpenReveal;
+  final VoidCallback onRefine;
+  final VoidCallback onTryAtmosphere;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, c) => Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _VisionAction(
+              icon: Icons.open_in_full_rounded,
+              label: context.pwaL10n.viewFullReveal,
+              primary: true,
+              maxWidth: c.maxWidth,
+              onTap: onOpenReveal,
+            ),
+            _VisionAction(
+              icon: Icons.tune_rounded,
+              label: context.pwaL10n.refineThis,
+              maxWidth: c.maxWidth,
+              onTap: onRefine,
+            ),
+            _VisionAction(
+              icon: Icons.auto_awesome,
+              label: context.pwaL10n.tryAnotherAtmosphere,
+              maxWidth: c.maxWidth,
+              onTap: onTryAtmosphere,
+            ),
+          ],
+        ),
+      );
 }
 
 /// One action attached to a vision card. The primary one is filled; the others
@@ -1251,49 +1097,55 @@ class _VisionAction extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    required this.maxWidth,
     this.primary = false,
   });
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+
+  /// The width of the row these pills wrap inside — see the note on the
+  /// constraint below.
+  final double maxWidth;
   final bool primary;
 
   @override
   Widget build(BuildContext context) {
-    final fg = primary ? av7Ink : av7InkSecondary;
+    // The product's own two buttons: the primary is the ink pill, the others
+    // are hairline pills. Gold is left to the accents it marks -- a selection,
+    // a glyph -- rather than carrying a CTA.
+    final fg = primary ? pwaSurface : pwaInk;
     return Semantics(
       button: true,
       label: label,
       child: Material(
-        color: primary ? av7Gold : av7Surface,
-        borderRadius: BorderRadius.circular(999),
+        color: primary ? pwaInk : pwaSurface,
+        borderRadius: BorderRadius.circular(PwaGap.radiusPill),
         child: InkWell(
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(PwaGap.radiusPill),
           onTap: onTap,
           child: Container(
-            height: 36,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            height: 40,
+            // See _V7QuickActions: a Wrap gives loose constraints, so without
+            // a ceiling a long French or Khmer label overflows instead of
+            // ellipsizing.
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(999),
-              border: primary
-                  ? null
-                  : Border.all(color: av7GoldDeep.withValues(alpha: 0.34)),
+              borderRadius: BorderRadius.circular(PwaGap.radiusPill),
+              border: primary ? null : Border.all(color: pwaHairline),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 14, color: primary ? av7Ink : av7GoldDeep),
-                const SizedBox(width: 6),
+                Icon(icon, size: 15, color: primary ? pwaSurface : pwaGold),
+                const SizedBox(width: 7),
                 Flexible(
                   child: Text(
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: av7Sans(
-                      fontSize: 12,
-                      fontWeight: primary ? FontWeight.w700 : FontWeight.w500,
-                      color: fg,
-                    ),
+                    style: PwaType.button(color: fg).copyWith(fontSize: 13.5),
                   ),
                 ),
               ],
@@ -1329,7 +1181,7 @@ class _ExpandRevealButtonState extends State<_ExpandRevealButton> {
           cursor: SystemMouseCursors.click,
           child: Material(
             color: const Color(
-              0xFF211914,
+              0xFF1E161E,
             ).withValues(alpha: _hover ? 0.92 : 0.82),
             shape: const CircleBorder(),
             clipBehavior: Clip.antiAlias,
@@ -1343,7 +1195,7 @@ class _ExpandRevealButtonState extends State<_ExpandRevealButton> {
                 child: Icon(
                   Icons.open_in_full_rounded,
                   size: 21,
-                  color: _hover ? av7Gold : Colors.white,
+                  color: _hover ? pwaGold : Colors.white,
                 ),
               ),
             ),
@@ -1426,11 +1278,7 @@ class _V7ChangePrompt extends StatelessWidget {
     padding: const EdgeInsets.only(left: 42),
     child: Text(
       context.pwaL10n.whatWouldYouLikeToChange,
-      style: av7Sans(
-        fontSize: 13.5,
-        fontWeight: FontWeight.w600,
-        color: kPwaOnGlass,
-      ),
+      style: PwaType.cardTitle(),
     ),
   );
 }
@@ -1442,43 +1290,44 @@ class _V7QuickActions extends StatelessWidget {
   final ValueChanged<String> onTap;
   @override
   Widget build(BuildContext context) {
-    final light = _V7OnLightGlass.of(context);
-    final edge = light ? av7GoldDeep : kPwaGlassEdge;
-    return Padding(
-      padding: EdgeInsets.zero,
-      child: Wrap(
+    // A Wrap hands each child LOOSE constraints, so a Row inside one sizes to
+    // its natural width and a long label simply runs off the screen — there is
+    // nothing for `Flexible` to shrink against. French does exactly that:
+    // "Rends-le plus chaleureux" overflowed a 390px phone by 9px. The ceiling
+    // has to come from the row the pills are laid out in, so it is measured
+    // once and handed down.
+    return LayoutBuilder(
+      builder: (context, c) => Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
-          for (final c in chips)
+          for (final chip in chips)
             Material(
-              color: light
-                  ? const Color(0xFFFFFBF8).withValues(alpha: 0.66)
-                  : kPwaWarmAccent.withValues(alpha: 0.46),
-              borderRadius: BorderRadius.circular(999),
+              color: pwaSurface,
+              borderRadius: BorderRadius.circular(PwaGap.radiusPill),
               child: InkWell(
-                borderRadius: BorderRadius.circular(999),
-                onTap: () => onTap(c),
+                borderRadius: BorderRadius.circular(PwaGap.radiusPill),
+                onTap: () => onTap(chip),
                 child: Container(
-                  height: 36,
+                  height: 38,
+                  constraints: BoxConstraints(maxWidth: c.maxWidth),
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: edge.withValues(alpha: 0.40)),
+                    borderRadius: BorderRadius.circular(PwaGap.radiusPill),
+                    border: Border.all(color: pwaHairline),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(_chipIcon(c), size: 14, color: edge),
-                      const SizedBox(width: 6),
-                      Text(
-                        c,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: av7Sans(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w500,
-                          color: light ? kPwaOnPlate : kPwaOnGlass,
+                      Icon(_chipIcon(chip), size: 14, color: pwaGold),
+                      const SizedBox(width: 7),
+                      Flexible(
+                        child: Text(
+                          chip,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style:
+                              PwaType.cardSubtitle().copyWith(fontSize: 13.5),
                         ),
                       ),
                     ],
@@ -1521,31 +1370,21 @@ class _V7RefineConfirmCard extends StatelessWidget {
     // engine had already judged wrong. On red the override is not disabled, it
     // is absent: a greyed button still says "this is available to you".
     final isRed = advisoryVerdict == 'red';
-    final light = _V7OnLightGlass.of(context);
-    final ink = light ? kPwaOnPlate : kPwaOnGlass;
-    final soft = light ? kPwaOnPlateSoft : kPwaOnGlassSoft;
-    final edge = light ? av7GoldDeep : kPwaGlassEdge;
     return Padding(
       padding: EdgeInsets.zero,
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: light
-              ? const Color(0xFFFFFBF8).withValues(alpha: 0.72)
-              : kPwaWarmAccent.withValues(alpha: 0.55),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: edge.withValues(alpha: 0.40)),
+          color: pwaWell,
+          borderRadius: BorderRadius.circular(PwaGap.radius),
+          border: Border.all(color: pwaGold.withValues(alpha: 0.45)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               context.pwaL10n.applyThisChange,
-              style: av7Sans(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: ink,
-              ),
+              style: PwaType.cardTitle(),
             ),
             const SizedBox(height: 6),
             Text(
@@ -1553,18 +1392,18 @@ class _V7RefineConfirmCard extends StatelessWidget {
               // change belongs to the canonical advisor, which answers on the
               // backend — never to a template composed here.
               '“$instruction”',
-              style: av7Sans(fontSize: 13, height: 1.46, color: soft),
+              style: PwaType.bodyMuted().copyWith(fontStyle: FontStyle.italic),
             ),
             if (!isRed) ...[
               const SizedBox(height: 10),
               Row(
                 children: [
-                  const Icon(Icons.auto_awesome, size: 14, color: av7GoldDeep),
+                  const Icon(Icons.auto_awesome, size: 14, color: pwaGold),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       context.pwaL10n.createsVisionUsesSpace(nextN),
-                      style: av7Sans(fontSize: 11.5, color: soft),
+                      style: PwaType.caption(),
                     ),
                   ),
                 ],
@@ -1579,8 +1418,9 @@ class _V7RefineConfirmCard extends StatelessWidget {
                         ? null
                         : () => controller.dismissRefine(messageId),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: ink,
-                      side: BorderSide(color: edge.withValues(alpha: 0.4)),
+                      foregroundColor: pwaInk,
+                      side: const BorderSide(color: pwaHairline, width: 1.5),
+                      shape: const StadiumBorder(),
                     ),
                     // On a refusal the only action left is to rephrase, so the
                     // button says that rather than "Cancel".
@@ -1607,8 +1447,9 @@ class _V7RefineConfirmCard extends StatelessWidget {
                             controller.applyRefine(instruction, confirm: true);
                           },
                     style: FilledButton.styleFrom(
-                      backgroundColor: av7Gold,
-                      foregroundColor: av7Ink,
+                      backgroundColor: pwaInk,
+                      foregroundColor: pwaSurface,
+                      shape: const StadiumBorder(),
                     ),
                     child: Text(busy ? context.pwaL10n.creating : context.pwaL10n.createVision),
                   ),
@@ -1663,11 +1504,6 @@ class _V7ComposerState extends State<_V7Composer> {
 
   @override
   Widget build(BuildContext context) {
-    final light = _V7OnLightGlass.of(context);
-    // The FIELD carries its own light surface, so its ink is dark on desktop.
-    // The disclaimer sits bare on the plate, so it keeps the light ink.
-    final ink = light ? kPwaOnPlate : kPwaOnGlass;
-    final fieldSoft = light ? kPwaOnPlateSoft : kPwaOnGlassSoft;
     return ColoredBox(
       key: const ValueKey('av7-integrated-composer'),
       // No fill of its own: the composer belongs to the glass plate, it is not
@@ -1695,34 +1531,32 @@ class _V7ComposerState extends State<_V7Composer> {
                       maxLines: 4,
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _send(),
-                      style: av7Sans(fontSize: 15, color: ink, height: 1.4),
-                      cursorColor: light ? av7GoldDeep : av7Gold,
+                      style: PwaType.body().copyWith(fontSize: 15),
+                      cursorColor: pwaGold,
                       decoration: InputDecoration(
                         isDense: true,
                         filled: true,
-                        fillColor: light
-                            ? const Color(0xFFFFFBF8).withValues(alpha: 0.68)
-                            : kPwaWarmAccent.withValues(alpha: 0.48),
+                        // The SAME field Step 4 uses: well, hairline, gold ring
+                        // on focus. Continuing a session and briefing one
+                        // should not feel like two different products.
+                        fillColor: pwaWell,
                         hintText: context.pwaL10n.askAydenAnything,
-                        hintStyle: av7Sans(fontSize: 15, color: fieldSoft),
+                        hintStyle: PwaType.bodyMuted(color: pwaFaint)
+                            .copyWith(fontSize: 15),
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 18,
                           vertical: 15,
                         ),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: light
-                                ? Colors.white.withValues(alpha: 0.46)
-                                : kPwaGlassEdge.withValues(alpha: 0.34),
-                          ),
+                          borderRadius:
+                              BorderRadius.circular(PwaGap.radiusInput),
+                          borderSide: const BorderSide(color: pwaHairline),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide(
-                            color: light ? av7GoldDeep : av7Gold,
-                            width: 1.5,
-                          ),
+                          borderRadius:
+                              BorderRadius.circular(PwaGap.radiusInput),
+                          borderSide:
+                              const BorderSide(color: pwaGold, width: 1.5),
                         ),
                       ),
                     ),
@@ -1733,10 +1567,7 @@ class _V7ComposerState extends State<_V7Composer> {
               ],
             ),
             const SizedBox(height: 7),
-            Text(
-              context.pwaL10n.aydenDisclaimer,
-              style: av7Sans(fontSize: 10.5, color: kPwaOnGlassSoft),
-            ),
+            Text(context.pwaL10n.aydenDisclaimer, style: PwaType.caption()),
           ],
         ),
       ),
@@ -1754,7 +1585,7 @@ class _V7SendButton extends StatelessWidget {
       button: true,
       label: context.pwaL10n.sendMessage,
       child: Material(
-        color: enabled ? av7Gold : av7Line,
+        color: enabled ? pwaInk : pwaWell,
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
@@ -1765,7 +1596,7 @@ class _V7SendButton extends StatelessWidget {
             child: Icon(
               Icons.send_rounded,
               size: 20,
-              color: enabled ? av7Ink : av7MutedSoft,
+              color: enabled ? pwaSurface : pwaFaint,
             ),
           ),
         ),

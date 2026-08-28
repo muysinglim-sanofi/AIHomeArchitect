@@ -1330,7 +1330,12 @@ class PwaController extends StateNotifier<PwaState> {
     if (!mounted) return;
     _activeGenerationKey = null;
     final action = pwaActionFromDb(p.actionType);
-    _adoptResolved(made, p.atmosphereId);
+    // Capture what `_adoptResolved` decided instead of discarding it: Ayden's
+    // opening line names the direction, and on a delegated Signature the
+    // resolved atmosphere is the only one worth naming. Called exactly once,
+    // as before — it mutates `selectedRoomId`, so a second call would be a
+    // second write.
+    final resolvedAtmo = _atmosphere(_adoptResolved(made, p.atmosphereId));
     final v = _visionFrom(
       made,
       actionType: action,
@@ -1347,7 +1352,10 @@ class PwaController extends StateNotifier<PwaState> {
       role: PwaRole.ayden,
       kind: PwaMessageKind.reveal,
       text: switch (action) {
-        PwaActionType.signature => _l10n.firstVisionIntro,
+        // The atmosphere the ENGINE resolved — `chosen`, not what was asked
+        // for. On a delegated "Ayden Signature" the two differ, and naming the
+        // delegation back at the person says nothing about their room.
+        PwaActionType.signature => _l10n.firstVisionIntro(resolvedAtmo.name),
         PwaActionType.refine => _repo.refineApplied(p.userInstruction),
         PwaActionType.switchAtmosphere => _repo.switchIntro(
           _atmosphere(p.atmosphereId),
@@ -1514,13 +1522,18 @@ class PwaController extends StateNotifier<PwaState> {
       id: _nextId('m'),
       role: PwaRole.ayden,
       kind: PwaMessageKind.reveal,
-      text: _l10n.firstVisionIntro,
+      text: _l10n.firstVisionIntro(chosen.name),
       visionId: v1.versionId,
       chips: [
         _l10n.chipWhatDoYouThink,
         _l10n.chipWarmer,
         _l10n.chipMoreLight,
-        _l10n.chipOpenKitchen,
+        // Room-NEUTRAL. These four sit under every result, and "Open the
+        // kitchen" under a terrace or a bathroom was a suggestion the person
+        // could tap and pay for. All four still travel the same road —
+        // `sendUserText` → the canonical turn — so nothing about what a
+        // suggestion CAN do has changed; only whether it makes sense to offer.
+        _l10n.chipCalmer,
       ],
     );
     await _settleFirstVision(v1, intro, chosen.id);

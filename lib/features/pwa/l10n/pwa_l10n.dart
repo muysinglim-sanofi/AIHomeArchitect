@@ -355,7 +355,13 @@ class PwaL10n {
   /// repository, so it never passes through `localize_reply` and stayed English
   /// for every reader. It is the FIRST thing Ayden says — measured in the
   /// browser sitting in English under a fully Khmer interface.
-  String get firstVisionIntro => _get('pwaFirstVisionIntro');
+  /// Ayden's opening line on a first result. Takes the atmosphere the ENGINE
+  /// resolved, so it names the direction that was actually rendered rather than
+  /// the one that was asked for — "Ayden Signature" is a delegation, not a
+  /// direction, and printing it back would tell the person nothing.
+  String firstVisionIntro(String atmosphere) =>
+      _get('pwaFirstVisionIntro').replaceAll('{name}', atmosphere);
+  String get chipCalmer => _get('pwaChipCalmer');
 
   String visionN(int n) => _get('pwaVisionN').replaceAll('{n}', '$n');
   String visionNWithAtmosphere(int n, String name) => _get(

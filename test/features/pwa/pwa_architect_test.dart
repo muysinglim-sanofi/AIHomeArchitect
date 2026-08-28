@@ -17,6 +17,7 @@ import 'package:ai_home_architect/features/pwa/application/pwa_controller.dart';
 import 'package:ai_home_architect/features/pwa/data/mock_pwa_experience_repository.dart';
 import 'package:ai_home_architect/features/pwa/domain/pwa_models.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_architect_screen.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_theme.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_experience.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_brand.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_widgets.dart';
@@ -154,32 +155,25 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('desktop shows one warm workspace holding the whole chat', (
+    testWidgets('desktop keeps the whole chat on one reading measure', (
       tester,
     ) async {
-      const size = Size(1920, 1080);
-      await _pumpArchitect(tester, size);
-      final shell = find.byKey(const ValueKey('av7-glass-chat-shell'));
-      expect(shell, findsOneWidget);
-      final r = tester.getRect(shell);
-      expect(r.width, lessThanOrEqualTo(1120));
-      // The header, the thread and the composer all live INSIDE that surface —
-      // no band running across the window.
-      expect(
-        find.descendant(
-          of: shell,
-          matching: find.byKey(const ValueKey('av7-conversation-header')),
-        ),
-        findsOneWidget,
+      // This used to assert that a glass PLATE contained the header, the
+      // thread and the composer. The plate is gone with the photograph it
+      // floated on; what it was really protecting — that the three share one
+      // left edge instead of drifting apart across a wide window — is what is
+      // asserted now.
+      await _pumpArchitect(tester, const Size(1920, 1080));
+      final header = tester.getRect(
+        find.byKey(const ValueKey('av7-conversation-header')),
       );
-      expect(
-        find.descendant(of: shell, matching: find.byKey(_feedKey)),
-        findsOneWidget,
-      );
-      expect(
-        find.descendant(of: shell, matching: find.byType(TextField)),
-        findsOneWidget,
-      );
+      final feed = tester.getRect(find.byKey(_feedKey));
+      final field = tester.getRect(find.byType(TextField));
+      expect(header.left, closeTo(feed.left, 1));
+      expect(header.width, lessThanOrEqualTo(kPwaChatColumnMax + 1));
+      expect(feed.width, lessThanOrEqualTo(kPwaChatColumnMax + 1));
+      expect(field.left, greaterThanOrEqualTo(feed.left - 40));
+      expect(field.right, lessThanOrEqualTo(feed.right + 40));
       expect(tester.takeException(), isNull);
     });
 
@@ -501,95 +495,111 @@ void main() {
   });
 
   // ── The desktop chat must LOOK like a conversation ──────────────────────────
-  group('desktop chat identity', () {
-    test('the workspace is LIGHT warm glass, not a brown panel', () {
-      // The desktop plate follows the narrow window: white-ivory and clearly
-      // translucent. A dark brown plate read as a tinted panel — that is the
-      // regression this guards against, in both directions at once.
-      expect(kPwaGlassTop.r, greaterThan(0.90));
-      expect(kPwaGlassTop.g, greaterThan(0.90));
-      expect(kPwaGlassBottom.r, greaterThan(0.85));
-      // Warm, not clinical white: red must stay ahead of blue.
-      expect(kPwaGlassTop.b, lessThan(kPwaGlassTop.r));
-      expect(kPwaGlassBottom.b, lessThan(kPwaGlassBottom.r));
-      // Still glass, not paper: opacity — not blur — is what hides a room.
-      expect(kPwaDesktopGlassTopAlpha, lessThanOrEqualTo(0.18));
-      expect(kPwaDesktopGlassBottomAlpha, lessThanOrEqualTo(0.10));
-      // Ink for the surfaces that carry their own fill (field, pills, cards).
-      expect(kPwaOnPlate.r, lessThan(0.25));
-      expect(kPwaOnPlateSoft.r, lessThan(0.25));
-    });
-
-    test('the narrow-window accent stays dark and separate from the plate', () {
-      // Mobile / tablet sit straight on the cream veil, so their pills and
-      // composer carry their own contrast. Lightening desktop must never reach
-      // them — different constants, enforced here.
-      expect(kPwaWarmAccent.r, lessThan(0.20));
-      expect(kPwaOnGlass.r, greaterThan(0.85));
-    });
-
-    testWidgets('a real Warm Modern room sits behind the conversation', (
-      tester,
-    ) async {
+  // ── The result, and the room it is shown in (Phase 5) ─────────────────────
+  //
+  // What this replaced. The conversation used to float on a photograph: a
+  // blurred Warm Modern living room filled the window, a warm-ivory veil lay
+  // over it, and on desktop a sheet of translucent glass carried the thread.
+  // Roughly twenty tests here measured that surface — the plate's two gradient
+  // stops, its alpha ceilings, its blur, the backdrop veil, and which ink each
+  // side of it demanded.
+  //
+  // None of it exists. The person has just generated a picture of THEIR room,
+  // and the app was showing them somebody else's behind it; the backdrop went,
+  // and every number describing it went with it. Those tests were not migrated
+  // because there is nothing left for them to describe. What replaces them is
+  // the rule the phase actually has to hold: the render is the biggest thing on
+  // the screen, it is shown whole, and it comes first.
+  group('the result leads', () {
+    testWidgets('there is no photograph behind the conversation',
+        (tester) async {
       await _pumpArchitect(tester, const Size(1440, 900));
-      final backdrop = tester.widgetList<Image>(find.byType(Image)).where((i) {
-        final p = i.image;
-        return p is AssetImage && p.assetName.contains('ftue_warm_modern');
+      final decorative = tester.widgetList<Image>(find.byType(Image)).where((i) {
+        final provider = i.image;
+        return provider is AssetImage &&
+            provider.assetName.contains('ftue_warm_modern');
       });
       expect(
-        backdrop,
-        isNotEmpty,
-        reason: 'the chat backdrop must use the Warm Modern living room asset',
+        decorative,
+        isEmpty,
+        reason: 'the only photograph on this screen is the render',
       );
+      expect(find.byType(BackdropFilter), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the header announces Ayden, not a gallery caption', (
-      tester,
-    ) async {
-      await _pumpArchitect(tester, const Size(1440, 900));
-      final header = find.byKey(const ValueKey('av7-conversation-header'));
-      expect(header, findsOneWidget);
-      expect(
-        find.descendant(of: header, matching: find.text('AYDEN ARCHITECT')),
-        findsOneWidget,
+    testWidgets('the canvas is the product canvas, not a dark shell',
+        (tester) async {
+      await _pumpArchitect(tester, const Size(390, 844));
+      final scaffold = tester.widget<Scaffold>(
+        find.byKey(const ValueKey('pwa-design-session-result')),
       );
+      expect(scaffold.backgroundColor, pwaCanvas);
+      expect(scaffold.backgroundColor, isNot(Colors.black));
+      expect(scaffold.backgroundColor, isNot(Colors.transparent));
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the render is the payoff: big, and never letterboxed', (
-      tester,
-    ) async {
+    testWidgets('the render is the payoff: big, and shown WHOLE',
+        (tester) async {
       await _pumpArchitect(tester, const Size(1440, 900));
-      final card = find.byKey(const ValueKey('av7-vision-expand'));
-      await _reveal(tester, card);
-      final image = tester.getRect(
-        find
-            .descendant(
-              of: find.byKey(_feedKey),
-              matching: find.byType(AspectRatio),
-            )
-            .first,
-      );
+      await _reveal(tester, find.byKey(const ValueKey('av7-vision-expand')));
+      final frame = find
+          .descendant(
+            of: find.byKey(_feedKey),
+            matching: find.byType(AspectRatio),
+          )
+          .first;
+      final rect = tester.getRect(frame);
       // Nearly the whole conversation column, and tall enough to land as a
       // result rather than a thumbnail.
-      expect(image.width, greaterThanOrEqualTo(760));
-      expect(image.width, lessThanOrEqualTo(kPwaVisionMaxWidth + 1));
-      expect(image.height, greaterThanOrEqualTo(400));
-      expect(image.height, lessThanOrEqualTo(kPwaVisionMaxHeight + 1));
-      // `cover` fills the frame, so a landscape render is never boxed between
-      // two charcoal bands. Uncropped viewing is the Full Reveal's job.
-      final rendered = tester.widgetList<Image>(
-        find.descendant(of: find.byKey(_feedKey), matching: find.byType(Image)),
+      expect(rect.width, greaterThanOrEqualTo(760));
+      expect(rect.width, lessThanOrEqualTo(kPwaVisionMaxWidth + 1));
+      expect(rect.height, greaterThanOrEqualTo(400));
+      expect(rect.height, lessThanOrEqualTo(kPwaVisionMaxHeight + 1));
+      // THE CROP. The frame is the shape the engine actually returns, so the
+      // `cover` inside it fills exactly and cuts nothing. A 16:9 frame — what
+      // was here before — took about a tenth off the top and bottom of the one
+      // image the person waited two minutes for.
+      expect(tester.widget<AspectRatio>(frame).aspectRatio, kPwaRenderAspect);
+      expect(rect.width / rect.height, closeTo(kPwaRenderAspect, 0.01));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the image comes before the words', (tester) async {
+      // IMAGE FIRST, COMMENTARY SECOND. The model order is asserted in "first
+      // turn order" below; this is the geometry, which is what the person
+      // actually experiences.
+      await _pumpArchitect(tester, const Size(390, 844));
+      final image = tester.getRect(
+        find.byKey(const ValueKey('pwa-result-vision')),
       );
-      expect(rendered.any((i) => i.fit == BoxFit.cover), isTrue);
+      // Ayden's opening line — located by its own words rather than by a
+      // private widget type, so the assertion survives a re-composition.
+      final commentary = tester.getRect(
+        find.textContaining('direction is in').first,
+      );
+      expect(
+        image.top,
+        lessThan(commentary.top),
+        reason: 'the render must not be preceded by a paragraph',
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the caption sits under the render, never above it',
+        (tester) async {
+      await _pumpArchitect(tester, const Size(390, 844));
+      final image = tester.getRect(
+        find.byKey(const ValueKey('pwa-result-vision')),
+      );
+      final caption = tester.getRect(find.textContaining('Vision 1').first);
+      expect(caption.top, greaterThan(image.top));
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('one Ayden turn = one avatar, render included', (tester) async {
       await _pumpArchitect(tester, const Size(1440, 900));
-      // The first turn holds the greeting, the render and the suggestions; if
-      // they were separate blocks the avatar would repeat.
       await _reveal(tester, find.text('What would you like to change?'));
       expect(find.byKey(const ValueKey('av7-vision-expand')), findsOneWidget);
       expect(find.text('View full reveal'), findsOneWidget);
@@ -597,22 +607,21 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the composer belongs to the same plate as the thread', (
-      tester,
-    ) async {
+    testWidgets('the composer sits inside the reading column', (tester) async {
       await _pumpArchitect(tester, const Size(1440, 900));
-      final shell = find.byKey(const ValueKey('av7-glass-chat-shell'));
-      final shellRect = tester.getRect(shell);
+      final feed = tester.getRect(find.byKey(_feedKey));
       final field = tester.getRect(find.byType(TextField));
-      expect(field.left, greaterThanOrEqualTo(shellRect.left - 1));
-      expect(field.right, lessThanOrEqualTo(shellRect.right + 1));
-      expect(field.bottom, lessThanOrEqualTo(shellRect.bottom + 1));
+      expect(field.left, greaterThanOrEqualTo(feed.left - 40));
+      expect(field.right, lessThanOrEqualTo(feed.right + 40));
+      expect(field.top, greaterThanOrEqualTo(feed.top));
       expect(tester.takeException(), isNull);
     });
 
     for (final size in const [
+      Size(390, 844),
+      Size(430, 932),
+      Size(768, 1024),
       Size(1440, 900),
-      Size(1536, 864),
       Size(1920, 1080),
     ]) {
       testWidgets(
@@ -620,34 +629,15 @@ void main() {
         (tester) async {
           await _pumpArchitect(tester, size);
           expect(
-            find.byKey(const ValueKey('av7-glass-chat-shell')),
+            find.byKey(const ValueKey('pwa-design-session-result')),
             findsOneWidget,
           );
           expect(tester.takeException(), isNull);
         },
       );
     }
-
-    // Below 1200 the glass plate must not appear at all: the narrow window
-    // keeps the flowing column it was designed with.
-    for (final size in const [
-      Size(390, 844),
-      Size(430, 932),
-      Size(768, 1024),
-    ]) {
-      testWidgets(
-        'no glass plate at ${size.width.toInt()}x${size.height.toInt()}',
-        (tester) async {
-          await _pumpArchitect(tester, size);
-          expect(
-            find.byKey(const ValueKey('av7-glass-chat-shell')),
-            findsNothing,
-          );
-          expect(tester.takeException(), isNull);
-        },
-      );
-    }
   });
+
 
   // ── The first vision earns a moment of its own ─────────────────────────────
   group('First Reveal', () {
@@ -781,15 +771,23 @@ void main() {
           .firstWhere((m) => m.kind == PwaMessageKind.reveal)
           .text;
 
-      final cardY = tester.getTopLeft(find.text('View full reveal')).dy;
+      // Anchored on the RENDER, not on an action label. The pills used to sit
+      // between the image and Ayden's line and stood in for the image's
+      // position; Phase 5 moved them below the commentary, which is the whole
+      // point — so the proxy had to become the thing itself.
+      final cardY =
+          tester.getTopLeft(find.byKey(const ValueKey('pwa-result-vision'))).dy;
       final bubbleY = tester.getTopLeft(find.text(text)).dy;
+      final actionY = tester.getTopLeft(find.text('View full reveal')).dy;
       final guidanceY = tester
           .getTopLeft(find.text('What would you like to change?'))
           .dy;
 
-      // You have just generated an image: the image is what you see first.
+      // You have just generated an image: the image is what you see first,
+      // then what Ayden says about it, then what you can do with it.
       expect(cardY, lessThan(bubbleY));
-      expect(bubbleY, lessThan(guidanceY));
+      expect(bubbleY, lessThan(actionY));
+      expect(actionY, lessThan(guidanceY));
       expect(tester.takeException(), isNull);
     });
 
@@ -829,197 +827,4 @@ void main() {
     });
   });
 
-  // ── The plate is glass, and the room is behind it ─────────────────────────
-  group('real translucency', () {
-    test('no layer is thick enough to hide the room', () {
-      // The ceilings that made the difference. Blur was never the problem —
-      // at 0.44 the plate was a milky rectangle however hard it was blurred.
-      expect(kPwaDesktopGlassTopAlpha, lessThanOrEqualTo(0.18));
-      expect(kPwaDesktopGlassBottomAlpha, lessThanOrEqualTo(0.10));
-      expect(kPwaDesktopBackdropVeilAlpha, lessThanOrEqualTo(0.07));
-      // The salon must still read as a salon: sofa, lamps, shelves, depth.
-      expect(kPwaDesktopBackdropBlur, lessThanOrEqualTo(6));
-      expect(kPwaBackdropBlur, lessThanOrEqualTo(8));
-    });
-
-    testWidgets('the room, the glass, the feed and the composer are layered '
-        'as designed', (tester) async {
-      await _pumpArchitect(tester, const Size(1440, 900));
-      final backdrop = find.byKey(const ValueKey('av7-warm-modern-backdrop'));
-      final shell = find.byKey(const ValueKey('av7-glass-chat-shell'));
-      expect(backdrop, findsWidgets);
-      expect(shell, findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('av7-integrated-composer')),
-        findsOneWidget,
-      );
-
-      // The Warm Modern photo is the bottom layer…
-      final room = tester.widgetList<Image>(find.byType(Image)).where((i) {
-        final prov = i.image;
-        return prov is AssetImage &&
-            prov.assetName.contains('ftue_warm_modern');
-      });
-      expect(room, isNotEmpty);
-
-      // …and the plate really refracts it rather than painting over it.
-      expect(
-        find.descendant(of: shell, matching: find.byType(BackdropFilter)),
-        findsWidgets,
-      );
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('the feed and the composer wrapper paint nothing', (
-      tester,
-    ) async {
-      await _pumpArchitect(tester, const Size(1440, 900));
-      expect(
-        tester
-            .widget<ColoredBox>(find.byKey(const ValueKey('av7-chat-feed')))
-            .color,
-        Colors.transparent,
-      );
-      expect(
-        tester
-            .widget<ColoredBox>(
-              find.byKey(const ValueKey('av7-integrated-composer')),
-            )
-            .color,
-        Colors.transparent,
-      );
-      // The field itself carries a fill so the text stays readable.
-      expect(find.byType(TextField), findsOneWidget);
-    });
-
-    // ── The structural guarantee, not a colour preference ────────────────────
-    // A single leftover opaque fill between the photo and the plate cancels the
-    // whole effect, so each layer of the desktop path is asserted by hand.
-    testWidgets('nothing opaque sits between the room and the glass', (
-      tester,
-    ) async {
-      await _pumpArchitect(tester, const Size(1440, 900));
-
-      // 1. The Scaffold paints nothing.
-      final scaffold = tester.widgetList<Scaffold>(find.byType(Scaffold)).last;
-      expect(scaffold.backgroundColor, Colors.transparent);
-
-      // 2. The image is painted BELOW the plate, inside the same Stack.
-      final root = find.ancestor(
-        of: find.byKey(const ValueKey('av7-warm-modern-backdrop')),
-        matching: find.byType(Stack),
-      );
-      expect(root, findsWidgets);
-      expect(
-        find.descendant(
-          of: root.first,
-          matching: find.byKey(const ValueKey('av7-glass-chat-shell')),
-        ),
-        findsOneWidget,
-      );
-
-      // 3. The plate refracts rather than covers, and its Material paints
-      //    nothing — MaterialType.transparency, not a colour.
-      final shell = find.byKey(const ValueKey('av7-glass-chat-shell'));
-      expect(
-        find.descendant(of: shell, matching: find.byType(BackdropFilter)),
-        findsWidgets,
-      );
-      final material = tester
-          .widgetList<Material>(
-            find.descendant(of: shell, matching: find.byType(Material)),
-          )
-          .first;
-      expect(material.type, MaterialType.transparency);
-      expect(material.color, isNull);
-
-      // 4. No broad fill anywhere between the Stack and the plate. Measured,
-      //    not counted: a 1px hairline at 0.22 is trim, a 900x600 box at 0.22
-      //    is the panel this pass removed. Only area makes a layer a cover.
-      final between = find.descendant(
-        of: root.first,
-        matching: find.byType(ColoredBox),
-      );
-      for (final element in between.evaluate()) {
-        final box = element.widget as ColoredBox;
-        final size = element.size ?? Size.zero;
-        final covers = size.width > 200 && size.height > 24;
-        if (!covers) continue;
-        expect(
-          box.color.a,
-          lessThanOrEqualTo(0.20),
-          reason:
-              'a ${size.width.round()}x${size.height.round()} ColoredBox '
-              '(${box.color}) is covering the room',
-        );
-      }
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('the plate carries no brown gradient any more', (tester) async {
-      await _pumpArchitect(tester, const Size(1440, 900));
-      final decorated = tester.widgetList<DecoratedBox>(
-        find.descendant(
-          of: find.byKey(const ValueKey('av7-glass-chat-shell')),
-          matching: find.byType(DecoratedBox),
-        ),
-      );
-      final gradients = decorated
-          .map((d) => d.decoration)
-          .whereType<BoxDecoration>()
-          .map((d) => d.gradient)
-          .whereType<LinearGradient>();
-      expect(gradients, isNotEmpty);
-      for (final g in gradients) {
-        for (final c in g.colors) {
-          // Ivory, not taupe: every stop stays bright, warm and thin.
-          expect(c.r, greaterThan(0.90));
-          expect(c.g, greaterThan(0.85));
-          expect(c.b, lessThan(c.r));
-          expect(c.a, lessThanOrEqualTo(0.18));
-        }
-      }
-    });
-
-    // The chrome is shared verbatim between the two layouts, so the surface —
-    // not the widget — has to decide the ink. Both directions are asserted:
-    // lightening desktop must not reach the narrow window.
-    testWidgets('the desktop composer writes dark ink on a light field', (
-      tester,
-    ) async {
-      await _pumpArchitect(tester, const Size(1440, 900));
-      final field = tester.widget<TextField>(find.byType(TextField));
-      expect(field.style!.color, kPwaOnPlate);
-      final fill = field.decoration!.fillColor!;
-      expect(fill.r, greaterThan(0.90));
-      expect(fill.a, lessThan(0.80)); // still translucent, not a white slab
-    });
-
-    testWidgets('the narrow window keeps its light ink on a dark field', (
-      tester,
-    ) async {
-      await _pumpArchitect(tester, const Size(390, 844));
-      final field = tester.widget<TextField>(find.byType(TextField));
-      expect(field.style!.color, kPwaOnGlass);
-      expect(field.decoration!.fillColor!.r, lessThan(0.25));
-    });
-
-    // Bare text has no surface of its own, and at 0.18 the plate reads as "the
-    // room, dimmed" rather than as paper — so it takes LIGHT ink on both
-    // layouts. Only what carries a fill gets dark ink.
-    testWidgets('text with no surface of its own stays light on both layouts', (
-      tester,
-    ) async {
-      Color guidanceInk() => tester
-          .widget<Text>(find.text('What would you like to change?'))
-          .style!
-          .color!;
-
-      await _pumpArchitect(tester, const Size(1440, 900));
-      expect(guidanceInk(), kPwaOnGlass);
-
-      await _pumpArchitect(tester, const Size(390, 844));
-      expect(guidanceInk(), kPwaOnGlass);
-    });
-  });
 }
