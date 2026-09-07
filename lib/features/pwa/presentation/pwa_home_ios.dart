@@ -62,13 +62,18 @@ class PwaHomeIos extends ConsumerWidget {
     final state = ref.watch(pwaControllerProvider);
     final controller = ref.read(pwaControllerProvider.notifier);
 
-    // `visibleProjects` already guarantees what a Featured Vision needs — at
-    // least one vision AND a project-owned cover — and is deduplicated, most
-    // recent first. Reusing it means Home and Projects can never disagree
-    // about what exists, and no new state or endpoint was required.
-    final featured = state.visibleProjects.isEmpty
-        ? null
-        : state.visibleProjects.first;
+    // TWO DATA SOURCES, never one. The hero is the curated Ayden showcase —
+    // iOS fills its hero from `featuredShowcase` and nothing else — and the
+    // person's own work is "Continue Designing", fed by `visibleProjects`
+    // (deduplicated, most recent first, the same list Projects shows).
+    //
+    // The previous rule, `featured = visibleProjects.first`, is SUPERSEDED.
+    // It is why the hero turned into whatever room had just been generated
+    // when the person came back from a session: a new project sorts first,
+    // so it displaced the approved Before/After. Opening a project, coming
+    // back, signing in, hydrating a library, signing out — all of those may
+    // reorder Continue Designing; none of them may touch the hero.
+    final recent = state.visibleProjects.take(3).toList();
     final columnWidth = pwaHomeColumnWidth(MediaQuery.sizeOf(context).width);
 
     return PwaNavShell(
@@ -131,19 +136,231 @@ class PwaHomeIos extends ConsumerWidget {
                       style: PwaType.homeHeadline(),
                     ),
                     const SizedBox(height: PwaGap.md),
-                    _FeaturedVision(
-                      key: const ValueKey('pwa-home-hero'),
-                      project: featured,
-                      onOpen: featured == null
-                          ? null
-                          : () => controller.openProject(featured.projectId),
+                    const _FeaturedVision(
+                      key: ValueKey('pwa-home-hero'),
+                      // Always the showcase (see above). The project branch
+                      // of `_FeaturedVision` is kept only so the widget's
+                      // contract is unchanged; Home never feeds it one.
+                      project: null,
                     ),
                   ],
                 ),
               ),
             ),
+            // Home showed ONE vision and offered no way to reach the rest, so
+            // someone with two sessions saw half their work and no door to the
+            // other half. This is not the old dashboard returning: it is a
+            // short rail of the most recent sessions and a way through to
+            // Projects, which owns the full library.
+            if (recent.isNotEmpty)
+              SliverToBoxAdapter(
+                child: _RecentSessions(
+                  key: const ValueKey('pwa-home-recent'),
+                  projects: recent,
+                  onOpen: controller.openProject,
+                  onSeeAll: controller.openLibrary,
+                ),
+              ),
             const SliverToBoxAdapter(child: SizedBox(height: PwaGap.lg)),
           ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// iOS's own numbers for this exact rail, read off `home_screen.dart`: a 168
+/// wide by 214 tall card, separated by 10, inside the page padding so the next
+/// card peeks past the edge. Not derived, not approximated — the same strip.
+const double kPwaRecentCardW = 168;
+const double kPwaRecentCardH = 214;
+
+/// The most recent sessions after the hero — a rail, not a second Projects.
+///
+/// Every value on a card comes from the SAME canonical derivation Projects
+/// uses: `visibleProjects` for existence and order, `coverVision` for the
+/// picture, `pwaAfterImage` to resolve it, `pwaRoomDisplayLabel` for the room
+/// in the reader's language, the denormalised atmosphere label, and
+/// `updatedLabelFor` for recency. There is no second source of truth here, so
+/// the two screens cannot drift.
+class _RecentSessions extends StatelessWidget {
+  const _RecentSessions({
+    super.key,
+    required this.projects,
+    required this.onOpen,
+    required this.onSeeAll,
+  });
+
+  final List<PwaProjectSnapshot> projects;
+  final void Function(String projectId) onOpen;
+  final VoidCallback onSeeAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.pwaL10n;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: PwaGap.lg),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: PwaGap.page),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  // iOS's own header for this rail, from the frozen shared
+                  // dictionary and already approved in all three languages.
+                  // It names the ACTION rather than the objects — "Continue
+                  // Designing", not "Recent redesigns" — which is the whole
+                  // reason the section is on Home at all.
+                  l.continueDesigning,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: PwaType.sectionTitle(),
+                ),
+              ),
+              const SizedBox(width: PwaGap.sm),
+              TextButton(
+                key: const ValueKey('pwa-home-see-all'),
+                onPressed: onSeeAll,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 36),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                // Gold, as on iOS: it is the one thing here that leaves.
+                child: Text(
+                  l.seeAll,
+                  style: PwaType.body(color: pwaGold)
+                      .copyWith(fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: PwaGap.sm),
+        SizedBox(
+          height: kPwaRecentCardH,
+          child: ListView.separated(
+            key: const ValueKey('pwa-home-recent-rail'),
+            scrollDirection: Axis.horizontal,
+            physics: const ClampingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: PwaGap.page),
+            itemCount: projects.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, i) => _RecentCard(
+              project: projects[i],
+              onTap: () => onOpen(projects[i].projectId),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A recent session at a glance: the render, the room, the direction, when.
+class _RecentCard extends StatelessWidget {
+  const _RecentCard({required this.project, required this.onTap});
+
+  final PwaProjectSnapshot project;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.pwaL10n;
+    final cover = project.coverVision;
+    // The stored sentinel is deliberately un-localised English; printing it
+    // would put "Your space" at the top of a Khmer card. Projects makes the
+    // same substitution, through the same resolver.
+    final title = project.roomLabel == kPwaGenericRoomLabel
+        ? project.title
+        : pwaRoomDisplayLabel(l,
+            roomId: project.roomId, roomLabel: project.roomLabel);
+    final meta = [
+      if (project.atmosphereLabel.isNotEmpty) project.atmosphereLabel,
+      l.updatedLabelFor(project.updatedAt, project.updatedLabel),
+    ].where((s) => s.isNotEmpty).join(' · ');
+
+    return Semantics(
+      button: true,
+      label: l.openNamed(title),
+      child: SizedBox(
+        width: kPwaRecentCardW,
+        child: Material(
+          color: pwaWell,
+          borderRadius: BorderRadius.circular(PwaGap.radius),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: ValueKey('pwa-home-recent-${project.projectId}'),
+            onTap: onTap,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (cover != null)
+                  pwaAfterImage(cover)
+                else
+                  const ColoredBox(
+                    color: pwaWell,
+                    child: Center(
+                      child: Icon(Icons.image_outlined,
+                          color: pwaFaint, size: 24),
+                    ),
+                  ),
+                // The foot carries the type, so it needs its own ground: a
+                // render can be any brightness and white on a pale kitchen is
+                // not readable.
+                const Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: 72,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0x00000000), Color(0xCC000000)],
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 10,
+                  right: 10,
+                  bottom: 10,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        // The Projects card's own type, to the letter, so a
+                        // session looks like itself on both screens.
+                        style: PwaType.cardSubtitle(color: Colors.white)
+                            .copyWith(
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.1),
+                      ),
+                      if (meta.isNotEmpty) ...[
+                        const SizedBox(height: 1),
+                        Text(
+                          meta,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: PwaType.caption(
+                            color: Colors.white.withValues(alpha: 0.78),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -205,12 +422,11 @@ double pwaHomeColumnWidth(double screenWidth) {
 }
 
 class _FeaturedVision extends StatelessWidget {
-  const _FeaturedVision({super.key, required this.project, this.onOpen});
+  const _FeaturedVision({super.key, required this.project});
 
   /// The person's most recent finished project, or null for a first-time
   /// visitor.
   final PwaProjectSnapshot? project;
-  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -302,20 +518,9 @@ class _FeaturedVision extends StatelessWidget {
       children: [
         // Tapping the hero returns to that project — which is what makes a
         // separate "Continue designing" grid unnecessary.
-        if (onOpen == null)
-          KeyedSubtree(
-              key: const ValueKey('pwa-home-showcase'), child: hero)
-        else
-          Semantics(
-            button: true,
-            label: l.featuredVision,
-            child: GestureDetector(
-              key: const ValueKey('pwa-home-featured'),
-              onTap: onOpen,
-              behavior: HitTestBehavior.opaque,
-              child: hero,
-            ),
-          ),
+        // The curated hero is not a door into anyone's project; the person's
+        // own work opens from Continue Designing below.
+        KeyedSubtree(key: const ValueKey('pwa-home-showcase'), child: hero),
         const SizedBox(height: PwaGap.sm),
         Text(caption, style: PwaType.bodyMuted()),
       ],

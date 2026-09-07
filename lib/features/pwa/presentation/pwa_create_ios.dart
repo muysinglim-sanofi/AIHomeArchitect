@@ -1130,13 +1130,26 @@ class _RoomPicker extends StatelessWidget {
 
 // ── step 3 ──────────────────────────────────────────────────────────────────
 
-/// iOS `_AtmosphereScroller` under `newDesignCards`: a page-snapped carousel of
-/// mini-hero cards at 80% of the width, ratio 1.2, Ayden Signature first.
+/// Step 3's atmosphere choice — the SAME card footprint as Step 2's rooms.
+///
+/// It was a page-snapped carousel at 80% of the width, ratio 1.2, ported from
+/// iOS's `_AtmosphereScroller`. On a 390dp phone that is a 274 × 228 card:
+/// one choice filling the screen, the next one sliced in half at the edge, and
+/// a large dark area under it. Real-phone review called it enormous and asked
+/// for the room-card scale instead — an explicit product decision, and one
+/// that only applies HERE. The Full Reveal's exploration rail is a different
+/// surface with its own proportions and is deliberately untouched by this.
+///
+/// So this is the room grid's geometry, stated the same way: two columns on a
+/// phone, `6 / 5`, 12 apart. Measured on a 390dp phone that is 165 × 137 — the
+/// same object, in the same grid, four visible at once instead of one and a
+/// sliver. The card is drawn in `AtmosphereHeroCard`'s own `compact` mode,
+/// which is what that widget documents for a card this size.
 ///
 /// The order comes from `kPwaPopularAtmosphereIds` — the same MVP list the web
 /// already showed, with Ayden Signature leading — so nothing about which
 /// atmospheres exist or in what order changes; only how they are drawn.
-class _AtmospherePicker extends StatefulWidget {
+class _AtmospherePicker extends StatelessWidget {
   const _AtmospherePicker({
     required this.atmospheres,
     required this.selected,
@@ -1148,68 +1161,54 @@ class _AtmospherePicker extends StatefulWidget {
   final ValueChanged<String> onSelect;
 
   @override
-  State<_AtmospherePicker> createState() => _AtmospherePickerState();
-}
-
-class _AtmospherePickerState extends State<_AtmospherePicker> {
-  // Held rather than rebuilt: iOS constructs a PageController inline every
-  // build, which on the web resets the carousel's position on every keystroke
-  // in Step 4. Same viewportFraction, one instance.
-  final _pages = PageController(viewportFraction: 0.80);
-
-  @override
-  void dispose() {
-    _pages.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final l = context.pwaL10n;
-    final byId = {for (final a in widget.atmospheres) a.id: a};
+    final byId = {for (final a in atmospheres) a.id: a};
     final ordered = <PwaAtmosphere>[
       for (final id in kPwaPopularAtmosphereIds)
         if (byId[id] != null) byId[id]!,
-      for (final a in widget.atmospheres)
+      for (final a in atmospheres)
         if (!kPwaPopularAtmosphereIds.contains(a.id)) a,
     ];
 
     return LayoutBuilder(
-      builder: (context, c) => SizedBox(
-        height: c.maxWidth * 0.80 / 1.2,
-        child: PageView.builder(
-          controller: _pages,
-          padEnds: false,
-          itemCount: ordered.length,
-          itemBuilder: (context, i) {
-            final a = ordered[i];
-            final signature = a.id == 'ayden_signature';
-            return Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: AtmosphereHeroCard(
-                key: ValueKey('pwa-atmos-${a.id}'),
-                // The AYDEN SIGNATURE wordmark is baked into that card's art,
-                // so iOS leaves the name blank and lets the image carry it.
-                name: signature ? '' : a.name,
-                subtitle: signature
-                    ? l.selectedByAyden
-                    : l.atmosphereSubtitle(a.id),
-                // Ayden Signature is NOT in `kAtmosphereCardById` — it is a
-                // delegation, not an atmosphere — so the generic fallback
-                // resolved to `assets/cards/atmospheres/ayden_signature.png`,
-                // which does not exist, and the lead card of Step 3 rendered
-                // as a black rectangle. iOS names its art explicitly for the
-                // same reason; so does this.
-                asset: signature
-                    ? kPwaSignatureCardAsset
-                    : (kAtmosphereCardById[a.id]?.asset ??
-                        'assets/cards/atmospheres/${a.id}.png'),
-                selected: widget.selected == a.id,
-                onTap: () => widget.onSelect(a.id),
-              ),
-            );
-          },
-        ),
+      builder: (context, c) => GridView.count(
+        key: const ValueKey('pwa-create-atmospheres'),
+        padding: EdgeInsets.zero,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        // The room grid's own numbers, so the two steps read as one flow.
+        crossAxisCount: c.maxWidth >= 600 ? 3 : 2,
+        childAspectRatio: 6 / 5,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        children: [
+          for (final a in ordered)
+            AtmosphereHeroCard(
+              key: ValueKey('pwa-atmos-${a.id}'),
+              // The AYDEN SIGNATURE wordmark is baked into that card's art,
+              // so iOS leaves the name blank and lets the image carry it.
+              name: a.id == 'ayden_signature' ? '' : a.name,
+              subtitle: a.id == 'ayden_signature'
+                  ? l.selectedByAyden
+                  : l.atmosphereSubtitle(a.id),
+              // Ayden Signature is NOT in `kAtmosphereCardById` — it is a
+              // delegation, not an atmosphere — so the generic fallback
+              // resolved to `assets/cards/atmospheres/ayden_signature.png`,
+              // which does not exist, and the lead card of Step 3 rendered
+              // as a black rectangle. iOS names its art explicitly for the
+              // same reason; so does this.
+              asset: a.id == 'ayden_signature'
+                  ? kPwaSignatureCardAsset
+                  : (kAtmosphereCardById[a.id]?.asset ??
+                      'assets/cards/atmospheres/${a.id}.png'),
+              selected: selected == a.id,
+              // The small-strip mode, which is what a 165dp card is.
+              compact: true,
+              fillPhoto: true,
+              onTap: () => onSelect(a.id),
+            ),
+        ],
       ),
     );
   }

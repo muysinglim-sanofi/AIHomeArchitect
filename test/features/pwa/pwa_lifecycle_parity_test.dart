@@ -260,7 +260,6 @@ void main() {
       c.selectRoom('livingRoom');
       c.setSource(_source());
       await c.generateFirstVision();
-      c.continueToArchitect();
       await c.applyRefine('make the sofa white');
       return c;
     }
@@ -321,7 +320,6 @@ void main() {
         final c = _controller(gen);
         c.setSource(_source());
         await c.generateFirstVision();
-        c.continueToArchitect();
         c.stageAtmosphere('japandi_calm');
         await c.applyAtmosphere();
 

@@ -50,10 +50,12 @@
 /// sides are labelled, and one short line says so.
 library;
 
-import 'dart:ui' as ui;
+
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart' show Share;
 
 import '../../cards/card_catalog.dart';
 import '../../cards/widgets/atmosphere_hero_card.dart';
@@ -61,9 +63,9 @@ import '../../../shared/widgets/reveal_hero.dart';
 import '../application/pwa_controller.dart';
 import '../domain/pwa_models.dart';
 import '../l10n/pwa_l10n.dart';
-import 'pwa_architect_screen.dart' show kPwaRenderAspect;
 import 'pwa_architect_tokens.dart';
-import 'pwa_stored_image.dart';
+import 'pwa_render_aspect.dart';
+import 'pwa_render_canvas.dart';
 import 'pwa_widgets.dart' show pwaAfterImage, pwaBeforeImage;
 
 /// iOS `before_after_screen.dart`: the hero takes half the screen, clamped, and
@@ -73,16 +75,93 @@ const double kPwaRevealHeroMin = 340;
 const double kPwaRevealHeroMax = 500;
 const double kPwaRevealSectionHeaderH = 34;
 
-/// The floor the atmosphere section keeps for itself: header, a card, and the
-/// action slot. The hero yields rather than pushing it off a short window.
-const double kPwaRevealSectionMin = 190;
+/// The atmosphere strip's height — iOS's own arithmetic, made explicit.
+///
+/// Round 2 capped this at a flat 132 on the strength of a 5.15k CHANGELOG
+/// comment ("Carousel strip height 120 → 105"). Reading the CODE instead: that
+/// comment describes a wave whose formula is not in the file. What the shipped
+/// `before_after_screen.dart` actually does is
+///
+/// ```dart
+///   final imageH = (screenH * 0.50).clamp(340.0, 500.0) - sectionHeaderH;
+///   …
+///   Expanded(child: Padding(top: 12, bottom: 8 + safeBottom,
+///       child: _buildControls(...)))     // header + Expanded(carousel) + 52
+///   …
+///   final cardW = (c.maxHeight * 1.35).clamp(170.0, screenW * 0.86);
+///   final cardH = c.maxHeight * 0.82;
+/// ```
+///
+/// which on a 390 × 844 phone gives a card of **335 × 269**, not 178 × 108 —
+/// the web's were less than half the native ones, which is the "too narrow /
+/// visually compressed" the phone review reported.
+///
+/// This reproduces iOS's CHAIN rather than a number copied out of it, so the
+/// two agree at every viewport. It stays a fixed height (iOS's is an Expanded
+/// inside a fixed budget, which comes to the same thing) because that is what
+/// makes selection unable to move the rail.
+double pwaRevealStripHeight(double boxH, double boxW) {
+  // A WIDE window is not a phone, and iOS has no opinion about one. There the
+  // web's own rule stands — the render earns the extra height, because a
+  // desktop's limit is the column's WIDTH and a taller strip would only shrink
+  // the picture. This is the value Round 2 measured for that case.
+  if (boxW >= 700) return 132.0;
 
-/// The blur that turns the letterbox into the render's own halo. iOS's sigma.
-const double kPwaRevealMatteBlur = 36;
+  const controlsPadV = 20.0; // iOS: Padding(top: 12, bottom: 8)
+  const generateSlotH = 52.0; // iOS: the reserved CTA slot under the carousel
+  final imageH = (boxH * kPwaRevealHeroFactor)
+          .clamp(kPwaRevealHeroMin, kPwaRevealHeroMax) -
+      kPwaRevealSectionHeaderH;
+  final carousel =
+      boxH - imageH - controlsPadV - kPwaRevealSectionHeaderH - generateSlotH;
+  // Bounded at both ends: floored so a very short window still shows a card
+  // rather than a sliver, and capped so the chain lands on iOS's measured
+  // 335 x 220 rather than drifting past it on a tall phone.
+  return carousel.clamp(150.0, 270.0);
+}
 
-/// The band under the render holding the instruction line and the one action.
-/// Reserved, so the picture is never laid out underneath them.
-const double kPwaRevealFootH = 84;
+/// The action slot's RESERVED height — the second half of the same fix.
+///
+/// The slot's own docstring already promised this ("Reserved rather than
+/// animated, so choosing a card does not resize the strip above it") but it
+/// rendered `SizedBox.shrink()` when idle and a two-line confirmation when a
+/// card was tapped. That ~90dp swing came straight out of the `Expanded` above
+/// it, so every selection resized every card in the rail. Fixed now, so the
+/// geometry above it cannot move.
+const double kPwaRevealSlotH = 104;  // measured: the pending bar needs
+// 95 at the default text scale; the rest is headroom for FR/KM metrics.
+
+/// The slot's own padding, counted into the hero's budget so the two agree.
+const double kPwaRevealSlotPadV = 18;
+
+
+
+
+/// The band under the render, reserved so the picture is never laid out
+/// underneath the one line of text that sits there.
+///
+/// It was 84 because it used to hold TWO things: the instruction AND a full
+/// "Refine with Ayden" pill. The pill is gone — that capability is the pencil
+/// in the top-left chrome now, where iOS puts it — and the band was never
+/// re-measured, so the render carried 84dp of reserved space for a 14dp line.
+/// iOS reserves none at all: its image block is `imageH` tall, the render is
+/// anchored to the top of it, and nothing is drawn beneath.
+///
+/// So this is the line's own height and nothing else, derived rather than
+/// chosen: the text sits at `bottom: 12` and is `fontSize: 11` at Flutter's
+/// default 1.2 leading (⌈13.2⌉ = 14), leaving 8 of clearance between it and
+/// the render's lower edge.
+const double kPwaRevealFootH = 12 + 14 + 8;
+
+/// The floating chrome's own band at the top of the hero — Back, Edit, Replay
+/// and Share sit at `top: 8` and are 40 tall, so the render starts below them.
+///
+/// It has to be RESERVED rather than overlapped: `RevealHero` prints the
+/// Original / result labels along its own top edge, and with the render pulled
+/// up under the buttons the two collided. iOS has the same four circles over
+/// its image, but its image block is taller than the contained 3:2 render is
+/// here, so the collision never arises there.
+const double kPwaRevealChromeH = 8 + 40;
 
 /// A restrained ceiling so a 27" monitor gets a bigger picture, not a poster.
 const double kPwaRevealMaxWidth = 1080;
@@ -104,6 +183,37 @@ class PwaRevealScreen extends ConsumerStatefulWidget {
 
 class _PwaRevealScreenState extends ConsumerState<PwaRevealScreen> {
   PwaController get _c => ref.read(pwaControllerProvider.notifier);
+
+  /// How many times Replay has been pressed. It is only ever part of the
+  /// reveal's widget key — see `_RevealHeroBlock.replayToken`.
+  int _replayToken = 0;
+
+  /// Share, the way iOS shares.
+  ///
+  /// `before_after_screen.dart` shares TEXT, not the render:
+  /// `Share.share('Check out my AI home redesign — $_title!')`. That is the
+  /// same package and the same shape here, so nothing is invented and nothing
+  /// is promised that the platform cannot do: `share_plus` uses the browser's
+  /// own `navigator.share` where it exists.
+  ///
+  /// A private render is deliberately NOT attached. Its URL is a signed,
+  /// expiring Storage link scoped to one account — putting it into a share
+  /// sheet would hand a third party a credential with a lifetime.
+  Future<void> _share(PwaVision vision) async {
+    final l = context.pwaL10n;
+    final state = ref.read(pwaControllerProvider);
+    final title = pwaAtmosphereNameOf(state, vision.atmosphereId);
+    try {
+      await Share.share(l.shareVisionText(title));
+    } catch (_) {
+      // Every browser that cannot share says so by throwing. Saying nothing
+      // would be worse than saying "not here".
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l.shareUnavailable)),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -145,43 +255,74 @@ class _PwaRevealScreenState extends ConsumerState<PwaRevealScreen> {
             bottom: false,
             child: LayoutBuilder(
               builder: (context, box) {
-                final contentW =
-                    box.maxWidth < kPwaRevealMaxWidth
-                        ? box.maxWidth
-                        : kPwaRevealMaxWidth;
 
-                // TWO CANDIDATES, and the bigger wins.
+                // THE HEIGHT BUDGET.
                 //
-                // iOS's 0.50-of-the-screen rule is a PHONE rule: there, the
-                // column is narrow, so height is what limits the render. On a
-                // desktop it is the opposite — the column is wide and the
-                // 0.50 rule leaves a small picture adrift in a large blurred
-                // halo, which is the opposite of "an even larger comparison
-                // surface". So the hero also asks what height the render would
-                // need to use the full column width, and takes whichever is
-                // larger.
-                final fromHeight =
-                    (box.maxHeight * kPwaRevealHeroFactor).clamp(
-                          kPwaRevealHeroMin,
-                          kPwaRevealHeroMax,
-                        ) -
-                        kPwaRevealSectionHeaderH;
-                final fromWidth = (contentW - 24) / kPwaRenderAspect +
-                    kPwaRevealFootH +
-                    24;
+                // Everything below the hero is a FIXED quantity — the section
+                // header, the atmosphere strip and the reserved action slot —
+                // which is what makes the rail stable: nothing the person does
+                // can resize it, because nothing under it changes size.
+                final stripH = pwaRevealStripHeight(box.maxHeight, box.maxWidth);
+                final belowH = kPwaRevealSectionHeaderH +
+                    stripH +
+                    kPwaRevealSlotH +
+                    kPwaRevealSlotPadV;
 
-                // …bounded by what the atmospheres need. A floor in pixels for
-                // a short window, and a share of the screen on a tall one, so
-                // the cards never collapse to a strip on a large display.
-                final sectionH = box.maxHeight * 0.28 < kPwaRevealSectionMin
-                    ? kPwaRevealSectionMin
-                    : box.maxHeight * 0.28;
-                final heroH = (fromHeight > fromWidth ? fromHeight : fromWidth)
-                    .clamp(
-                      160.0,
-                      (box.maxHeight - sectionH).clamp(160.0, double.infinity),
-                    )
-                    .toDouble();
+                // EXACTLY WHAT THE RENDER NEEDS — nothing reserved beyond it.
+                //
+                // This used to take the LARGER of two candidates: iOS's
+                // `(screenH * 0.50).clamp(340, 500) - sectionHeaderH`, and the
+                // height the render needs at the full column width. On a phone
+                // iOS's rule won (366 against 302) and the render could not
+                // use the difference: iOS fills its image block, the web
+                // CONTAINs a 3:2 render at zero crop, so the surplus became
+                // dead space between the picture and the instruction line —
+                // the ~84dp gap the phone review reported. Reserving less in
+                // the foot alone would have made it WORSE (26 → 76), because
+                // the surplus is the hero's, not the foot's.
+                //
+                // So the hero is the render's own requirement — its 3:2 height
+                // at the column width, plus the line beneath it and the frame
+                // around it — and iOS's 0.50 rule stays where it still governs
+                // something real: `pwaRevealStripHeight`, which derives the
+                // atmosphere rail from it.
+                //
+                // And "the render's own requirement" means the render's OWN
+                // shape. A portrait photo comes back as a portrait render
+                // (1024×1536); framing it at 3:2 cover-cropped it to landscape,
+                // which the phone review read as the engine having widened the
+                // room. The aspect is measured off the decode (see
+                // `pwa_render_aspect.dart`); a portrait render is height-bound,
+                // so it takes what the rail and the slot leave, as iOS's
+                // fixed-height block CONTAINs it.
+                final renderAspect = pwaAspectOf(
+                  ref.watch(pwaRenderAspectsProvider),
+                  vision.afterAsset,
+                  fallbackKey: kPwaSourceAspectKey,
+                );
+                // The hero is iOS's IMAGE BLOCK — a fixed, full-width surface
+                // (`(screenH * 0.50).clamp(340, 500) - 34`) — plus the chrome
+                // band and the instruction line, bounded by what the rail and
+                // the slot leave. The render's orientation no longer sizes the
+                // block: it sizes the INNER frame, centred on the block over a
+                // blurred continuation of itself (`pwa_render_canvas.dart`).
+                //
+                // A WIDE window is not a phone, and iOS has no opinion about
+                // one; there the block also grows to the render's own height
+                // at the column width (Round 2: "a wide window gets a BIGGER
+                // comparison"), still bounded by what is available.
+                final contentW = box.maxWidth < kPwaRevealMaxWidth
+                    ? box.maxWidth
+                    : kPwaRevealMaxWidth;
+                final heroH = pwaRevealHeroHeight(
+                  blockH: math.max(
+                    pwaRevealBlockHeight(box.maxHeight),
+                    (contentW - 24) / renderAspect,
+                  ),
+                  available: box.maxHeight - belowH,
+                  chromeH: kPwaRevealChromeH,
+                  footH: kPwaRevealFootH,
+                );
 
                 return Center(
                   child: ConstrainedBox(
@@ -190,11 +331,27 @@ class _PwaRevealScreenState extends ConsumerState<PwaRevealScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // TOP-ANCHORED, at iOS's own height — not Expanded.
+                        //
+                        // iOS anchors the render "to the very top" of the
+                        // safe area and lets the walnut continue beneath it
+                        // (`before_after_screen.dart`, Wave 5.13d.8). Letting
+                        // the hero expand instead centred the render and
+                        // exposed the gradient's LIGHTEST stop (#3F3220) as a
+                        // wide band above it — which is the flat taupe block
+                        // the phone review saw. The colours were already iOS's;
+                        // what differed was how much of the light end showed.
+                        //
+                        // The slack now falls BELOW the render, where iOS puts
+                        // it and where the gradient is already deep — "a calm
+                        // transition zone", not a hole, because the strip and
+                        // the slot are pinned to the bottom by the Spacer.
                         SizedBox(
                           height: heroH,
                           child: _RevealHeroBlock(
                             state: state,
                             vision: vision,
+                            aspect: renderAspect,
                             onBack: () => _c.backToConversation(
                               focusVisionId: vision.versionId,
                             ),
@@ -205,15 +362,36 @@ class _PwaRevealScreenState extends ConsumerState<PwaRevealScreen> {
                             // to the conversation. It generates nothing.
                             onRefine: () =>
                                 _c.startRefineContext(vision.versionId),
+                            // Presentation only: remount the reveal so its
+                            // auto-sweep runs again. No request, no version,
+                            // no Space.
+                            onReplay: () =>
+                                setState(() => _replayToken++),
+                            onShare: () => _share(vision),
+                            replayToken: _replayToken,
                           ),
                         ),
+                        // The strip block sits CENTRED in what is left between
+                        // the render and the reserved slot — iOS centres its
+                        // own carousel in the same leftover (`Align(center)`
+                        // inside an Expanded). Pinning it to the bottom left
+                        // the void reading as a hole above it rather than as
+                        // the calm transition zone iOS describes.
+                        const Spacer(),
                         _SectionHeader(context.pwaL10n.exploreOtherAtmospheres),
-                        Expanded(
+                        // Fixed, not Expanded. The strip used to take whatever
+                        // was left over, which made a card ~310dp wide on a
+                        // phone — most of the screen for one of five
+                        // directions — and made every card resize whenever the
+                        // slot below grew.
+                        SizedBox(
+                          height: stripH,
                           child: _AtmosphereCarousel(
                             state: state,
                             onSelect: _c.stageAtmosphere,
                           ),
                         ),
+                        const Spacer(),
                         _ActionSlot(state: state, controller: _c),
                       ],
                     ),
@@ -248,14 +426,26 @@ class _RevealHeroBlock extends StatelessWidget {
     required this.onPrev,
     required this.onNext,
     required this.onRefine,
+    required this.onReplay,
+    required this.onShare,
+    required this.replayToken,
+    required this.aspect,
   });
 
   final PwaState state;
   final PwaVision vision;
+
+  /// The render's measured `width / height` (3:2 until it is known).
+  final double aspect;
   final VoidCallback onBack;
   final VoidCallback onPrev;
   final VoidCallback onNext;
   final VoidCallback onRefine;
+  final VoidCallback onReplay;
+  final VoidCallback onShare;
+
+  /// Bumped by Replay. Part of the reveal's key, and nothing else.
+  final int replayToken;
 
   @override
   Widget build(BuildContext context) {
@@ -265,49 +455,42 @@ class _RevealHeroBlock extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // ── The halo ────────────────────────────────────────────────────────
-        // The render again, filling the block, blurred past recognition. It is
-        // what turns the letterbox from dead walnut into the picture's own
-        // extended colour. Isolated in a RepaintBoundary so the blur is
-        // rasterised once and never recomputed while the divider is dragged.
-        Positioned.fill(
-          child: RepaintBoundary(
-            child: ImageFiltered(
-              imageFilter: ui.ImageFilter.blur(
-                sigmaX: kPwaRevealMatteBlur,
-                sigmaY: kPwaRevealMatteBlur,
-              ),
-              child: PwaStoredImage(
-                key: ValueKey('reveal-matte-${vision.versionId}'),
-                reference: vision.afterAsset,
-                placeholderColor: av7DarkBg,
-              ),
-            ),
-          ),
-        ),
-        // A little ink over the halo: it is a backdrop, and the render in front
-        // of it has to stay the brightest thing on the screen.
-        const Positioned.fill(
-          child: ColoredBox(color: Color(0x59181410)),
-        ),
-
-        // ── The render ──────────────────────────────────────────────────────
-        Center(
-          child: Padding(
-            // The bottom inset is the hint + CTA block's own height. Without
-            // it the render's lower edge and the instruction line share the
-            // same six pixels, and the words sit ON the picture — the exact
-            // contrast bet this screen avoids everywhere else.
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, kPwaRevealFootH),
-            child: AspectRatio(
-              // CONTAIN, at the shape the engine returns. The screen is called
-              // Full Reveal; cropping it here would be the one place the name
-              // is a lie.
-              aspectRatio: kPwaRenderAspect,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(22),
-                child: RevealHero(
-                  key: ValueKey('full-reveal-${vision.versionId}'),
+        // ── The block, and the render inside it ─────────────────────────────
+        //
+        // Round 2 removed a full-screen ambient halo here, citing iOS's 5.13b
+        // ("Dropped: RevealCanvas ambient blur backdrop"). That reading stopped
+        // one wave early. iOS 5.15d then made the reveal a CONTAIN and wrote,
+        // in `before_after_screen.dart:502`: "the letterbox is no longer dead
+        // walnut — a blurred BoxFit.cover copy of the AFTER image fills the
+        // surface so the BoxFit.contain foreground floats on its own extended
+        // colour". That is inside the rounded block (22), not across the
+        // screen: the walnut gradient stays around it, the matte lives in it.
+        //
+        // The block is iOS's fixed image block; the render is CONTAINed in it
+        // at its measured ratio. A portrait render is portrait artwork on a
+        // canvas, a landscape one the same canvas with the matte above and
+        // below. Nothing is cropped. Nothing is 3:2 by decree.
+        Padding(
+          // The bottom inset is the hint's own height. Without it the block's
+          // lower edge and the instruction line share the same six pixels.
+          padding: const EdgeInsets.fromLTRB(
+              12, kPwaRevealChromeH, 12, kPwaRevealFootH),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: PwaRenderCanvas(
+              key: ValueKey('full-reveal-canvas-${vision.versionId}'),
+              reference: vision.afterAsset,
+              aspect: aspect,
+              style: PwaCanvasStyle.reveal,
+              child: RevealHero(
+                  // The replay token is part of the KEY on purpose. The shared
+                  // `RevealHero` is a FROZEN widget and exposes no controller
+                  // (iOS drives its own `RevealController.replay()` instead),
+                  // so replaying the presentation here means remounting it —
+                  // which restarts the auto-sweep from the beginning. It
+                  // renders the same two images, asks the engine for nothing,
+                  // creates no version and spends no Space.
+                  key: ValueKey('full-reveal-${vision.versionId}-$replayToken'),
                   afterImage: pwaAfterImage(vision),
                   beforeImage: pwaBeforeImage(
                     state.source,
@@ -330,7 +513,6 @@ class _RevealHeroBlock extends StatelessWidget {
               ),
             ),
           ),
-        ),
 
         // ── Chrome, kept to the corners ─────────────────────────────────────
         Positioned(
@@ -345,6 +527,19 @@ class _RevealHeroBlock extends StatelessWidget {
                 icon: Icons.arrow_back_rounded,
                 tooltip: l.backToConversation,
                 onTap: onBack,
+              ),
+              const SizedBox(width: 8),
+              // EDIT — iOS's own pencil, in iOS's own slot (top-left, right of
+              // Back: "Wave 4.9.3 — 'Refine in chat' pencil… Top-LEFT, right
+              // of Back"). It is the same capability the foot pill used to
+              // carry: `startRefineContext` records which vision the next
+              // message is about and hands the person back to the
+              // conversation. It generates nothing.
+              _GlassButton(
+                key: const ValueKey('pwa-reveal-edit'),
+                icon: Icons.edit_outlined,
+                tooltip: l.refineWithAyden,
+                onTap: onRefine,
               ),
               const Spacer(),
               // Only when there is more than one vision to step between. A
@@ -374,92 +569,63 @@ class _RevealHeroBlock extends StatelessWidget {
                   tooltip: l.nextVision,
                   onTap: state.hasNextVision ? onNext : null,
                 ),
+                const SizedBox(width: 8),
               ],
+              // REPLAY — iOS's `Icons.replay` at `right: 52`, which
+              // "re-triggers the cinematic reveal in place so the user never
+              // has to leave and re-enter Full Reveal". Presentation only.
+              _GlassButton(
+                key: const ValueKey('pwa-reveal-replay'),
+                icon: Icons.replay_rounded,
+                tooltip: l.replayReveal,
+                onTap: onReplay,
+              ),
+              const SizedBox(width: 8),
+              // SHARE — iOS's share circle at `right: 12`. It shares TEXT, not
+              // the render: `Share.share('Check out my AI home redesign — …')`.
+              // The web equivalent is the same call through the same package,
+              // which uses `navigator.share` where the browser has it.
+              _GlassButton(
+                key: const ValueKey('pwa-reveal-share'),
+                icon: Icons.ios_share_rounded,
+                tooltip: l.shareVision,
+                onTap: onShare,
+              ),
             ],
           ),
         ),
 
-        // ── The one action, and the one line of instruction ────────────────
+        // ── The one line of instruction ────────────────────────────────────
         //
-        // iOS keeps a SINGLE in-hero CTA at the foot of the render. Here it is
-        // "Refine with Ayden", and it is not decoration: `startRefineContext`
-        // is a real capability that was reachable only from this screen — it
-        // returns to the conversation carrying THIS vision, so the composer
-        // opens already pointed at it. The details panel that used to hold it
-        // is gone; the capability is not.
+        // The foot used to carry a full "Refine with Ayden" pill as well. iOS
+        // has no such pill: the same capability is the PENCIL in the top-left
+        // chrome, and the foot of its hero carries nothing. Keeping both put
+        // one action in two places and pushed the atmosphere section down.
+        //
+        // The instruction stays. iOS does not draw it — `dragToReveal` is in
+        // the shared dictionary but unused by `before_after_screen.dart` — and
+        // the web keeps it because a surface-drag compare with no handle is
+        // discoverable on a phone and much less so with a mouse.
         Positioned(
           left: 0,
           right: 0,
           bottom: 12,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IgnorePointer(
-                child: Text(
-                  l.shared.dragToReveal,
-                  textAlign: TextAlign.center,
-                  style: av7Sans(
-                    fontSize: 11,
-                    color: av7OnDark.withValues(alpha: 0.62),
-                    letterSpacing: 0.2,
-                  ),
-                ),
+          child: IgnorePointer(
+            child: Text(
+              l.shared.dragToReveal,
+              textAlign: TextAlign.center,
+              style: av7Sans(
+                fontSize: 11,
+                color: av7OnDark.withValues(alpha: 0.62),
+                letterSpacing: 0.2,
               ),
-              const SizedBox(height: 8),
-              Center(child: _HeroCta(label: l.refineWithAyden, onTap: onRefine)),
-            ],
+            ),
           ),
         ),
       ],
     );
   }
 }
-
-/// The single in-hero call to action. Glass, so it reads over a bright kitchen
-/// and a dark bedroom alike — the label never sits bare on an image nobody
-/// chose.
-class _HeroCta extends StatelessWidget {
-  const _HeroCta({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      key: const ValueKey('pwa-reveal-refine'),
-      color: const Color(0xFF181410).withValues(alpha: 0.66),
-      shape: const StadiumBorder(
-        side: BorderSide(color: Color(0x59D3B064)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.tune_rounded, size: 15, color: av7Gold),
-              const SizedBox(width: 8),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: av7Sans(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                  color: av7OnDark,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// A control that reads on any render: dark glass, never a bare glyph over an
 /// unpredictable photograph.
 class _GlassButton extends StatelessWidget {
@@ -551,18 +717,39 @@ class _AtmosphereCarousel extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = context.pwaL10n;
     final screenW = MediaQuery.sizeOf(context).width;
-    // What is APPLIED, not what is staged: the tick marks the direction the
-    // render on screen was made in.
-    final appliedId =
-        state.currentVision?.atmosphereId ?? state.selectedAtmosphereId;
+    // TWO concepts, one tick. While nothing is staged the tick marks the
+    // direction the render on screen was made in (the CURRENT vision's
+    // atmosphere). The moment the person taps a card, that card is the
+    // PENDING choice and the tick moves to it — the same state the bar
+    // beneath the rail reads ("Soft Luxury selected") and the same state
+    // Create Vision will generate. Cancel clears the pending choice and the
+    // tick returns to the current atmosphere. iOS's rail is driven by its
+    // `_selectedAtmosphere` alone (`selected: _selectedAtmosphere == a.name`);
+    // the web additionally shows the applied one at rest.
+    //
+    // Reported from the phone (Round 3): the tick stayed on Warm Modern while
+    // the bar said "Soft Luxury selected" — this read `currentVision` only.
+    final appliedId = state.pendingAtmosphereId ??
+        state.currentVision?.atmosphereId ??
+        state.selectedAtmosphereId;
 
     return LayoutBuilder(
       builder: (context, c) {
-        // iOS's proportions: the card's width follows the section's full
-        // height, the card itself is a little shorter so the strip reads as
-        // calm rather than packed.
-        final cardW = (c.maxHeight * 1.35).clamp(150.0, screenW * 0.86);
-        final cardH = c.maxHeight * 0.82;
+        // iOS's proportions: the card's width follows the strip's height, the
+        // card itself is a little shorter so the strip reads as calm rather
+        // than packed. The strip is CAPPED (`kPwaAtmoStripH`) rather than
+        // taking all the room the Expanded offers — that cap is what keeps a
+        // card browsable-sized instead of screen-sized, and what makes the
+        // geometry identical in every selection state.
+        // The parent hands down `pwaRevealStripHeight`; taking it from the
+        // constraint rather than recomputing keeps this honest if a caller
+        // ever gives it less. The 170 floor and the 0.86-of-screen ceiling are
+        // iOS's OWN clamps — the web had lowered the floor to 150, which on a
+        // narrow phone made the card smaller than the native one is allowed to
+        // be.
+        final strip = c.maxHeight;
+        final cardW = (strip * 1.35).clamp(170.0, screenW * 0.86);
+        final cardH = strip * 0.82;
         return Align(
           child: SizedBox(
             height: cardH,
@@ -593,6 +780,12 @@ class _AtmosphereCarousel extends StatelessWidget {
                         : (kAtmosphereCardById[a.id]?.asset ??
                             'assets/cards/atmospheres/${a.id}.png'),
                     selected: selected,
+                    // iOS's exact call for THIS rail, restored: the large mode
+                    // with two size overrides. Round 2 switched to `compact`
+                    // because the card had been shrunk to 178dp, where the
+                    // large mode's 22/20/20 padding does not fit. With the card
+                    // back at its native ~335 the large mode is right again —
+                    // and it is what the phone actually draws.
                     fillPhoto: true,
                     nameFontSize: 16,
                     subtitleFontSize: 11,
@@ -644,7 +837,7 @@ class _ActionSlot extends StatelessWidget {
     }
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 8, 16, 10 + inset),
-      child: child,
+      child: SizedBox(height: kPwaRevealSlotH, child: child),
     );
   }
 }

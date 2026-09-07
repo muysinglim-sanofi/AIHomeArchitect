@@ -49,7 +49,6 @@ Future<String> _genPersisted(_FakePersistence fake, List<int> a) async {
   c.selectRoom('living_room');
   c.setSource(_srcOf(a));
   await c.generateFirstVision();
-  c.continueToArchitect();
   await pumpEventQueue();
   return c.state.project.projectId;
 }

@@ -21,7 +21,7 @@ import '../billing/pwa_entitlement_controller.dart';
 import '../l10n/pwa_l10n.dart';
 import 'pwa_account_sheet.dart';
 import 'pwa_paywall.dart';
-import 'pwa_theme.dart' show pwaTextFallback;
+import 'pwa_theme.dart' show pwaGold, pwaTextFallback;
 
 class PwaAccountChip extends ConsumerWidget {
   const PwaAccountChip({super.key, this.onDark = false});
@@ -61,19 +61,20 @@ class PwaAccountChip extends ConsumerWidget {
               case 'paywall':
                 await showPwaPaywall(context, ref);
               case 'account':
-                final ok = await showPwaAccountSheet(context);
-                if (ok) {
-                  await ref
-                      .read(pwaEntitlementProvider.notifier)
-                      .onIdentityChanged();
-                }
+                // The sheet owns the post-authentication hydration.
+                await showPwaAccountSheet(context);
+              case 'signin':
+                // The RETURNING user, from the header. Same call Profile
+                // makes, same separate journey underneath: sign-in switches
+                // to an account that already exists and carries nothing over
+                // from the guest. Nothing merges.
+                await showPwaAccountSheet(context, signIn: true);
               case 'signout':
                 await controller.signOut();
                 // A new anonymous Guest is a different user with different
-                // entitlement. Re-read; never carry the old answer forward.
-                await ref
-                    .read(pwaEntitlementProvider.notifier)
-                    .onIdentityChanged();
+                // entitlement AND different work. Re-read both; never carry
+                // the old answer — or the old library — forward.
+                await pwaHydrateForIdentity(ref, switchedUser: true);
             }
           },
           itemBuilder: (context) => [
@@ -89,6 +90,15 @@ class PwaAccountChip extends ConsumerWidget {
                   ),
                 ),
               ),
+            // The identity block. A verified account sees WHO IT IS; a Guest
+            // sees the two things a Guest can do, and they are not equals:
+            // saving the work in front of them is the primary act, signing in
+            // to an account that already exists is the returning-user door.
+            //
+            // Round 1 gave Profile both and left this menu with only the
+            // first, so the two entry points disagreed about what was
+            // possible — the defect the phone review found. One behaviour,
+            // two entries, as the account sheet already had.
             PopupMenuItem<String>(
               key: const ValueKey('pwa-account-open'),
               value: 'account',
@@ -96,10 +106,24 @@ class PwaAccountChip extends ConsumerWidget {
                 identified ? label : l.accountTitle,
                 style: TextStyle(
                   fontSize: 13,
+                  fontWeight: identified ? FontWeight.w400 : FontWeight.w600,
                   fontFamilyFallback: pwaTextFallback,
                 ),
               ),
             ),
+            if (!identified)
+              PopupMenuItem<String>(
+                key: const ValueKey('pwa-account-signin'),
+                value: 'signin',
+                child: Text(
+                  l.accountSignInTitle,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: pwaGold,
+                    fontFamilyFallback: pwaTextFallback,
+                  ),
+                ),
+              ),
             if (identified)
               PopupMenuItem<String>(
                 key: const ValueKey('pwa-account-signout'),

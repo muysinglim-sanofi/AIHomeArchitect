@@ -35,12 +35,18 @@ import '../l10n/pwa_l10n.dart';
 import '../../../core/providers/locale_provider.dart';
 
 /// `entry` is the CREATE session (`/create`); `home` is the dashboard (`/`).
+/// Where the experience is.
+///
+/// There is no `loading` and no `firstReveal`. iOS has never had either: the
+/// Design Session is the CONTAINER, and generating is a state inside it — a
+/// loading bubble in the thread that the render replaces in place. The web had
+/// grown a full-screen loading page and then a full-screen unveiling the person
+/// had to leave before the conversation could start, which made the result feel
+/// like a separate product with a door out of it.
 enum PwaPhase {
   home,
   entry,
-  loading,
   architect,
-  firstReveal,
   reveal,
   projects,
   profile,
@@ -474,6 +480,12 @@ class PwaState {
       case PwaPhase.profile:
         return PwaRoute.profile;
       case PwaPhase.architect:
+        // Step 6A, unchanged: a session whose FIRST vision is still being made
+        // has no durable project behind it, so it keeps `/create` and never
+        // claims a `/projects/{id}` URL. The phase is the Architect — the
+        // person is watching Ayden work inside the session — but the address
+        // stays honest until there is something at it.
+        if (versions.isEmpty) return PwaRoute.create;
         final v = previewVisionId;
         final vid = (v != null && v != currentVisionId) ? v : null;
         return PwaRoute(
@@ -482,16 +494,13 @@ class PwaState {
           visionId: vid,
         );
       case PwaPhase.reveal:
-      case PwaPhase.firstReveal:
         // The Reveal always names the vision it is showing — that is the whole
-        // point of the durable URL. `mode=first` marks the one-off unveiling.
+        // point of the durable URL.
         return PwaRoute(
           PwaPage.reveal,
           projectId: project.projectId,
           visionId: previewedVision?.versionId,
-          firstLook: phase == PwaPhase.firstReveal,
         );
-      case PwaPhase.loading:
       case PwaPhase.entry:
         // Step 6A — a pre-Generate creation session is `/create`: never a
         // durable `/projects/{id}/draft` URL (there is no durable project yet).
@@ -825,7 +834,7 @@ class PwaController extends StateNotifier<PwaState> {
     // Active project (has Visions) → Ayden Architect. If the URL carried a valid
     // `?vision=` for a NON-current vision, restore that preview (§6).
     final isReveal = restore.route?.page == PwaPage.reveal;
-    final isFirstLook = isReveal && (restore.route?.firstLook ?? false);
+
     final routeVision = restore.route?.visionId;
     final validRouteVision =
         routeVision != null &&
@@ -839,9 +848,7 @@ class PwaController extends StateNotifier<PwaState> {
               ? routeVision
               : null);
     return base.copyWith(
-      phase: isFirstLook
-          ? PwaPhase.firstReveal
-          : (isReveal ? PwaPhase.reveal : PwaPhase.architect),
+      phase: isReveal ? PwaPhase.reveal : PwaPhase.architect,
       project: descriptor,
       source: source,
       sourceOrigin: origin,
@@ -1363,33 +1370,32 @@ class PwaController extends StateNotifier<PwaState> {
     // A retry inside the conversation must SHOW that it restarted. The failure
     // banner removed the original placeholder, so without putting one back the
     // retry ran for two silent minutes and read, correctly, as a dead button.
-    final loadingMsg = isFirst
-        ? null
-        : PwaMessage(
-            id: _nextId('m'),
-            role: PwaRole.ayden,
-            kind: PwaMessageKind.loading,
-            // A retry says what it is retrying, exactly as the first attempt did.
-            workingKind:
-                pwaActionFromDb(p.actionType) == PwaActionType.switchAtmosphere
-                ? PwaWorkKind.switchAtmosphere
-                : PwaWorkKind.refine,
-            workingSubject: p.atmosphereLabel,
-          );
+    // The FIRST vision gets one too, and in the same session: a replay is the
+    // same work as the original attempt and belongs in the same container.
+    final loadingMsg = PwaMessage(
+      id: _nextId('m'),
+      role: PwaRole.ayden,
+      kind: PwaMessageKind.loading,
+      // A retry says what it is retrying, exactly as the first attempt did.
+      workingKind: isFirst
+          ? PwaWorkKind.firstVision
+          : (pwaActionFromDb(p.actionType) == PwaActionType.switchAtmosphere
+              ? PwaWorkKind.switchAtmosphere
+              : PwaWorkKind.refine),
+      workingSubject: p.atmosphereLabel,
+    );
     state = state.copyWith(
       generating: true,
-      phase: isFirst ? PwaPhase.loading : state.phase,
+      phase: isFirst ? PwaPhase.architect : state.phase,
       clearGenerationError: true,
-      messages: loadingMsg == null
-          ? state.messages
-          : [...state.messages, loadingMsg],
+      messages: [...state.messages, loadingMsg],
     );
     final PwaGeneratedVision made;
     try {
       made = await _execute(p);
     } catch (e) {
       if (!mounted) return;
-      await _failGeneration(_asFailure(e), removeMessageId: loadingMsg?.id);
+      await _failGeneration(_asFailure(e), removeMessageId: loadingMsg.id);
       if (isFirst) state = state.copyWith(phase: PwaPhase.entry);
       return;
     }
@@ -1430,13 +1436,14 @@ class PwaController extends StateNotifier<PwaState> {
       visionId: v.versionId,
     );
     if (isFirst) {
-      await _settleFirstVision(v, reveal, p.atmosphereId);
+      await _settleFirstVision(v, reveal, p.atmosphereId,
+          replaceLoadingId: loadingMsg.id);
     } else {
       _commitNewVision(
         v,
         // Swap the retry's placeholder for the reveal, exactly as the original
         // attempt would have — never leaving a stale "creating…" behind it.
-        replaceLoadingId: loadingMsg?.id ?? '',
+        replaceLoadingId: loadingMsg.id,
         revealMsg: reveal,
         atmosphereId: p.atmosphereId,
       );
@@ -1530,13 +1537,23 @@ class PwaController extends StateNotifier<PwaState> {
     if (state.source == null) return;
     // Set synchronously, BEFORE the first await: a second tap finds `generating`
     // already true and returns, so one click is one upload and one generation.
+    // ENTER THE SESSION NOW. Tapping Generate opens the Design Session and the
+    // work happens inside it: the loading bubble goes into the thread in the
+    // same synchronous write that starts the generation, so the session can
+    // never render a beat before it knows what it was asked for, and the render
+    // will replace this bubble in place. `canonicalRoute` keeps the address at
+    // `/create` until the project is durable.
+    final loadingMsg = PwaMessage(
+      id: _nextId('m'),
+      role: PwaRole.ayden,
+      kind: PwaMessageKind.loading,
+      workingKind: PwaWorkKind.firstVision,
+    );
     state = state.copyWith(
-      phase: PwaPhase.loading,
+      phase: PwaPhase.architect,
       generating: true,
       clearGenerationError: true,
-      // Recorded for the Design Session to show, in the same synchronous write
-      // that starts the generation — so the session can never render a beat
-      // before it knows what it was asked for.
+      messages: [...state.messages, loadingMsg],
       visionBrief: userInstruction.trim(),
     );
     final atmosphereId = state.selectedAtmosphereId ?? 'ayden_signature';
@@ -1566,8 +1583,10 @@ class PwaController extends StateNotifier<PwaState> {
       if (!mounted) return;
       // §Failure — stay on Create with the photo, Room and Atmosphere intact
       // and the real error visible. No vision, no card, no fixture. The pending
-      // record survives, so Retry reuses the same key.
-      await _failGeneration(_asFailure(e));
+      // record survives, so Retry reuses the same key. The bubble goes with it:
+      // a failed generation must not leave "creating…" in a thread nobody is
+      // looking at any more.
+      await _failGeneration(_asFailure(e), removeMessageId: loadingMsg.id);
       state = state.copyWith(phase: PwaPhase.entry);
       return;
     }
@@ -1602,22 +1621,34 @@ class PwaController extends StateNotifier<PwaState> {
         _l10n.chipCalmer,
       ],
     );
-    await _settleFirstVision(v1, intro, chosen.id);
+    await _settleFirstVision(v1, intro, chosen.id,
+        replaceLoadingId: loadingMsg.id);
   }
 
-  /// §Generate 5-10 — commit the first vision, persist the project, and only
-  /// then unveil it. The phase STAYS `loading` across the durable save, so the
-  /// First Reveal is reached by a real success and never by a timer.
+  /// §Generate 5-10 — commit the first vision and persist the project. The
+  /// session stays exactly where it was: the loading bubble is SWAPPED for the
+  /// render in the same thread, `generating` stays true across the durable
+  /// save, and the conversation continues underneath. Nothing to leave.
   Future<void> _settleFirstVision(
     PwaVision v1,
     PwaMessage intro,
-    String atmosphereId,
-  ) async {
+    String atmosphereId, {
+    required String replaceLoadingId,
+  }) async {
+    // BEFORE the write that gives the session its first vision — because that
+    // is the write that turns the URL from `/create` into the project's own,
+    // and it must REPLACE rather than push. Back from a new project goes Home,
+    // never to a Create still holding the photo that just became a project.
+    _replaceNextNav = true;
     state = state.copyWith(
       versions: [v1],
       currentVisionId: v1.versionId,
       selectedAtmosphereId: atmosphereId,
-      messages: [...state.messages, intro],
+      messages: [
+        for (final m in state.messages)
+          if (m.id != replaceLoadingId) m,
+        intro,
+      ],
       generating: true,
     );
     _syncActiveProject();
@@ -1646,16 +1677,10 @@ class PwaController extends StateNotifier<PwaState> {
       );
       return;
     }
-    // §Generate 9-10 — the project is saved and listed; now UNVEIL it. The
-    // first vision earns a full-screen moment before the conversation starts.
-    // It REPLACES `/create` in history, so Back from the project returns Home
-    // and never to a Create still holding the photo that just became a project.
-    _replaceNextNav = true;
-    state = state.copyWith(
-      phase: PwaPhase.firstReveal,
-      previewVisionId: v1.versionId,
-      generating: false,
-    );
+    // §Generate 9-10 — the project is saved and listed. The session is ALREADY
+    // the Architect and already shows the render; all that is left is to say
+    // the work is over.
+    state = state.copyWith(generating: false);
   }
 
   // ── In-architect actions ────────────────────────────────────────────────
@@ -1717,6 +1742,22 @@ class PwaController extends StateNotifier<PwaState> {
       selectedAtmosphereId: atmosphereId,
       messages: [...state.messages, userMsg, loadingMsg],
       clearGenerationError: true,
+      // The Full Reveal is LEFT the moment the person confirms. This is iOS's
+      // contract to the letter — `before_after_screen.dart` does
+      // `context.pop(_selectedAtmosphere)` on Generate and the CHAT starts the
+      // switch — and it is also the only honest place to wait: the working
+      // bubble appended just above lives in the conversation, not here.
+      //
+      // Reported from the phone (Round 3): confirming cleared the pending bar
+      // and then nothing visibly happened, because this method changed every
+      // field but the phase. The render was being made; the person was left
+      // on the one screen that could not show it being made.
+      //
+      // The preview is cleared, not kept: `backToConversation` keeps it so the
+      // Architect can scroll to the vision that was being explored, but a
+      // switch should land on the bubble that is working, at the bottom.
+      phase: PwaPhase.architect,
+      clearPreview: true,
     );
     final key = _activeGenerationKey ??= const Uuid().v4();
 
@@ -2114,14 +2155,7 @@ class PwaController extends StateNotifier<PwaState> {
     );
   }
 
-  /// "Continue with Ayden" — leave the one-off unveiling for the conversation.
-  /// The First Reveal is transient: it REPLACES itself in history, so Back from
-  /// the Architect goes Home rather than back to a moment already lived.
-  void continueToArchitect() {
-    if (state.phase != PwaPhase.firstReveal) return;
-    _replaceNextNav = true;
-    state = state.copyWith(phase: PwaPhase.architect, clearPreview: true);
-  }
+
 
   /// Drop the refinement context. Creates nothing, changes no vision.
   void clearRefineContext() => state = state.copyWith(clearRefineContext: true);
@@ -2202,6 +2236,47 @@ class PwaController extends StateNotifier<PwaState> {
       librarySort: state.librarySort,
       librarySearch: state.librarySearch,
     );
+  }
+
+  /// The person is now a DIFFERENT user. Reload everything an identity owns.
+  ///
+  /// THE BUG THIS EXISTS FOR. The durable library was seeded exactly once, in
+  /// the constructor, from `pwaBootRestoreProvider` — the boot path. Nothing
+  /// reloaded it afterwards, so signing in to an existing account left the
+  /// working library holding the GUEST's rows (usually none, in a fresh
+  /// browser), and Projects said "0 redesigns" for an account with three. A
+  /// full page reload fixed it, which is exactly the shape of a
+  /// hydrated-once-at-boot defect.
+  ///
+  /// Only ever called for a SWITCH, never for a link: attaching an address to
+  /// the current anonymous user does not change the user, so its library is
+  /// already correct — and resetting the session would throw away the work the
+  /// person was in the middle of, which is the opposite of what "save my
+  /// designs" promises.
+  ///
+  /// The previous identity's rows are REPLACED, never merged. Two accounts'
+  /// work must not mix, and `deleteProject` here touches only this in-memory
+  /// working copy — the durable rows stay with whoever owns them.
+  Future<void> reloadForIdentity() async {
+    final p = _persistence;
+    if (p == null) {
+      // Offline / mock: there is no durable store and no second identity.
+      state = _freshSession(PwaPhase.home);
+      return;
+    }
+    final restore = await pwaResolveBootRestore(p);
+    if (!mounted) return;
+    for (final s in _repo.listProjects()) {
+      _repo.deleteProject(s.projectId);
+    }
+    for (final s in restore.library) {
+      _repo.saveProject(s);
+    }
+    // Home, because the session that was open belonged to someone else. The
+    // new library is read back from the repository rather than from `restore`,
+    // so Projects and Home see the one list the rest of the app sees.
+    state = _freshSession(PwaPhase.home)
+        .copyWith(library: _repo.listProjects());
   }
 
   /// "Back home" — the dashboard. Any in-progress creation session is dropped
@@ -2532,16 +2607,6 @@ class PwaController extends StateNotifier<PwaState> {
         final rv = route.visionId;
         if (rid == null || rv == null) return;
         if (state.activeProjectId == rid && state.versions.isNotEmpty) {
-          if (route.firstLook) {
-            if (state.versions.any((v) => v.versionId == rv)) {
-              state = state.copyWith(
-                phase: PwaPhase.firstReveal,
-                previewVisionId: rv,
-                clearPending: true,
-              );
-            }
-            return;
-          }
           openReveal(rv);
           return;
         }
@@ -2549,14 +2614,7 @@ class PwaController extends StateNotifier<PwaState> {
         // Reveal on the named vision.
         openProject(rid, previewVisionId: rv).then((_) {
           if (!mounted || state.activeProjectId != rid) return;
-          if (route.firstLook) {
-            state = state.copyWith(
-              phase: PwaPhase.firstReveal,
-              previewVisionId: rv,
-            );
-          } else {
-            openReveal(rv);
-          }
+          openReveal(rv);
         });
       case PwaPage.architect:
         final id = route.projectId;

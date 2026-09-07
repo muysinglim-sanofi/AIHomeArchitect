@@ -1,153 +1,326 @@
 {
-  "hosting": {
-    "public": "build/web",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**",
-      "**/.env",
-      "**/.env.*",
-      "assets/.env"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
-    ],
-    "headers": [
-      {
-        "comment": [
-          "IMMUTABLE IS ONLY SAFE FOR A URL THAT CHANGES WHEN ITS BYTES DO.",
-          "The previous rule matched every js/json/image by extension, which",
-          "swept up main.dart.js, flutter_bootstrap.js and version.json - all",
-          "of which keep the SAME filename on every deploy. A returning",
-          "visitor's browser was therefore told to keep the app it already had",
-          "for a year and never ask again, so every future deploy was",
-          "invisible to everyone who had opened the site before. It was caught",
-          "in Phase 3 by fixes that were live on the server and absent in the",
-          "browser.",
-          "canvaskit/ is versioned by the Flutter release and assets/ are",
-          "content-checked by the service worker's own manifest, so those keep",
-          "the long cache. The app shell revalidates."
-        ],
-        "source": "/canvaskit/**",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=31536000, immutable"
-          }
-        ]
-      },
-      {
-        "source": "/assets/**",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=604800"
-          }
-        ]
-      },
-      {
-        "source": "**/*.@(png|jpg|jpeg|svg|ttf|otf|woff|woff2)",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=604800"
-          }
-        ]
-      },
-      {
-        "source": "/",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/index.html",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/main.dart.js",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/flutter_bootstrap.js",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/flutter.js",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/version.json",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/manifest.json",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/flutter_service_worker.js",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "**",
-        "headers": [
-          {
-            "key": "X-Content-Type-Options",
-            "value": "nosniff"
-          },
-          {
-            "key": "Referrer-Policy",
-            "value": "strict-origin-when-cross-origin"
-          },
-          {
-            "key": "X-Frame-Options",
-            "value": "SAMEORIGIN"
-          }
-        ]
-      }
-    ]
-  },
+  "hosting": [
+    {
+      "target": "live",
+      "public": "build/web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**",
+        "**/.env",
+        "**/.env.*",
+        "assets/.env"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ],
+      "headers": [
+        {
+          "source": "/thumbs/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "//": "The Create flow's selection thumbnails. Derivatives of frozen art, so they change only when regenerated - a week is safe and keeps a repeat visit free. NOT immutable, because they are not fingerprinted.",
+              "value": "public, max-age=604800"
+            }
+          ]
+        },
+        {
+          "comment": [
+            "IMMUTABLE IS ONLY SAFE FOR A URL THAT CHANGES WHEN ITS BYTES DO.",
+            "The previous rule matched every js/json/image by extension, which",
+            "swept up main.dart.js, flutter_bootstrap.js and version.json - all",
+            "of which keep the SAME filename on every deploy. A returning",
+            "visitor's browser was therefore told to keep the app it already had",
+            "for a year and never ask again, so every future deploy was",
+            "invisible to everyone who had opened the site before. It was caught",
+            "in Phase 3 by fixes that were live on the server and absent in the",
+            "browser.",
+            "canvaskit/ is versioned by the Flutter release and assets/ are",
+            "content-checked by the service worker's own manifest, so those keep",
+            "the long cache. The app shell revalidates."
+          ],
+          "source": "/canvaskit/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=31536000, immutable"
+            }
+          ]
+        },
+        {
+          "source": "/assets/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=604800"
+            }
+          ]
+        },
+        {
+          "source": "**/*.@(png|jpg|jpeg|svg|ttf|otf|woff|woff2)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=604800"
+            }
+          ]
+        },
+        {
+          "source": "/",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/index.html",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/main.dart.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/flutter_bootstrap.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/flutter.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/version.json",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/manifest.json",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/flutter_service_worker.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "SAMEORIGIN"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "target": "preprod",
+      "public": "build/web",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**",
+        "**/.env",
+        "**/.env.*",
+        "assets/.env"
+      ],
+      "rewrites": [
+        {
+          "source": "**",
+          "destination": "/index.html"
+        }
+      ],
+      "headers": [
+        {
+          "source": "/thumbs/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "//": "The Create flow's selection thumbnails. Derivatives of frozen art, so they change only when regenerated - a week is safe and keeps a repeat visit free. NOT immutable, because they are not fingerprinted.",
+              "value": "public, max-age=604800"
+            }
+          ]
+        },
+        {
+          "comment": [
+            "IMMUTABLE IS ONLY SAFE FOR A URL THAT CHANGES WHEN ITS BYTES DO.",
+            "The previous rule matched every js/json/image by extension, which",
+            "swept up main.dart.js, flutter_bootstrap.js and version.json - all",
+            "of which keep the SAME filename on every deploy. A returning",
+            "visitor's browser was therefore told to keep the app it already had",
+            "for a year and never ask again, so every future deploy was",
+            "invisible to everyone who had opened the site before. It was caught",
+            "in Phase 3 by fixes that were live on the server and absent in the",
+            "browser.",
+            "canvaskit/ is versioned by the Flutter release and assets/ are",
+            "content-checked by the service worker's own manifest, so those keep",
+            "the long cache. The app shell revalidates."
+          ],
+          "source": "/canvaskit/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=31536000, immutable"
+            }
+          ]
+        },
+        {
+          "source": "/assets/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=604800"
+            }
+          ]
+        },
+        {
+          "source": "**/*.@(png|jpg|jpeg|svg|ttf|otf|woff|woff2)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "public, max-age=604800"
+            }
+          ]
+        },
+        {
+          "source": "/",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/index.html",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/main.dart.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/flutter_bootstrap.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/flutter.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/version.json",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/manifest.json",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/flutter_service_worker.js",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "Referrer-Policy",
+              "value": "strict-origin-when-cross-origin"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "SAMEORIGIN"
+            }
+          ]
+        }
+      ]
+    }
+  ],
   "flutter": {
     "platforms": {
       "android": {

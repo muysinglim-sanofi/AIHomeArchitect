@@ -29,6 +29,7 @@ import 'package:ai_home_architect/features/pwa/data/mock_pwa_persistence_reposit
 import 'package:ai_home_architect/features/pwa/l10n/pwa_l10n.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_experience.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_nav_shell.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_paywall.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_profile_ios.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_theme.dart';
 import 'package:flutter/material.dart';
@@ -446,11 +447,26 @@ void main() {
       addTearDown(c.dispose);
       await id.identify(c, 'someone@example.com');
       await _pump(tester, container: c);
+      // The Profile grew (Help Center, Privacy, About): the sign-out card now
+      // sits below the fold of a 390x844 window, and a ListView does not build
+      // what is off screen.
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('pwa-profile-signout')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pump();
 
       final row = find.byKey(const ValueKey('pwa-profile-signout'));
       expect(row, findsOneWidget);
       await tester.tap(row);
       await tester.pumpAndSettle();
+      // Signing out is a change of USER, so the session resets to Home — the
+      // previous account's open project must not stay on screen. Home's hero
+      // arms the shared reveal auto-sweep (a Future.delayed in the FROZEN
+      // widget iOS uses too), so the test advances past it rather than the
+      // product weakening its own animation for a harness.
+      await tester.pump(const Duration(seconds: 1));
       expect(id.auth.signOuts, 1);
       expect(c.read(pwaAuthProvider).stage, PwaAuthStage.guest);
       expect(tester.takeException(), isNull);
@@ -462,6 +478,141 @@ void main() {
       addTearDown(c.dispose);
       await _pump(tester, container: c);
       expect(find.byKey(const ValueKey('pwa-profile-signout')), findsNothing);
+    });
+  });
+
+  // ── Two intents, two doors ────────────────────────────────────────────────
+  //
+  // AUTH01-05. "Save your work" is the right sentence for someone who has just
+  // made something and has nowhere to keep it. It is the wrong one for someone
+  // whose work is already on a server and who is simply on a new browser —
+  // and that person could previously only reach the sign-in journey by typing
+  // an address into the SAVE screen and being told it was taken.
+  //
+  // Both journeys already existed in `PwaAuthService`, and they are different
+  // operations: linking attaches an address to the current anonymous user and
+  // keeps their work; signing in switches to an account that already exists
+  // and carries nothing over. Nothing about that separation changed here —
+  // only which of them a person can ask for.
+  group('AUTH  Save your work vs Sign in', () {
+    testWidgets('AUTH01: a Guest is offered BOTH, and the primary is Save',
+        (tester) async {
+      final id = _Identity();
+      final c = _container(identity: id);
+      addTearDown(c.dispose);
+      await _pump(tester, container: c);
+      final l = pwaL10nFor(const Locale('en'));
+
+      final save = find.byKey(const ValueKey('pwa-profile-save-work'));
+      final signIn = find.byKey(const ValueKey('pwa-profile-sign-in'));
+      expect(save, findsOneWidget);
+      expect(signIn, findsOneWidget);
+      expect(find.text(l.accountHaveOne), findsOneWidget);
+      // Hierarchy, as geometry: the returning-user door sits BELOW the primary
+      // one, because the guest in front of us is far more often new. iOS keeps
+      // the same order (a primary create, a secondary acctSignInExisting).
+      expect(tester.getTopLeft(signIn).dy,
+          greaterThan(tester.getTopLeft(save).dy));
+      // Drawing them creates nothing.
+      expect(id.link.calls, isEmpty);
+      expect(c.read(pwaAuthProvider).stage, PwaAuthStage.guest);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('AUTH02: Sign in opens the sheet ON the sign-in journey',
+        (tester) async {
+      final id = _Identity();
+      final c = _container(identity: id);
+      addTearDown(c.dispose);
+      await _pump(tester, container: c);
+      final l = pwaL10nFor(const Locale('en'));
+
+      await tester.tap(find.byKey(const ValueKey('pwa-profile-sign-in')));
+      await tester.pumpAndSettle();
+      // Scoped to the SHEET: the Profile card behind it carries `accountBody`
+      // of its own, so an unscoped count would be reading the wrong surface.
+      Finder inSheet(String s) => find.descendant(
+            of: find.byType(BottomSheet),
+            matching: find.text(s),
+          );
+      // Its own title and body — not "Save your work" with a link underneath.
+      expect(inSheet(l.accountSignInTitle), findsOneWidget);
+      expect(inSheet(l.accountSignInBody), findsOneWidget);
+      expect(inSheet(l.accountBody), findsNothing);
+      // …and the way back to the other journey is still offered.
+      expect(find.text(l.accountBackToLink), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('AUTH03: Save your work still opens on the LINK journey',
+        (tester) async {
+      final id = _Identity();
+      final c = _container(identity: id);
+      addTearDown(c.dispose);
+      await _pump(tester, container: c);
+      final l = pwaL10nFor(const Locale('en'));
+
+      await tester.tap(find.byKey(const ValueKey('pwa-profile-save-work')));
+      await tester.pumpAndSettle();
+      Finder inSheet(String s) => find.descendant(
+            of: find.byType(BottomSheet),
+            matching: find.text(s),
+          );
+      expect(inSheet(l.accountTitle), findsOneWidget);
+      expect(inSheet(l.accountBody), findsOneWidget);
+      expect(inSheet(l.accountSignInBody), findsNothing);
+      // The fork to the other journey is the one that was always there.
+      expect(find.text(l.accountSignInInstead), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('AUTH04: linking keeps the same user, and says so',
+        (tester) async {
+      final id = _Identity();
+      final c = _container(identity: id);
+      addTearDown(c.dispose);
+      await _pump(tester, container: c);
+
+      final before = id.auth.currentUserId;
+      await id.identify(c, 'someone@example.com');
+      await tester.pumpAndSettle();
+
+      final s = c.read(pwaAuthProvider);
+      expect(s.stage, PwaAuthStage.identified);
+      // MEASURED, not assumed — the service captures the id either side of
+      // verifyOTP and the UI only claims continuity when they match.
+      expect(id.auth.currentUserId, before);
+      expect(s.identityPreserved, isTrue);
+      expect(s.switchedAccount, isFalse);
+      expect(s.journey, PwaAuthJourney.linkNewIdentity);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('AUTH05: once identified, neither door is offered any more',
+        (tester) async {
+      final id = _Identity();
+      final c = _container(identity: id);
+      addTearDown(c.dispose);
+      await _pump(tester, container: c);
+      await id.identify(c, 'someone@example.com');
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('pwa-profile-save-work')), findsNothing);
+      expect(find.byKey(const ValueKey('pwa-profile-sign-in')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    test('AUTH06: the two journeys stay separate in the service', () {
+      // The guard that matters is not in the UI. `beginLinkIdentity` and
+      // `beginSignInExisting` drive DIFFERENT channels, and the sheet only
+      // names which one is meant — it can neither merge them nor infer one
+      // from the other.
+      final id = _Identity();
+      expect(id.service.runtimeType, PwaAuthService);
+      // A link that finds the address already registered STOPS, and moving on
+      // is a decision the person makes on screen — not a silent fallback.
+      expect(PwaVerificationFailure.values,
+          contains(PwaVerificationFailure.destinationAlreadyRegistered));
     });
   });
 
@@ -537,6 +688,84 @@ void main() {
       expect(find.text(l.freeVisionAvailable), findsOneWidget);
       expect(find.text(l.passSpacesLeft(1)), findsNothing);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'PROF03c: a granted balance is REPORTED, not reduced to "1 free vision"',
+        (tester) async {
+      // Found on the live phone. The account held a canonical ADMIN ledger
+      // adjustment of +300 and the entitlement endpoint said so —
+      // credits_available 300, free_credits 300, tier free, no pass — and
+      // Profile answered "1 free vision".
+      //
+      // ROOT CAUSE: the row is keyed on the billing STATE, which is the right
+      // discriminator for WHY access was granted, and `freeAvailable` means
+      // only "granted from the non-pass bucket". An ADMIN adjustment lands in
+      // exactly that bucket. The state was correct; the sentence under it was
+      // a constant. The count now comes off `creditsAvailable` — the server's
+      // own `credits_available` — and nothing is added up locally.
+      final c = _container(
+        entitlement: const PwaEntitlement(
+          state: PwaBillingState.freeAvailable,
+          canGenerate: true,
+          accessSource: 'free',
+          tier: 'free',
+          freeCredits: 300,
+          creditsAvailable: 300,
+        ),
+      );
+      addTearDown(c.dispose);
+      await _pump(tester, container: c);
+      final l = pwaL10nFor(const Locale('en'));
+      expect(find.text(l.passSpacesLeft(300)), findsOneWidget);
+      expect(find.text(l.freeVisionAvailable), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    test('PROF03d: the sentence follows the BALANCE, not the tier', () {
+      // Stated as arithmetic so the boundary is explicit and cannot drift: ONE
+      // is the welcome vision and keeps its name; anything above it is a
+      // count. `tier` is deliberately 'free' throughout — the whole defect was
+      // treating that classification as a quantity.
+      final l = pwaL10nFor(const Locale('en'));
+      String at(int n) => pwaWalletSentence(
+            l,
+            PwaEntitlement(
+              state: PwaBillingState.freeAvailable,
+              canGenerate: true,
+              tier: 'free',
+              accessSource: 'free',
+              freeCredits: n,
+              creditsAvailable: n,
+            ),
+          );
+      expect(at(1), l.freeVisionAvailable);
+      expect(at(2), l.passSpacesLeft(2));
+      expect(at(30), l.passSpacesLeft(30));
+      expect(at(300), l.passSpacesLeft(300));
+      expect(at(300), contains('300'));
+      // …and the untouched welcome vision is still never called a Space.
+      expect(at(1), isNot(contains('space')));
+      expect(at(1), isNot(contains('Space')));
+    });
+
+    test('PROF03e: every language reports the granted balance', () {
+      for (final code in const ['en', 'fr', 'km']) {
+        final l = pwaL10nFor(Locale(code));
+        final s = pwaWalletSentence(
+          l,
+          const PwaEntitlement(
+            state: PwaBillingState.freeAvailable,
+            canGenerate: true,
+            tier: 'free',
+            freeCredits: 300,
+            creditsAvailable: 300,
+          ),
+        );
+        expect(s, contains('300'), reason: code);
+        expect(s, isNot(l.freeVisionAvailable), reason: code);
+        expect(s.startsWith('pwa'), isFalse, reason: '$code: $s');
+      }
     });
 
     test('every billing state the server can emit has a sentence', () {
@@ -653,12 +882,26 @@ void main() {
           l.accountTitle,
           l.seeHowItWorks,
           l.yourSpaces,
+          // Round 1 — the returning user's door, in every language.
+          l.accountHaveOne,
+          l.accountSignInTitle,
         ]) {
           expect(s, isNotEmpty, reason: code);
           expect(s.startsWith('pwa'), isFalse, reason: '$code: $s');
         }
         // 'Profile' is also the nav label — the title is the 26pt one.
         expect(find.text(l.shared.profileTitle), findsWidgets);
+        expect(find.text(l.accountHaveOne), findsOneWidget, reason: code);
+        // The Settings list is lazily built and the identity block above it
+        // grew by a row, so Language can sit below the first build window.
+        // Scroll to it the way a reader does, rather than widening the test
+        // viewport until the assertion happens to pass.
+        await tester.scrollUntilVisible(
+          find.text(l.shared.settingsLanguage),
+          200,
+          scrollable: find.byType(Scrollable).first,
+          maxScrolls: 40,
+        );
         expect(find.text(l.shared.settingsLanguage), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
@@ -710,5 +953,60 @@ void main() {
       expect(pwaProfileColumnWidth(1440), 640);
       expect(pwaProfileColumnWidth(1920), 640);
     });
+  });
+
+  // A deliberate WEB addition over iOS (Round 3, phone review item 4): a person
+  // who still has Spaces may want more, and the only shop on this platform is
+  // the paywall sheet. iOS needs no such line — its store handles top-ups.
+  group('PROF08  a holder of Spaces can choose to buy more', () {
+    const holder = PwaEntitlement(
+      state: PwaBillingState.freeAvailable,
+      canGenerate: true,
+      freeCredits: 300,
+      creditsAvailable: 300,
+    );
+
+    testWidgets('the balance row carries a "Get more Spaces" line',
+        (tester) async {
+      final c = _container(entitlement: holder);
+      addTearDown(c.dispose);
+      await _pump(tester, container: c);
+      final l = pwaL10nFor(const Locale('en'));
+      expect(find.text(l.passSpacesLeft(300)), findsOneWidget,
+          reason: 'the authoritative balance is still what the row states');
+      expect(find.byKey(const ValueKey('pwa-profile-get-spaces')),
+          findsOneWidget);
+      expect(find.text(l.getMoreSpaces), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('tapping it opens the existing paywall — with Spaces in hand',
+        (tester) async {
+      final c = _container(entitlement: holder);
+      addTearDown(c.dispose);
+      await _pump(tester, container: c);
+      // Nothing about gating changed: this person is not required to buy.
+      expect(c.read(pwaEntitlementProvider).requiresPurchase, isFalse);
+      expect(c.read(pwaEntitlementProvider).canGenerate, isTrue);
+
+      await tester.tap(find.byKey(const ValueKey('pwa-profile-get-spaces')));
+      await tester.pumpAndSettle();
+      expect(find.byType(PwaPaywallSheet), findsOneWidget,
+          reason: 'the sheet that already exists, opened voluntarily');
+      expect(tester.takeException(), isNull);
+    });
+
+    for (final (code, label) in const [
+      ('en', 'Get more Spaces'),
+      ('fr', 'Acheter des Spaces'),
+      ('km', 'ទិញ Spaces បន្ថែម'),
+    ]) {
+      testWidgets('the line reads "$label" in $code', (tester) async {
+        final c = _container(entitlement: holder);
+        addTearDown(c.dispose);
+        await _pump(tester, container: c, locale: Locale(code));
+        expect(find.text(label), findsOneWidget);
+      });
+    }
   });
 }

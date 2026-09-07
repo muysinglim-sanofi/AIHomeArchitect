@@ -1,5 +1,17 @@
 {
   "projects": {
     "default": "ayden-studio"
+  },
+  "targets": {
+    "ayden-studio": {
+      "hosting": {
+        "live": [
+          "ayden-studio"
+        ],
+        "preprod": [
+          "ayden-studio-preprod"
+        ]
+      }
+    }
   }
 }

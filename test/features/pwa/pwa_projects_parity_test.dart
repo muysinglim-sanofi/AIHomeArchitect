@@ -237,8 +237,15 @@ void main() {
       final c = await _pump(tester, seed: false);
       expect(c.read(pwaControllerProvider).visibleProjects, isEmpty);
       expect(find.byKey(const ValueKey('pwa-projects-empty')), findsOneWidget);
-      // No demo projects in a person's own library, ever.
-      expect(find.byType(Image), findsNothing);
+      // No demo projects in a person's own library, ever. The bottom bar's
+      // payment acceptance mark is not a project and is excluded by name —
+      // narrowing this rather than deleting it keeps the assertion that
+      // matters: an empty library shows no artwork of its own.
+      final strays = tester
+          .widgetList<Image>(find.byType(Image))
+          .where((i) => i.key != const ValueKey('pwa-accept-mark'));
+      expect(strays, isEmpty,
+          reason: 'an empty library must show no project imagery');
       final l = pwaL10nFor(const Locale('en'));
       expect(find.text(l.transformationsCount(0)), findsOneWidget);
       expect(tester.takeException(), isNull);

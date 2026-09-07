@@ -317,8 +317,14 @@ class PwaGenerationApi {
   PwaGenerationApi({
     required String baseUrl,
     required PwaTokenProvider tokenProvider,
+    /// The path every Web API route hangs under: `/pwa/staging` for the
+    /// staging deployment (the default, so nothing existing changes) and
+    /// `/pwa` for production. It comes from `PwaEnvironment.apiPrefix`, which
+    /// is the mirror of the backend's `pwa_target.py`.
+    String apiPrefix = '/pwa/staging',
     Dio? dio,
-  }) : _tokenProvider = tokenProvider,
+  }) : _prefix = apiPrefix,
+       _tokenProvider = tokenProvider,
        _dio =
            dio ??
            Dio(
@@ -334,6 +340,7 @@ class PwaGenerationApi {
            );
 
   final Dio _dio;
+  final String _prefix;
   final PwaTokenProvider _tokenProvider;
   final _inFlight = <CancelToken>[];
   bool _disposed = false;
@@ -369,7 +376,7 @@ class PwaGenerationApi {
     _inFlight.add(cancel);
     try {
       final res = await _dio.post<Object?>(
-        '/pwa/staging/generate',
+        '$_prefix/generate',
         data: request.toJson(),
         cancelToken: cancel,
         options: Options(headers: {'Authorization': 'Bearer $token'}),
@@ -430,7 +437,7 @@ class PwaGenerationApi {
     }
     try {
       final res = await _dio.get<Object?>(
-        '/pwa/staging/generation/${Uri.encodeComponent(idempotencyKey)}',
+        '$_prefix/generation/${Uri.encodeComponent(idempotencyKey)}',
         options: Options(
           headers: {'Authorization': 'Bearer $token'},
           receiveTimeout: const Duration(seconds: 20),
@@ -461,7 +468,7 @@ class PwaGenerationApi {
     if (token == null || token.isEmpty) return const PwaChatTurn.silent();
     try {
       final res = await _dio.post<Object?>(
-        '/pwa/staging/chat',
+        '$_prefix/chat',
         data: {
           'project_id': projectId,
           'message': message,
@@ -499,7 +506,7 @@ class PwaGenerationApi {
     if (token == null || token.isEmpty) return silent;
     try {
       final res = await _dio.post<Object?>(
-        '/pwa/staging/refine/verify',
+        '$_prefix/refine/verify',
         data: {
           'project_id': projectId,
           'before_path': beforePath,
@@ -561,7 +568,7 @@ class PwaGenerationApi {
     if (token == null || token.isEmpty) return null;
     try {
       final res = await _dio.get<Object?>(
-        '/pwa/staging/entitlement',
+        '$_prefix/entitlement',
         options: Options(
           headers: {'Authorization': 'Bearer $token'},
           receiveTimeout: const Duration(seconds: 20),
@@ -598,25 +605,37 @@ class PwaGenerationApi {
   Future<Map<String, Object?>> startCheckout({
     required String sku,
     required String attemptKey,
-  }) => _payment('POST', '/pwa/staging/payments/checkout',
+  }) => _payment('POST', '$_prefix/payments/checkout',
+      body: {'sku': sku, 'attempt_key': attemptKey});
+
+  /// The ACTIVE Web checkout since 2026-09-05: ask the server to open a
+  /// payment and hand back the SIGNED fields for ABA's own plugin to post.
+  ///
+  /// Same two inputs as [startCheckout], same authority. The answer carries a
+  /// `plugin` object — a form action and a map of fields — which this client
+  /// relays to the plugin bridge without reading a single key of it.
+  Future<Map<String, Object?>> startPluginCheckout({
+    required String sku,
+    required String attemptKey,
+  }) => _payment('POST', '$_prefix/payments/checkout/plugin',
       body: {'sku': sku, 'attempt_key': attemptKey});
 
   /// The server's view of one payment. THE polling endpoint — it re-verifies
   /// with PayWay server-side, so this is how the browser learns it was paid.
   Future<Map<String, Object?>> orderStatus(String tranId) => _payment(
-      'GET', '/pwa/staging/payments/order/${Uri.encodeComponent(tranId)}');
+      'GET', '$_prefix/payments/order/${Uri.encodeComponent(tranId)}');
 
   /// The payment still in progress for this person, if any. Asked at boot: an
   /// F5 or a second tab restores the sheet from the SERVER, so nothing about a
   /// payment is ever kept in browser storage.
   Future<Map<String, Object?>> openOrder() =>
-      _payment('GET', '/pwa/staging/payments/open');
+      _payment('GET', '$_prefix/payments/open');
 
   /// The person closed the sheet. Cancels the ATTEMPT — the server verifies
   /// first, so money that arrived a moment ago still wins.
   Future<Map<String, Object?>> cancelOrder(String tranId) => _payment(
       'POST',
-      '/pwa/staging/payments/order/${Uri.encodeComponent(tranId)}/cancel');
+      '$_prefix/payments/order/${Uri.encodeComponent(tranId)}/cancel');
 
   Future<Map<String, Object?>> _payment(
     String method,

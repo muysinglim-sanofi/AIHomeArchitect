@@ -331,8 +331,15 @@ void main() {
     test('I18N09 the working indicator resolves phases from the dictionary',
         () {
       final km = pwaL10nFor(const Locale('km'));
+      // The FIRST vision speaks the shared dictionary — the same seven the
+      // phone says for the same beat (`chat_screen.dart:3661`). Refine and
+      // switch keep the web's own four.
       expect(pwaWorkingPhasesFor(PwaWorkKind.firstVision, '', km),
-          km.workInitialPhases);
+          km.shared.genInitPhrases);
+      expect(km.shared.genInitPhrases, hasLength(7));
+      for (final s in km.shared.genInitPhrases) {
+        expect(s, isNotEmpty);
+      }
       expect(pwaWorkingPhasesFor(PwaWorkKind.refine, '', km),
           km.workRefinePhases);
       // Without a dictionary it stays on the English constants — the existing
@@ -537,9 +544,20 @@ void main() {
                                // must match the FontLoader registration
                                // byte-for-byte, so translating it would
                                // silently disable Khmer rendering
+      'PlayfairDisplay',       // the paywall headline's two faces. Same rule
+      'GreatVibes',            // as the three above: FONT ids matched against
+                               // pwa_fonts.dart, never read by a person.
       'Living Room',           // example-asset labels routed as EN room labels
       'Bedroom',
       'Kitchen',
+      'ABA PayWay',            // the payment brand, and the accessible title of
+                               // the embedded checkout frame. Never translated,
+                               // by the same rule pwa_translations.dart states
+                               // for 'KHQR' and 'ABA Mobile': it is the name
+                               // printed on the thing the person is paying
+                               // with, and translating a brand is how an
+                               // interface becomes unrecognisable.
+      'ABA KHQR',              // same rule — the payment method's own name.
     };
 
     // Files whose English literals are a DOCUMENTED fallback rather than what a
@@ -620,7 +638,7 @@ void main() {
         .toList();
     expect(presentation, isEmpty,
         reason: 'these presentation strings never reach the localization '
-            'layer:\n' + presentation.join('\n'));
+            'layer:\n${presentation.join('\n')}');
 
     // The controller is a different case and is treated as one.
     //
@@ -651,8 +669,8 @@ void main() {
         .where((v) => !_isFailureFallback(v))
         .toList();
     expect(controller, isEmpty,
-        reason: 'new hardcoded English in the controller:\n' +
-            controller.join('\n'));
+        reason: 'new hardcoded English in the controller:\n'
+            '${controller.join('\n')}');
   });
 }
 

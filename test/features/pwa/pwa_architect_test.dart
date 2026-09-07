@@ -19,6 +19,8 @@ import 'package:ai_home_architect/features/pwa/domain/pwa_models.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_architect_screen.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_theme.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_experience.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_render_aspect.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_render_canvas.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_brand.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_widgets.dart';
 import 'package:ai_home_architect/shared/widgets/reveal_hero.dart';
@@ -59,7 +61,6 @@ Future<ProviderContainer> _pumpArchitect(WidgetTester tester, Size size) async {
   await c.generateFirstVision();
   // Generate now unveils the first vision full-screen; these tests are about
   // what comes after, so step through it exactly as a user would.
-  c.continueToArchitect();
   await tester.pump();
   await tester.pump(const Duration(seconds: 3));
   return container;
@@ -225,15 +226,6 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('vision card carries its three actions', (tester) async {
-      await _pumpArchitect(tester, const Size(1440, 900));
-      await _reveal(tester, find.text('View full reveal'));
-      expect(find.text('View full reveal'), findsOneWidget);
-      expect(find.text('Refine this'), findsOneWidget);
-      expect(find.text('Try another atmosphere'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-
     testWidgets('a second vision appends a second card chronologically', (
       tester,
     ) async {
@@ -247,13 +239,14 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('View full reveal moves to the Reveal for that vision', (
+    testWidgets('the expand control moves to the Reveal for that vision', (
       tester,
     ) async {
       final c = await _pumpArchitect(tester, const Size(1440, 900));
       final id = c.read(pwaControllerProvider).currentVision!.versionId;
-      await _reveal(tester, find.text('View full reveal'));
-      await tester.tap(find.text('View full reveal').first);
+      final expand = find.byKey(const ValueKey('av7-vision-expand'));
+      await _reveal(tester, expand);
+      await tester.tap(expand.first);
       await tester.pump();
       await tester.pump(const Duration(seconds: 3));
       final s = c.read(pwaControllerProvider);
@@ -354,7 +347,8 @@ void main() {
 
       // What is left: the alternatives, and one action.
       expect(find.text(l.exploreOtherAtmospheres), findsOneWidget);
-      expect(find.text(l.refineWithAyden), findsOneWidget);
+      // iOS carries this as the top-left pencil, not a foot pill.
+      expect(find.byKey(const ValueKey('pwa-reveal-edit')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -370,9 +364,21 @@ void main() {
             matching: find.byType(AspectRatio),
           )
           .first;
-      expect(tester.widget<AspectRatio>(frame).aspectRatio, kPwaRenderAspect);
+      // "The shape the engine returns" is no longer a constant: it is the
+      // decoded render's own width / height, recorded by the image that shows
+      // it (a portrait photo comes back portrait — Round 3, phone review).
+      // The mock's render is a bundle asset; whatever its shape, the frame
+      // takes exactly that shape.
+      final c = tester
+          .element(find.byType(PwaExperience))
+          .findAncestorWidgetOfExactType<UncontrolledProviderScope>()!
+          .container;
+      final after = c.read(pwaControllerProvider).currentVision!.afterAsset;
+      final measured = c.read(pwaRenderAspectsProvider)[after];
+      expect(measured, isNotNull, reason: 'the render has been measured');
+      expect(tester.widget<AspectRatio>(frame).aspectRatio, measured);
       final r = tester.getRect(frame);
-      expect(r.width / r.height, closeTo(kPwaRenderAspect, 0.01));
+      expect(r.width / r.height, closeTo(measured!, 0.01));
       expect(tester.takeException(), isNull);
     });
 
@@ -422,9 +428,9 @@ void main() {
       // The plain-return duplicate is gone: only the header goes back.
       expect(find.text('Open in conversation'), findsNothing);
       expect(find.text('Refine this vision'), findsNothing);
-      expect(find.text('Refine with Ayden'), findsOneWidget);
+      expect(find.byKey(const ValueKey('pwa-reveal-edit')), findsOneWidget);
 
-      await tester.tap(find.text('Refine with Ayden'));
+      await tester.tap(find.byKey(const ValueKey('pwa-reveal-edit')));
       await tester.pump();
       await tester.pumpAndSettle();
 
@@ -443,7 +449,7 @@ void main() {
       final c = await _pumpArchitect(tester, const Size(1440, 900));
       final versions = c.read(pwaControllerProvider).versions.length;
       await _openReveal(tester, c);
-      await tester.tap(find.text('Refine with Ayden'));
+      await tester.tap(find.byKey(const ValueKey('pwa-reveal-edit')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('av7-refine-context-cancel')));
       await tester.pumpAndSettle();
@@ -612,18 +618,34 @@ void main() {
           )
           .first;
       final rect = tester.getRect(frame);
-      // Nearly the whole conversation column, and tall enough to land as a
-      // result rather than a thumbnail.
-      expect(rect.width, greaterThanOrEqualTo(760));
-      expect(rect.width, lessThanOrEqualTo(kPwaVisionMaxWidth + 1));
-      expect(rect.height, greaterThanOrEqualTo(400));
-      expect(rect.height, lessThanOrEqualTo(kPwaVisionMaxHeight + 1));
-      // THE CROP. The frame is the shape the engine actually returns, so the
-      // `cover` inside it fills exactly and cuts nothing. A 16:9 frame — what
-      // was here before — took about a tenth off the top and bottom of the one
-      // image the person waited two minutes for.
-      expect(tester.widget<AspectRatio>(frame).aspectRatio, kPwaRenderAspect);
-      expect(rect.width / rect.height, closeTo(kPwaRenderAspect, 0.01));
+      // THE CROP. The frame is the shape the render ACTUALLY has — measured
+      // off its decode, as iOS's result card measures it — so the `cover`
+      // inside it fills exactly and cuts nothing. A 16:9 frame took a tenth
+      // off the top and bottom of a landscape render; a fixed 3:2 took a third
+      // off the top and bottom of a portrait one (Round 3, phone review).
+      final c = tester
+          .element(find.byType(PwaExperience))
+          .findAncestorWidgetOfExactType<UncontrolledProviderScope>()!
+          .container;
+      final after = c.read(pwaControllerProvider).currentVision!.afterAsset;
+      final measured = c.read(pwaRenderAspectsProvider)[after]!;
+      expect(tester.widget<AspectRatio>(frame).aspectRatio, measured);
+      expect(rect.width / rect.height, closeTo(measured, 0.01));
+      // As big as that shape allows inside iOS's canvas: the OUTER card is
+      // `(screenH * 0.52).clamp(280, 560)` tall and the column wide; the
+      // INNER frame is the largest box of the render's ratio that fits it.
+      final vision = c.read(pwaControllerProvider).currentVision!;
+      final canvasFinder =
+          find.byKey(ValueKey('vision-canvas-${vision.versionId}'));
+      final canvas = tester.getRect(canvasFinder);
+      // `setSurfaceSize` does not change `MediaQuery.sizeOf`; read the size
+      // the widget itself saw, as iOS's formula does.
+      final screen = MediaQuery.sizeOf(tester.element(canvasFinder));
+      expect(canvas.height, closeTo(pwaRenderCanvasHeight(screen), 1));
+      expect(canvas.width, greaterThanOrEqualTo(760));
+      final inner = PwaRenderCanvas.innerRect(canvas.size, measured);
+      expect(rect.width, closeTo(inner.width, 1));
+      expect(rect.height, closeTo(inner.height, 1));
       expect(tester.takeException(), isNull);
     });
 
@@ -663,8 +685,30 @@ void main() {
       await _pumpArchitect(tester, const Size(1440, 900));
       await _reveal(tester, find.text('What would you like to change?'));
       expect(find.byKey(const ValueKey('av7-vision-expand')), findsOneWidget);
-      expect(find.text('View full reveal'), findsOneWidget);
       expect(find.byType(PwaLogoBadge), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('CHAT01: the vision carries no action row at all',
+        (tester) async {
+      // iOS removed this row in Wave 5.13 and never brought it back: "the
+      // image itself is now the primary interaction (tap = reveal)". Each pill
+      // duplicated something the session already does — the render opens the
+      // Reveal, the composer IS the refine interface, and atmospheres are
+      // explored in the Reveal — so the row competed with the conversation.
+      await _pumpArchitect(tester, const Size(1440, 900));
+      await _reveal(tester, find.text('What would you like to change?'));
+      for (final code in const ['en', 'fr', 'km']) {
+        final l = pwaL10nFor(Locale(code));
+        expect(find.text(l.viewFullReveal), findsNothing, reason: code);
+        expect(find.text(l.refineThis), findsNothing, reason: code);
+        expect(find.text(l.tryAnotherAtmosphere), findsNothing, reason: code);
+      }
+      // …and it was not replaced by another toolbar: the only affordance on
+      // the render is the expand control, and the render itself.
+      expect(find.byKey(const ValueKey('av7-vision-expand')), findsOneWidget);
+      // The composer is still there, because that is where a refine is typed.
+      expect(find.byType(TextField), findsWidgets);
       expect(tester.takeException(), isNull);
     });
 
@@ -700,65 +744,73 @@ void main() {
   });
 
 
-  // ── The first vision earns a moment of its own ─────────────────────────────
-  group('First Reveal', () {
-    testWidgets('Generate unveils the vision full-screen, already saved', (
+  // ── The Design Session is the container ────────────────────────────────────
+  //
+  // SESS01-04. Generate used to open a full-screen loading page, then a
+  // full-screen unveiling with one "Continue with Ayden" button, and only then
+  // the conversation. Three screens for one act. iOS has always done this in
+  // ONE: the loading is a bubble in the thread and the render replaces it in
+  // place. These tests hold that shape — including the two screens' absence,
+  // which is what stops them growing back.
+  group('generation happens INSIDE the session', () {
+    testWidgets('SESS01: Generate lands in the session, already saved', (
       tester,
     ) async {
       final c = await _pumpFirstReveal(tester, const Size(1440, 900));
       final s = c.read(pwaControllerProvider);
-      expect(s.phase, PwaPhase.firstReveal);
-      expect(find.byKey(const ValueKey('pwa-first-reveal')), findsOneWidget);
-      // The project is durable BEFORE the unveiling — this is a presentation
-      // state, not a step in the save chain.
+      // The conversation, not a product screen with a door out of it.
+      expect(s.phase, PwaPhase.architect);
+      expect(find.byKey(_feedKey), findsOneWidget);
+      // The render is IN the thread.
+      expect(find.byKey(const ValueKey('pwa-result-vision')), findsOneWidget);
+      // The project is durable by the time the session settles.
       expect(s.versions, hasLength(1));
       expect(
         s.visibleProjects.any((p) => p.projectId == s.activeProjectId),
         isTrue,
       );
-      expect(s.previewedVision!.versionId, s.currentVision!.versionId);
+      // …and the URL is the session's own, not a `mode=first` presentation.
       expect(
         s.canonicalRoute.location,
-        '/projects/${s.project.projectId}/reveal'
-        '?vision=${s.currentVision!.versionId}&mode=first',
+        '/projects/${s.project.projectId}/architect',
       );
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('it holds ONE action and nothing else', (tester) async {
-      await _pumpFirstReveal(tester, const Size(1440, 900));
-      expect(
-        find.byKey(const ValueKey('pwa-first-reveal-continue')),
-        findsOneWidget,
-      );
-      expect(find.text('Continue with Ayden'), findsOneWidget);
-      // No details panel, no rail, no conversation, no refine, no composer.
-      expect(find.text('VISION DETAILS'), findsNothing);
-      expect(find.text('ATMOSPHERES'), findsNothing);
-      expect(find.text('Refine with Ayden'), findsNothing);
-      expect(find.text('Refine this'), findsNothing);
-      expect(find.text('Try another atmosphere'), findsNothing);
-      expect(find.byType(TextField), findsNothing);
-      expect(find.byKey(_feedKey), findsNothing);
-      expect(find.textContaining(' of '), findsNothing);
-      // …but the reveal engine itself is there.
-      expect(find.byType(PwaRevealCard), findsOneWidget);
-      expect(find.byType(RevealHero), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('Continue with Ayden hands over to the conversation', (
+    testWidgets('SESS02: there is no continuation step to take', (
       tester,
     ) async {
+      await _pumpFirstReveal(tester, const Size(1440, 900));
+      // The unveiling and its single action are gone, not hidden.
+      expect(find.byKey(const ValueKey('pwa-first-reveal')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('pwa-first-reveal-continue')),
+        findsNothing,
+      );
+      expect(find.text('Continue with Ayden'), findsNothing);
+      // What IS there is the conversation: a composer to type the next
+      // instruction into, under the render.
+      expect(find.byType(TextField), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('SESS03: exactly ONE generation request was made', (
+      tester,
+    ) async {
+      // The old flow crossed two screen boundaries between the tap and the
+      // result; collapsing them must not make the session ask twice.
       final c = await _pumpFirstReveal(tester, const Size(1440, 900));
-      await tester.tap(find.byKey(const ValueKey('pwa-first-reveal-continue')));
-      await tester.pump();
       await tester.pump(const Duration(seconds: 3));
       final s = c.read(pwaControllerProvider);
-      expect(s.phase, PwaPhase.architect);
-      expect(find.byKey(_feedKey), findsOneWidget);
-      expect(find.byKey(const ValueKey('pwa-first-reveal')), findsNothing);
-      expect(tester.takeException(), isNull);
+      expect(s.versions, hasLength(1));
+      expect(s.versions.single.visionNumber, 1);
+      // …and nothing is still running.
+      expect(s.generating, isFalse);
+      expect(
+        s.messages.where((m) => m.kind == PwaMessageKind.loading),
+        isEmpty,
+        reason: 'the loading bubble is REPLACED by the render, never left',
+      );
     });
 
     testWidgets('a refinement never re-opens the unveiling', (tester) async {
@@ -807,11 +859,13 @@ void main() {
       Size(1920, 1080),
     ]) {
       testWidgets(
-        'no overflow at ${size.width.toInt()}x${size.height.toInt()}',
+        'SESS04: the settled session fits at '
+        '${size.width.toInt()}x${size.height.toInt()}',
         (tester) async {
           await _pumpFirstReveal(tester, size);
+          expect(find.byKey(_feedKey), findsOneWidget);
           expect(
-            find.byKey(const ValueKey('pwa-first-reveal-continue')),
+            find.byKey(const ValueKey('pwa-result-vision')),
             findsOneWidget,
           );
           expect(tester.takeException(), isNull);
@@ -839,16 +893,15 @@ void main() {
       final cardY =
           tester.getTopLeft(find.byKey(const ValueKey('pwa-result-vision'))).dy;
       final bubbleY = tester.getTopLeft(find.text(text)).dy;
-      final actionY = tester.getTopLeft(find.text('View full reveal')).dy;
       final guidanceY = tester
           .getTopLeft(find.text('What would you like to change?'))
           .dy;
 
       // You have just generated an image: the image is what you see first,
-      // then what Ayden says about it, then what you can do with it.
+      // then what Ayden says about it, then the invitation to say something
+      // back. The action row that used to sit between the last two is gone.
       expect(cardY, lessThan(bubbleY));
-      expect(bubbleY, lessThan(actionY));
-      expect(actionY, lessThan(guidanceY));
+      expect(bubbleY, lessThan(guidanceY));
       expect(tester.takeException(), isNull);
     });
 
@@ -859,7 +912,6 @@ void main() {
           .messages
           .firstWhere((m) => m.kind == PwaMessageKind.reveal)
           .text;
-      expect(find.text('View full reveal'), findsOneWidget);
       expect(find.byKey(const ValueKey('av7-vision-expand')), findsOneWidget);
       expect(find.text(text), findsOneWidget);
       expect(find.text('What would you like to change?'), findsOneWidget);

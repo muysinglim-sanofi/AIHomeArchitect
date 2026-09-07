@@ -43,7 +43,6 @@ Future<(PwaController, PwaFakeGenerationService)> _session() async {
   c.selectRoom('livingRoom');
   c.setSource(_source());
   await c.generateFirstVision();
-  c.continueToArchitect();
   gen.calls.clear();
   gen.chatCalls.clear();
   return (c, gen);

@@ -65,7 +65,6 @@ Future<ProviderContainer> _pumpReveal(
   n.selectRoom('living_room');
   n.selectEntryAtmosphere('warm_modern');
   await n.generateFirstVision();
-  n.continueToArchitect();
   n.openReveal(c.read(pwaControllerProvider).currentVision!.versionId);
 
   await tester.pumpWidget(
@@ -339,6 +338,134 @@ void main() {
     });
   });
 
+  // ── The rail is a rail, and it does not move ──────────────────────────────
+  //
+  // REVEAL08-11. On the phone the atmosphere cards were about 310dp wide —
+  // roughly 80% of the screen — because the carousel sat in an `Expanded` and
+  // took whatever height the hero left over. And SELECTING one visibly
+  // reflowed the whole strip: the action slot below rendered `SizedBox.shrink`
+  // when idle and a two-line confirmation when a card was tapped, and that
+  // ~90dp swing came straight out of the Expanded above it, resizing every
+  // card in the rail.
+  //
+  // Both are geometry, and both are now held as arithmetic: the strip has a
+  // ceiling, and the slot has a reserve. Neither depends on a screenshot.
+  group('REVEAL08  the atmosphere rail is stable and browsable', () {
+    /// Every card's rect, keyed by atmosphere id.
+    Map<String, Rect> cardRects(WidgetTester tester, ProviderContainer c) {
+      final out = <String, Rect>{};
+      for (final a in c.read(pwaControllerProvider).atmospheres) {
+        final f = find.byKey(ValueKey('pwa-reveal-atmo-${a.id}'));
+        if (f.evaluate().isNotEmpty) out[a.id] = tester.getRect(f.first);
+      }
+      return out;
+    }
+
+    testWidgets('REVEAL08: selecting one does not resize ANY of them',
+        (tester) async {
+      final c = await _pumpReveal(tester, size: const Size(390, 844));
+      final before = cardRects(tester, c);
+      expect(before, isNotEmpty);
+
+      final card = find.byKey(const ValueKey('pwa-reveal-atmo-soft_luxury'));
+      await tester.scrollUntilVisible(
+        card,
+        240,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey('pwa-reveal-atmospheres')),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(card);
+      await tester.pumpAndSettle();
+      // The confirmation is up — the state that used to shrink the rail.
+      expect(find.byKey(const ValueKey('pwa-reveal-pending')), findsOneWidget);
+
+      final after = cardRects(tester, c);
+      for (final id in before.keys) {
+        if (!after.containsKey(id)) continue;
+        expect(after[id]!.width, closeTo(before[id]!.width, 0.5),
+            reason: '$id changed WIDTH when another card was selected');
+        expect(after[id]!.height, closeTo(before[id]!.height, 0.5),
+            reason: '$id changed HEIGHT when another card was selected');
+      }
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('REVEAL09: the selected card is marked, not enlarged',
+        (tester) async {
+      await _pumpReveal(tester, size: const Size(390, 844));
+      final card = find.byKey(const ValueKey('pwa-reveal-atmo-soft_luxury'));
+      await tester.scrollUntilVisible(
+        card,
+        240,
+        scrollable: find.descendant(
+          of: find.byKey(const ValueKey('pwa-reveal-atmospheres')),
+          matching: find.byType(Scrollable),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final was = tester.getRect(card.first);
+      await tester.tap(card);
+      await tester.pumpAndSettle();
+      final now = tester.getRect(
+          find.byKey(const ValueKey('pwa-reveal-atmo-soft_luxury')).first);
+      // iOS marks selection with a border and a ring, never with size
+      // (`atmosphere_card.dart`: `width: selected ? 2 : 1`).
+      expect(now.width, closeTo(was.width, 0.5));
+      expect(now.height, closeTo(was.height, 0.5));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('REVEAL10: several directions are browsable at once',
+        (tester) async {
+      final c = await _pumpReveal(tester, size: const Size(390, 844));
+      final cards = cardRects(tester, c);
+      expect(cards, isNotEmpty);
+      final w = cards.values.first.width;
+      // iOS's OWN size for this rail, re-derived in Round 3 from the shipped
+      // `before_after_screen.dart` rather than from a CHANGELOG line: the card
+      // is `(strip * 1.35).clamp(170, screenW * 0.86)`, which on a 390dp phone
+      // is the 0.86 ceiling — 335 wide, 221 tall. Round 2 had shrunk it to 178
+      // x 108, less than half the native card, which is the "too narrow /
+      // visually compressed" the phone review reported.
+      expect(w, closeTo(390 * 0.86, 1.0),
+          reason: 'the native rail fills 86% of the screen, by iOS clamp');
+      final h = cards.values.first.height;
+      expect(h, closeTo(221.0, 2.0), reason: 'and 0.82 of the strip');
+      // Every card the same size — that IS the rail.
+      for (final r in cards.values) {
+        expect(r.width, closeTo(w, 0.5));
+      }
+      // …and it scrolls horizontally, so the rest are reachable.
+      // The key sits ON the ListView, not around it.
+      final rail = tester.widget<ListView>(
+          find.byKey(const ValueKey('pwa-reveal-atmospheres')));
+      expect(rail.scrollDirection, Axis.horizontal);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('REVEAL11: the rail geometry is identical in both states, at '
+        'every phone size', (tester) async {
+      for (final size in const [Size(390, 844), Size(430, 932)]) {
+        final c = await _pumpReveal(tester, size: size);
+        final before = cardRects(tester, c);
+        c.read(pwaControllerProvider.notifier).stageAtmosphere('soft_luxury');
+        await tester.pumpAndSettle();
+        final after = cardRects(tester, c);
+        for (final id in before.keys) {
+          if (!after.containsKey(id)) continue;
+          expect(after[id], before[id], reason: '$size / $id moved or resized');
+        }
+        // Staging still spends nothing, which is the semantic this geometry
+        // work was not allowed to touch.
+        expect(c.read(pwaControllerProvider).versions, hasLength(1));
+        expect(tester.takeException(), isNull, reason: '$size');
+      }
+    });
+  });
+
   group('REVEAL04  the way out, and the way on', () {
     testWidgets('back returns to the conversation and carries no intent',
         (tester) async {
@@ -352,12 +479,14 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the one in-hero action carries THIS vision back',
+    testWidgets('EDIT carries THIS vision back to the conversation',
         (tester) async {
+      // Same capability, iOS's own place: the top-left pencil, right of Back
+      // ("Wave 4.9.3 — 'Refine in chat' pencil… Top-LEFT, right of Back").
       final c = await _pumpReveal(tester);
       final id = c.read(pwaControllerProvider).previewedVision!.versionId;
       final msgs = c.read(pwaControllerProvider).messages.length;
-      await tester.tap(find.byKey(const ValueKey('pwa-reveal-refine')));
+      await tester.tap(find.byKey(const ValueKey('pwa-reveal-edit')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 2));
       final s = c.read(pwaControllerProvider);
@@ -367,6 +496,40 @@ void main() {
       expect(s.messages, hasLength(msgs));
       expect(s.versions, hasLength(1));
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('REPLAY re-runs the presentation and spends nothing',
+        (tester) async {
+      final c = await _pumpReveal(tester);
+      final before = c.read(pwaControllerProvider);
+      final msgs = before.messages.length;
+      await tester.tap(find.byKey(const ValueKey('pwa-reveal-replay')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      final s = c.read(pwaControllerProvider);
+      // Presentation only: iOS's replay "re-triggers the cinematic reveal in
+      // place". No request, no version, no message, no Space.
+      expect(s.versions, hasLength(before.versions.length));
+      expect(s.messages, hasLength(msgs));
+      expect(s.generating, isFalse);
+      expect(s.phase, PwaPhase.reveal);
+      expect(s.pendingAtmosphereId, isNull);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('SHARE is offered, and shares nothing private',
+        (tester) async {
+      await _pumpReveal(tester);
+      expect(find.byKey(const ValueKey('pwa-reveal-share')), findsOneWidget);
+      // iOS shares TEXT. The render's URL is a signed, expiring Storage link
+      // scoped to one account, and handing that to a share sheet would hand
+      // out a credential with a lifetime — so the text names the vision and
+      // carries no link at all.
+      final l = pwaL10nFor(const Locale('en'));
+      final text = l.shareVisionText('Soft Luxury');
+      expect(text, contains('Soft Luxury'));
+      expect(text, isNot(contains('http')));
+      expect(text, isNot(contains('token')));
     });
 
     testWidgets('the vision navigator appears only when there is somewhere '
@@ -416,15 +579,21 @@ void main() {
         final l = pwaL10nFor(Locale(code));
         for (final s in [
           l.exploreOtherAtmospheres,
+          // The chrome's tooltips — the actions are iOS's floating circles
+          // now, so their words live in a tooltip rather than on a pill.
           l.refineWithAyden,
+          l.replayReveal,
+          l.shareVision,
+          l.shareVisionText('Soft Luxury'),
           l.beforeLabel,
           l.shared.dragToReveal,
         ]) {
           expect(s, isNotEmpty, reason: code);
           expect(s.startsWith('pwa'), isFalse, reason: '$code: $s');
         }
+        expect(l.shareVisionText('Soft Luxury'), contains('Soft Luxury'),
+            reason: '$code: the vision must be named in the share text');
         expect(find.text(l.exploreOtherAtmospheres), findsOneWidget);
-        expect(find.text(l.refineWithAyden), findsOneWidget);
         expect(tester.takeException(), isNull);
       });
     }

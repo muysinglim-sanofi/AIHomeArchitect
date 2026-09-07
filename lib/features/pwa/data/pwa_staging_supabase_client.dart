@@ -23,20 +23,29 @@ class PwaStagingSupabaseClient {
   /// Build the isolated client. Fails CLOSED on any allowlist mismatch, BEFORE
   /// initialising anything.
   static Future<PwaStagingSupabaseClient> create(PwaEnvironment env) async {
-    if (!env.isStaging) {
+    if (!env.isRemote) {
       throw const PwaConfigError(
-        'PwaStagingSupabaseClient requested outside AYDEN_ENV=staging.',
+        'PwaStagingSupabaseClient requested outside a remote build '
+        '(AYDEN_ENV=staging or production).',
       );
     }
-    final url = env.stagingSupabaseUrl ?? '';
-    // Re-assert the exact host + ref + non-secret key (never production).
-    PwaEnvironment.assertStagingTargetAllowed(url);
-    PwaEnvironment.assertProjectRefAllowed(env.stagingProjectRef ?? '', url);
-    PwaEnvironment.assertPublishableKeyAllowed(env.stagingPublishableKey ?? '');
+    final url = env.supabaseUrl ?? '';
+    // Each target is validated by ITS OWN guard — a staging build may not be
+    // pointed at production, and a production build may not be pointed at
+    // staging. `PwaEnvironment.parse` already refused anything else; this is
+    // the second reading, at the moment the client is actually built.
+    if (env.isProduction) {
+      PwaEnvironment.assertProductionTargetAllowed(url);
+      PwaEnvironment.assertProductionRefAllowed(env.projectRef ?? '', url);
+    } else {
+      PwaEnvironment.assertStagingTargetAllowed(url);
+      PwaEnvironment.assertProjectRefAllowed(env.projectRef ?? '', url);
+    }
+    PwaEnvironment.assertPublishableKeyAllowed(env.publishableKey ?? '');
 
     // Native persistence: supabase_flutter installs its SharedPreferences-backed
     // localStorage and restores any existing session during initialize().
-    await Supabase.initialize(url: url, anonKey: env.stagingPublishableKey!);
+    await Supabase.initialize(url: url, anonKey: env.publishableKey!);
     return PwaStagingSupabaseClient._(Supabase.instance.client);
   }
 

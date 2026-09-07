@@ -69,7 +69,6 @@ Future<ProviderContainer> _pumpResult(
   n.selectRoom(room);
   n.selectEntryAtmosphere(atmosphere);
   await n.generateFirstVision();
-  n.continueToArchitect();
 
   await tester.pumpWidget(
     MediaQuery(
@@ -149,20 +148,31 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('image, then commentary, then actions', (tester) async {
+    testWidgets('image, then commentary — and nothing after it', (tester) async {
       // The brief's hierarchy, asserted as geometry. The three action pills
       // used to sit INSIDE the card between the render and Ayden's line, so a
       // person who had waited two minutes met a row of buttons before they
-      // were told anything about what they were looking at.
+      // were told anything about what they were looking at. Round 1 removed
+      // them outright, which is what iOS did to its own action row in Wave
+      // 5.13: "the image itself is now the primary interaction (tap =
+      // reveal)". So the order is now two things, not three.
       await _pumpResult(tester);
-      final l = pwaL10nFor(const Locale('en'));
       final image =
           tester.getRect(find.byKey(const ValueKey('pwa-result-vision')));
       final words =
           tester.getRect(find.textContaining('direction is in').first);
-      final action = tester.getRect(find.text(l.viewFullReveal).first);
       expect(image.bottom, lessThanOrEqualTo(words.top + 1));
-      expect(words.bottom, lessThanOrEqualTo(action.top + 1));
+      // RESULT01b — the row is gone, in every language, and does not come
+      // back as a differently-worded toolbar.
+      for (final code in const ['en', 'fr', 'km']) {
+        final l = pwaL10nFor(Locale(code));
+        expect(find.text(l.viewFullReveal), findsNothing, reason: code);
+        expect(find.text(l.refineThis), findsNothing, reason: code);
+        expect(find.text(l.tryAnotherAtmosphere), findsNothing, reason: code);
+      }
+      // What replaces it was already there: the render opens the Reveal, and
+      // the expand control makes that visible.
+      expect(find.byKey(const ValueKey('av7-vision-expand')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -301,12 +311,14 @@ void main() {
   });
 
   group('RESULT04  the Full Reveal entry is unchanged', () {
-    testWidgets('the CTA routes to the Reveal for THAT vision',
+    testWidgets('the image itself routes to the Reveal for THAT vision',
         (tester) async {
       final c = await _pumpResult(tester);
       final id = c.read(pwaControllerProvider).versions.single.versionId;
-      final l = pwaL10nFor(const Locale('en'));
-      final cta = find.text(l.viewFullReveal).first;
+      // The destination is the same one the pill used to reach; only the door
+      // changed, from a text action competing with the conversation to the
+      // render's own expand control.
+      final cta = find.byKey(const ValueKey('av7-vision-expand'));
       await tester.ensureVisible(cta);
       await tester.pumpAndSettle();
       await tester.tap(cta);
@@ -346,13 +358,11 @@ void main() {
         // translations are checked below, at the dictionary.
         expect(find.text(l.whatWouldYouLikeToChange), findsOneWidget);
         expect(find.text(l.chipWarmer), findsWidgets);
-        expect(find.text(l.viewFullReveal), findsWidgets);
         // …and none of them fell back to the key.
         for (final s in [
           l.firstVisionIntro('Warm Modern'),
           l.whatWouldYouLikeToChange,
           l.chipCalmer,
-          l.viewFullReveal,
         ]) {
           expect(s, isNotEmpty, reason: code);
           expect(s.startsWith('pwa'), isFalse, reason: '$code: $s');

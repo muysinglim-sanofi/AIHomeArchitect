@@ -49,6 +49,7 @@ import '../billing/pwa_payment.dart';
 import '../billing/pwa_payment_controller.dart';
 import '../data/pwa_external_launcher.dart';
 import '../l10n/pwa_l10n.dart';
+import 'pwa_aba_marks.dart';
 import 'pwa_theme.dart';
 import 'pwa_widgets.dart' show pwaSerif;
 
@@ -77,17 +78,15 @@ Future<PwaPaymentExit> showPwaPaymentSheetFor(
   PwaProduct product,
 ) async {
   ref.read(pwaPaymentProvider.notifier).start(product.sku);
-  final exit = await showModalBottomSheet<PwaPaymentExit>(
+  final exit = await showDialog<PwaPaymentExit>(
     context: context,
-    isScrollControlled: true,
-    isDismissible: false,
-    enableDrag: false,
-    backgroundColor: pwaSurface,
-    barrierColor: Colors.black.withValues(alpha: 0.72),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (_) => PwaPaymentSheet(product: product),
+    // The Wallet stays on screen and stays polling; the payer must be able to
+    // see the pack they chose behind this. A near-opaque scrim over a
+    // full-height sheet was the rejected treatment — it read as a separate
+    // screen wearing a sheet's clothes.
+    barrierColor: Colors.black.withValues(alpha: 0.38),
+    barrierDismissible: false,
+    builder: (_) => _PaymentModalFrame(product: product),
   );
   return exit ?? PwaPaymentExit.none;
 }
@@ -119,17 +118,15 @@ Future<PwaPaymentExit> showPwaPaymentReturn(
     storeOnly: false,
     webEnabled: true,
   );
-  final exit = await showModalBottomSheet<PwaPaymentExit>(
+  final exit = await showDialog<PwaPaymentExit>(
     context: context,
-    isScrollControlled: true,
-    isDismissible: false,
-    enableDrag: false,
-    backgroundColor: pwaSurface,
-    barrierColor: Colors.black.withValues(alpha: 0.72),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (_) => PwaPaymentSheet(product: product),
+    // The Wallet stays on screen and stays polling; the payer must be able to
+    // see the pack they chose behind this. A near-opaque scrim over a
+    // full-height sheet was the rejected treatment — it read as a separate
+    // screen wearing a sheet's clothes.
+    barrierColor: Colors.black.withValues(alpha: 0.38),
+    barrierDismissible: false,
+    builder: (_) => _PaymentModalFrame(product: product),
   );
   return exit ?? PwaPaymentExit.none;
 }
@@ -143,6 +140,54 @@ Future<bool> showPwaPaymentSheet(
     (await showPwaPaymentSheetFor(context, ref, product)) !=
     PwaPaymentExit.none;
 
+/// The dialog shell: a small white card, centred, sized by its content.
+///
+/// WHAT THIS REPLACED, AND WHY. The first pass put ABA's hosted checkout in a
+/// near-full-height bottom sheet. Measured at 340 / 360 / 390 / 420 px iframe
+/// widths on 2026-09-05, that page has no mobile breakpoint — it renders the
+/// same ~1180 px desktop composition at every width, instruction column and
+/// postal footer included — so the sheet had to be tall, and the result read as
+/// a bank's web page bolted into the app rather than as the compact modal ABA
+/// approved. It was rejected on sight, correctly.
+///
+/// This is the other half of the same decision: the payment is now composed
+/// from the two official fields PayWay returns (`qr_string`, `abapay_deeplink`)
+/// inside Ayden's own small card, so the card can be as small as its contents.
+class _PaymentModalFrame extends StatelessWidget {
+  const _PaymentModalFrame({required this.product});
+
+  final PwaProduct product;
+
+  /// The card's ceiling. Wide enough for a scannable QR with margins, narrow
+  /// enough that the Wallet is unmistakably still there around it.
+  static const double maxWidth = 400;
+
+  @override
+  Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    // 16 a side on a phone, which is the smallest gutter that still reads as a
+    // modal rather than as a page. On a wide screen the ceiling takes over.
+    final width = (screen.width - 32).clamp(240.0, maxWidth).toDouble();
+    return Dialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: width,
+          // Tall content (a QR plus a deeplink button) still has to fit a short
+          // landscape phone, so the card scrolls inside itself rather than
+          // overflowing.
+          maxHeight: screen.height - 48,
+        ),
+        child: PwaPaymentSheet(product: product),
+      ),
+    );
+  }
+}
+
 class PwaPaymentSheet extends ConsumerWidget {
   const PwaPaymentSheet({super.key, required this.product});
 
@@ -154,48 +199,22 @@ class PwaPaymentSheet extends ConsumerWidget {
     final form = pwaFormFactorForWidth(MediaQuery.sizeOf(context).width);
     final onPhone = form == PwaFormFactor.mobile;
 
-    return ConstrainedBox(
-      constraints:
-          BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.94),
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const _Grabber(),
-                const SizedBox(height: PwaGap.lg),
-                _Header(product: product, payment: payment),
-                const SizedBox(height: PwaGap.lg),
-                _Body(payment: payment, onPhone: onPhone),
-                const SizedBox(height: PwaGap.lg),
-                _Actions(product: product, payment: payment),
-              ],
-            ),
-          ),
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Header(product: product, payment: payment),
+            const SizedBox(height: PwaGap.md),
+            _Body(payment: payment, onPhone: onPhone),
+            _Actions(product: product, payment: payment),
+          ],
         ),
       ),
     );
   }
-}
-
-class _Grabber extends StatelessWidget {
-  const _Grabber();
-
-  @override
-  Widget build(BuildContext context) => Center(
-        child: Container(
-          width: 40,
-          height: 4,
-          decoration: BoxDecoration(
-            color: pwaHairline,
-            borderRadius: BorderRadius.circular(2),
-          ),
-        ),
-      );
 }
 
 /// The one line that never changes while a person pays: what they are buying
@@ -217,16 +236,40 @@ class _Header extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(l.payTitle,
-            style: pwaSerif(fontSize: 24, fontWeight: FontWeight.w500)),
-        const SizedBox(height: PwaGap.sm),
+        Row(
+          children: [
+            const PwaAbaMethodMark(size: 26),
+            const SizedBox(width: 8),
+            // The method's own name, never translated.
+            Expanded(
+              child: Text('ABA KHQR',
+                  style: pwaSans(fontSize: 17, fontWeight: FontWeight.w700)),
+            ),
+            // Always reachable, in every state. A payment card with no way out
+            // is the one thing worse than a payment card that is too big.
+            IconButton(
+              key: const ValueKey('pwa-pay-close'),
+              onPressed: () =>
+                  Navigator.of(context).maybePop(PwaPaymentExit.none),
+              icon: const Icon(Icons.close_rounded, size: 20),
+              color: pwaMuted,
+              splashRadius: 20,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+              tooltip: l.payClose,
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        const Divider(height: 1, color: pwaHairline),
+        const SizedBox(height: 10),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(l.paywallSpaces(credits),
-                style: pwaSans(fontSize: 15, color: pwaMuted)),
+                style: pwaSans(fontSize: 13.5, color: pwaMuted)),
             Text(price,
-                style: pwaSans(fontSize: 17, fontWeight: FontWeight.w600)),
+                style: pwaSans(fontSize: 20, fontWeight: FontWeight.w700)),
           ],
         ),
       ],
@@ -343,7 +386,15 @@ class _Working extends StatelessWidget {
       );
 }
 
-/// The live payment: what is being bought, and the way to ABA's checkout.
+/// The live payment: ABA's KHQR, ABA's deeplink, and a poll that decides.
+///
+/// COMPOSED, NOT EMBEDDED. ABA's hosted checkout was measured at 340 / 360 /
+/// 390 / 420 px iframe widths on 2026-09-05 and has no mobile breakpoint: the
+/// same ~1180 px desktop page at every width. It cannot be the compact modal
+/// ABA approved without scaling or cropping their page, which is not ours to
+/// do. So this shows the two official fields PayWay returns instead — the exact
+/// `qr_string`, rendered to pixels by the server, and the exact
+/// `abapay_deeplink` — in a card small enough to sit over the Wallet.
 class _Payable extends StatelessWidget {
   const _Payable({required this.payment, required this.onPhone});
 
@@ -365,33 +416,51 @@ class _Payable extends StatelessWidget {
       );
     }
 
-    // Only when the deployment pinned `abapay_khqr_deeplink`. Normally empty —
-    // ABA shows the QR on its own page, which is where it belongs.
-    final hasQr = payment.qrImage.isNotEmpty;
+    // THE ACTIVE PATH. ABA's own plugin is presenting the checkout in its own
+    // popup, above this card. What belongs here is the status of the payment
+    // and the way to end it — not a QR, not a deeplink, not instructions: all
+    // of those are ABA's, inside the popup, and a second copy underneath would
+    // be the duplicate checkout ABA's review rejected.
+    if (payment.checkoutMode == kPwaCheckoutModePlugin) {
+      return Column(
+        key: const ValueKey('pwa-pay-plugin-open'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: PwaGap.sm),
+          Text(
+            l.payPluginOpen,
+            textAlign: TextAlign.center,
+            style: pwaSans(fontSize: 13, color: pwaMuted, height: 1.45),
+          ),
+          const SizedBox(height: PwaGap.md),
+          _Waiting(payment: payment),
+        ],
+      );
+    }
+
+    final hasQr = payment.qrImage.isNotEmpty || payment.qrString.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // No heading here: the sheet header already names the payment. A
-        // second copy of the same sentence is noise on a screen whose whole
-        // job is one clear action.
-        Text(onPhone ? l.payHandoffBodyPhone : l.payHandoffBodyDesktop,
-            style: pwaSans(fontSize: 13, color: pwaMuted, height: 1.5)),
-        const SizedBox(height: PwaGap.lg),
-
-        _ContinueToAbaButton(url: payment.checkoutUrl),
-
+        const SizedBox(height: PwaGap.sm),
         if (hasQr) ...[
-          const SizedBox(height: PwaGap.md),
-          Center(
-            child: Text(l.payOrScan,
-                textAlign: TextAlign.center,
-                style: pwaSans(fontSize: 12, color: pwaFaint)),
-          ),
-          const SizedBox(height: PwaGap.sm),
           _QrPanel(payment: payment),
-        ],
-
+          const SizedBox(height: PwaGap.md),
+          Text(
+            l.payScanBody,
+            textAlign: TextAlign.center,
+            style: pwaSans(fontSize: 12.5, color: pwaMuted, height: 1.4),
+          ),
+          if (payment.deeplink.isNotEmpty) ...[
+            const SizedBox(height: PwaGap.md),
+            _OpenAbaMobileButton(url: payment.deeplink),
+          ],
+        ] else
+          // No QR on this rail — the older `abapay_khqr` shape returns only a
+          // checkout URL. Not a dead end and not a fabricated QR: the official
+          // page, in a new tab, so the Wallet and its poll survive.
+          _OpenCheckoutButton(url: payment.checkoutUrl),
         const SizedBox(height: PwaGap.md),
         _Waiting(payment: payment),
       ],
@@ -399,13 +468,48 @@ class _Payable extends StatelessWidget {
   }
 }
 
-/// The one action on this sheet: go to ABA.
+/// ABA Mobile, opened with ABA's own link.
 ///
-/// A NAVIGATION and nothing else. Tapping it writes no state, concludes
-/// nothing, and starts no timer — the poll that is already running is what will
-/// find out whether money moved, by asking the server, which asks PayWay.
-class _ContinueToAbaButton extends ConsumerWidget {
-  const _ContinueToAbaButton({required this.url});
+/// The URL is PayWay's `abapay_deeplink`, verbatim — never assembled here. It
+/// goes through `open` rather than `openNewTab` because a custom scheme in a
+/// new tab strands an empty tab on every mobile browser, and because the QR is
+/// still on screen underneath if the OS does nothing.
+///
+/// Tapping it concludes NOTHING. The poll that is already running is what will
+/// find out whether money moved.
+class _OpenAbaMobileButton extends ConsumerWidget {
+  const _OpenAbaMobileButton({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l = context.pwaL10n;
+    return OutlinedButton(
+      key: const ValueKey('pwa-pay-open-aba-mobile'),
+      onPressed: url.isEmpty
+          ? null
+          : () => ref.read(pwaExternalLauncherProvider).open(url),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(46),
+        side: const BorderSide(color: pwaHairline),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(PwaGap.radius),
+        ),
+      ),
+      child: Text(l.payOpenAba,
+          style: pwaSans(
+              fontSize: 14, fontWeight: FontWeight.w600, color: pwaInk)),
+    );
+  }
+}
+
+/// The fallback when PayWay returned no QR: ABA's own page, in a NEW tab.
+///
+/// A new tab and not this one — same-tab navigation unloads the Flutter app and
+/// takes the Wallet and the poll with it.
+class _OpenCheckoutButton extends ConsumerWidget {
+  const _OpenCheckoutButton({required this.url});
 
   final String url;
 
@@ -413,24 +517,18 @@ class _ContinueToAbaButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l = context.pwaL10n;
     return FilledButton.icon(
+      key: const ValueKey('pwa-pay-open-checkout'),
       onPressed: url.isEmpty
           ? null
-          : () => ref.read(pwaExternalLauncherProvider).open(url),
+          : () => ref.read(pwaExternalLauncherProvider).openNewTab(url),
       icon: const Icon(Icons.open_in_new_rounded, size: 18),
-      // The colour is stated HERE, not left to `foregroundColor`. `pwaSans`
-      // defaults to ink, and an explicit style on the child beats the button's
-      // foreground — which is how the paywall's Buy buttons came to be black
-      // labels on black pills. The icon looked white because an Icon DOES read
-      // the foreground; only the text did not.
       label: Text(l.payContinueToAba,
           style: pwaSans(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: Colors.white)),
+              fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
       style: FilledButton.styleFrom(
         backgroundColor: pwaInk,
         foregroundColor: Colors.white,
-        minimumSize: const Size.fromHeight(52),
+        minimumSize: const Size.fromHeight(46),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(PwaGap.radius),
         ),
@@ -439,12 +537,14 @@ class _ContinueToAbaButton extends ConsumerWidget {
   }
 }
 
-/// PayWay's own QR artwork, decoded from the base64 PNG it returned.
+/// ABA's payload, as pixels.
 ///
-/// Rendered from `qr_image` rather than drawn from `qr_string` on purpose: the
-/// image is what the gateway certified, it carries the KHQR branding a
-/// Cambodian payer looks for, and generating our own would mean shipping a QR
-/// encoder to redraw a payload we did not author.
+/// The image is rendered BY THE SERVER from the exact `qr_string` PayWay
+/// returned (`backend/pwa_qr.py`), because ABA hands the payment back as a
+/// string and never as an image on this rail. Nothing here parses, rebuilds or
+/// decorates it: no logo in the middle, no rounded modules, no colour. If the
+/// image is missing the payload itself is shown rather than a placeholder that
+/// pretends to be a code.
 class _QrPanel extends StatelessWidget {
   const _QrPanel({required this.payment});
 
@@ -455,7 +555,7 @@ class _QrPanel extends StatelessWidget {
     final bytes = _decode(payment.qrImage);
     return Center(
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(PwaGap.radius),

@@ -79,7 +79,12 @@ List<String> pwaWorkingPhasesFor(
     case PwaWorkKind.conversation:
       return l10n == null ? kPwaConversationPhases : <String>[l10n.thinking];
     case PwaWorkKind.firstVision:
-      return l10n == null ? kPwaFirstVisionPhases : l10n.workInitialPhases;
+      // iOS's own choice for this exact beat: `widget.iteration > 1 ?
+      // l10n.genRefinePhrases : l10n.genInitPhrases` (chat_screen.dart:3661).
+      // The first vision speaks the shared dictionary's seven approved
+      // sentences — the same ones the phone says, already translated — rather
+      // than the web's shorter four. Refine and switch keep their own.
+      return l10n == null ? kPwaFirstVisionPhases : l10n.shared.genInitPhrases;
     case PwaWorkKind.refine:
       return l10n == null ? kPwaRefinePhases : l10n.workRefinePhases;
     case PwaWorkKind.switchAtmosphere:
@@ -186,16 +191,24 @@ class _PwaWorkingIndicatorState extends State<PwaWorkingIndicator>
         ),
         const SizedBox(width: 10),
         // The phase change is a cross-fade, so the line never "jumps".
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 420),
-          child: Text(
-            label,
-            key: ValueKey(label),
-            style: TextStyle(
-              fontSize: 13.5,
-              height: 1.35,
-              color: fg.withValues(alpha: 0.82),
-              fontWeight: FontWeight.w500,
+        //
+        // Flexible, because the sentence is a dictionary entry and the caller
+        // decides how much room it gets: the shared `genInitPhrases` are
+        // longer than the web's own four, and one of them overflowed the
+        // in-session card on a 390dp phone. It wraps now rather than running
+        // off the side, in every language.
+        Flexible(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 420),
+            child: Text(
+              label,
+              key: ValueKey(label),
+              style: TextStyle(
+                fontSize: 13.5,
+                height: 1.35,
+                color: fg.withValues(alpha: 0.82),
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ),

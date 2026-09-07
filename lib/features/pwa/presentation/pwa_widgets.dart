@@ -15,6 +15,7 @@ import '../../../core/media/ayden_image_source.dart';
 import '../../../shared/widgets/reveal_hero.dart';
 import '../domain/pwa_models.dart';
 import 'pwa_brand.dart';
+import 'pwa_render_aspect.dart';
 import 'pwa_stored_image.dart';
 import 'pwa_theme.dart';
 import 'pwa_type.dart';
@@ -117,8 +118,11 @@ Widget pwaBeforeImage(
       : pwaBeforeReference(vision, versions, project);
   final isOriginal = reference == project.originalAsset;
   if (source != null && isOriginal) {
-    return Image.memory(source.bytes, fit: BoxFit.cover,
-        errorBuilder: _imgFallback);
+    return PwaMemoryImage(
+      bytes: source.bytes,
+      aspectKey: kPwaSourceAspectKey,
+      errorBuilder: _imgFallback,
+    );
   }
   return PwaStoredImage(
     key: ValueKey('before-${project.projectId}-$reference'),

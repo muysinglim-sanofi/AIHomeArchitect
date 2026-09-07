@@ -272,23 +272,23 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('every atmosphere in the catalogue is in the carousel', (
+  testWidgets('every atmosphere in the catalogue is offered', (
     tester,
   ) async {
     final c = await _pumpEntry(tester, size: const Size(1440, 900));
     await _enterWorkspace(tester);
-    // The carousel is a PageView, so only the pages near the viewport are
-    // BUILT — the same laziness iOS has. Asserting `findsOneWidget` per id
-    // would therefore test the scroll position, not the catalogue. The
-    // catalogue is `itemCount`, and it is what must stay whole: Nordic Warmth
+    // Step 3 is a GRID now, at the room cards' own footprint — the page-snapped
+    // carousel put one 274dp card on a phone with the next one sliced in half.
+    // The catalogue is what must stay whole either way: Nordic Warmth
     // included, not behind a disclosure, exactly as before Phase 3.
     final ids = c.read(pwaControllerProvider).atmospheres.map((a) => a.id);
     expect(ids, containsAll(kPwaPopularAtmosphereIds));
-    final pager = tester.widget<PageView>(find.byType(PageView));
+    final grid = tester.widget<GridView>(
+        find.byKey(const ValueKey('pwa-create-atmospheres')));
     expect(
-      (pager.childrenDelegate as SliverChildBuilderDelegate).childCount,
+      (grid.childrenDelegate as SliverChildListDelegate).children.length,
       ids.length,
-      reason: 'the carousel must offer the whole catalogue',
+      reason: 'the picker must offer the whole catalogue',
     );
     // Ayden Signature leads and is the default, as on the phone.
     expect(

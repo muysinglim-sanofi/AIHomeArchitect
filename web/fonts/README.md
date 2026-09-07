@@ -53,3 +53,49 @@ offline, and without contacting anyone.
 Latin text is unaffected. The family is registered as a **fallback**, never as
 the primary family, so English and French keep the exact typography they had —
 only code points no other font covers reach it.
+
+## The paywall's two faces — Playfair Display and Great Vibes
+
+Added for Round 2.1, on the same terms and by the same mechanism.
+
+`PlayfairDisplay-Latin.ttf` — 300 724 bytes, variable (`wght`).
+
+* Family: `Playfair Display`
+* Copyright 2017 The Playfair Display Project Authors
+  (<https://github.com/clauseggers/Playfair-Display>), Reserved Font Name
+  "Playfair Display"
+* **SIL Open Font License 1.1** — recorded in the font's own `name` table
+  (ID 13 = the licence text, ID 14 = `http://scripts.sil.org/OFL`), verified by
+  reading the table, and copied beside it as `OFL-PlayfairDisplay.txt`.
+* Source: `google/fonts`, `ofl/playfairdisplay/PlayfairDisplay[wght].ttf`.
+
+`GreatVibes-Regular.ttf` — 457 588 bytes, static regular.
+
+* Family: `Great Vibes`
+* Copyright 2015 The Great Vibes Pro Project Authors
+  (<https://github.com/googlefonts/great-vibes>)
+* **SIL Open Font License 1.1** — same evidence: name table IDs 13/14
+  (`https://openfontlicense.org`), plus `OFL-GreatVibes.txt`.
+* Source: `google/fonts`, `ofl/greatvibes/GreatVibes-Regular.ttf`.
+
+OFL 1.1 §2 permits redistribution of the font software, bundled or standalone,
+provided the licence travels with it. It does here twice over: as the `OFL-*.txt`
+files, and inside the fonts' own name tables, where it cannot drift from the
+binary it describes. Neither face is sold, and neither is renamed (§3/§4).
+
+### Why these two, and only on the paywall
+
+iOS composes the paywall headline in Playfair Display with a Great Vibes accent
+word (`features/paywall/paywall_sheet.dart`). Round 2 substituted the product's
+own Cormorant, which was honest but not parity. These are the real faces, and a
+test (`PAY27`) fails if Great Vibes is ever used anywhere else in the product
+just because it is now available.
+
+### Why they are NOT awaited at boot
+
+`loadPwaFonts()` (Inter + Cormorant, ~300 KB) is awaited before the first paint
+because a face that arrives late causes a visible reflow on CanvasKit. These two
+are ~750 KB and belong to ONE surface that is never the first screen, so
+`loadPwaPaywallFonts()` is started at boot and deliberately not awaited: no
+visitor pays a boot cost for a screen most of them never open, and they land
+long before the paywall can be reached.

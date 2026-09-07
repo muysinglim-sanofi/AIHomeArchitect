@@ -1,0 +1,105 @@
+Sanitised network proof — ABA PayWay plugin, post-whitelist retest, 2026-09-07 (UTC)
+Source: CDP Network.requestWillBeSent / responseReceived recorder (no bodies, no headers captured).
+Sessions: e2e-mobile-* = iPhone UA emulation 390x844 (Chrome instance 1, user …f5cb4b);
+          e2e-desktop-1 = Windows Chrome 152 UA, 1440x900, separate profile (Chrome instance 2, user …a242eb).
+Site https://preprod.aydenstudio.com, API https://ayden-api-staging.fly.dev, PayWay SANDBOX only.
+Query strings stripped; PayWay checkout tokens redacted as <opaque>; polls collapsed to counts.
+Note: the iframe's POST purchase shows status None because its 302 is carried by the next hop
+      (GET /checkout/<opaque> 200) — Chrome reuses the request id across the redirect.
+
+==============================================================================
+e2e-mobile-2.jsonl
+hosts: {'ayden-api-staging.fly.dev': 203, 'www.google-analytics.com': 2, 'www.google.com': 8, 'www.gstatic.com': 4, 'preprod.aydenstudio.com': 20, '?': 2, 'fonts.gstatic.com': 2, 'checkout.payway.com.kh': 4, 'accounts.google.com': 1, 'eedcahzekpgxvvfxufbk.supabase.co': 1}
+PRODUCTION HOSTS HIT: none
+-- key events (UTC, method host path [frame] status):
+  GET     checkout.payway.com.kh           /plugins/checkout2-0.js                                      [top] 200
+  GET     checkout.payway.com.kh           /plugins/bs.js                                               [top] 200
+  GET     checkout.payway.com.kh           /plugins/bridge.js                                           [top] 200
+  GET     checkout.payway.com.kh           /plugins/checkout.prod.js                                    [top] 200
+  GET     ayden-api-staging.fly.dev        /pwa/staging/entitlement                                     [top] 200
+  GET     ayden-api-staging.fly.dev        /pwa/staging/payments/open                                   [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/entitlement                                     [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/payments/open                                   [top] 200
+  polls GET /pwa/staging/payments/order/A200c5a239fd27081140: n=198 (recorder has no timestamps; cadence measured from DB check_count deltas)
+-- raw records to the PayWay sandbox host (method, path, frame, hasPostData, status):
+==============================================================================
+e2e-mobile-3.jsonl
+hosts: {'preprod.aydenstudio.com': 23, 'checkout.payway.com.kh': 6, 'fonts.gstatic.com': 3, 'accounts.google.com': 1, 'eedcahzekpgxvvfxufbk.supabase.co': 4, 'www.google-analytics.com': 7, 'ayden-api-staging.fly.dev': 267, 'checkout-sandbox.payway.com.kh': 4, 'www.googletagmanager.com': 1}
+PRODUCTION HOSTS HIT: none
+-- key events (UTC, method host path [frame] status):
+  GET     checkout.payway.com.kh           /plugins/checkout2-0.js                                      [top] 200
+  GET     checkout.payway.com.kh           /plugins/bs.js                                               [top] 200
+  GET     checkout.payway.com.kh           /plugins/bridge.js                                           [top] 200
+  GET     checkout.payway.com.kh           /plugins/checkout.prod.js                                    [top] 200
+  GET     ayden-api-staging.fly.dev        /pwa/staging/entitlement                                     [top] 200
+  GET     ayden-api-staging.fly.dev        /pwa/staging/payments/open                                   [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/entitlement                                     [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/payments/open                                   [top] 200
+  POST    ayden-api-staging.fly.dev        /pwa/staging/payments/checkout/plugin                        [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/payments/checkout/plugin                        [top] 200
+  GET     checkout.payway.com.kh           /images/payway-logo-white.svg                                [top] 200
+  POST    checkout-sandbox.payway.com.kh   /api/payment-gateway/v1/payments/purchase                    [iframe] None
+  GET     checkout-sandbox.payway.com.kh   /checkout/<opaque>                                           [iframe] 200
+  POST    ayden-api-staging.fly.dev        /pwa/staging/payments/order/A883bf3bbd1033a06317/cancel      [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/payments/order/A883bf3bbd1033a06317/cancel      [top] 200
+  POST    ayden-api-staging.fly.dev        /pwa/staging/payments/order/A883bf3bbd1033a06317/cancel      [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/payments/order/A883bf3bbd1033a06317/cancel      [top] 200
+  GET     ayden-api-staging.fly.dev        /pwa/staging/entitlement                                     [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/entitlement                                     [top] 200
+  POST    ayden-api-staging.fly.dev        /pwa/staging/payments/checkout/plugin                        [top] 200
+  GET     checkout.payway.com.kh           /images/payway-logo-white.svg                                [top] 200
+  POST    checkout-sandbox.payway.com.kh   /api/payment-gateway/v1/payments/purchase                    [iframe] None
+  GET     checkout-sandbox.payway.com.kh   /checkout/<opaque>                                           [iframe] 200
+  polls GET /pwa/staging/payments/order/A883bf3bbd1033a06317: n=36 (recorder has no timestamps; cadence measured from DB check_count deltas)
+  polls GET /pwa/staging/payments/order/Ab5f73e6a390aa3e8b08: n=215 (recorder has no timestamps; cadence measured from DB check_count deltas)
+-- raw records to the PayWay sandbox host (method, path, frame, hasPostData, status):
+  POST    /api/payment-gateway/v1/payments/purchase                    [iframe] post=True None
+  GET     /checkout/<opaque>                                           [iframe] post=False 200
+  POST    /api/payment-gateway/v1/payments/purchase                    [iframe] post=True None
+  GET     /checkout/<opaque>                                           [iframe] post=False 200
+==============================================================================
+e2e-mobile-4.jsonl
+hosts: {'ayden-api-staging.fly.dev': 198, 'www.google-analytics.com': 3, 'eedcahzekpgxvvfxufbk.supabase.co': 2}
+PRODUCTION HOSTS HIT: none
+-- key events (UTC, method host path [frame] status):
+  polls GET /pwa/staging/payments/order/Ab5f73e6a390aa3e8b08: n=197 (recorder has no timestamps; cadence measured from DB check_count deltas)
+-- raw records to the PayWay sandbox host (method, path, frame, hasPostData, status):
+==============================================================================
+e2e-desktop-1.jsonl
+hosts: {'preprod.aydenstudio.com': 24, 'checkout.payway.com.kh': 10, 'fonts.gstatic.com': 3, 'accounts.google.com': 1, 'www.google-analytics.com': 4, 'eedcahzekpgxvvfxufbk.supabase.co': 4, 'ayden-api-staging.fly.dev': 50, 'checkout-sandbox.payway.com.kh': 4, 'www.googletagmanager.com': 1}
+PRODUCTION HOSTS HIT: none
+-- key events (UTC, method host path [frame] status):
+  GET     checkout.payway.com.kh           /plugins/checkout2-0.js                                      [top] 200
+  GET     checkout.payway.com.kh           /plugins/bs.js                                               [top] 200
+  GET     checkout.payway.com.kh           /plugins/bridge.js                                           [top] 200
+  GET     checkout.payway.com.kh           /plugins/checkout.prod.js                                    [top] 200
+  GET     ayden-api-staging.fly.dev        /pwa/staging/entitlement                                     [top] 200
+  GET     ayden-api-staging.fly.dev        /pwa/staging/payments/open                                   [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/entitlement                                     [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/payments/open                                   [top] 200
+  POST    ayden-api-staging.fly.dev        /pwa/staging/payments/checkout/plugin                        [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/payments/checkout/plugin                        [top] 200
+  GET     checkout.payway.com.kh           /images/loading.svg                                          [top] 200
+  GET     checkout.payway.com.kh           /images/payway-logo-white.svg                                [top] 200
+  GET     checkout.payway.com.kh           /images/checkout_cross.svg                                   [top] 200
+  POST    checkout-sandbox.payway.com.kh   /api/payment-gateway/v1/payments/purchase                    [iframe] None
+  GET     checkout-sandbox.payway.com.kh   /checkout/<opaque>                                           [iframe] 200
+  POST    ayden-api-staging.fly.dev        /pwa/staging/payments/order/A2f03c07eefe8285e794/cancel      [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/payments/order/A2f03c07eefe8285e794/cancel      [top] 200
+  POST    ayden-api-staging.fly.dev        /pwa/staging/payments/order/A2f03c07eefe8285e794/cancel      [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/payments/order/A2f03c07eefe8285e794/cancel      [top] 200
+  POST    ayden-api-staging.fly.dev        /pwa/staging/payments/checkout/plugin                        [top] 200
+  GET     checkout.payway.com.kh           /images/loading.svg                                          [top] 200
+  GET     checkout.payway.com.kh           /images/payway-logo-white.svg                                [top] 200
+  GET     checkout.payway.com.kh           /images/checkout_cross.svg                                   [top] 200
+  POST    checkout-sandbox.payway.com.kh   /api/payment-gateway/v1/payments/purchase                    [iframe] None
+  GET     checkout-sandbox.payway.com.kh   /checkout/<opaque>                                           [iframe] 200
+  POST    ayden-api-staging.fly.dev        /pwa/staging/payments/order/A9503c856b1c453648ed/cancel      [top] 200
+  OPTIONS ayden-api-staging.fly.dev        /pwa/staging/payments/order/A9503c856b1c453648ed/cancel      [top] 200
+  polls GET /pwa/staging/payments/order/A2f03c07eefe8285e794: n=31 (recorder has no timestamps; cadence measured from DB check_count deltas)
+  polls GET /pwa/staging/payments/order/A9503c856b1c453648ed: n=4 (recorder has no timestamps; cadence measured from DB check_count deltas)
+-- raw records to the PayWay sandbox host (method, path, frame, hasPostData, status):
+  POST    /api/payment-gateway/v1/payments/purchase                    [iframe] post=True None
+  GET     /checkout/<opaque>                                           [iframe] post=False 200
+  POST    /api/payment-gateway/v1/payments/purchase                    [iframe] post=True None
+  GET     /checkout/<opaque>                                           [iframe] post=False 200

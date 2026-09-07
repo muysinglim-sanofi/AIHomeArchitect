@@ -45,7 +45,6 @@ Future<ProviderContainer> _pumpToArchitect(
   final controller = container.read(pwaControllerProvider.notifier);
   controller.setSource(_fakeSource()); // no room / atmosphere chosen
   await controller.generateFirstVision();
-  controller.continueToArchitect();
   await tester.pump(); // rebuild → architect
   await tester.pump(
     const Duration(seconds: 3),

@@ -167,7 +167,10 @@ void main() {
         c.setSource(_src(const [9, 9, 9]));
         final fut = c
             .generateFirstVision(); // do NOT await: inspect the loading tick
-        expect(c.state.phase, PwaPhase.loading);
+        // The session opens IMMEDIATELY and the work runs inside it, so the
+        // loading tick is the Architect — with nothing in it yet, which is
+        // exactly what this test is about.
+        expect(c.state.phase, PwaPhase.architect);
         expect(c.state.versions, isEmpty);
         expect(c.state.currentVision, isNull);
         expect(c.state.previewedVision, isNull); // nothing stale to paint
@@ -183,7 +186,6 @@ void main() {
         final replaced = _src(const [7, 7, 7]);
         c.setSource(replaced);
         await c.generateFirstVision();
-        c.continueToArchitect();
         expect(c.state.phase, PwaPhase.architect);
         expect(c.state.activeProjectId, draftId);
         expect(c.state.previewedVision, isNotNull);

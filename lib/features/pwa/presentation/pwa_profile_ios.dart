@@ -38,8 +38,10 @@ import '../l10n/pwa_l10n.dart';
 import 'hero/pwa_hero_sequence.dart';
 import 'hero/pwa_hero_video.dart';
 import 'pwa_account_sheet.dart';
+import 'pwa_external_links.dart';
 import 'pwa_nav_shell.dart';
 import 'pwa_paywall.dart';
+import 'pwa_profile_sheets.dart';
 import 'pwa_primitives.dart';
 import 'pwa_scaffold.dart';
 import 'pwa_theme.dart';
@@ -103,19 +105,71 @@ class PwaProfileIos extends ConsumerWidget {
                     key: const ValueKey('pwa-profile-save-work'),
                     label: l.accountTitle,
                     onPressed: () async {
-                      final ok = await showPwaAccountSheet(context);
-                      if (ok) {
-                        // A new identity is a different entitlement. Ask again;
-                        // never carry the old answer forward. (Same call the
-                        // account chip makes — one behaviour, two entries.)
-                        await ref
-                            .read(pwaEntitlementProvider.notifier)
-                            .onIdentityChanged();
-                      }
+                      // The sheet OWNS the post-authentication hydration
+                      // now — identity, entitlement and library all settle
+                      // before it closes. Refreshing again here would be a
+                      // second network round trip for an answer already on
+                      // screen, and the version that mattered (the one that
+                      // ran only when a particular button was pressed) is
+                      // exactly the hole this replaced.
+                      await showPwaAccountSheet(context);
                     },
+                  ),
+                  // The RETURNING user. "Save your work" is the right sentence
+                  // for someone who has just made something and has nowhere to
+                  // keep it; it is the wrong one for someone whose work is
+                  // already on a server and who is simply on a new browser.
+                  // Both journeys already existed — only the second had no
+                  // door, reachable only by being told an address was taken.
+                  // Secondary by design: the guest in front of us is far more
+                  // often new than returning, and iOS keeps the same hierarchy
+                  // (a primary create, a secondary `acctSignInExisting`).
+                  const SizedBox(height: PwaGap.sm),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          l.accountHaveOne,
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          style: PwaType.bodyMuted(),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      TextButton(
+                        key: const ValueKey('pwa-profile-sign-in'),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          minimumSize: const Size(0, 36),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () async {
+                          // The SIGN-IN journey, explicitly. It does not link,
+                          // does not merge and carries nothing from the guest —
+                          // that separation lives in PwaAuthService and is
+                          // untouched here; this only names which one is meant.
+                          await showPwaAccountSheet(context, signIn: true);
+                        },
+                        child: Text(
+                          l.accountSignInTitle,
+                          style: PwaType.bodyMuted(color: pwaGold)
+                              .copyWith(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
                 const SizedBox(height: PwaGap.lg),
+                // iOS's `_StatsRow`: one number, the finished redesigns. The
+                // web counts what Projects lists — a project with a vision —
+                // so Profile and Projects can never disagree about it.
+                PwaStatCard(
+                  key: const ValueKey('pwa-profile-stats'),
+                  value: '${ref.watch(pwaControllerProvider.select((s) => s.visibleProjects.length))}',
+                  label: l.shared.projectsCount,
+                ),
+                const SizedBox(height: PwaGap.md),
                 const _WalletRow(),
                 const SizedBox(height: PwaGap.lg),
                 _SectionHeader(label: l.shared.settingsAccount),
@@ -126,7 +180,7 @@ class PwaProfileIos extends ConsumerWidget {
                       itemKey: const ValueKey('pwa-profile-language'),
                       icon: Icons.language,
                       label: l.shared.settingsLanguage,
-                      value: pwaLanguageEndonym(
+                      value: pwaLanguageFlagLabel(
                           ref.watch(localeProvider).languageCode),
                       onTap: () => _showLanguageSheet(context, ref),
                     ),
@@ -135,6 +189,12 @@ class PwaProfileIos extends ConsumerWidget {
                 const SizedBox(height: PwaGap.lg),
                 _SectionHeader(label: l.shared.settingsSupport),
                 const SizedBox(height: PwaGap.sm),
+                // iOS's SUPPORT card is Help Center · Rate the App · About,
+                // and its ACCOUNT card also carries Privacy. Here: the guide
+                // that already exists, iOS's Help Center (FAQ + support),
+                // Privacy — the PUBLISHED policy, not iOS's in-app summary
+                // with its "coming soon" — and About. Rate the App is an App
+                // Store action and has no web meaning; it is not imitated.
                 _SettingsCard(
                   items: [
                     _SettingItem(
@@ -142,6 +202,25 @@ class PwaProfileIos extends ConsumerWidget {
                       icon: Icons.play_circle_outline,
                       label: l.seeHowItWorks,
                       onTap: () => showPwaGuide(context),
+                    ),
+                    _SettingItem(
+                      itemKey: const ValueKey('pwa-profile-help'),
+                      icon: Icons.help_outline,
+                      label: l.shared.helpCenter,
+                      onTap: () => showPwaHelpCenter(context),
+                    ),
+                    _SettingItem(
+                      itemKey: const ValueKey('pwa-profile-privacy'),
+                      icon: Icons.lock_outline,
+                      label: l.shared.privacy,
+                      external: true,
+                      onTap: () => ref.read(pwaLinkOpenerProvider)(kPwaPrivacyUrl),
+                    ),
+                    _SettingItem(
+                      itemKey: const ValueKey('pwa-profile-about'),
+                      icon: Icons.info_outline,
+                      label: l.shared.about,
+                      onTap: () => showPwaAbout(context),
                     ),
                   ],
                 ),
@@ -156,9 +235,10 @@ class PwaProfileIos extends ConsumerWidget {
                         destructive: true,
                         onTap: () async {
                           await authController.signOut();
-                          await ref
-                              .read(pwaEntitlementProvider.notifier)
-                              .onIdentityChanged();
+                          // Signing out IS a change of user: the previous
+                          // account's projects must not stay in the library.
+                          await pwaHydrateForIdentity(ref,
+                              switchedUser: true);
                         },
                       ),
                     ],
@@ -268,17 +348,25 @@ class _IdentityCard extends StatelessWidget {
 
 /// What the wallet row says, for a given answer from the server.
 ///
-/// Keyed on the STATE, which is the backend's own discriminator — the same
-/// shape iOS's status card takes off `access_source`. Reading the counters
-/// instead is how the first cut of this row told a free Guest they held
-/// "1 Spaces restants": true arithmetic, wrong sentence, and a Space is a paid
-/// thing. Every sentence here already existed; none is composed locally.
+/// Keyed on the STATE — the backend's own discriminator, the same shape iOS's
+/// status card takes off `access_source` — because the state says WHY access
+/// was granted, and a Space is a paid thing that a free vision must never be
+/// called. Every sentence here already existed; none is composed locally.
+///
+/// But the state answers "why", not "how many", and `freeAvailable` means only
+/// "granted from the non-pass bucket". A canonical ADMIN adjustment lands in
+/// exactly that bucket, so an account holding 300 credits was being told it
+/// held "1 free vision" — the state was right and the sentence was a constant.
+/// The balance therefore comes off `creditsAvailable`, the server's own
+/// `credits_available`, and only the SINGLE welcome vision keeps its name.
 ///
 /// A `switch` rather than an if-chain so a new billing state is a compile error
 /// rather than a blank line in front of a paying customer.
 String pwaWalletSentence(PwaL10n l, PwaEntitlement e) => switch (e.state) {
       PwaBillingState.loading => '',
-      PwaBillingState.freeAvailable => l.freeVisionAvailable,
+      PwaBillingState.freeAvailable => e.creditsAvailable > 1
+          ? l.passSpacesLeft(e.creditsAvailable)
+          : l.freeVisionAvailable,
       PwaBillingState.freeExhausted => l.billingFreeExhausted,
       PwaBillingState.passActive => l.passSpacesLeft(e.creditsAvailable),
       PwaBillingState.passExhausted => l.billingPassExhausted,
@@ -344,6 +432,19 @@ class _WalletRow extends ConsumerWidget {
                     Text(l.yourSpaces, style: pwaEyebrow()),
                     const SizedBox(height: 3),
                     Text(value, style: PwaType.subsectionTitle()),
+                    // A WEB addition, on purpose, over iOS. iOS has no such
+                    // line because its store handles top-ups; here the only
+                    // way to more Spaces is this sheet, and the row alone did
+                    // not say it could be opened. It changes no gating: a
+                    // person with Spaces generates exactly as before and is
+                    // never sent here — they may simply choose to come.
+                    const SizedBox(height: 6),
+                    Text(
+                      l.getMoreSpaces,
+                      key: const ValueKey('pwa-profile-get-spaces'),
+                      style: PwaType.bodyMuted(color: pwaGold)
+                          .copyWith(fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
               ),
@@ -381,6 +482,7 @@ class _SettingItem {
     required this.onTap,
     this.value,
     this.destructive = false,
+    this.external = false,
   });
 
   final Key itemKey;
@@ -389,6 +491,10 @@ class _SettingItem {
   final String? value;
   final VoidCallback onTap;
   final bool destructive;
+
+  /// Opens a page outside the app (a new tab). The trailing glyph says so,
+  /// where iOS's chevron promises a sheet.
+  final bool external;
 }
 
 class _SettingsCard extends StatelessWidget {
@@ -432,8 +538,13 @@ class _SettingsCard extends StatelessWidget {
                         if (items[i].value != null)
                           Text(items[i].value!, style: PwaType.bodyMuted()),
                         const SizedBox(width: 4),
-                        const Icon(Icons.chevron_right,
-                            color: AppColors.textTertiary, size: 20),
+                        Icon(
+                          items[i].external
+                              ? Icons.open_in_new
+                              : Icons.chevron_right,
+                          color: AppColors.textTertiary,
+                          size: items[i].external ? 18 : 20,
+                        ),
                       ],
                     ),
               onTap: items[i].onTap,
@@ -499,10 +610,27 @@ Future<void> _showLanguageSheet(BuildContext context, WidgetRef ref) {
             for (final code in const ['km', 'en', 'fr'])
               ListTile(
                 key: ValueKey('pwa-profile-lang-$code'),
-                title: Text(pwaLanguageEndonym(code), style: PwaType.body()),
-                trailing: current.languageCode == code
-                    ? const Icon(Icons.check_rounded, color: pwaGold)
-                    : null,
+                // The flag sits in a fixed-width slot so the three names line
+                // up whatever the glyph's advance; the check keeps its own
+                // slot on the right, so choosing a row moves nothing.
+                leading: SizedBox(
+                  width: 28,
+                  child: Text(
+                    pwaLanguageFlag(code),
+                    key: ValueKey('pwa-profile-lang-flag-$code'),
+                    style: const TextStyle(fontSize: 20, height: 1),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                minLeadingWidth: 28,
+                horizontalTitleGap: 10,
+                title: Text(pwaLanguageShortName(code), style: PwaType.body()),
+                trailing: SizedBox(
+                  width: 24,
+                  child: current.languageCode == code
+                      ? const Icon(Icons.check_rounded, color: pwaGold)
+                      : null,
+                ),
                 onTap: () {
                   ref.read(localeProvider.notifier).setLocale(Locale(code));
                   Navigator.of(sheetContext).pop();

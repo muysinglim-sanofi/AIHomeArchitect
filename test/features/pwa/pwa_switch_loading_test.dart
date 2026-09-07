@@ -47,7 +47,6 @@ Future<(PwaController, PwaFakeGenerationService)> _session({
   c.selectRoom('livingRoom');
   c.setSource(_source());
   await c.generateFirstVision();
-  c.continueToArchitect();
   gen.calls.clear(); // the first vision is setup, not the call under test
   gen.delay = hold; // the next generation stays in flight
   return (c, gen);

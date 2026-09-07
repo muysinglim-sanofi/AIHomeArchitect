@@ -302,13 +302,21 @@ void main() {
       await _pumpPaywall(tester);
       // The badge is a machine code from the catalogue; the default is the row
       // the CATALOGUE marks, not a row this file picked.
-      final cta = tester.widget<PwaPrimaryButton>(
+      final cta = tester.widget<PwaGoldCta>(
           find.byKey(const ValueKey('pwa-paywall-continue')));
       expect(cta.label, contains(r'$7.99'));
 
-      await tester.tap(find.byKey(const ValueKey('pwa-pack-pack_300')));
+      // The sheet is taller now that it carries the cinematic hero, so the
+      // third card can start below the fold in a test viewport. Scroll to it
+      // the way a reader does rather than tapping at coordinates it does not
+      // occupy — a missed tap would have read as "selection does nothing".
+      final pack300 = find.byKey(const ValueKey('pwa-pack-pack_300'));
+      await tester.scrollUntilVisible(pack300, 240,
+          scrollable: find.byType(Scrollable).first, maxScrolls: 30);
       await tester.pumpAndSettle();
-      final after = tester.widget<PwaPrimaryButton>(
+      await tester.tap(pack300);
+      await tester.pumpAndSettle();
+      final after = tester.widget<PwaGoldCta>(
           find.byKey(const ValueKey('pwa-paywall-continue')));
       expect(after.label, contains(r'$47.99'));
       expect(tester.takeException(), isNull);
@@ -319,8 +327,13 @@ void main() {
       await _pumpPaywall(tester);
       // The old screen put a Buy button on every row — and painted the label
       // ink-on-ink, so each read as an empty black rectangle.
-      expect(find.byType(PwaPrimaryButton), findsOneWidget);
-      final label = tester.widget<PwaPrimaryButton>(
+      expect(find.byType(PwaGoldCta), findsOneWidget);
+      // …and the product's INK pill is nowhere on this surface: it is the
+      // cream-canvas button, and the paywall is the one dark screen that
+      // sells something. A black pill here was the generic-web-pricing
+      // look the phone review rejected.
+      expect(find.byType(PwaPrimaryButton), findsNothing);
+      final label = tester.widget<PwaGoldCta>(
           find.byKey(const ValueKey('pwa-paywall-continue')));
       expect(label.label.trim(), isNotEmpty);
 
@@ -337,7 +350,7 @@ void main() {
       await _pumpPaywall(tester, entitlement: _exhausted(configured: false));
       final l = pwaL10nFor(const Locale('en'));
       expect(find.text(l.paywallUnavailableTitle), findsOneWidget);
-      final cta = tester.widget<PwaPrimaryButton>(
+      final cta = tester.widget<PwaGoldCta>(
           find.byKey(const ValueKey('pwa-paywall-continue')));
       expect(cta.onPressed, isNull,
           reason: 'an offer that cannot complete is worse than none');
@@ -348,7 +361,7 @@ void main() {
       // Structural: the CTA carries the selected product, and the payment
       // controller's entry point takes `sku`. Nothing in this file formats a
       // number into a request — the server resolves the amount from the sku.
-      final cta = tester.widget<PwaPrimaryButton>(
+      final cta = tester.widget<PwaGoldCta>(
           find.byKey(const ValueKey('pwa-paywall-continue')));
       expect(cta.label, contains(r'$'),
           reason: 'the price is DISPLAYED…');

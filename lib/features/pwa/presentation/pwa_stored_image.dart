@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/pwa_controller.dart';
 import '../data/pwa_image_url_resolver.dart';
+import 'pwa_render_aspect.dart';
 
 class PwaStoredImage extends ConsumerStatefulWidget {
   const PwaStoredImage({
@@ -26,7 +27,18 @@ class PwaStoredImage extends ConsumerStatefulWidget {
     required this.reference,
     required this.placeholderColor,
     this.fit = BoxFit.cover,
+    this.builder,
   });
+
+  /// Wrap the picture with something that needs its PROVIDER — iOS's canvas
+  /// derives a blurred ambient copy from the same provider the picture is
+  /// drawn with, so the two decode once. Called on EVERY build: with the
+  /// provider and the ready-made `Image` once the reference is resolvable,
+  /// and with `null` and the placeholder while it is being signed or when it
+  /// cannot be — so whatever the caller lays out around the picture (a
+  /// before/after slider, a caption) never disappears with the signature.
+  final Widget Function(
+      BuildContext context, ImageProvider? provider, Widget image)? builder;
 
   /// A durable Storage path, or a bundle asset path.
   final String reference;
@@ -109,16 +121,27 @@ class _PwaStoredImageState extends ConsumerState<PwaStoredImage> {
   @override
   Widget build(BuildContext context) {
     if (!pwaIsStoragePath(widget.reference)) {
-      return Image.asset(
-        widget.reference,
+      final asset = AssetImage(widget.reference);
+      pwaRecordAspect(ref, asset, widget.reference);
+      final image = Image(
+        image: asset,
         fit: widget.fit,
         errorBuilder: (_, _, _) => _placeholder,
       );
+      return widget.builder?.call(context, asset, image) ?? image;
     }
     final url = _url;
-    if (_failed || url == null) return _placeholder;
-    return Image.network(
-      url,
+    if (_failed || url == null) {
+      return widget.builder?.call(context, null, _placeholder) ?? _placeholder;
+    }
+    // The frame around this image asks `pwaRenderAspectsProvider` for its
+    // shape; this is where that shape is learnt — off the same decode the
+    // `Image` below performs, keyed by the durable reference so a re-signed
+    // URL does not count as a different picture.
+    final provider = NetworkImage(url);
+    pwaRecordAspect(ref, provider, widget.reference);
+    final image = Image(
+      image: provider,
       fit: widget.fit,
       errorBuilder: (_, _, _) {
         _resignOnce();
@@ -127,5 +150,6 @@ class _PwaStoredImageState extends ConsumerState<PwaStoredImage> {
       loadingBuilder: (context, child, progress) =>
           progress == null ? child : _placeholder,
     );
+    return widget.builder?.call(context, provider, image) ?? image;
   }
 }

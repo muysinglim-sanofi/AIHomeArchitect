@@ -36,7 +36,12 @@ import 'dart:js_interop';
 import 'package:flutter/services.dart';
 import 'package:web/web.dart' as web;
 
-import '../presentation/pwa_type.dart' show kPwaDisplayFamily, kPwaTextFamily;
+import '../presentation/pwa_type.dart'
+    show
+        kPwaDisplayFamily,
+        kPwaPaywallDisplayFamily,
+        kPwaPaywallScriptFamily,
+        kPwaTextFamily;
 
 /// Relative on purpose: the PWA is served from the origin root in staging but
 /// must keep working under a sub-path, and an absolute `/fonts/...` would break
@@ -44,6 +49,26 @@ import '../presentation/pwa_type.dart' show kPwaDisplayFamily, kPwaTextFamily;
 const Map<String, String> _kFontFiles = {
   kPwaDisplayFamily: 'fonts/CormorantGaramond-Latin.ttf',
   kPwaTextFamily: 'fonts/Inter-Latin.ttf',
+};
+
+/// The two faces the PAYWALL headline is set in, and nowhere else.
+///
+/// iOS composes that headline in Playfair Display with a Great Vibes accent
+/// word (`paywall_sheet.dart`), and those are the only two places either face
+/// appears in the product. Both are SIL OFL 1.1 — see `web/fonts/README.md`
+/// and the `OFL-*.txt` beside the files — so bundling and serving them is
+/// exactly what the licence is for.
+///
+/// LOADED SEPARATELY, AND NOT AWAITED. The product faces are awaited before the
+/// first paint because a face that arrives late causes a visible reflow on
+/// CanvasKit. These two are ~750 KB and belong to ONE surface that is never the
+/// first screen, so making every visitor wait for them would be paying a boot
+/// cost for a screen most of them never open. They are started at boot and land
+/// long before anyone can reach the paywall; if they somehow have not, the
+/// headline draws in the fallback chain and re-lays out when they do.
+const Map<String, String> _kPaywallFontFiles = {
+  kPwaPaywallDisplayFamily: 'fonts/PlayfairDisplay-Latin.ttf',
+  kPwaPaywallScriptFamily: 'fonts/GreatVibes-Regular.ttf',
 };
 
 /// Load and register the product typefaces.
@@ -61,6 +86,52 @@ Future<Set<String>> loadPwaFonts() async {
   return loaded;
 }
 
+/// The paywall's two faces. Same mechanism, same guarantees, not awaited.
+Future<Set<String>> loadPwaPaywallFonts() async {
+  final loaded = <String>{};
+  await Future.wait(_kPaywallFontFiles.entries.map((entry) async {
+    if (await _register(entry.key, entry.value)) loaded.add(entry.key);
+  }));
+  return loaded;
+}
+
+/// The family names `google_fonts` asks for, and why they are registered here.
+///
+/// The PWA reuses several FROZEN iOS widgets verbatim — the atmosphere card is
+/// the one a reader notices — and those state their type through
+/// `AppTheme.atmosphereTitle`, i.e. `GoogleFonts.cormorantGaramond(...)`.
+///
+/// MEASURED, not inferred (`google_fonts` 6.3.3, `google_fonts_base.dart:114`):
+///
+/// ```dart
+/// return textStyle.copyWith(
+///   fontFamily: familyWithVariant.toString(),   // "CormorantGaramond_500"
+///   fontFamilyFallback: <String>[fontFamily],   // ["CormorantGaramond"]
+/// );
+/// ```
+///
+/// The primary name is per-VARIANT and is only ever registered by the runtime
+/// fetch — which `pwaDisableRemoteFonts()` forbids, on purpose. That leaves the
+/// fallback, which names the family this file already registers… except
+/// `AppTheme.atmosphereTitle` ends with `.copyWith(fontFamilyFallback:
+/// khmerFallback)`, and `copyWith` REPLACES the list. So the one name that
+/// would have resolved was overwritten by the Khmer chain, and the card
+/// resolved to `sans-serif`: the right size, the right weight, the wrong face.
+///
+/// On iOS none of this shows, because there the fetch succeeds and registers
+/// the per-variant name. This is a WEB-ONLY consequence of a web-only rule.
+///
+/// Registering the same bytes under those names fixes every reused iOS widget
+/// at once, and touches no frozen file. The files are variable, so one file
+/// covers every weight; the alias only has to make the NAME resolve.
+const List<String> _kVariantSuffixes = [
+  'regular', 'italic',
+  '300', '300italic',
+  '500', '500italic',
+  '600', '600italic',
+  '700', '700italic',
+];
+
 Future<bool> _register(String family, String url) async {
   try {
     final response = await web.window.fetch(url.toJS).toDart;
@@ -73,9 +144,16 @@ Future<bool> _register(String family, String url) async {
     // chain would never be consulted.
     if (bytes.lengthInBytes < 4096) return false;
 
-    final loader = FontLoader(family)
-      ..addFont(Future<ByteData>.value(ByteData.sublistView(bytes)));
-    await loader.load();
+    // The product name first: everything the PWA writes itself asks for this.
+    final names = <String>[
+      family,
+      for (final v in _kVariantSuffixes) '${family}_$v',
+    ];
+    for (final name in names) {
+      final loader = FontLoader(name)
+        ..addFont(Future<ByteData>.value(ByteData.sublistView(bytes)));
+      await loader.load();
+    }
     return true;
   } catch (_) {
     // Deliberately silent about the reason and deliberately non-fatal.

@@ -15,7 +15,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../application/pwa_controller.dart';
 import '../auth/pwa_auth_controller.dart';
+import '../billing/pwa_entitlement_controller.dart';
 import '../auth/pwa_auth_service.dart';
 import '../auth/pwa_verification_channel.dart';
 import '../l10n/pwa_l10n.dart';
@@ -24,7 +26,18 @@ import 'pwa_widgets.dart' show pwaSerif;
 
 /// Opens the sheet. Returns true when the person ended up identified, so the
 /// caller (the paywall) can react without watching the provider itself.
-Future<bool> showPwaAccountSheet(BuildContext context) async {
+/// [signIn] opens on the RETURNING-USER journey rather than on "Save your
+/// work". The two are different operations, not two labels for one: linking
+/// attaches an address to the anonymous user in place and keeps their work,
+/// while signing in switches to an account that already exists and carries
+/// nothing over. A person opening Ayden in a fresh browser needs the second,
+/// and until now could only reach it by first being TOLD their address was
+/// taken — which meant typing an address into a screen offering to save work
+/// they had not done yet.
+Future<bool> showPwaAccountSheet(
+  BuildContext context, {
+  bool signIn = false,
+}) async {
   final done = await showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
@@ -33,13 +46,39 @@ Future<bool> showPwaAccountSheet(BuildContext context) async {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => const _PwaAccountSheet(),
+    builder: (_) => _PwaAccountSheet(signIn: signIn),
   );
   return done ?? false;
 }
 
+/// Make the app BE the current identity: entitlement, and — when the user
+/// itself changed — the project library.
+///
+/// One seam, three callers (verify, and the two sign-out entries). It used to
+/// be open-coded at each call site, entitlement only, and the library half was
+/// missing everywhere: signing out left the previous account's projects in the
+/// working library, and signing in never loaded the new account's at all.
+Future<void> pwaHydrateForIdentity(
+  WidgetRef ref, {
+  required bool switchedUser,
+}) async {
+  // A different identity is a different entitlement — always re-read, never
+  // carry the previous answer forward.
+  await ref.read(pwaEntitlementProvider.notifier).onIdentityChanged();
+  // …and a different USER owns different work. Not on a link: that keeps the
+  // same user, so the library is already correct, and resetting the session
+  // would throw away the work being saved.
+  if (switchedUser) {
+    await ref.read(pwaControllerProvider.notifier).reloadForIdentity();
+  }
+}
+
 class _PwaAccountSheet extends ConsumerStatefulWidget {
-  const _PwaAccountSheet();
+  const _PwaAccountSheet({this.signIn = false});
+
+  /// Which journey the sheet OPENS on. The caller decides, because the caller
+  /// is the one that knows which question was asked.
+  final bool signIn;
 
   @override
   ConsumerState<_PwaAccountSheet> createState() => _PwaAccountSheetState();
@@ -49,10 +88,47 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
   final _email = TextEditingController();
   final _code = TextEditingController();
 
-  /// The person chose to sign in to the existing account after being told the
-  /// address was taken. Held here, not in the service: it is a UI journey
-  /// choice, and the service must never infer it.
-  bool _signInMode = false;
+  /// The person chose to sign in to an existing account — either by opening
+  /// the sheet on that journey, or after being told the address was taken.
+  /// Held here, not in the service: it is a UI journey choice, and the service
+  /// must never infer it.
+  late bool _signInMode = widget.signIn;
+
+  /// Authentication has SUCCEEDED and the account's own state is being read.
+  ///
+  /// This is the whole of §4. The sheet used to hand back control the instant
+  /// `verifyOTP` returned, which put a verified email on screen beside the
+  /// previous identity's entitlement and the previous identity's (empty)
+  /// project library — a half-old, half-new account the person could see and
+  /// act on. Now nothing is handed back until identity, entitlement and
+  /// library have all settled.
+  bool _settling = false;
+
+  /// Verify the code, and — only if it worked — make the app be this account.
+  ///
+  /// The refresh used to be the CALLER's job, done after the sheet returned
+  /// `true`. That had two holes: the sheet returned `true` only from one
+  /// button, so dismissing it by swipe or barrier tap skipped the refresh
+  /// entirely; and even when it ran, it ran after the authenticated UI was
+  /// already on screen. Both are gone: the work happens here, before the sheet
+  /// closes, on every path that succeeds.
+  Future<void> _verifyAndSettle() async {
+    final auth = ref.read(pwaAuthProvider.notifier);
+    final destination = ref.read(pwaAuthProvider).destination;
+    await auth.submitCode(destination, _code.text);
+    if (!mounted) return;
+
+    final s = ref.read(pwaAuthProvider);
+    if (s.stage != PwaAuthStage.identified) return; // the code was refused
+
+    setState(() => _settling = true);
+    await pwaHydrateForIdentity(ref, switchedUser: s.switchedAccount);
+    if (!mounted) return;
+    // Authentication has succeeded and everything it changes has settled.
+    // There is nothing left to ask, so nothing is asked: the sheet closes
+    // itself and the person is returned to what they were doing.
+    Navigator.of(context).pop(true);
+  }
 
   @override
   void dispose() {
@@ -72,14 +148,21 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
     if (!controller.isAvailable) {
       body = _Message(title: l.accountTitle, body: l.authUnavailable);
     } else if (auth.stage == PwaAuthStage.identified) {
+      // SUCCESS — and therefore nothing to decide. This state used to offer a
+      // single button labelled `l.paywallClose`, which is the PAYWALL's "Not
+      // now": an invitation to postpone something that had already happened,
+      // and the only path that told the app to refresh itself. It is now a
+      // settling state with no action at all; `_verifyAndSettle` closes the
+      // sheet as soon as the account's own state is on screen behind it.
+      //
       // Which promise is honest depends on a MEASURED fact: the same user_id
       // means the work came along, a different one means it did not.
-      body = _Message(
-        title: auth.switchedAccount ? l.accountSwitchedTitle : l.accountLinkedTitle,
+      body = _Settling(
+        title: auth.switchedAccount
+            ? l.accountSwitchedTitle
+            : l.accountLinkedTitle,
         body: auth.switchedAccount ? l.accountSwitchedBody : l.accountLinkedBody,
         footnote: auth.email.isEmpty ? null : l.accountSignedInAs(auth.email),
-        primary: l.paywallClose,
-        onPrimary: () => Navigator.of(context).pop(true),
       );
     } else if (auth.failure ==
         PwaVerificationFailure.destinationAlreadyRegistered) {
@@ -105,7 +188,7 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
         destination: auth.destination,
         busy: auth.busy,
         failure: auth.failure,
-        onVerify: () => controller.submitCode(auth.destination, _code.text),
+        onVerify: _settling ? null : _verifyAndSettle,
         onResend: () => controller.resend(auth.destination),
         onBack: () {
           _code.clear();
@@ -248,7 +331,9 @@ class _CodeStep extends StatelessWidget {
   final String destination;
   final bool busy;
   final PwaVerificationFailure? failure;
-  final VoidCallback onVerify;
+  /// Null while the account's own state is being read: authentication has
+  /// already succeeded and re-submitting the code would mean nothing.
+  final VoidCallback? onVerify;
   final VoidCallback onResend;
   final VoidCallback onBack;
 
@@ -275,7 +360,7 @@ class _CodeStep extends StatelessWidget {
           ],
           textInputAction: TextInputAction.done,
           onSubmitted: (_) {
-            if (!busy) onVerify();
+            if (!busy) onVerify?.call();
           },
           // Latin digits, widely spaced: a code is read character by character.
           style: pwaSans(fontSize: 22, letterSpacing: 6),
@@ -287,7 +372,7 @@ class _CodeStep extends StatelessWidget {
         _PrimaryButton(
           label: l.accountVerify,
           busy: busy,
-          onPressed: busy ? null : onVerify,
+          onPressed: (busy || onVerify == null) ? null : onVerify,
         ),
         const SizedBox(height: PwaGap.xs),
         Row(
@@ -312,11 +397,54 @@ class _CodeStep extends StatelessWidget {
 
 // ── Shared pieces ────────────────────────────────────────────────────────────
 
+/// Authentication has succeeded; the account's own state is being read.
+///
+/// It says what happened and shows that something is still finishing — and
+/// offers NOTHING to press, because there is nothing left to decide. The sheet
+/// removes itself as soon as the work behind it is done.
+class _Settling extends StatelessWidget {
+  const _Settling({
+    required this.title,
+    required this.body,
+    this.footnote,
+  });
+
+  final String title;
+  final String body;
+  final String? footnote;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        key: const ValueKey('pwa-account-settling'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(title, style: pwaSerif(fontSize: 22, fontWeight: FontWeight.w500)),
+          const SizedBox(height: PwaGap.sm),
+          Text(body, style: pwaSans(fontSize: 14, color: pwaMuted, height: 1.5)),
+          if (footnote != null) ...[
+            const SizedBox(height: PwaGap.xs),
+            Text(footnote!, style: pwaSans(fontSize: 13, color: pwaFaint)),
+          ],
+          const SizedBox(height: PwaGap.lg),
+          const Row(
+            children: [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: pwaGold),
+              ),
+            ],
+          ),
+          const SizedBox(height: PwaGap.md),
+        ],
+      );
+}
+
 class _Message extends StatelessWidget {
   const _Message({
     required this.title,
     required this.body,
-    this.footnote,
     this.primary,
     this.onPrimary,
     this.secondary,
@@ -326,7 +454,6 @@ class _Message extends StatelessWidget {
 
   final String title;
   final String body;
-  final String? footnote;
   final String? primary;
   final VoidCallback? onPrimary;
   final String? secondary;
@@ -342,10 +469,6 @@ class _Message extends StatelessWidget {
         Text(title, style: pwaSerif(fontSize: 24, fontWeight: FontWeight.w500)),
         const SizedBox(height: PwaGap.sm),
         Text(body, style: pwaSans(fontSize: 14, color: pwaMuted, height: 1.5)),
-        if (footnote != null) ...[
-          const SizedBox(height: PwaGap.md),
-          Text(footnote!, style: pwaSans(fontSize: 13, color: pwaFaint)),
-        ],
         if (primary != null) ...[
           const SizedBox(height: PwaGap.lg),
           _PrimaryButton(label: primary!, busy: busy, onPressed: onPrimary),

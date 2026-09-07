@@ -36,6 +36,16 @@ import '../../../core/constants/app_colors.dart';
 const String kPwaDisplayFamily = 'CormorantGaramond';
 const String kPwaTextFamily = 'Inter';
 
+/// The PAYWALL headline's two faces — iOS's own, and used nowhere else.
+///
+/// `paywall_sheet.dart` sets its three-line headline in Playfair Display
+/// (lead + trail) with a Great Vibes accent word. Both are bundled in
+/// `web/fonts/` and registered by `pwa_fonts.dart`, exactly like the product
+/// faces; the names match what `google_fonts` would generate, so a reused iOS
+/// widget asking for them through `GoogleFonts` resolves too.
+const String kPwaPaywallDisplayFamily = 'PlayfairDisplay';
+const String kPwaPaywallScriptFamily = 'GreatVibes';
+
 /// The bundled Khmer family, registered by `pwa_khmer_font.dart`.
 const String kPwaKhmerFamilyName = 'NotoSansKhmer';
 

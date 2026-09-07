@@ -282,6 +282,12 @@ class PwaL10n {
   String get heroAccent => _get('pwaHeroAccent');
   String get heroSub => _get('pwaHeroSub');
   String get seeHowItWorks => _get('pwaSeeHowItWorks');
+  String get contactSupport => _get('pwaContactSupport');
+
+  /// The public version line. iOS's shared `spAboutVersion` reads
+  /// "Version 1.0 · MVP Preview" — an internal phase label that has no
+  /// business on a public screen; the web shows the version alone.
+  String get aboutVersion => _get('pwaAboutVersion');
   String get continueDesigningEyebrow => _get('pwaContinueDesigningEyebrow');
   String get pickUpWhereYouLeftOff => _get('pwaPickUpWhereYouLeftOff');
   String get viewAllProjects => _get('pwaViewAllProjects');
@@ -456,6 +462,7 @@ class PwaL10n {
 
   // Projects.
   String get yourSpaces => _get('pwaYourSpaces');
+  String get getMoreSpaces => _get('pwaGetMoreSpaces');
   String get searchProjects => _get('pwaSearchProjects');
   String get clearSearch => _get('pwaClearSearch');
   String get sortProjects => _get('pwaSortProjects');
@@ -687,8 +694,16 @@ class PwaL10n {
   String get payScanTitle => _get('pwaPayScanTitle');
   String get payScanBody => _get('pwaPayScanBody');
   String get payOpenAba => _get('pwaPayOpenAba');
+  String get payClose => _get('pwaPayClose');
+  String get payPluginOpen => _get('pwaPayPluginOpen');
+  String get payInlineChecking => _get('pwaPayInlineChecking');
+  String get payInlineCancel => _get('pwaPayInlineCancel');
   String get payOrScan => _get('pwaPayOrScan');
   String get payContinueToAba => _get('pwaPayContinueToAba');
+  String get payOpenInNewTab => _get('pwaPayOpenInNewTab');
+  String get acceptWeAccept => _get('pwaAcceptWeAccept');
+  String get payMethodTitle => _get('pwaPayMethodTitle');
+  String get payMethodBody => _get('pwaPayMethodBody');
   String get payStartDesigning => _get('pwaPayStartDesigning');
   String get payMaybeLater => _get('pwaPayMaybeLater');
   String get payHandoffBodyDesktop => _get('pwaPayHandoffBodyDesktop');
@@ -733,6 +748,8 @@ class PwaL10n {
       'AMOUNT_MISSING' =>
         _get('pwaPayFailedAmount'),
       'QR_REFUSED' || 'UNREACHABLE' => _get('pwaPayFailedProvider'),
+      // PayWay refused before a transaction existed — the whitelist case.
+      'NOT_CREATED' => _get('pwaPayFailedNotCreated'),
       _ => _get('pwaPayFailedBody'),
     };
   }
@@ -762,6 +779,25 @@ class PwaL10n {
   String get accountExistsBody => _get('pwaAccountExistsBody');
   String get accountSignInInstead => _get('pwaAccountSignInInstead');
   String get accountSignInTitle => _get('pwaAccountSignInTitle');
+
+  /// The returning user's question, above the Sign in door.
+  String get accountHaveOne => _get('pwaAccountHaveOne');
+
+  // The Full Reveal's own chrome, mapped from iOS's floating circle buttons.
+  String get replayReveal => _get('pwaReplayReveal');
+  String get shareVision => _get('pwaShareVision');
+  String shareVisionText(String title) =>
+      _get('pwaShareVisionText').replaceAll('{title}', title);
+  String get shareUnavailable => _get('pwaShareUnavailable');
+
+  // The paywall's three headline lines are the SHARED dictionary's own — the
+  // same strings the phone shows, already approved in en/km/fr. Reading them
+  // through here keeps the paywall's copy in one place with the rest of its
+  // text, and means no new string was invented for a screen that already had
+  // one.
+  String get paywallHeadlineLead => _mobile.pwHeadlineLead;
+  String get paywallHeadlineTrail => _mobile.pwHeadlineTrail;
+  String get paywallHeadlineAccent => _mobile.pwHeadlineAccent;
   String get accountSignInBody => _get('pwaAccountSignInBody');
   String get accountBackToLink => _get('pwaAccountBackToLink');
   String get authUnavailable => _get('pwaAuthUnavailable');
@@ -811,6 +847,37 @@ const List<Locale> kPwaLocaleOrder = [Locale('km'), Locale('en'), Locale('fr')];
 
 /// The name of a language, written IN that language — the only labelling that
 /// works when the person cannot read the current one.
+/// The flag shown beside a language, in the language sheet and on the
+/// Profile's Language row. Emoji, as the brief asked — rendered by the same
+/// emoji fallback the Create screen's "✨" already relies on.
+String pwaLanguageFlag(String code) {
+  switch (code) {
+    case 'km':
+      return '🇰🇭';
+    case 'fr':
+      return '🇫🇷';
+    default:
+      return '🇬🇧';
+  }
+}
+
+/// The short name that follows the flag: "ខ្មែរ", not the longer
+/// "ភាសាខ្មែរ" ("Khmer language") the endonym helper keeps for the top bar.
+String pwaLanguageShortName(String code) {
+  switch (code) {
+    case 'km':
+      return 'ខ្មែរ';
+    case 'fr':
+      return 'Français';
+    default:
+      return 'English';
+  }
+}
+
+/// "🇫🇷 Français" — flag and short name, as one string.
+String pwaLanguageFlagLabel(String code) =>
+    '${pwaLanguageFlag(code)} ${pwaLanguageShortName(code)}';
+
 String pwaLanguageEndonym(String code) {
   switch (code) {
     case 'km':

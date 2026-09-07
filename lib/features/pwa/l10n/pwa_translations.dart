@@ -49,6 +49,8 @@ const Map<String, String> pwaEnTranslations = {
   'pwaHeroAccent': 'Reimagined.',
   'pwaHeroSub': 'Turn any room into a vision,\nin the blink of an eye.',
   'pwaSeeHowItWorks': 'See how it works',
+  'pwaContactSupport': 'Contact support',
+  'pwaAboutVersion': 'Version 1.0',
   'pwaContinueDesigningEyebrow': 'CONTINUE DESIGNING',
   'pwaPickUpWhereYouLeftOff': 'Pick up where you left off.',
   'pwaViewAllProjects': 'View all projects',
@@ -198,6 +200,7 @@ const Map<String, String> pwaEnTranslations = {
 
   // ── Projects ───────────────────────────────────────────────────────────────
   'pwaYourSpaces': 'YOUR SPACES',
+  'pwaGetMoreSpaces': 'Get more Spaces',
   'pwaContinueShapingHome': 'Continue shaping your home.',
   'pwaReturnToProject':
       'Return to a project, explore its visions, or begin a new space.',
@@ -288,7 +291,8 @@ const Map<String, String> pwaEnTranslations = {
   'pwaProductBadgeBestValue': 'BEST VALUE',
   'pwaPaywallRestore': 'I already paid',
   'pwaPaywallClose': 'Not now',
-  'pwaPaywallSecureNote': 'Payment is handled by Ayden. Never in your browser.',
+  'pwaPaywallSecureNote':
+      "Payment is handled by ABA PayWay, on ABA's own secure page.",
 
   // -- Payment (ABA PayWay / KHQR) -------------------------------------------
   // Cambodia-first wording. 'KHQR' and 'ABA Mobile' stay untranslated in all
@@ -300,11 +304,17 @@ const Map<String, String> pwaEnTranslations = {
   'pwaPayStartDesigning': 'Start a new design',
   'pwaPayMaybeLater': 'Maybe later',
   'pwaPayHandoffBodyDesktop':
-      'You will finish paying on ABA PayWay, where you can choose ABA KHQR, '
-      'ABA Pay or a card. We will bring you back here.',
+      "You will pay with ABA KHQR, on ABA PayWay's own page below. Scan the "
+      'code with any banking app that supports KHQR.',
   'pwaPayHandoffBodyPhone':
-      'You will finish paying on ABA PayWay, where you can open ABA Mobile or '
-      'scan with another bank app. We will bring you back here.',
+      "You will pay with ABA KHQR, on ABA PayWay's own page below. Open ABA "
+      'Mobile, or scan the code with any banking app that supports KHQR.',
+  // The escape hatch under the embedded checkout. Named for what it DOES —
+  // a new tab — because the whole point is that this one keeps running.
+  'pwaPayOpenInNewTab': 'Open ABA PayWay in a new tab',
+  'pwaAcceptWeAccept': 'We accept',
+  'pwaPayMethodTitle': 'Payment method',
+  'pwaPayMethodBody': 'Scan to pay with any banking app that supports KHQR.',
   'pwaPayLinkExpiredTitle': 'This payment link has expired',
   'pwaPayLinkExpiredBody':
       'ABA payment links are only valid for a few minutes. Nothing was '
@@ -318,6 +328,21 @@ const Map<String, String> pwaEnTranslations = {
   'pwaPayScanBody':
       'Open ABA Mobile — or any Cambodian bank app that reads KHQR — and scan '
       'this code.',
+  'pwaPayClose': 'Close',
+  // Shown BEHIND ABA's popup, and after it closes: the payment is still open
+  // and this card will change on its own when the server hears from ABA.
+  'pwaPayPluginOpen':
+      "ABA PayWay's secure checkout is open. Finish there — this will update "
+      'by itself.',
+  // The line under Buy while a transaction is live. No countdown, no
+  // "waiting for your payment": the popup says what is open, and this only
+  // says that the server is checking.
+  'pwaPayInlineChecking': 'Checking your payment with ABA PayWay…',
+  'pwaPayInlineCancel': 'Cancel this payment',
+  // NOT_CREATED — PayWay refused the purchase before a transaction existed
+  // (a domain not yet whitelisted, a rejected request). Nothing to wait for.
+  'pwaPayFailedNotCreated':
+      'ABA PayWay could not start the payment. Please try again.',
   'pwaPayOpenAba': 'Open ABA Mobile',
   'pwaPayOrScan': 'or scan the code with another bank app',
   'pwaPayExpiresIn': 'This code expires in {t}',
@@ -355,10 +380,9 @@ const Map<String, String> pwaEnTranslations = {
   'pwaPaySafeNote': 'Ayden never sees your banking details.',
 
   // -- Account / verification ------------------------------------------------
-  'pwaAccountTitle': 'Save your work',
+  'pwaAccountTitle': 'Save my designs',
   'pwaAccountBody':
-      'Add an email so your projects follow you to any device. Everything you '
-      'have made stays exactly where it is.',
+      'Create your Ayden account and keep your designs.',
   'pwaAccountEmailLabel': 'Email address',
   'pwaAccountEmailHint': 'you@example.com',
   'pwaAccountSend': 'Send code',
@@ -385,6 +409,11 @@ const Map<String, String> pwaEnTranslations = {
       'not move across.',
   'pwaAccountSignInInstead': 'Sign in to that account',
   'pwaAccountSignInTitle': 'Sign in',
+  'pwaReplayReveal': 'Replay',
+  'pwaShareVision': 'Share',
+  'pwaShareVisionText': 'Check out my AI home redesign — {title}!',
+  'pwaShareUnavailable': 'Sharing is not available in this browser.',
+  'pwaAccountHaveOne': 'Already use Ayden Studio?',
   'pwaAccountSignInBody': 'We will send a code to your email address.',
   'pwaAccountBackToLink': 'Create a new account instead',
   'pwaAuthErrInvalidEmail': 'That email address does not look right.',
@@ -433,6 +462,8 @@ const Map<String, String> pwaKmTranslations = {
   'pwaHeroAccent': 'ស្រមៃ​ឡើង​វិញ។',
   'pwaHeroSub': 'ប្រែក្លាយ​បន្ទប់​ណាមួយ​ទៅ​ជា​ទស្សនៈ\nក្នុង​ពេល​តែ​ប៉ុន្មាន​វិនាទី។',
   'pwaSeeHowItWorks': 'មើល​របៀប​ដំណើរការ',
+  'pwaContactSupport': 'ទាក់ទង​ផ្នែក​ជំនួយ',
+  'pwaAboutVersion': 'កំណែ 1.0',
   'pwaContinueDesigningEyebrow': 'បន្ត​ការ​រចនា',
   'pwaPickUpWhereYouLeftOff': 'បន្ត​ពី​កន្លែង​ដែល​អ្នក​បាន​ឈប់។',
   'pwaViewAllProjects': 'មើល​គម្រោង​ទាំងអស់',
@@ -570,6 +601,7 @@ const Map<String, String> pwaKmTranslations = {
 
   // ── Projects ───────────────────────────────────────────────────────────────
   'pwaYourSpaces': 'ទីកន្លែង​របស់​អ្នក',
+  'pwaGetMoreSpaces': 'ទិញ Spaces បន្ថែម',
   'pwaContinueShapingHome': 'បន្ត​រៀបចំ​ផ្ទះ​របស់​អ្នក។',
   'pwaReturnToProject':
       'ត្រឡប់​ទៅ​គម្រោង​មួយ ស្វែងរក​ទស្សនៈ​របស់​វា ឬ​ចាប់ផ្ដើម​ទីកន្លែង​ថ្មី។',
@@ -661,7 +693,7 @@ const Map<String, String> pwaKmTranslations = {
   'pwaPaywallRestore': 'ខ្ញុំ​បាន​ទូទាត់​រួច​ហើយ',
   'pwaPaywallClose': 'មិន​ទាន់​ទេ',
   'pwaPaywallSecureNote':
-      'ការ​ទូទាត់​ត្រូវ​បាន​គ្រប់គ្រង​ដោយ Ayden មិន​មែន​ក្នុង​កម្មវិធី​រុករក​របស់​អ្នក​ទេ។',
+      'ការ​ទូទាត់​ត្រូវ​បាន​គ្រប់គ្រង​ដោយ ABA PayWay នៅ​លើ​ទំព័រ​សុវត្ថិភាព​របស់ ABA ផ្ទាល់។',
 
   // -- Payment (ABA PayWay / KHQR) -------------------------------------------
   'pwaPayBuy': 'ទិញ',
@@ -670,11 +702,15 @@ const Map<String, String> pwaKmTranslations = {
   'pwaPayStartDesigning': 'ចាប់​ផ្ដើម​រចនា​ថ្មី',
   'pwaPayMaybeLater': 'ពេល​ក្រោយ',
   'pwaPayHandoffBodyDesktop':
-      'អ្នក​នឹង​បញ្ចប់​ការ​ទូទាត់​នៅ​លើ ABA PayWay ដែល​អ្នក​អាច​ជ្រើស ABA KHQR, '
-      'ABA Pay ឬ​កាត។ យើង​នឹង​នាំ​អ្នក​ត្រឡប់​មក​វិញ។',
+      'អ្នក​នឹង​ទូទាត់​ដោយ ABA KHQR នៅ​លើ​ទំព័រ​របស់ ABA PayWay ខាង​ក្រោម។ '
+      'ស្កេន​កូដ​ដោយ​កម្មវិធី​ធនាគារ​ណា​មួយ​ដែល​គាំទ្រ KHQR។',
   'pwaPayHandoffBodyPhone':
-      'អ្នក​នឹង​បញ្ចប់​ការ​ទូទាត់​នៅ​លើ ABA PayWay ដែល​អ្នក​អាច​បើក ABA Mobile '
-      'ឬ​ស្កេន​ដោយ​កម្មវិធី​ធនាគារ​ផ្សេង។ យើង​នឹង​នាំ​អ្នក​ត្រឡប់​មក​វិញ។',
+      'អ្នក​នឹង​ទូទាត់​ដោយ ABA KHQR នៅ​លើ​ទំព័រ​របស់ ABA PayWay ខាង​ក្រោម។ '
+      'បើក ABA Mobile ឬ​ស្កេន​កូដ​ដោយ​កម្មវិធី​ធនាគារ​ណា​មួយ​ដែល​គាំទ្រ KHQR។',
+  'pwaPayOpenInNewTab': 'បើក ABA PayWay ក្នុង​ផ្ទាំង​ថ្មី',
+  'pwaAcceptWeAccept': 'យើង​ទទួល',
+  'pwaPayMethodTitle': 'មធ្យោបាយ​ទូទាត់',
+  'pwaPayMethodBody': 'ស្កេន​ដើម្បី​ទូទាត់​ដោយ​កម្មវិធី​ធនាគារ​ណា​មួយ​ដែល​គាំទ្រ KHQR។',
   'pwaPayLinkExpiredTitle': 'តំណ​ទូទាត់​នេះ​ផុត​កំណត់​ហើយ',
   'pwaPayLinkExpiredBody':
       'តំណ​ទូទាត់ ABA មាន​សុពលភាព​តែ​ប៉ុន្មាន​នាទី​ប៉ុណ្ណោះ។ គ្មាន​ការ​កាត់​ប្រាក់​ទេ — '
@@ -688,6 +724,14 @@ const Map<String, String> pwaKmTranslations = {
   'pwaPayScanBody':
       'បើក ABA Mobile — ឬ​កម្មវិធី​ធនាគារ​កម្ពុជា​ណា​មួយ​ដែល​អាន KHQR បាន — '
       'រួច​ស្កេន​កូដ​នេះ។',
+  'pwaPayClose': 'បិទ',
+  'pwaPayPluginOpen':
+      'ទំព័រ​ទូទាត់​សុវត្ថិភាព​របស់ ABA PayWay បាន​បើក​ហើយ។ សូម​បញ្ចប់​នៅ​ទីនោះ — '
+      'ទំព័រ​នេះ​នឹង​ធ្វើ​បច្ចុប្បន្នភាព​ដោយ​ខ្លួន​ឯង។',
+  'pwaPayInlineChecking': 'កំពុង​ពិនិត្យ​ការ​ទូទាត់​របស់​អ្នក​ជាមួយ ABA PayWay…',
+  'pwaPayInlineCancel': 'បោះបង់​ការ​ទូទាត់​នេះ',
+  'pwaPayFailedNotCreated':
+      'ABA PayWay មិន​អាច​ចាប់ផ្ដើម​ការ​ទូទាត់​បាន​ទេ។ សូម​ព្យាយាម​ម្ដង​ទៀត។',
   'pwaPayOpenAba': 'បើក ABA Mobile',
   'pwaPayOrScan': 'ឬ​ស្កេន​កូដ​ដោយ​កម្មវិធី​ធនាគារ​ផ្សេង',
   'pwaPayExpiresIn': 'កូដ​នេះ​ផុត​កំណត់​ក្នុង​រយៈពេល {t}',
@@ -731,10 +775,9 @@ const Map<String, String> pwaKmTranslations = {
   'pwaPaySafeNote': 'Ayden មិន​ដែល​ឃើញ​ព័ត៌មាន​ធនាគារ​របស់​អ្នក​ទេ។',
 
   // -- Account / verification ------------------------------------------------
-  'pwaAccountTitle': 'រក្សា​ទុក​ការងារ​របស់​អ្នក',
+  'pwaAccountTitle': 'រក្សា​ទុក​ការ​រចនា​របស់​ខ្ញុំ',
   'pwaAccountBody':
-      'បន្ថែម​អ៊ីមែល ដើម្បី​ឲ្យ​គម្រោង​របស់​អ្នក​តាម​អ្នក​ទៅ​គ្រប់​ឧបករណ៍។ '
-      'អ្វី​គ្រប់​យ៉ាង​ដែល​អ្នក​បាន​បង្កើត​នៅ​ដដែល។',
+      'បង្កើត​គណនី Ayden របស់​អ្នក ហើយ​រក្សា​ទុក​ការ​រចនា​របស់​អ្នក។',
   'pwaAccountEmailLabel': 'អាសយដ្ឋាន​អ៊ីមែល',
   'pwaAccountEmailHint': 'you@example.com',
   'pwaAccountSend': 'ផ្ញើ​លេខ​កូដ',
@@ -761,6 +804,11 @@ const Map<String, String> pwaKmTranslations = {
       'ហើយ​មិន​ផ្លាស់​ទី​ទៅ​តាម​ទេ។',
   'pwaAccountSignInInstead': 'ចូល​ទៅ​គណនី​នោះ',
   'pwaAccountSignInTitle': 'ចូល​គណនី',
+  'pwaReplayReveal': 'ចាក់​ឡើង​វិញ',
+  'pwaShareVision': 'ចែក​រំលែក',
+  'pwaShareVisionText': 'មើល​ការ​រចនា​ផ្ទះ​ឡើង​វិញ​ដោយ AI របស់​ខ្ញុំ — {title}!',
+  'pwaShareUnavailable': 'ការ​ចែក​រំលែក​មិន​អាច​ប្រើ​បាន​ក្នុង​កម្មវិធី​រុករក​នេះ​ទេ។',
+  'pwaAccountHaveOne': 'ប្រើ Ayden Studio រួច​ហើយ​មែន​ទេ?',
   'pwaAccountSignInBody': 'យើង​នឹង​ផ្ញើ​លេខ​កូដ​ទៅ​អាសយដ្ឋាន​អ៊ីមែល​របស់​អ្នក។',
   'pwaAccountBackToLink': 'បង្កើត​គណនី​ថ្មី​ជំនួស​វិញ',
   'pwaAuthErrInvalidEmail': 'អាសយដ្ឋាន​អ៊ីមែល​នោះ​មើល​ទៅ​មិន​ត្រឹមត្រូវ​ទេ។',
@@ -809,6 +857,8 @@ const Map<String, String> pwaFrTranslations = {
   'pwaHeroAccent': 'Réimaginée.',
   'pwaHeroSub': "Transformez n'importe quelle pièce en vision,\nen un clin d'œil.",
   'pwaSeeHowItWorks': 'Voir comment ça marche',
+  'pwaContactSupport': 'Contacter le support',
+  'pwaAboutVersion': 'Version 1.0',
   'pwaContinueDesigningEyebrow': 'CONTINUER LE DESIGN',
   'pwaPickUpWhereYouLeftOff': 'Reprenez où vous vous étiez arrêté.',
   'pwaViewAllProjects': 'Voir tous les projets',
@@ -947,6 +997,7 @@ const Map<String, String> pwaFrTranslations = {
 
   // ── Projects ───────────────────────────────────────────────────────────────
   'pwaYourSpaces': 'VOS ESPACES',
+  'pwaGetMoreSpaces': 'Acheter des Spaces',
   'pwaContinueShapingHome': 'Continuez à façonner votre maison.',
   'pwaReturnToProject':
       'Revenez à un projet, explorez ses visions, ou commencez un nouvel espace.',
@@ -1039,7 +1090,7 @@ const Map<String, String> pwaFrTranslations = {
   'pwaPaywallRestore': "J'ai déjà payé",
   'pwaPaywallClose': 'Pas maintenant',
   'pwaPaywallSecureNote':
-      'Le paiement est géré par Ayden. Jamais dans votre navigateur.',
+      "Le paiement est géré par ABA PayWay, sur la page sécurisée d'ABA.",
 
   // -- Payment (ABA PayWay / KHQR) -------------------------------------------
   'pwaPayBuy': 'Acheter',
@@ -1048,12 +1099,17 @@ const Map<String, String> pwaFrTranslations = {
   'pwaPayStartDesigning': 'Créer un nouveau design',
   'pwaPayMaybeLater': 'Plus tard',
   'pwaPayHandoffBodyDesktop':
-      'Vous finaliserez le paiement sur ABA PayWay, où vous pourrez choisir '
-      'ABA KHQR, ABA Pay ou une carte. Nous vous ramènerons ici.',
+      "Vous paierez avec ABA KHQR, sur la page d'ABA PayWay ci-dessous. "
+      'Scannez le code avec une application bancaire compatible KHQR.',
   'pwaPayHandoffBodyPhone':
-      'Vous finaliserez le paiement sur ABA PayWay, où vous pourrez ouvrir '
-      'ABA Mobile ou scanner avec une autre application bancaire. Nous '
-      'vous ramènerons ici.',
+      "Vous paierez avec ABA KHQR, sur la page d'ABA PayWay ci-dessous. "
+      'Ouvrez ABA Mobile, ou scannez le code avec une application bancaire '
+      'compatible KHQR.',
+  'pwaPayOpenInNewTab': 'Ouvrir ABA PayWay dans un nouvel onglet',
+  'pwaAcceptWeAccept': 'Nous acceptons',
+  'pwaPayMethodTitle': 'Moyen de paiement',
+  'pwaPayMethodBody':
+      'Scannez pour payer avec une application bancaire compatible KHQR.',
   'pwaPayLinkExpiredTitle': 'Ce lien de paiement a expiré',
   'pwaPayLinkExpiredBody':
       'Les liens de paiement ABA ne sont valables que quelques minutes. Rien '
@@ -1067,6 +1123,14 @@ const Map<String, String> pwaFrTranslations = {
   'pwaPayScanBody':
       'Ouvrez ABA Mobile — ou toute application bancaire cambodgienne qui lit '
       'le KHQR — et scannez ce code.',
+  'pwaPayClose': 'Fermer',
+  'pwaPayPluginOpen':
+      "Le paiement sécurisé d'ABA PayWay est ouvert. Terminez là-bas — cette "
+      'carte se mettra à jour toute seule.',
+  'pwaPayInlineChecking': 'Vérification de votre paiement avec ABA PayWay…',
+  'pwaPayInlineCancel': 'Annuler ce paiement',
+  'pwaPayFailedNotCreated':
+      "ABA PayWay n'a pas pu démarrer le paiement. Veuillez réessayer.",
   'pwaPayOpenAba': 'Ouvrir ABA Mobile',
   'pwaPayOrScan': 'ou scannez le code avec une autre application bancaire',
   'pwaPayExpiresIn': 'Ce code expire dans {t}',
@@ -1107,10 +1171,9 @@ const Map<String, String> pwaFrTranslations = {
   'pwaPaySafeNote': 'Ayden ne voit jamais vos informations bancaires.',
 
   // -- Account / verification ------------------------------------------------
-  'pwaAccountTitle': 'Enregistrez votre travail',
+  'pwaAccountTitle': 'Enregistrer mes créations',
   'pwaAccountBody':
-      'Ajoutez un e-mail pour que vos projets vous suivent sur tous vos '
-      'appareils. Tout ce que vous avez créé reste exactement où il est.',
+      'Créez votre compte Ayden et conservez vos créations.',
   'pwaAccountEmailLabel': 'Adresse e-mail',
   'pwaAccountEmailHint': 'vous@exemple.com',
   'pwaAccountSend': 'Envoyer le code',
@@ -1136,7 +1199,14 @@ const Map<String, String> pwaFrTranslations = {
       "Connectez-vous à ce compte. Votre travail d'invité reste sur ce "
       'navigateur et ne sera pas transféré.',
   'pwaAccountSignInInstead': 'Se connecter à ce compte',
-  'pwaAccountSignInTitle': 'Connexion',
+  'pwaAccountSignInTitle': 'Se connecter',
+  'pwaReplayReveal': 'Revoir',
+  'pwaShareVision': 'Partager',
+  'pwaShareVisionText':
+      "Découvrez le redesign de mon intérieur par l'IA — {title} !",
+  'pwaShareUnavailable':
+      "Le partage n'est pas disponible dans ce navigateur.",
+  'pwaAccountHaveOne': 'Vous utilisez déjà Ayden Studio ?',
   'pwaAccountSignInBody': 'Nous enverrons un code à votre adresse e-mail.',
   'pwaAccountBackToLink': 'Créer un nouveau compte',
   'pwaAuthErrInvalidEmail': 'Cette adresse e-mail ne semble pas valide.',

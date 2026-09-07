@@ -23,11 +23,11 @@ import 'pwa_payment_sheet.dart';
 import 'pwa_paywall.dart';
 import 'pwa_architect_screen.dart';
 import 'pwa_create_ios.dart';
-import 'pwa_design_session_screen.dart';
+
 import 'pwa_home_ios.dart';
 import 'pwa_profile_ios.dart';
 import 'pwa_projects_ios.dart';
-import 'pwa_first_reveal_screen.dart';
+
 import 'pwa_reveal_screen.dart';
 import 'pwa_theme.dart';
 import 'pwa_type.dart';
@@ -50,11 +50,11 @@ class PwaExperience extends ConsumerWidget {
       // still owns the shared catalogue constants this screen imports, and it
       // is the fast way back if this needs reverting.
       PwaPhase.entry => const PwaCreateIos(),
-      // Phase 4 — the wait is a SESSION, not a spinner. `PwaLoadingScreen` is
-      // retained, unreferenced, on the same terms as the other two originals.
-      PwaPhase.loading => const PwaDesignSessionScreen(),
+      // The Design Session is the container: generating is a state INSIDE the
+      // Architect, not a screen before it, and the first render is not a
+      // screen after it. The two intermediate screens this switch used to
+      // route to are deleted.
       PwaPhase.architect => const PwaArchitectScreen(),
-      PwaPhase.firstReveal => const PwaFirstRevealScreen(),
       PwaPhase.reveal => const PwaRevealScreen(),
       // Phase 7 — Projects on the product canvas. `PwaProjectsScreen` (the dark
       // original) is retained, unreferenced, on the same terms as the other
@@ -134,6 +134,14 @@ class _PwaPaymentReturnWatcherState
     ref.listen<PwaPaymentState>(
       pwaPaymentProvider.select((p) => p.state),
       (_, next) {
+        // A new attempt re-arms the card. This watcher was written for the
+        // cold-boot return, where one showing per session was the whole story;
+        // on the plugin path it is ALSO the success surface for payments
+        // started in this very session, and a person may buy twice.
+        if (next == PwaPaymentState.starting || next == PwaPaymentState.idle) {
+          _shown = false;
+          return;
+        }
         if (_shown) return;
         if (next != PwaPaymentState.verified &&
             next != PwaPaymentState.granted) {

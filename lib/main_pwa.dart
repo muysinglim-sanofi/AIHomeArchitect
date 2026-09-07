@@ -17,7 +17,10 @@
 /// tree or `main.dart` imports them.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -33,6 +36,7 @@ import 'features/pwa/billing/pwa_entitlement_controller.dart';
 import 'features/pwa/billing/pwa_payment_controller.dart';
 import 'features/pwa/config/pwa_environment.dart';
 import 'features/pwa/data/mock_pwa_experience_repository.dart';
+import 'features/pwa/data/pwa_aba_plugin.dart';
 import 'features/pwa/data/pwa_external_launcher.dart';
 import 'features/pwa/data/pwa_generation_api.dart';
 import 'features/pwa/data/pwa_generation_service.dart';
@@ -41,6 +45,7 @@ import 'features/pwa/data/pwa_pending_generation.dart';
 import 'features/pwa/data/pwa_staging_supabase_client.dart';
 import 'features/pwa/data/pwa_web_navigation.dart';
 import 'features/pwa/data/pwa_fonts.dart';
+import 'features/pwa/data/pwa_thumbnail_bundle.dart';
 import 'features/pwa/data/pwa_khmer_font.dart';
 import 'features/pwa/data/supabase_pwa_persistence_repository.dart';
 import 'features/pwa/domain/pwa_project.dart';
@@ -66,6 +71,12 @@ Future<void> main() async {
   // network involved. Non-fatal by construction — a failed load degrades to the
   // platform default, which is exactly what this build looked like yesterday.
   await Future.wait([loadPwaKhmerFont(), loadPwaFonts()]);
+  // The paywall's two faces (~750 KB) are started here and deliberately NOT
+  // awaited: they belong to one surface that is never the first screen, and
+  // making every visitor wait for them would be a boot cost paid for a screen
+  // most of them never open. `unawaited` rather than a bare call so the intent
+  // is stated rather than looking like a forgotten await.
+  unawaited(loadPwaPaywallFonts());
 
   // Single environment authority for the web app. Fails CLOSED on production /
   // misconfigured staging BEFORE anything else runs (no remote side effects).
@@ -75,7 +86,10 @@ Future<void> main() async {
   final bridge = WebPwaUrlBridge();
   final bootRoute = PwaRoute.parse(bridge.current());
 
-  if (env.isStaging) {
+  // Staging and production take the SAME path: the same client, the same
+  // engine, the same persistence. What differs is which project and which API
+  // origin `PwaEnvironment` resolved, and both were validated before this line.
+  if (env.isRemote) {
     await _bootPwaStaging(env, bridge, bootRoute);
     return;
   }
@@ -137,7 +151,15 @@ void _bootPwaMock(PwaUrlBridge bridge, PwaRoute bootRoute) {
         // Inventing either would make the prototype claim something untrue.
         ..._webNavOverrides(bridge),
       ],
-      child: const PwaUrlSyncScope(child: PwaMockApp()),
+      // Selection cards resolve to small WebP derivatives instead of the
+      // 2.5 MB production PNGs behind them. `Image.asset` reads
+      // `DefaultAssetBundle.of(context)`, so this redirects the frozen iOS
+      // card widgets without touching them — see `pwa_thumbnail_bundle.dart`
+      // for the measurement (49.5 MB -> 0.90 MB) and the fail-open rule.
+      child: DefaultAssetBundle(
+        bundle: PwaThumbnailBundle(rootBundle),
+        child: const PwaUrlSyncScope(child: PwaMockApp()),
+      ),
     ),
   );
 }
@@ -194,7 +216,10 @@ Future<void> _bootPwaStaging(
   // PwaEnvironment.parse; the token is read fresh per call so a session renewed
   // mid-session is used, and it is never stored in this closure.
   final api = PwaGenerationApi(
-    baseUrl: env.stagingBackendUrl!,
+    baseUrl: env.backendUrl!,
+    // `/pwa/staging` or `/pwa` — the backend resolves the same pair from
+    // `PWA_TARGET`, so neither side hard-codes the other's address.
+    apiPrefix: env.apiPrefix,
     tokenProvider: () async {
       await client.ensureSession();
       return client.client.auth.currentSession?.accessToken;
@@ -247,6 +272,7 @@ Future<void> _bootPwaStaging(
         pwaPaymentGatewayProvider.overrideWithValue(
           PwaPaymentGateway(
             startCheckout: api.startCheckout,
+            startPluginCheckout: api.startPluginCheckout,
             orderStatus: api.orderStatus,
             openOrder: api.openOrder,
             cancelOrder: api.cancelOrder,
@@ -256,10 +282,22 @@ Future<void> _bootPwaStaging(
         // lives with the other `package:web` adapters and is injected here.
         pwaExternalLauncherProvider
             .overrideWithValue(const WebPwaExternalLauncher()),
+        // ABA's checkout plugin — the active Web checkout. Present only here,
+        // on the web entrypoint; the controller falls back to the server-side
+        // path wherever this is null.
+        pwaAbaPluginProvider.overrideWithValue(createPwaAbaPlugin()),
         pwaAuthServiceProvider.overrideWithValue(auth),
         ..._webNavOverrides(bridge),
       ],
-      child: const PwaUrlSyncScope(child: PwaMockApp()),
+      // Selection cards resolve to small WebP derivatives instead of the
+      // 2.5 MB production PNGs behind them. `Image.asset` reads
+      // `DefaultAssetBundle.of(context)`, so this redirects the frozen iOS
+      // card widgets without touching them — see `pwa_thumbnail_bundle.dart`
+      // for the measurement (49.5 MB -> 0.90 MB) and the fail-open rule.
+      child: DefaultAssetBundle(
+        bundle: PwaThumbnailBundle(rootBundle),
+        child: const PwaUrlSyncScope(child: PwaMockApp()),
+      ),
     ),
   );
 }

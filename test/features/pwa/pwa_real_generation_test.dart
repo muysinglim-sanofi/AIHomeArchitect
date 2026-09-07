@@ -156,7 +156,6 @@ Future<_Rig> _generated() async {
   rig.controller.selectRoom('living_room');
   rig.controller.setSource(_source());
   await rig.controller.generateFirstVision();
-  rig.controller.continueToArchitect();
   return rig;
 }
 
@@ -516,9 +515,11 @@ void main() {
     });
 
     test('REVEAL07: every reveal surface is given the lineage', () {
+      // The First Reveal was the third such surface. It is deleted: the first
+      // vision now arrives in the session like every other, so there is no
+      // one-off unveiling left to hand a lineage to.
       for (final path in [
         'lib/features/pwa/presentation/pwa_reveal_screen.dart',
-        'lib/features/pwa/presentation/pwa_first_reveal_screen.dart',
         'lib/features/pwa/presentation/pwa_versions_sheet.dart',
       ]) {
         expect(File(path).readAsStringSync().contains('versions: state.versions'),
@@ -1274,7 +1275,6 @@ void main() {
       'lib/features/pwa/presentation/pwa_versions_sheet.dart',
       'lib/features/pwa/presentation/pwa_projects_screen.dart',
       'lib/features/pwa/presentation/pwa_reveal_screen.dart',
-      'lib/features/pwa/presentation/pwa_first_reveal_screen.dart',
     ];
 
     test('GEN60: no runtime path simulates a generation', () {

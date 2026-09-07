@@ -37,6 +37,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../data/pwa_aba_plugin.dart';
 import 'pwa_entitlement_controller.dart';
 import 'pwa_payment.dart';
 
@@ -48,22 +49,40 @@ class PwaPaymentGateway {
     required this.orderStatus,
     required this.openOrder,
     required this.cancelOrder,
+    this.startPluginCheckout,
   });
 
   final Future<Map<String, Object?>> Function({
     required String sku,
     required String attemptKey,
   }) startCheckout;
+
+  /// The plugin-path variant. Optional so existing fakes need not grow one;
+  /// the controller only takes this path when a plugin is also present.
+  final Future<Map<String, Object?>> Function({
+    required String sku,
+    required String attemptKey,
+  })? startPluginCheckout;
   final Future<Map<String, Object?>> Function(String tranId) orderStatus;
   final Future<Map<String, Object?>> Function() openOrder;
   final Future<Map<String, Object?>> Function(String tranId) cancelOrder;
 }
 
 class PwaPaymentController extends StateNotifier<PwaPayment> {
-  PwaPaymentController(this._gateway, this._onGranted)
-      : super(const PwaPayment.idle());
+  PwaPaymentController(this._gateway, this._onGranted, {PwaAbaPlugin? plugin})
+      : _plugin = plugin,
+        super(const PwaPayment.idle());
 
   final PwaPaymentGateway? _gateway;
+
+  /// ABA's checkout plugin, when this build has one. With it, [start] takes
+  /// the plugin path: the server signs, the plugin presents. Without it (tests,
+  /// the mock build) the server-side path is used, exactly as before.
+  final PwaAbaPlugin? _plugin;
+
+  /// How the last plugin launch went. PRESENTATION only — it says whether
+  /// ABA's popup was asked to open, never whether anything was paid.
+  PwaAbaPluginLaunch? lastPluginLaunch;
 
   /// Called EXACTLY once per attempt, when the server says GRANTED.
   final Future<void> Function()? _onGranted;
@@ -112,10 +131,50 @@ class PwaPaymentController extends StateNotifier<PwaPayment> {
     }
     _timer?.cancel();
     _granted = false;
+    lastPluginLaunch = null;
     state = const PwaPayment.starting();
-    final body = await gateway.startCheckout(sku: sku, attemptKey: _attemptKey);
+
+    final plugin = _plugin;
+    final viaPlugin = plugin != null &&
+        plugin.isSupported &&
+        gateway.startPluginCheckout != null;
+    final body = viaPlugin
+        ? await gateway.startPluginCheckout!(sku: sku, attemptKey: _attemptKey)
+        : await gateway.startCheckout(sku: sku, attemptKey: _attemptKey);
     if (!mounted) return;
     _apply(PwaPayment.parse(body));
+
+    // Hand the SIGNED fields to ABA's plugin, once, and only for a fresh
+    // payment: a rejoin comes back without them, because PayWay accepts one
+    // Purchase per tran_id and the client that rejoins is already polling.
+    // Nothing about the launch feeds back into payment state — the poll
+    // scheduled by `_apply` is what will learn whether money moved.
+    if (viaPlugin) {
+      final handoff = _pluginHandoff(body);
+      if (handoff != null) {
+        lastPluginLaunch = plugin.launch(
+          formAction: handoff.action,
+          fields: handoff.fields,
+        );
+      }
+    }
+  }
+
+  /// The plugin handoff, if the server sent one. Keys are relayed, not read.
+  static ({String action, Map<String, String> fields})? _pluginHandoff(
+    Map<String, Object?> body,
+  ) {
+    final raw = body['plugin'];
+    if (raw is! Map) return null;
+    final action = raw['form_action'];
+    final fields = raw['fields'];
+    if (action is! String || action.isEmpty || fields is! Map) return null;
+    return (
+      action: action,
+      fields: {
+        for (final e in fields.entries) e.key.toString(): e.value.toString(),
+      },
+    );
   }
 
   /// Re-join whatever is already in progress for this person.
@@ -209,5 +268,6 @@ final pwaPaymentProvider =
     // The ONE side effect of a successful payment: ask the Billing Engine what
     // this person may now do. Nothing here computes a new balance.
     () => ref.read(pwaEntitlementProvider.notifier).refresh(),
+    plugin: ref.watch(pwaAbaPluginProvider),
   );
 });

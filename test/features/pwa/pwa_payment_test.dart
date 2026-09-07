@@ -19,6 +19,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:ai_home_architect/core/l10n/app_localizations.dart';
@@ -27,12 +28,14 @@ import 'package:ai_home_architect/features/pwa/billing/pwa_entitlement.dart';
 import 'package:ai_home_architect/features/pwa/billing/pwa_entitlement_controller.dart';
 import 'package:ai_home_architect/features/pwa/billing/pwa_payment.dart';
 import 'package:ai_home_architect/features/pwa/billing/pwa_payment_controller.dart';
+import 'package:ai_home_architect/features/pwa/data/pwa_aba_plugin.dart';
 import 'package:ai_home_architect/features/pwa/data/pwa_external_launcher.dart';
 import 'package:ai_home_architect/features/pwa/l10n/pwa_l10n.dart';
 import 'package:ai_home_architect/features/pwa/l10n/pwa_translations.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_payment_sheet.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_aba_marks.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_nav_shell.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_paywall.dart';
-import 'package:ai_home_architect/features/pwa/presentation/pwa_primitives.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -145,8 +148,64 @@ class _CountingEntitlement extends PwaEntitlementController {
 class _RecordingLauncher implements PwaExternalLauncher {
   final opened = <String>[];
 
+  /// Kept SEPARATE from [opened] on purpose. The two methods have opposite
+  /// consequences for the running app — one replaces this document, the other
+  /// leaves it running — so a test that asserted only "a URL was launched"
+  /// could not tell the regression apart from the fix.
+  final newTabs = <String>[];
+
   @override
   void open(String url) => opened.add(url);
+
+  @override
+  void openNewTab(String url) => newTabs.add(url);
+}
+
+
+/// Records what the controller hands to ABA's plugin. Says nothing back about
+/// the payment — a real plugin cannot either.
+class _RecordingAbaPlugin implements PwaAbaPlugin {
+  _RecordingAbaPlugin({this.supported = true});
+
+  final bool supported;
+  final launches = <({String action, Map<String, String> fields})>[];
+
+  @override
+  bool get isSupported => supported;
+
+  @override
+  PwaAbaPluginLaunch launch({
+    required String formAction,
+    required Map<String, String> fields,
+  }) {
+    launches.add((action: formAction, fields: fields));
+    return PwaAbaPluginLaunch.launched;
+  }
+}
+
+/// The server's answer on the plugin path: an AWAITING row in plugin mode
+/// plus the signed handoff. No QR, no deeplink — those are ABA's, in the popup.
+Map<String, Object?> _pluginServer({
+  bool withHandoff = true,
+  String state = 'AWAITING_PAYMENT',
+}) {
+  final base = _server(state: state)
+    ..['checkout_mode'] = 'plugin'
+    ..['checkout_url'] = '';
+  if (withHandoff) {
+    base['plugin'] = {
+      'form_action': 'https://gateway.example/api/purchase',
+      'fields': {
+        'hash': 'SIGNATURE==',
+        'tran_id': 'A0123456789abcdef012',
+        'amount': '4.99',
+        'req_time': '20260905170000',
+        'payment_option': 'abapay_khqr',
+        'currency': 'USD',
+      },
+    };
+  }
+  return base;
 }
 
 Widget _app(Widget child, {required List<Override> overrides, String locale = 'en'}) =>
@@ -430,15 +489,22 @@ void main() {
   // ══ the surface ═════════════════════════════════════════════════════════
 
   group('PAYWAY13-16  the surface', () {
-    testWidgets('PAYWAY13 both devices get ONE handoff to ABA, and no QR of '
-        'our own', (tester) async {
+    testWidgets('PAYWAY13 a rail with no QR still has ONE way forward, on '
+        'both devices', (tester) async {
+      // The `abapay_khqr` shape returns a checkout URL and nothing else, so
+      // there is no QR to show and no deeplink to offer. That is not a dead end
+      // and it is not an excuse to draw a QR: the way forward is ABA's own
+      // page, in a NEW tab, so the Wallet and its poll survive.
+      //
+      // (The shipped rail is `abapay_khqr_deeplink`, which does return a
+      // payload — ABA01/ABA02 cover that one.)
       for (final size in [const Size(1400, 1000), const Size(390, 844)]) {
         tester.view.physicalSize = size;
         tester.view.devicePixelRatio = 1.0;
         addTearDown(tester.view.resetPhysicalSize);
 
         await _teardown(tester);
-        final server = _FakeServer();
+        final server = _FakeServer();   // no qr, no deeplink
         final controller = PwaPaymentController(server.gateway, null);
         await controller.start('pack_10');
 
@@ -448,13 +514,13 @@ void main() {
         ));
         await tester.pump();
 
-        final l = pwaL10nFor(const Locale('en'));
-        expect(find.widgetWithText(FilledButton, l.payContinueToAba),
+        expect(find.byKey(const ValueKey('pwa-pay-open-checkout')),
             findsOneWidget,
             reason: "the checkout is ABA's, and this is the way to it");
-        // ABA draws the QR on ABA's page. Drawing our own was the old rail.
-        expect(find.byType(Image), findsNothing,
-            reason: "Ayden must not reproduce ABA's payment screen");
+        // No QR is invented to fill the gap.
+        final images = tester.widgetList<Image>(find.byType(Image));
+        expect(images.any((i) => i.image is MemoryImage), isFalse,
+            reason: 'with no payload there is nothing to render');
       }
       await _teardown(tester);
     });
@@ -481,17 +547,24 @@ void main() {
       ));
       await tester.pump();
 
-      final l = pwaL10nFor(const Locale('en'));
-      await tester.tap(find.widgetWithText(FilledButton, l.payContinueToAba));
+      await tester.tap(find.byKey(const ValueKey('pwa-pay-open-checkout')));
       await tester.pump();
 
-      expect(launcher.opened, [
+      // A NEW TAB, and specifically not `open`. `open` assigns
+      // `location.href`, which unloads the Flutter app — taking the Wallet, the
+      // attempt and the poll waiting on it with it, so a returning payer lands
+      // on a cold boot. That was the behaviour here until 2026-09-04, and this
+      // is the assertion that keeps it from coming back.
+      expect(launcher.newTabs, [
         'https://checkout-sandbox.payway.com.kh/eyJzdGVwIjoicGF5bWVudCJ9',
       ]);
+      expect(launcher.opened, isEmpty,
+          reason: 'same-tab navigation would destroy the app mid-payment');
       expect(controller.state.state, PwaPaymentState.awaitingPayment,
           reason: "opening ABA's checkout is not evidence of payment");
       expect(entitlement.refreshes, 0);
-      expect(find.text(l.payDoneTitle), findsNothing);
+      expect(find.text(pwaL10nFor(const Locale('en')).payDoneTitle),
+          findsNothing);
       await _teardown(tester);
     });
 
@@ -585,7 +658,7 @@ void main() {
         // disabled rather than absent when no rail is open — a person who
         // cannot pay should see what is on offer and be told why, not find the
         // control missing.
-        final cta = tester.widget<PwaPrimaryButton>(
+        final cta = tester.widget<PwaGoldCta>(
             find.byKey(const ValueKey('pwa-paywall-continue')));
         expect(cta.onPressed, configured ? isNotNull : isNull,
             reason: 'configured=$configured — the SERVER decides whether a '
@@ -854,6 +927,936 @@ void main() {
       });
       expect(weird.credits, 0);
       expect(weird.credits, isA<int>());
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ABA MERCHANT REVIEW (2026-09-04) — what the bank asked to see, and what we
+  // refused to fabricate for it.
+  // ══════════════════════════════════════════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════════
+  // ABA MERCHANT REVIEW — the compact KHQR modal, and the acceptance mark that
+  // lives in the navigation bar rather than in a strip of its own.
+  // ══════════════════════════════════════════════════════════════════════════
+  group('ABA merchant review', () {
+    /// A payment sitting at AWAITING with the shape the deployed rail returns:
+    /// the official KHQR payload, a server-rendered PNG of it, and ABA's own
+    /// deeplink.
+    PwaPaymentController awaiting() {
+      final server = _FakeServer(
+        checkoutAnswer: _server(state: 'AWAITING_PAYMENT', qr: 'KHQR-PAYLOAD',
+            deeplink: 'abamobilebank://ababank.com?type=payway&qrcode=x'),
+      );
+      return PwaPaymentController(server.gateway, null);
+    }
+
+    testWidgets('ABA01 the payment modal is COMPACT, and shows ABA KHQR',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final controller = awaiting();
+      await controller.start('pack_10');
+      await tester.pumpWidget(_app(
+        const PwaPaymentSheet(product: _pack),
+        overrides: [pwaPaymentProvider.overrideWith((ref) => controller)],
+      ));
+      await tester.pump();
+
+      // The method names itself, and the way out is always reachable.
+      expect(find.text('ABA KHQR'), findsOneWidget);
+      expect(find.byKey(const ValueKey('pwa-pay-close')), findsOneWidget);
+
+      // ABA's own deeplink, offered as ABA returned it.
+      expect(find.byKey(const ValueKey('pwa-pay-open-aba-mobile')),
+          findsOneWidget);
+
+      // AND NOT the rejected treatment: no embedded hosted page, and no
+      // paragraph of Ayden instructions duplicating what ABA's QR already says.
+      final l = pwaL10nFor(const Locale('en'));
+      expect(find.text(l.payHandoffBodyDesktop), findsNothing);
+      expect(find.text(l.payHandoffBodyPhone), findsNothing);
+      await _teardown(tester);
+    });
+
+    testWidgets('ABA02 the QR shown is the SERVER-rendered image of ABA\'s '
+        'payload', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final controller = awaiting();
+      await controller.start('pack_10');
+      await tester.pumpWidget(_app(
+        const PwaPaymentSheet(product: _pack),
+        overrides: [pwaPaymentProvider.overrideWith((ref) => controller)],
+      ));
+      await tester.pump();
+
+      // `Image.memory` — decoded from what the server sent, never encoded here.
+      expect(find.byType(Image), findsWidgets);
+      final images = tester.widgetList<Image>(find.byType(Image)).toList();
+      expect(images.any((i) => i.image is MemoryImage), isTrue,
+          reason: 'the QR is a server-rendered PNG, not a client-drawn symbol');
+
+      // And the client ships no QR ENCODER. The pixels must come from the
+      // server, so a payload can never be turned into a symbol in the browser.
+      final pubspec = File('pubspec.yaml').readAsStringSync();
+      for (final pkg in ['qr_flutter', 'qr:', 'barcode', 'zxing', 'pretty_qr']) {
+        expect(pubspec.contains(pkg), isFalse,
+            reason: 'no client-side QR encoder may enter the bundle ($pkg)');
+      }
+      await _teardown(tester);
+    });
+
+    testWidgets('ABA03 no payment method other than ABA KHQR is ever named, '
+        'in any locale', (tester) async {
+      const forbidden = [
+        'card', 'carte', 'កាត',
+        'Visa', 'Mastercard', 'Alipay', 'WeChat', 'ABA Pay',
+        'Apple Pay', 'Google Pay',
+      ];
+      const surfaces = [
+        'pwaPayHandoffBodyDesktop',
+        'pwaPayHandoffBodyPhone',
+        'pwaPayMethodTitle',
+        'pwaPayMethodBody',
+        'pwaPaywallSecureNote',
+        'pwaPayTitle',
+        'pwaPayScanTitle',
+        'pwaPayScanBody',
+        'pwaPayOrScan',
+        'pwaAcceptWeAccept',
+      ];
+      for (final table in [
+        pwaEnTranslations,
+        pwaKmTranslations,
+        pwaFrTranslations,
+      ]) {
+        for (final key in surfaces) {
+          final value = table[key];
+          if (value == null) continue;
+          // The gateway's own name contains a banned method name — "ABA Pay"
+          // is a substring of "ABA PayWay" — so the brand is removed before
+          // the check reads what is left.
+          final hay = value.replaceAll('ABA PayWay', '').toLowerCase();
+          for (final word in forbidden) {
+            expect(hay.contains(word.toLowerCase()), isFalse,
+                reason: '$key names "$word", which ABA no longer offers');
+          }
+        }
+      }
+    });
+
+    testWidgets('ABA04 the security note does not claim the payment happens '
+        'outside the browser', (tester) async {
+      for (final table in [
+        pwaEnTranslations,
+        pwaKmTranslations,
+        pwaFrTranslations,
+      ]) {
+        final note = table['pwaPaywallSecureNote']!;
+        expect(note.contains('Ayden'), isFalse,
+            reason: 'ABA handles the payment, not Ayden');
+        expect(note.toLowerCase().contains('never in your browser'), isFalse);
+        expect(note.toLowerCase().contains('jamais dans votre navigateur'),
+            isFalse);
+        expect(note.contains('ABA'), isTrue);
+      }
+    });
+
+    testWidgets('ABA05 every locale carries the payment vocabulary',
+        (tester) async {
+      const added = [
+        'pwaPayOpenInNewTab',
+        'pwaAcceptWeAccept',
+        'pwaPayMethodTitle',
+        'pwaPayMethodBody',
+        'pwaPayClose',
+        'pwaPayOpenAba',
+        'pwaPayScanBody',
+      ];
+      for (final table in [
+        pwaEnTranslations,
+        pwaKmTranslations,
+        pwaFrTranslations,
+      ]) {
+        for (final key in added) {
+          expect(table[key], isNotNull, reason: '$key is missing');
+          expect(table[key]!.trim(), isNotEmpty);
+        }
+        expect(table['pwaPayTitle']!.contains('ABA PayWay'), isTrue);
+      }
+    });
+
+    testWidgets('ABA06 the modal is a DIALOG over the Wallet, not a full sheet',
+        (tester) async {
+      // A source assertion, because what is being pinned is how the surface is
+      // PRESENTED — and the previous implementation's defect was exactly that:
+      // a 0.90-height bottom sheet reads as a separate screen, which is what
+      // ABA rejected. `showDialog` centres a content-sized card instead.
+      final src = File(
+        'lib/features/pwa/presentation/pwa_payment_sheet.dart',
+      ).readAsStringSync();
+
+      expect(src.contains('showDialog<PwaPaymentExit>'), isTrue,
+          reason: 'the payment surface must be a centred modal');
+      expect(src.contains('showModalBottomSheet'), isFalse,
+          reason: 'a near-full-height bottom sheet was the rejected treatment');
+      expect(src.contains('maxWidth = 400'), isTrue,
+          reason: 'the card is capped so the Wallet stays visible around it');
+
+      // The hosted checkout is no longer embedded anywhere.
+      expect(src.contains('createPwaAbaCheckoutFrame'), isFalse,
+          reason: "ABA's desktop page has no compact layout and is not framed");
+      expect(src.contains('HtmlElementView'), isFalse);
+    });
+
+    testWidgets('ABA07 closing the modal grants nothing', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final controller = awaiting();
+      final entitlement = _CountingEntitlement();
+      await controller.start('pack_10');
+
+      await tester.pumpWidget(_app(
+        const PwaPaymentSheet(product: _pack),
+        overrides: [
+          pwaPaymentProvider.overrideWith((ref) => controller),
+          pwaEntitlementProvider.overrideWith((ref) => entitlement),
+        ],
+      ));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('pwa-pay-close')));
+      await tester.pump();
+
+      expect(controller.state.state, PwaPaymentState.awaitingPayment,
+          reason: 'closing a card is not a payment outcome');
+      expect(entitlement.refreshes, 0);
+      final l = pwaL10nFor(const Locale('en'));
+      expect(find.text(l.payDoneTitle), findsNothing);
+      await _teardown(tester);
+    });
+
+    testWidgets('ABA08 the ABA Mobile button opens ABA\'s OWN deeplink',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final controller = awaiting();
+      final launcher = _RecordingLauncher();
+      await controller.start('pack_10');
+
+      await tester.pumpWidget(_app(
+        const PwaPaymentSheet(product: _pack),
+        overrides: [
+          pwaPaymentProvider.overrideWith((ref) => controller),
+          pwaExternalLauncherProvider.overrideWithValue(launcher),
+        ],
+      ));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('pwa-pay-open-aba-mobile')));
+      await tester.pump();
+
+      // Verbatim, and never assembled in the client.
+      expect(launcher.opened,
+          ['abamobilebank://ababank.com?type=payway&qrcode=x']);
+      final src = File(
+        'lib/features/pwa/presentation/pwa_payment_sheet.dart',
+      ).readAsStringSync();
+      expect(src.contains('abamobilebank://'), isFalse,
+          reason: 'the deeplink is PayWay\'s, never built here');
+      expect(controller.state.state, PwaPaymentState.awaitingPayment,
+          reason: 'opening a bank app is not evidence of payment');
+      await _teardown(tester);
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // THE ACCEPTANCE MARK — one place, and that place is the navigation bar.
+  // ══════════════════════════════════════════════════════════════════════════
+  group('acceptance mark', () {
+    Widget navBar() => PwaBottomNav(
+          current: PwaNavDestination.home,
+          onSelect: (_) {},
+        );
+
+    testWidgets('NAV01 the mark lives INSIDE the bottom navigation',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(_app(navBar(), overrides: []));
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('pwa-accept-mark')), findsOneWidget,
+          reason: 'the bar is the single container for the mark');
+      // The three destinations are still there and still readable.
+      final l = pwaL10nFor(const Locale('en'));
+      expect(find.text(l.shared.navHome), findsOneWidget);
+      expect(find.text(l.shared.navProjects), findsOneWidget);
+      expect(find.text(l.shared.navProfile), findsOneWidget);
+      await _teardown(tester);
+    });
+
+    testWidgets('NAV02 the mark is the SUPPLIED artwork, from web/aba/',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(_app(navBar(), overrides: []));
+      await tester.pump();
+
+      final img =
+          tester.widget<Image>(find.byKey(const ValueKey('pwa-accept-mark')));
+      expect((img.image as NetworkImage).url, kPwaAcceptMarkAsset);
+      expect(kPwaAcceptMarkAsset, 'aba/we_accept_aba_khqr.png');
+      expect(kPwaAbaMethodMarkAsset, 'aba/aba_khqr_logo.png');
+
+      // One image, not a re-typeset lockup: no separate "We accept" Text and
+      // no pill beside it. Splitting a third party's lockup is redrawing it.
+      expect(find.text('We accept'), findsNothing);
+      await _teardown(tester);
+    });
+
+    testWidgets('NAV03 there is NO standalone acceptance strip anywhere',
+        (tester) async {
+      // The rejected pattern: a full-width row inserted between the page and
+      // the navigation. It was added to Home, Profile and the Wallet, and read
+      // as a banner bolted onto the product.
+      for (final path in [
+        'lib/features/pwa/presentation/pwa_home_ios.dart',
+        'lib/features/pwa/presentation/pwa_profile_ios.dart',
+        'lib/features/pwa/presentation/pwa_paywall.dart',
+        'lib/features/pwa/presentation/pwa_architect_screen.dart',
+        'lib/features/pwa/presentation/pwa_reveal_screen.dart',
+      ]) {
+        final f = File(path);
+        if (!f.existsSync()) continue;
+        final src = f.readAsStringSync();
+        expect(src.contains('PwaAcceptStrip'), isFalse,
+            reason: '$path must not host a standalone acceptance strip');
+        expect(src.contains('PwaAcceptMark'), isFalse,
+            reason: '$path must inherit the mark from PwaBottomNav, not '
+                'place its own');
+      }
+      // And exactly one file places it.
+      final nav = File('lib/features/pwa/presentation/pwa_nav_shell.dart')
+          .readAsStringSync();
+      expect('PwaAcceptMark('.allMatches(nav).length, 1,
+          reason: 'one placement, in the shared bar');
+    });
+
+    testWidgets('NAV04 the bar does not overflow on a small phone',
+        (tester) async {
+      for (final size in [
+        const Size(320, 200),
+        const Size(390, 200),
+        const Size(430, 200),
+      ]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        await tester.pumpWidget(_app(navBar(), overrides: []));
+        await tester.pump();
+        expect(tester.takeException(), isNull,
+            reason: 'no overflow at ${size.width.toInt()}px');
+        await _teardown(tester);
+      }
+    });
+
+    testWidgets('NAV06 the mark is INLINE with the Profile label',
+        (tester) async {
+      // Two placements were rejected before this one, and for the same reason:
+      // a lockup on its OWN LINE reads as a footer, whether that line sits
+      // under the item or under the bar. It now shares the label's line.
+      //
+      // Measured, because "inline" is a geometry and nothing else: the mark's
+      // vertical centre must sit on the label's, and its left edge must be to
+      // the right of the label's right edge.
+      for (final size in [const Size(320, 200), const Size(390, 200),
+                          const Size(430, 200)]) {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+
+        await tester.pumpWidget(_app(navBar(), overrides: []));
+        await tester.pump();
+
+        final l = pwaL10nFor(const Locale('en'));
+        final label = tester.getRect(find.text(l.shared.navProfile));
+        final mark =
+            tester.getRect(find.byKey(const ValueKey('pwa-accept-mark')));
+
+        expect(mark.center.dy, closeTo(label.center.dy, 2.0),
+            reason: 'at ${size.width.toInt()}px the mark must sit ON the '
+                'label\'s line, not on a line of its own');
+        expect(mark.left, greaterThanOrEqualTo(label.right),
+            reason: 'it follows the word, it does not sit under it');
+        expect(mark.left - label.right, lessThanOrEqualTo(8.0),
+            reason: 'and it stays attached to it');
+
+        // The bar is the label's row plus the icon, and nothing else: the mark
+        // must not have bought itself a second row of height.
+        final bar = tester.getRect(find.byType(PwaBottomNav));
+        final home = tester.getRect(find.text(l.shared.navHome));
+        expect(bar.bottom - label.bottom,
+            closeTo(bar.bottom - home.bottom, 2.0),
+            reason: 'Profile must end where Home ends — no extra row');
+        await _teardown(tester);
+      }
+    });
+
+    testWidgets('NAV07 the mark is small enough to read as metadata',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(_app(navBar(), overrides: []));
+      await tester.pump();
+
+      final l = pwaL10nFor(const Locale('en'));
+      final label = tester.getRect(find.text(l.shared.navProfile));
+      final mark =
+          tester.getRect(find.byKey(const ValueKey('pwa-accept-mark')));
+
+      // 16 px tall by the artwork's own 3.23:1, so ~52 px wide — it rides the
+      // label's line and must never grow into a fourth destination.
+      expect(mark.height, lessThanOrEqualTo(18.0),
+          reason: 'trust metadata, not a destination');
+      expect(label.width + 5 + mark.width, lessThan(390 / 3),
+          reason: 'label and mark together must fit the Profile column');
+      await _teardown(tester);
+    });
+
+    testWidgets('NAV05 Profile is still tappable with the mark beside it',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final taps = <PwaNavDestination>[];
+      await tester.pumpWidget(_app(
+        PwaBottomNav(
+          current: PwaNavDestination.home,
+          onSelect: taps.add,
+        ),
+        overrides: [],
+      ));
+      await tester.pump();
+
+      final l = pwaL10nFor(const Locale('en'));
+      await tester.tap(find.text(l.shared.navProfile));
+      await tester.pump();
+      expect(taps, [PwaNavDestination.profile],
+          reason: 'the mark must not steal the destination\'s hit target');
+      await _teardown(tester);
+    });
+  });
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // THE WALLET'S PAYMENT METHOD — a statement, not a door.
+  // ══════════════════════════════════════════════════════════════════════════
+  group('wallet payment method', () {
+    testWidgets('WAL01 the ABA KHQR row has NO chevron', (tester) async {
+      // The phone review found a false affordance: a trailing chevron promised
+      // a chooser, and tapping the row did nothing — because there is nothing
+      // to choose. ABA KHQR is the only method this deployment offers.
+      tester.view.physicalSize = const Size(390, 400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(_app(
+        const PwaAbaMethodRow(tone: PwaMarkTone.dark),
+        overrides: [],
+      ));
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('pwa-aba-method-row')), findsOneWidget);
+      expect(find.text('ABA KHQR'), findsOneWidget);
+      for (final glyph in [
+        Icons.chevron_right_rounded,
+        Icons.chevron_right,
+        Icons.arrow_forward_ios,
+        Icons.keyboard_arrow_right,
+      ]) {
+        expect(find.byIcon(glyph), findsNothing,
+            reason: 'no affordance may promise a destination that is not there');
+      }
+      // And no other interactive affordance stood in for it.
+      expect(find.byType(Radio<Object?>), findsNothing);
+      expect(find.byType(Checkbox), findsNothing);
+      await _teardown(tester);
+    });
+
+    testWidgets('WAL02 the row is not a button, and BUY is still the only CTA',
+        (tester) async {
+      final src = File(
+        'lib/features/pwa/presentation/pwa_aba_marks.dart',
+      ).readAsStringSync();
+      // No tap handler of any kind on the method row.
+      for (final tappable in [
+        'onTap:',
+        'GestureDetector',
+        'InkWell',
+        'onPressed:',
+      ]) {
+        expect(src.contains(tappable), isFalse,
+            reason: 'the payment-method row is informational ($tappable)');
+      }
+      // The Wallet keeps exactly one control that starts a payment.
+      final paywall = File(
+        'lib/features/pwa/presentation/pwa_paywall.dart',
+      ).readAsStringSync();
+      expect('showPwaPaymentSheet('.allMatches(paywall).length, 1,
+          reason: 'one checkout CTA on the Wallet, and it is Buy');
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ABA'S PLUGIN — the active Web checkout since 2026-09-05.
+  // ══════════════════════════════════════════════════════════════════════════
+  group('ABA checkout plugin', () {
+    testWidgets('PLG01 Buy hands the SERVER-signed fields to the plugin, '
+        'verbatim', (tester) async {
+      var pluginCalls = 0;
+      var legacyCalls = 0;
+      final gateway = PwaPaymentGateway(
+        startCheckout: ({required sku, required attemptKey}) async {
+          legacyCalls++;
+          return _server(state: 'AWAITING_PAYMENT');
+        },
+        startPluginCheckout: ({required sku, required attemptKey}) async {
+          pluginCalls++;
+          return _pluginServer();
+        },
+        orderStatus: (_) async => _pluginServer(withHandoff: false),
+        openOrder: () async => const {'ok': true, 'open': false},
+        cancelOrder: (_) async => _server(state: 'CANCELLED'),
+      );
+      final plugin = _RecordingAbaPlugin();
+      final controller = PwaPaymentController(gateway, null, plugin: plugin);
+      await controller.start('pack_10');
+
+      expect(pluginCalls, 1, reason: 'the plugin path is the active one');
+      expect(legacyCalls, 0, reason: 'the server-side Purchase path is dormant');
+      expect(plugin.launches.length, 1);
+      expect(plugin.launches.single.action,
+          'https://gateway.example/api/purchase');
+      // Relayed, not read: every key the server sent, and nothing added.
+      expect(plugin.launches.single.fields, {
+        'hash': 'SIGNATURE==',
+        'tran_id': 'A0123456789abcdef012',
+        'amount': '4.99',
+        'req_time': '20260905170000',
+        'payment_option': 'abapay_khqr',
+        'currency': 'USD',
+      });
+      expect(controller.lastPluginLaunch, PwaAbaPluginLaunch.launched);
+      expect(controller.state.state, PwaPaymentState.awaitingPayment,
+          reason: 'opening the popup is not a payment');
+      controller.dispose();
+    });
+
+    testWidgets('PLG02 without a plugin the controller keeps the old path',
+        (tester) async {
+      var pluginCalls = 0;
+      var legacyCalls = 0;
+      final gateway = PwaPaymentGateway(
+        startCheckout: ({required sku, required attemptKey}) async {
+          legacyCalls++;
+          return _server(state: 'AWAITING_PAYMENT');
+        },
+        startPluginCheckout: ({required sku, required attemptKey}) async {
+          pluginCalls++;
+          return _pluginServer();
+        },
+        orderStatus: (_) async => _server(state: 'AWAITING_PAYMENT'),
+        openOrder: () async => const {'ok': true, 'open': false},
+        cancelOrder: (_) async => _server(state: 'CANCELLED'),
+      );
+      final controller = PwaPaymentController(gateway, null);
+      await controller.start('pack_10');
+      expect(legacyCalls, 1);
+      expect(pluginCalls, 0);
+      controller.dispose();
+    });
+
+    testWidgets('PLG03 a rejoin launches nothing — one Purchase per tran_id',
+        (tester) async {
+      final gateway = PwaPaymentGateway(
+        startCheckout: ({required sku, required attemptKey}) async =>
+            _server(state: 'AWAITING_PAYMENT'),
+        startPluginCheckout: ({required sku, required attemptKey}) async =>
+            _pluginServer(withHandoff: false),
+        orderStatus: (_) async => _pluginServer(withHandoff: false),
+        openOrder: () async => const {'ok': true, 'open': false},
+        cancelOrder: (_) async => _server(state: 'CANCELLED'),
+      );
+      final plugin = _RecordingAbaPlugin();
+      final controller = PwaPaymentController(gateway, null, plugin: plugin);
+      await controller.start('pack_10');
+      expect(plugin.launches, isEmpty,
+          reason: 'no fields came back, so there is nothing to post');
+      expect(controller.lastPluginLaunch, isNull);
+      controller.dispose();
+    });
+
+    testWidgets('PLG04 behind the popup the card is a STATUS, not a second '
+        'checkout', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final gateway = PwaPaymentGateway(
+        startCheckout: ({required sku, required attemptKey}) async =>
+            _server(state: 'AWAITING_PAYMENT'),
+        startPluginCheckout: ({required sku, required attemptKey}) async =>
+            _pluginServer(),
+        orderStatus: (_) async => _pluginServer(withHandoff: false),
+        openOrder: () async => const {'ok': true, 'open': false},
+        cancelOrder: (_) async => _server(state: 'CANCELLED'),
+      );
+      final plugin = _RecordingAbaPlugin();
+      final controller = PwaPaymentController(gateway, null, plugin: plugin);
+      await controller.start('pack_10');
+
+      await tester.pumpWidget(_app(
+        const PwaPaymentSheet(product: _pack),
+        overrides: [pwaPaymentProvider.overrideWith((ref) => controller)],
+      ));
+      await tester.pump();
+
+      expect(find.byKey(const ValueKey('pwa-pay-plugin-open')), findsOneWidget);
+      // None of the dormant custom-checkout pieces are rendered.
+      final images = tester.widgetList<Image>(find.byType(Image));
+      expect(images.any((i) => i.image is MemoryImage), isFalse,
+          reason: 'no server-rendered QR on the plugin path');
+      expect(find.byKey(const ValueKey('pwa-pay-open-aba-mobile')), findsNothing,
+          reason: 'no custom ABA Mobile button — the plugin owns that prompt');
+      expect(find.byKey(const ValueKey('pwa-pay-open-checkout')), findsNothing,
+          reason: 'no new-tab handoff either');
+      // What IS here: the status, the timer, and the way out.
+      final l = pwaL10nFor(const Locale('en'));
+      expect(find.text(l.payPluginOpen), findsOneWidget);
+      expect(find.text(l.payWaiting), findsOneWidget);
+      expect(find.byKey(const ValueKey('pwa-pay-close')), findsOneWidget);
+      await _teardown(tester);
+    });
+
+    testWidgets('PLG05 the plugin launch result never becomes a payment state',
+        (tester) async {
+      // A launch that "succeeds" and a launch that fails must leave the
+      // payment exactly where the SERVER put it.
+      for (final supported in [true, false]) {
+        final gateway = PwaPaymentGateway(
+          startCheckout: ({required sku, required attemptKey}) async =>
+              _server(state: 'AWAITING_PAYMENT'),
+          startPluginCheckout: ({required sku, required attemptKey}) async =>
+              _pluginServer(),
+          orderStatus: (_) async => _pluginServer(withHandoff: false),
+          openOrder: () async => const {'ok': true, 'open': false},
+          cancelOrder: (_) async => _server(state: 'CANCELLED'),
+        );
+        final plugin = _RecordingAbaPlugin(supported: supported);
+        final entitlement = _CountingEntitlement();
+        final controller = PwaPaymentController(
+          gateway, entitlement.refresh, plugin: plugin);
+        await controller.start('pack_10');
+        expect(controller.state.state, PwaPaymentState.awaitingPayment,
+            reason: 'supported=$supported: the popup decides nothing');
+        expect(entitlement.refreshes, 0);
+        controller.dispose();
+      }
+    });
+
+    testWidgets('PLG06 Dart names no PayWay field and builds no iframe',
+        (tester) async {
+      // The bridge relays an opaque map. If a field name ever appears in Dart
+      // the client has started to KNOW the protocol, which is the first step
+      // toward signing it. And ABA's plugin owns the iframe — we build none.
+      for (final path in [
+        'lib/features/pwa/data/pwa_aba_plugin.dart',
+        'lib/features/pwa/data/pwa_aba_plugin_web.dart',
+        'lib/features/pwa/data/pwa_aba_plugin_stub.dart',
+        'lib/features/pwa/billing/pwa_payment_controller.dart',
+      ]) {
+        final src = File(path).readAsStringSync();
+        for (final banned in [
+          "'merchant_id'", "'hash'", "'req_time'", "'amount'",
+          "'payment_option'", 'HTMLIFrameElement', 'createElement',
+          'HtmlElementView',
+        ]) {
+          expect(src.contains(banned), isFalse,
+              reason: '$path must not contain $banned');
+        }
+      }
+      // The official script, from ABA's host, with the flag that stops a
+      // close from reloading the page.
+      final index = File('web/index.html').readAsStringSync();
+      expect(index.contains(
+          'https://checkout.payway.com.kh/plugins/checkout2-0.js?hide-close=2'),
+          isTrue, reason: "ABA's plugin, from ABA, with hide-close=2");
+      expect(index.contains("form.target = 'aba_webservice'"), isTrue,
+          reason: 'the form targets the iframe the plugin names');
+      expect(index.contains("form.id = 'aba_merchant_request'"), isTrue);
+      // The BARE identifier: the plugin's `const AbaPayway` is not on window.
+      expect(index.contains('AbaPayway.checkout();'), isTrue);
+      expect(index.contains('window.AbaPayway'), isFalse,
+          reason: 'a top-level const is not a window property');
+      // And the page ships no PayWay secret or endpoint of its own.
+      for (final banned in [
+        'payment-gateway/v1/payments', 'checkout-sandbox', 'PAYWAY_',
+        'merchant_id', 'sha512',
+      ]) {
+        expect(index.contains(banned), isFalse,
+            reason: 'index.html must not contain $banned');
+      }
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ONE CHECKOUT SURFACE — the plugin's. Found on a real phone: Ayden's own
+  // payment sheet opened first and ABA's sheet opened over it.
+  // ══════════════════════════════════════════════════════════════════════════
+  group('double modal', () {
+    /// A Wallet with one purchasable pack, a configured rail, a plugin, and a
+    /// scriptable gateway — the exact production wiring, in miniature.
+    Future<({PwaEntitlementController entitlement, _RecordingAbaPlugin plugin})>
+        pumpWallet(
+      WidgetTester tester, {
+      required Map<String, Object?> Function() onStatus,
+      Map<String, Object?> Function()? onPluginStart,
+    }) async {
+      tester.view.physicalSize = const Size(390, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final entitlement = PwaEntitlementController(() async => {
+            'can_generate': false,
+            'billing_state': 'FREE_EXHAUSTED',
+            'payment': {'provider': 'payway', 'configured': true},
+            'products': [
+              {
+                'sku': 'pack_10', 'type': 'CREDIT_PACK', 'credits': 10,
+                'price_usd': 4.99, 'currency': 'USD',
+                'store_only': false, 'web_enabled': true,
+                'metadata': {'badge': 'popular'},
+              },
+            ],
+          });
+      await entitlement.refresh();
+      final plugin = _RecordingAbaPlugin();
+      final gateway = PwaPaymentGateway(
+        startCheckout: ({required sku, required attemptKey}) async =>
+            _server(state: 'AWAITING_PAYMENT'),
+        startPluginCheckout: ({required sku, required attemptKey}) async =>
+            (onPluginStart ?? _pluginServer)(),
+        orderStatus: (_) async => onStatus(),
+        openOrder: () async => const {'ok': true, 'open': false},
+        cancelOrder: (_) async => _server(state: 'CANCELLED'),
+      );
+      await tester.pumpWidget(_app(
+        const PwaPaywallSheet(),
+        overrides: [
+          pwaEntitlementProvider.overrideWith((ref) => entitlement),
+          pwaPaymentGatewayProvider.overrideWithValue(gateway),
+          pwaAbaPluginProvider.overrideWithValue(plugin),
+        ],
+      ));
+      await tester.pumpAndSettle();
+      return (entitlement: entitlement, plugin: plugin);
+    }
+
+    testWidgets('DM01/DM02/DM03 Buy launches the plugin and mounts NO Ayden '
+        'payment sheet', (tester) async {
+      final w = await pumpWallet(
+          tester, onStatus: () => _pluginServer(withHandoff: false));
+
+      expect(find.byType(PwaPaymentSheet), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('pwa-paywall-continue')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // DM02 — the plugin was invoked, once, right after preparation.
+      expect(w.plugin.launches.length, 1);
+      // DM01 / DM03 — and nothing of ours is presenting a checkout.
+      expect(find.byType(PwaPaymentSheet), findsNothing,
+          reason: 'the plugin owns the checkout surface');
+      expect(find.byType(Dialog), findsNothing);
+      // The Wallet is still the surface: packs and CTA are still there.
+      expect(find.byKey(const ValueKey('pwa-pack-pack_10')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pwa-paywall-continue')), findsOneWidget);
+      // DM04 — what IS shown is one quiet line, not a second surface.
+      expect(find.byKey(const ValueKey('pwa-paywall-payment-inline')),
+          findsOneWidget);
+      final l = pwaL10nFor(const Locale('en'));
+      expect(find.text(l.payInlineChecking), findsOneWidget);
+      expect(find.text(l.payPluginOpen), findsNothing,
+          reason: 'no "checkout is open" card');
+      expect(find.text(l.payWaiting), findsNothing);
+      await _teardown(tester);
+    });
+
+    testWidgets('DM05/DM06 Ayden builds no checkout iframe; the plugin does',
+        (tester) async {
+      for (final path in [
+        'lib/features/pwa/presentation/pwa_paywall.dart',
+        'lib/features/pwa/presentation/pwa_payment_sheet.dart',
+        'lib/features/pwa/billing/pwa_payment_controller.dart',
+        'lib/features/pwa/data/pwa_aba_plugin_web.dart',
+      ]) {
+        final src = File(path).readAsStringSync();
+        expect(src.contains('HTMLIFrameElement'), isFalse, reason: path);
+        expect(src.contains('HtmlElementView'), isFalse, reason: path);
+        expect(src.contains("createElement('iframe')"), isFalse, reason: path);
+      }
+      final index = File('web/index.html').readAsStringSync();
+      expect(index.contains("createElement('iframe')"), isFalse,
+          reason: 'the bridge builds a FORM; the iframe is the plugin\'s');
+      expect(index.contains("form.target = 'aba_webservice'"), isTrue);
+    });
+
+    testWidgets('ERR02/ERR03/ERR05/ERR06 NOT_CREATED leaves no waiting state '
+        'and returns the Wallet', (tester) async {
+      // The server concluded the transaction was never created (Error 6 →
+      // "tran_id not found" past the grace window) and answers the poll with
+      // FAILED / NOT_CREATED.
+      var polls = 0;
+      final w = await pumpWallet(tester, onStatus: () {
+        polls++;
+        return _server(state: 'FAILED', failureReason: 'NOT_CREATED')
+          ..['checkout_mode'] = 'plugin'
+          ..['checkout_url'] = '';
+      });
+      await tester.tap(find.byKey(const ValueKey('pwa-paywall-continue')));
+      await tester.pump();
+      // First poll fires at the server's interval.
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pump();
+
+      final l = pwaL10nFor(const Locale('en'));
+      // ERR02 — no "waiting", ERR03 — no countdown.
+      expect(find.text(l.payWaiting), findsNothing);
+      expect(find.textContaining(':'), findsNothing,
+          reason: 'no mm:ss countdown anywhere on the Wallet');
+      expect(find.byKey(const ValueKey('pwa-paywall-payment-inline')),
+          findsNothing, reason: 'the checking line is gone');
+      // ERR06 — the Wallet is what the person sees, with a short reason.
+      expect(find.byKey(const ValueKey('pwa-pack-pack_10')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pwa-paywall-payment-error')),
+          findsOneWidget);
+      expect(find.text(l.payFailedBody('NOT_CREATED')), findsOneWidget);
+      expect(find.byType(PwaPaymentSheet), findsNothing);
+      // ERR05 — polling stopped: no further poll after the terminal answer.
+      final before = polls;
+      await tester.pump(const Duration(seconds: 10));
+      expect(polls, before, reason: 'a terminal answer ends the poll');
+      // ERR04 — nothing granted.
+      expect(w.entitlement.state.creditsAvailable, 0);
+      // And Buy is live again for a NEW attempt.
+      final cta = tester.widget<PwaGoldCta>(
+          find.byKey(const ValueKey('pwa-paywall-continue')));
+      expect(cta.onPressed, isNotNull);
+      expect(w.plugin.launches.length, 1);
+      await _teardown(tester);
+    });
+
+    testWidgets('PAY02 a cancelled plugin payment returns to the Wallet with '
+        'no line at all', (tester) async {
+      await pumpWallet(
+          tester, onStatus: () => _pluginServer(withHandoff: false));
+      await tester.tap(find.byKey(const ValueKey('pwa-paywall-continue')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.byKey(const ValueKey('pwa-paywall-payment-cancel')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.byKey(const ValueKey('pwa-paywall-payment-inline')),
+          findsNothing);
+      expect(find.byKey(const ValueKey('pwa-paywall-payment-error')),
+          findsNothing, reason: 'cancelling is a decision, not an error');
+      expect(find.byType(PwaPaymentSheet), findsNothing);
+      await _teardown(tester);
+    });
+
+    testWidgets('PAY03 GRANTED closes the Wallet — and grants once',
+        (tester) async {
+      // The Wallet is a modal ROUTE in production (`showPwaPaywall` →
+      // showModalBottomSheet), and closing it is a pop. So here it is pushed
+      // the same way, from a host page, rather than pumped bare — a bare sheet
+      // has no route to pop and would sit there whatever the code did.
+      tester.view.physicalSize = const Size(390, 1200);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final entitlement = PwaEntitlementController(() async => {
+            'can_generate': false,
+            'billing_state': 'FREE_EXHAUSTED',
+            'payment': {'provider': 'payway', 'configured': true},
+            'products': [
+              {
+                'sku': 'pack_10', 'type': 'CREDIT_PACK', 'credits': 10,
+                'price_usd': 4.99, 'currency': 'USD',
+                'store_only': false, 'web_enabled': true,
+                'metadata': {'badge': 'popular'},
+              },
+            ],
+          });
+      await entitlement.refresh();
+      final plugin = _RecordingAbaPlugin();
+      final gateway = PwaPaymentGateway(
+        startCheckout: ({required sku, required attemptKey}) async =>
+            _server(state: 'AWAITING_PAYMENT'),
+        startPluginCheckout: ({required sku, required attemptKey}) async =>
+            _pluginServer(),
+        orderStatus: (_) async => _pluginServer(state: 'GRANTED'),
+        openOrder: () async => const {'ok': true, 'open': false},
+        cancelOrder: (_) async => _server(state: 'CANCELLED'),
+      );
+      await tester.pumpWidget(_app(
+        Builder(
+          builder: (ctx) => TextButton(
+            key: const ValueKey('open-wallet'),
+            onPressed: () => showModalBottomSheet<void>(
+              context: ctx,
+              isScrollControlled: true,
+              builder: (_) => const PwaPaywallSheet(),
+            ),
+            child: const Text('open'),
+          ),
+        ),
+        overrides: [
+          pwaEntitlementProvider.overrideWith((ref) => entitlement),
+          pwaPaymentGatewayProvider.overrideWithValue(gateway),
+          pwaAbaPluginProvider.overrideWithValue(plugin),
+        ],
+      ));
+      // The localisation delegates load asynchronously: the first frame is
+      // empty until they do, so settle before looking for the host button.
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('open-wallet')));
+      await tester.pumpAndSettle();
+      expect(find.byType(PwaPaywallSheet), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('pwa-paywall-continue')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
+      // The sheet popped itself. Success is presented by the return watcher
+      // (see pwa_experience.dart), not by a second surface here.
+      expect(find.byType(PwaPaywallSheet), findsNothing);
+      expect(find.byType(PwaPaymentSheet), findsNothing);
+      expect(plugin.launches.length, 1);
+      await _teardown(tester);
     });
   });
 }

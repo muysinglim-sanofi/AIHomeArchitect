@@ -20,6 +20,7 @@ import 'package:ai_home_architect/features/pwa/presentation/pwa_home_screen.dart
 import 'package:ai_home_architect/features/pwa/data/mock_pwa_experience_repository.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_mock_app.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_url_sync_scope.dart';
+import 'package:ai_home_architect/data/mock/mock_projects.dart' show featuredShowcase;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -91,52 +92,42 @@ void main() {
       expect(bridge.current().path, '/');
     });
 
-    testWidgets("it opens on the person's OWN most recent work", (
-      tester,
-    ) async {
-      // REVERSED DELIBERATELY. This used to assert the opposite — a stock
-      // brand hero, and explicitly NO featured slot. iOS parity changed the
-      // product decision: a returning customer should see the room they were
-      // working on, not a stranger's apartment. The assertion is kept just as
-      // strong, pointing the other way.
+    testWidgets('the hero is the curated showcase; the OWN work is Continue '
+        'Designing', (tester) async {
+      // Round 3 (phone): the hero had become `visibleProjects.first`, so a
+      // Bedroom generated a minute ago replaced the approved Before/After
+      // the moment the person came back to Home. Two data sources now, as on
+      // iOS: `featuredShowcase` for the hero, `visibleProjects` for the rail.
       final (c, _) = await _pump(tester);
       final visible = c.read(pwaControllerProvider).visibleProjects;
       expect(visible, isNotEmpty);
 
       expect(find.byKey(const ValueKey('pwa-home-hero')), findsOneWidget);
-      expect(find.byKey(const ValueKey('pwa-home-featured')), findsOneWidget);
-      // The showcase fallback must NOT be used when real work exists.
-      expect(find.byKey(const ValueKey('pwa-home-showcase')), findsNothing);
+      expect(find.byKey(const ValueKey('pwa-home-showcase')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pwa-home-featured')), findsNothing);
+      expect(find.text(featuredShowcase.first.title), findsOneWidget);
 
-      // The hero is that project — its room and atmosphere, not a slogan.
-      final top = visible.first;
-      expect(find.text('${top.roomLabel} · ${top.atmosphereLabel}'),
-          findsOneWidget);
-      expect(find.text(top.title), findsOneWidget);
+      // The person's most recent work is the FIRST card of the rail.
+      expect(find.byKey(const ValueKey('pwa-home-recent')), findsOneWidget);
+      expect(
+        find.byKey(ValueKey('pwa-home-recent-${visible.first.projectId}')),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('the hero IS the continuation — no duplicate grid', (
-      tester,
-    ) async {
-      // REVERSED DELIBERATELY. The old Home carried three competing blocks:
-      // a stock hero with two CTAs, a "Continue designing" grid, and a second
-      // full-width "New project" panel. Two said the same thing and the third
-      // duplicated Projects. Tapping the Featured Vision now reopens that
-      // project, so the grid has no job left.
+    testWidgets('the rail is the one list of the person\'s work: no second '
+        'grid, no duplicate', (tester) async {
       final (c, _) = await _pump(tester);
       final visible = c.read(pwaControllerProvider).visibleProjects;
       expect(visible.length, greaterThan(1));
 
-      expect(find.byKey(const ValueKey('pwa-home-continue')), findsNothing);
-      expect(find.text('CONTINUE DESIGNING'), findsNothing);
-
-      // Deduplication still holds where it matters — the hero leads with the
-      // most recent, and it appears exactly once.
       final ids = visible.map((p) => p.projectId).toList();
       expect(ids.toSet().length, ids.length);
-      expect(find.text(visible.first.title), findsOneWidget);
-      // A second project's title must NOT also be on Home: that was the grid.
-      expect(find.text(visible[1].title), findsNothing);
+      final rail = tester.widget<ListView>(
+          find.byKey(const ValueKey('pwa-home-recent-rail')));
+      expect(rail.semanticChildCount, visible.take(3).length);
+      // The library grid stays in Projects.
+      expect(find.byKey(const ValueKey('pwa-home-continue')), findsNothing);
     });
 
     testWidgets('the dashboard is not the library: the NAV links out', (
@@ -178,11 +169,12 @@ void main() {
     testWidgets('opening a card goes straight to that project conversation', (
       tester,
     ) async {
-      final (c, bridge) = await _pump(tester);
+      // Tall enough that the rail is on screen (it sits under the hero).
+      final (c, bridge) = await _pump(tester, size: const Size(900, 1500));
       final target = c.read(pwaControllerProvider).visibleProjects.first;
-      // The Featured Vision IS the way back into the work — tapping the hero
-      // reopens that project. This is what replaced the Continue grid.
-      await tester.tap(find.byKey(const ValueKey('pwa-home-featured')));
+      // The way back into the work is the rail — the hero is the showcase.
+      await tester.tap(
+          find.byKey(ValueKey('pwa-home-recent-${target.projectId}')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 3));
       final s = c.read(pwaControllerProvider);
@@ -276,14 +268,11 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 3));
       final id = c.read(pwaControllerProvider).activeProjectId;
-      // Generate unveils the vision first, replacing /create in history…
-      expect(bridge.current().path, '/projects/$id/reveal');
-      expect(bridge.current().queryParameters['mode'], 'first');
-      // …then Continue supersedes the unveiling with the conversation.
-      ctl.continueToArchitect();
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 3));
+      // Generate lands straight in the conversation, replacing /create in
+      // history — there is no unveiling in between to supersede any more, and
+      // therefore no `mode=first` entry that Back could land on.
       expect(bridge.current().path, '/projects/$id/architect');
+      expect(bridge.current().queryParameters['mode'], isNull);
       expect(bridge.ops, contains('replace:/projects/$id/architect'));
 
       bridge.back();
@@ -295,6 +284,98 @@ void main() {
       expect(s.hasSource, isFalse, reason: 'Back must not restore the photo');
       // The generated project survived and is listed on the dashboard.
       expect(s.visibleProjects.any((p) => p.projectId == id), isTrue);
+    });
+  });
+
+  // ── Home shows the work, not one piece of it ──────────────────────────────
+  //
+  // HOME01-05. Projects listed two sessions; Home showed one Featured Vision
+  // and offered no way to reach the other. This supersedes the Phase-2
+  // decision to keep Home to a single vision — but it is NOT the old dashboard
+  // returning: a short rail of the most recent sessions and a door through to
+  // Projects, which still owns the library.
+  //
+  // The load-bearing rule is the DATA one: both screens read the same
+  // `visibleProjects`, in the same order, through the same cover and label
+  // resolvers. There is no second derivation to drift.
+  group('Home recent sessions', () {
+    testWidgets('HOME01: the rail is the person\'s work, newest first, '
+        'capped at three', (tester) async {
+      final (c, _) = await _pump(tester, size: const Size(900, 1500));
+      final projects = c.read(pwaControllerProvider).visibleProjects;
+      expect(projects.length, greaterThan(1),
+          reason: 'the seeded library must have something to rail');
+
+      expect(find.byKey(const ValueKey('pwa-home-recent')), findsOneWidget);
+      // The hero is the curated showcase, so the rail starts at the FIRST
+      // project — nothing is skipped — and is capped at three.
+      final expected = projects.take(3).toList();
+      final rail = tester.widget<ListView>(
+          find.byKey(const ValueKey('pwa-home-recent-rail')));
+      expect(rail.semanticChildCount, expected.length);
+      expect(
+        find.byKey(ValueKey('pwa-home-recent-${expected.first.projectId}')),
+        findsOneWidget,
+      );
+      // …and the showcase hero is never one of them.
+      expect(find.byKey(const ValueKey('pwa-home-showcase')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('HOME02: with only one session there is no rail to draw',
+        (tester) async {
+      final (c, _) = await _pump(tester, seed: false);
+      expect(c.read(pwaControllerProvider).visibleProjects, isEmpty);
+      expect(find.byKey(const ValueKey('pwa-home-recent')), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('HOME03: See all opens Projects', (tester) async {
+      final (c, _) = await _pump(tester, size: const Size(900, 1500));
+      final seeAll = find.byKey(const ValueKey('pwa-home-see-all'));
+      expect(seeAll, findsOneWidget);
+      await tester.tap(seeAll);
+      await tester.pumpAndSettle();
+      final s = c.read(pwaControllerProvider);
+      expect(s.phase, PwaPhase.projects);
+      expect(s.canonicalRoute.location, '/projects');
+      // Looking at the library creates nothing.
+      expect(s.versions.length, s.versions.length);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('HOME04: a rail card opens that project', (tester) async {
+      final (c, _) = await _pump(tester, size: const Size(900, 1500));
+      final target = c.read(pwaControllerProvider).visibleProjects[1];
+      final card = find.byKey(ValueKey('pwa-home-recent-${target.projectId}'));
+      expect(card, findsOneWidget);
+      await tester.tap(card);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      expect(c.read(pwaControllerProvider).activeProjectId, target.projectId);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('HOME05: Home and Projects agree on order and covers',
+        (tester) async {
+      final (c, _) = await _pump(tester);
+      final home = c.read(pwaControllerProvider).visibleProjects;
+      // Projects reads the same getter — this is the invariant stated as an
+      // identity rather than as two screenshots.
+      c.read(pwaControllerProvider.notifier).openLibrary();
+      await tester.pump();
+      final library = c.read(pwaControllerProvider).visibleProjects;
+      expect(
+        home.map((p) => p.projectId).toList(),
+        library.map((p) => p.projectId).toList(),
+      );
+      for (var i = 0; i < home.length; i++) {
+        expect(home[i].coverVision?.versionId,
+            library[i].coverVision?.versionId, reason: 'cover $i');
+        expect(home[i].roomLabel, library[i].roomLabel, reason: 'room $i');
+        expect(home[i].atmosphereLabel, library[i].atmosphereLabel,
+            reason: 'atmosphere $i');
+      }
     });
   });
 
@@ -328,7 +409,6 @@ void main() {
       ctl.newProject();
       ctl.setSource(_fake()); // no Room chosen → repository says "Your space"
       await ctl.generateFirstVision();
-      ctl.continueToArchitect();
       await tester.pump();
       await tester.pump(const Duration(seconds: 3));
       ctl.openHome();
@@ -347,19 +427,17 @@ void main() {
       ctl.newProject();
       ctl.setSource(_fake());
       await ctl.generateFirstVision();
-      ctl.continueToArchitect();
       await tester.pump();
       await tester.pump(const Duration(seconds: 3));
       ctl.openHome();
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 1)); // hero sweep, see _pump
       expect(c.read(pwaControllerProvider).visibleProjects, hasLength(1));
-      // ONE project is enough to earn the real hero — the showcase fallback
-      // is only for someone with nothing of their own.
       expect(find.byKey(const ValueKey('pwa-home-hero')), findsOneWidget);
-      expect(find.byKey(const ValueKey('pwa-home-featured')), findsOneWidget);
-      expect(find.byKey(const ValueKey('pwa-home-showcase')), findsNothing);
-      // And the page is still complete: headline, hero, the single CTA, nav.
+      // The hero stays the showcase even now; the one project is the rail.
+      expect(find.byKey(const ValueKey('pwa-home-showcase')), findsOneWidget);
+      expect(find.byKey(const ValueKey('pwa-home-featured')), findsNothing);
+      expect(find.byKey(const ValueKey('pwa-home-recent')), findsOneWidget);
       expect(find.byKey(_newSessionKey), findsOneWidget);
       expect(find.byKey(const ValueKey('pwa-home-continue')), findsNothing);
       expect(find.byKey(_emptyKey), findsNothing);

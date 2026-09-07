@@ -81,10 +81,44 @@ const List<String> kStagingBackendOriginAllowlist = <String>[
   'https://ayden-api-staging.fly.dev',
 ];
 
+/// The PRODUCTION Supabase project. Named for the same reason the staging ref
+/// is: it is an address, not a credential, and naming it is what makes the
+/// cross-check ("this ref must match this host") possible at all.
+const String kProductionProjectRef = 'vtxkciupyafukhdsgxgw';
+
+/// The EXACT Supabase host a production build may talk to.
+const List<String> kProductionHostAllowlist = <String>[
+  'vtxkciupyafukhdsgxgw.supabase.co',
+];
+
+/// The EXACT origin of the production generation backend — the Fly.io app that
+/// serves the Web API, behind `api.aydenstudio.com`.
+///
+/// Reviewed and written down here rather than derived at runtime, exactly as
+/// the staging list is: a production build that guessed its backend from the
+/// page's own origin would turn a compromised host into a token exfiltrator.
+/// HTTPS only, no path — a session token never travels in clear.
+const List<String> kProductionBackendOriginAllowlist = <String>[
+  'https://api.aydenstudio.com',
+];
+
+/// The hosts a PRODUCTION build must refuse: the staging project and the
+/// staging API. The mirror image of [kProductionHostDenylist], so the guard is
+/// symmetric and a production bundle can never be pointed at staging data.
+const List<String> kStagingHostDenylist = <String>[
+  'eedcahzekpgxvvfxufbk.supabase.co',
+  'eedcahzekpgxvvfxufbk',
+  'ayden-api-staging.fly.dev',
+];
+
 /// Resolved, validated environment configuration.
 class PwaEnvironment {
   const PwaEnvironment._(
     this.environment, {
+    this.prodSupabaseUrl,
+    this.prodProjectRef,
+    this.prodPublishableKey,
+    this.prodBackendUrl,
     this.stagingSupabaseUrl,
     this.stagingProjectRef,
     this.stagingPublishableKey,
@@ -110,6 +144,45 @@ class PwaEnvironment {
   final String? stagingBackendUrl;
   final bool allowStagingMigrations;
   final bool seedDemo;
+
+  /// The PRODUCTION equivalents. Only one set is ever populated: a build is
+  /// staging or production, never both, and the parser refuses anything else.
+  final String? prodSupabaseUrl;
+  final String? prodProjectRef;
+  final String? prodPublishableKey;
+  final String? prodBackendUrl;
+
+  // ── What every consumer should read ──────────────────────────────────────
+  //
+  // Before production existed, callers read `staging*` directly. That was
+  // honest then and would be a lie now, so the resolved values live here and
+  // the `staging*` fields stay as the raw parse result (and as what the
+  // existing guards assert on).
+
+  /// The Supabase URL this build talks to.
+  String? get supabaseUrl => isProduction ? prodSupabaseUrl : stagingSupabaseUrl;
+
+  /// The Supabase project ref this build talks to.
+  String? get projectRef => isProduction ? prodProjectRef : stagingProjectRef;
+
+  /// The publishable (never secret) key this build ships.
+  String? get publishableKey =>
+      isProduction ? prodPublishableKey : stagingPublishableKey;
+
+  /// The generation backend origin this build calls.
+  String? get backendUrl => isProduction ? prodBackendUrl : stagingBackendUrl;
+
+  /// The path every Web API route hangs under.
+  ///
+  /// The staging deployment answers on `/pwa/staging` and keeps that address
+  /// for as long as it exists; production answers on `/pwa`. The backend
+  /// resolves the same two values from `PWA_TARGET` (`backend/pwa_target.py`),
+  /// so the pair is defined once on each side and nowhere else.
+  String get apiPrefix => isProduction ? '/pwa' : '/pwa/staging';
+
+  /// True when this build talks to a real backend (staging or production), as
+  /// opposed to the offline mock.
+  bool get isRemote => isStaging || isProduction;
 
   bool get isMock => environment == AydenEnvironment.mock;
   bool get isStaging => environment == AydenEnvironment.staging;
@@ -142,6 +215,18 @@ class PwaEnvironment {
     'AYDEN_STAGING_SEED_DEMO': String.fromEnvironment(
       'AYDEN_STAGING_SEED_DEMO',
     ),
+    'AYDEN_PROD_SUPABASE_URL': String.fromEnvironment(
+      'AYDEN_PROD_SUPABASE_URL',
+    ),
+    'AYDEN_PROD_PROJECT_REF': String.fromEnvironment(
+      'AYDEN_PROD_PROJECT_REF',
+    ),
+    'AYDEN_PROD_SUPABASE_PUBLISHABLE_KEY': String.fromEnvironment(
+      'AYDEN_PROD_SUPABASE_PUBLISHABLE_KEY',
+    ),
+    'AYDEN_PROD_BACKEND_URL': String.fromEnvironment(
+      'AYDEN_PROD_BACKEND_URL',
+    ),
   });
 
   /// Pure parser (unit-testable without touching real dart-defines). Fails
@@ -156,9 +241,26 @@ class PwaEnvironment {
       _ => throw PwaConfigError('Unknown AYDEN_ENV "$envName".'),
     };
 
+    final prodUrl = defines['AYDEN_PROD_SUPABASE_URL']?.trim();
+    final prodRef = defines['AYDEN_PROD_PROJECT_REF']?.trim();
+    final prodKey = defines['AYDEN_PROD_SUPABASE_PUBLISHABLE_KEY']?.trim();
+    final prodBackend = defines['AYDEN_PROD_BACKEND_URL']?.trim();
+
     if (environment == AydenEnvironment.production) {
-      throw const PwaConfigError(
-        'AYDEN_ENV=production is not implemented in this build (refusing to boot).',
+      // Implemented 2026-09-04, and implemented the same way staging is: an
+      // EXACT host, an EXACT ref that must match that host, a key proved not
+      // to be a secret, and an EXACT backend origin. Nothing is inferred, and
+      // a missing value is a refusal to boot rather than a fallback.
+      assertProductionTargetAllowed(prodUrl ?? '');
+      assertProductionRefAllowed(prodRef ?? '', prodUrl ?? '');
+      assertPublishableKeyAllowed(prodKey ?? '');
+      assertProductionBackendUrlAllowed(prodBackend ?? '');
+      return PwaEnvironment._(
+        environment,
+        prodSupabaseUrl: prodUrl,
+        prodProjectRef: prodRef,
+        prodPublishableKey: prodKey,
+        prodBackendUrl: prodBackend,
       );
     }
 
@@ -317,6 +419,102 @@ class PwaEnvironment {
     if (_jwtRole(k) == 'service_role') {
       throw const PwaConfigError(
         'A service_role key must never be used in the client (§3).',
+      );
+    }
+  }
+
+  /// Host guard, production side: an EXACT https host on
+  /// [kProductionHostAllowlist] and NOT on [kStagingHostDenylist].
+  static void assertProductionTargetAllowed(String target) {
+    final t = target.trim();
+    if (t.isEmpty) {
+      throw const PwaConfigError(
+        'AYDEN_PROD_SUPABASE_URL is not configured (fail closed — a production '
+        'build never guesses its project).',
+      );
+    }
+    final host = (Uri.tryParse(t)?.host ?? '').toLowerCase();
+    if (host.isEmpty) {
+      throw PwaConfigError('Production target has no host (got "$target").');
+    }
+    if (!t.toLowerCase().startsWith('https://')) {
+      throw PwaConfigError('Production target must be https (got "$target").');
+    }
+    for (final banned in kStagingHostDenylist) {
+      if (host.contains(banned)) {
+        throw PwaConfigError(
+          'Refusing a STAGING host in a production build (matched "$banned").',
+        );
+      }
+    }
+    if (!kProductionHostAllowlist.contains(host)) {
+      throw PwaConfigError(
+        'Production host "$host" is not the authorized production host '
+        '(fail closed).',
+      );
+    }
+  }
+
+  /// Project-ref guard, production side: exactly [kProductionProjectRef], and
+  /// it must match the URL's host.
+  static void assertProductionRefAllowed(String ref, String url) {
+    final r = ref.trim();
+    if (r.isEmpty) {
+      throw const PwaConfigError(
+        'AYDEN_PROD_PROJECT_REF is not configured (fail closed).',
+      );
+    }
+    if (r != kProductionProjectRef) {
+      throw PwaConfigError(
+        'Project ref "$r" is not the authorized production ref (fail closed).',
+      );
+    }
+    final host = (Uri.tryParse(url.trim())?.host ?? '').toLowerCase();
+    if (host != '$r.supabase.co') {
+      throw PwaConfigError(
+        'Project ref "$r" does not match the production URL host "$host" '
+        '(fail closed).',
+      );
+    }
+  }
+
+  /// Backend guard, production side: EXACTLY one of
+  /// [kProductionBackendOriginAllowlist], never a staging host.
+  static void assertProductionBackendUrlAllowed(String url) {
+    final u = url.trim();
+    if (u.isEmpty) {
+      throw const PwaConfigError(
+        'AYDEN_PROD_BACKEND_URL is not configured (fail closed — the PWA never '
+        'guesses a generation backend).',
+      );
+    }
+    final parsed = Uri.tryParse(u);
+    final host = (parsed?.host ?? '').toLowerCase();
+    if (parsed == null || host.isEmpty) {
+      throw PwaConfigError('Production backend URL has no host (got "$url").');
+    }
+    for (final banned in kStagingHostDenylist) {
+      if (host.contains(banned)) {
+        throw PwaConfigError(
+          'Refusing a STAGING backend host in production (matched "$banned").',
+        );
+      }
+    }
+    if (parsed.hasQuery ||
+        parsed.hasFragment ||
+        parsed.path.replaceAll('/', '').isNotEmpty) {
+      throw PwaConfigError(
+        'Production backend URL must be a bare origin, no path or query '
+        '(got "$url").',
+      );
+    }
+    final origin =
+        '${parsed.scheme.toLowerCase()}://$host'
+        '${parsed.hasPort ? ':${parsed.port}' : ''}';
+    if (!kProductionBackendOriginAllowlist.contains(origin)) {
+      throw PwaConfigError(
+        'Production backend origin "$origin" is not authorized (fail closed). '
+        'Allowed: ${kProductionBackendOriginAllowlist.join(", ")}.',
       );
     }
   }

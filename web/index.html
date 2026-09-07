@@ -33,6 +33,71 @@
   <link rel="manifest" href="manifest.json">
 
   <!--
+    ABA PayWay's OFFICIAL checkout plugin — the Web checkout since 2026-09-05.
+
+    ABA's website guidance is that the checkout be presented as a popup by this
+    script: it creates an <iframe name="aba_webservice"> (a modal on desktop, a
+    bottom sheet on a phone), submits the merchant form into it, and handles
+    the "open the ABA app" prompt on mobile itself. Loaded from ABA, never
+    copied into this repository, never modified: the same URL serves sandbox
+    and production, and the form's action decides which environment is hit.
+
+    `hide-close=2` — measured in checkout.prod.js: without it, closing the
+    popup ends in `location.reload()`, which unloads this whole application
+    mid-payment. With it, the close button still renders and closing merely
+    hides the popup; the Wallet underneath, and its poll, survive.
+  -->
+  <script src="https://checkout.payway.com.kh/plugins/checkout2-0.js?hide-close=2" defer></script>
+  <script>
+    // The ONE bridge between Flutter and ABA's plugin. Dart calls
+    // aydenAbaCheckout(formAction, fieldsJson) with values the SERVER returned;
+    // this builds the exact form ABA's published sample shows — method POST,
+    // target "aba_webservice", id "aba_merchant_request", hidden inputs — via
+    // createElement and .value, so no field value can break out of markup.
+    // Then AbaPayway.checkout() with no arguments, as in that sample.
+    //
+    // It signs nothing, reads nothing, and concludes nothing. The api key is
+    // not in the page; the fields are the signature OUTPUT and the identifiers
+    // ABA's own sample already places in hidden inputs.
+    window.aydenAbaCheckout = function (formAction, fieldsJson) {
+      try {
+        // BARE identifier, deliberately. checkout.prod.js declares
+        // `const AbaPayway = new AbaPay()` at top level, and a top-level
+        // `const` lives in the global lexical scope, NOT as a property of the
+        // global object — reading it off `window` gives undefined even when
+        // the plugin is fully loaded. Measured on preprod 2026-09-05: all four
+        // ABA scripts present, `#aba-checkout` created, the bare name resolves
+        // to an AbaPay instance and the window property does not exist.
+        if (typeof AbaPayway === 'undefined' ||
+            typeof AbaPayway.checkout !== 'function') {
+          return 'plugin-missing';
+        }
+        var fields = JSON.parse(fieldsJson);
+        var old = document.getElementById('aba_merchant_request');
+        if (old) old.remove();
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.target = 'aba_webservice';
+        form.id = 'aba_merchant_request';
+        form.action = formAction;
+        form.style.display = 'none';
+        Object.keys(fields).forEach(function (name) {
+          var input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = name;
+          input.value = String(fields[name]);
+          form.appendChild(input);
+        });
+        document.body.appendChild(form);
+        AbaPayway.checkout();
+        return 'ok';
+      } catch (e) {
+        return 'error:' + (e && e.message ? e.message : String(e));
+      }
+    };
+  </script>
+
+  <!--
     Web-only horizontal-scroll history guard (PWA fast-path carousels).
     `overscroll-behavior-x: none` tells the browser NOT to perform its default
     overscroll action (back/forward history navigation, rubber-banding) when a

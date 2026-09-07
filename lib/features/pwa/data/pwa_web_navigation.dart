@@ -75,4 +75,13 @@ class WebPwaExternalLauncher implements PwaExternalLauncher {
     if (url.isEmpty) return;
     web.window.location.href = url;
   }
+
+  @override
+  void openNewTab(String url) {
+    if (url.isEmpty) return;
+    // `noopener` severs `window.opener`, so ABA's page cannot reach back into
+    // this one. Standard hygiene for any cross-origin link, and mandatory for
+    // one that is about to ask somebody for money.
+    web.window.open(url, '_blank', 'noopener,noreferrer');
+  }
 }

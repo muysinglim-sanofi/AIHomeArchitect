@@ -74,6 +74,11 @@ enum PwaPaymentState {
 }
 
 /// A payment attempt, exactly as the server described it.
+/// `checkout_mode` when ABA's own plugin presents the checkout and the BROWSER
+/// posts the signed purchase — the active Web path since 2026-09-05. The other
+/// two modes ('redirect', 'json') are the server-side Purchase call, dormant.
+const String kPwaCheckoutModePlugin = 'plugin';
+
 class PwaPayment {
   const PwaPayment({
     required this.state,
@@ -163,16 +168,27 @@ class PwaPayment {
   /// Both halves matter. A checkout whose token has aged out is not payable
   /// through THIS link even though the payment behind it is still open — so
   /// offering it would send someone to a PayWay error page.
+  ///
+  /// On the PLUGIN path there is no link at all: ABA's own script posted the
+  /// signed form into its own iframe, and the place to pay is that popup, for
+  /// as long as the transaction lives. `checkoutUrl` is empty there by design
+  /// and `checkoutStale` measures a token this path never used — so neither
+  /// may decide payability, or every plugin checkout would read as expired the
+  /// moment it opened.
   bool get isPayable =>
       state == PwaPaymentState.awaitingPayment &&
-      checkoutUrl.isNotEmpty &&
-      !checkoutStale;
+      (checkoutMode == kPwaCheckoutModePlugin ||
+          (checkoutUrl.isNotEmpty && !checkoutStale));
 
   /// The attempt is alive but its link is not. A fresh attempt is the only way
   /// back to a payable state — PayWay refuses a second checkout for the same
   /// transaction id.
+  ///
+  /// Never true on the plugin path, for the reason given on [isPayable]: there
+  /// is no link to age out.
   bool get needsFreshCheckout =>
       state == PwaPaymentState.awaitingPayment &&
+      checkoutMode != kPwaCheckoutModePlugin &&
       (checkoutUrl.isEmpty || checkoutStale);
 
   /// Whether offering "try again" makes sense.

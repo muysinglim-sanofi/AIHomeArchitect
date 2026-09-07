@@ -40,12 +40,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/media/ayden_image_source.dart';
 import '../application/pwa_controller.dart';
 import '../domain/pwa_models.dart';
 import '../domain/pwa_project.dart';
 import 'pwa_architect_tokens.dart';
 import 'pwa_brand.dart';
-import 'pwa_stored_image.dart';
+import 'pwa_render_aspect.dart';
+import 'pwa_render_canvas.dart';
+// `kPwaRenderAspect` now lives beside the cache of MEASURED aspects that
+// replaced it as the frame's authority; re-exported so importers of this file
+// keep compiling unchanged.
+export 'pwa_render_aspect.dart' show kPwaRenderAspect;
 import 'pwa_working_indicator.dart';
 import '../l10n/pwa_l10n.dart';
 import 'pwa_account_chip.dart';
@@ -101,7 +107,6 @@ const double kPwaVisionMaxHeight = 560;
 
 /// The shape the engine actually returns: 1536x1024. Stated once, so the result
 /// screen shows the render rather than a crop of it.
-const double kPwaRenderAspect = 3 / 2;
 
 class PwaArchitectScreen extends ConsumerStatefulWidget {
   const PwaArchitectScreen({super.key});
@@ -344,16 +349,32 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
         // The message says WHAT is running; the words for it live here, beside
         // the indicator, so there is one phase system and the controller carries
         // no copy.
-        return [
-          const _V7ChatGap(),
-          _V7InlineGenerating(
-            phases: pwaWorkingPhasesFor(
-              m.workingKind,
-              m.workingSubject,
-              context.pwaL10n,
+        final phases = pwaWorkingPhasesFor(
+          m.workingKind,
+          m.workingSubject,
+          context.pwaL10n,
+        );
+        // The FIRST vision has no earlier render to sit beside, so the wait
+        // shows the photo it is working FROM — and in the shape the render will
+        // take, which is iOS's own rule for this moment: "Card height matches
+        // the _LoadingBubble formula so the shape doesn't jump between
+        // generating and generated." The render then replaces this card in
+        // place, in the same thread.
+        final src = state.source;
+        if (m.workingKind == PwaWorkKind.firstVision && src != null) {
+          return [
+            const _V7ChatGap(),
+            _V7FirstVisionWorking(
+              source: src,
+              phases: phases,
+              brief: state.visionBrief,
+              contextLine:
+                  pwaSessionContextBits(state, context.pwaL10n).join(' · '),
+              maxImageHeight: visionMaxH,
             ),
-          ),
-        ];
+          ];
+        }
+        return [const _V7ChatGap(), _V7InlineGenerating(phases: phases)];
       case PwaMessageKind.text:
         if (m.role == PwaRole.user) {
           return [const _V7ChatGap(), _V7UserBubble(text: m.text)];
@@ -388,15 +409,6 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
           highlighted: _highlightVersionId == vision.versionId,
           maxImageHeight: visionMaxH,
           onOpenReveal: () => _c.openReveal(vision.versionId),
-          // A button label is not a design instruction. Sending "Refine
-          // Vision 2" as the message made the parser read it as a change and
-          // the engine act on it. Mobile has no such button: refining is what
-          // the composer is for, so this focuses it on that vision.
-          onRefine: () {
-            _c.continueFromVision(vision.versionId);
-            _composerFocus.requestFocus();
-          },
-          onTryAtmosphere: () => _c.openReveal(vision.versionId),
         );
         // Guidance: after a result nobody should wonder what to do next.
         final guidance = <Widget>[
@@ -421,39 +433,27 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // IMAGE, then COMMENTARY, then ACTIONS. The three pills used to
-                // sit inside the card, between the render and Ayden's line, so
-                // a person who had waited two minutes met a row of buttons
-                // before they were told anything about what they were looking
-                // at. Same widgets, same callbacks, read in the order the
-                // moment actually has.
+                // IMAGE, then COMMENTARY. Nothing else. iOS removed this
+                // card's action row outright ("Wave 5.13 — action row removed.
+                // The image itself is now the primary interaction (tap =
+                // reveal)"), and the web had grown three pills back: View full
+                // reveal, Refine this, Try another atmosphere. Each duplicated
+                // something the session already offers — the render and its
+                // expand control open the Reveal, the composer IS the refine
+                // interface, and atmospheres are explored in the Reveal — so
+                // the row competed with the conversation it sat above.
                 _V7VisionCard(
                   key: _visionKey(vision.versionId),
                   vision: vision,
                   atmosphereName: _atmoNameOf(state, vision.atmosphereId),
                   highlighted: _highlightVersionId == vision.versionId,
                   maxImageHeight: visionMaxH,
-                  showActions: false,
                   onOpenReveal: () => _c.openReveal(vision.versionId),
-                  onRefine: () {
-                    _c.continueFromVision(vision.versionId);
-                    _composerFocus.requestFocus();
-                  },
-                  onTryAtmosphere: () => _c.openReveal(vision.versionId),
                 ),
                 if (m.text.isNotEmpty) ...[
                   const SizedBox(height: 14),
                   _V7AydenGroup(children: [_V7AydenSpeech(text: m.text)]),
                 ],
-                const SizedBox(height: 14),
-                _VisionActions(
-                  onOpenReveal: () => _c.openReveal(vision.versionId),
-                  onRefine: () {
-                    _c.continueFromVision(vision.versionId);
-                    _composerFocus.requestFocus();
-                  },
-                  onTryAtmosphere: () => _c.openReveal(vision.versionId),
-                ),
                 ...guidance,
               ],
             ),
@@ -700,6 +700,39 @@ class _V7ProjectsButton extends StatelessWidget {
 /// treatment is identical and maintainable. Falls back to flat ivory if the asset
 /// is unavailable (offline test harness).
 
+/// Which room, which direction — the two choices the person made on Create.
+///
+/// One derivation, two readers: the desktop conversation header and the
+/// in-session working card. It prefers the SAVED snapshot and falls back to the
+/// live selection, because before the first vision lands there is no saved
+/// project to read — and the desktop header went blank for the whole of that
+/// wait, showing the person nothing of what they had asked for.
+///
+/// The stored room is canonical English (it keys the prompt engine's DNA and is
+/// routed, never translated), so it is localised at display time through the
+/// same resolver Home and Projects use — the fix that stopped "Master Bedroom"
+/// appearing at the top of a Khmer conversation.
+List<String> pwaSessionContextBits(PwaState state, PwaL10n l) {
+  PwaProjectSnapshot? snap;
+  for (final p in state.library) {
+    if (p.projectId == state.activeProjectId) snap = p;
+  }
+  final room = (snap?.roomLabel ?? '').isNotEmpty
+      ? pwaRoomDisplayLabel(l, roomId: snap!.roomId, roomLabel: snap.roomLabel)
+      : (state.selectedRoomId == null
+          ? l.uplAiDecide
+          : pwaRoomDisplayLabel(l,
+              roomId: state.selectedRoomId, roomLabel: ''));
+  final atmo = (snap?.atmosphereLabel ?? '').isNotEmpty
+      ? snap!.atmosphereLabel
+      : state.atmospheres
+          .where((a) => a.id == state.selectedAtmosphereId)
+          .map((a) => a.name)
+          .followedBy(const [''])
+          .first;
+  return [if (room.isNotEmpty) room, if (atmo.isNotEmpty) atmo];
+}
+
 /// The workspace header: which project, which direction, which vision. It reads
 /// only what the library snapshot already stores — nothing derived, nothing new.
 class _V7ConversationHeader extends StatelessWidget {
@@ -715,15 +748,7 @@ class _V7ConversationHeader extends StatelessWidget {
     final title =
         state.activeTitleOverride ?? snap?.title ?? state.project.title;
     final bits = <String>[
-      // The STORED room is canonical English — it keys the prompt engine's DNA
-      // and is routed, never translated — so it is localised at display time,
-      // through the same resolver Home and Projects use. This header was the
-      // last place printing it raw, which put "Master Bedroom" at the top of a
-      // Khmer conversation.
-      if ((snap?.roomLabel ?? '').isNotEmpty)
-        pwaRoomDisplayLabel(context.pwaL10n,
-            roomId: snap!.roomId, roomLabel: snap.roomLabel),
-      if ((snap?.atmosphereLabel ?? '').isNotEmpty) snap!.atmosphereLabel,
+      ...pwaSessionContextBits(state, context.pwaL10n),
       if (state.currentVision != null)
         context.pwaL10n.visionN(state.currentVision!.visionNumber),
     ];
@@ -889,6 +914,126 @@ class _V7UserBubble extends StatelessWidget {
 }
 
 /// §23 — inline generation state (no full-screen route).
+/// The first vision, being made, inside the session.
+///
+/// Same frame as `_V7VisionCard`: the same max width, the same render aspect
+/// and the same height ceiling, so when the render arrives it lands in the
+/// shape this card already occupies instead of shifting the thread. The source
+/// photo is dimmed rather than hidden — it is the context for the wait, not the
+/// result — and the phrases are the approved dictionary's, with no percentage.
+class _V7FirstVisionWorking extends ConsumerWidget {
+  const _V7FirstVisionWorking({
+    required this.source,
+    required this.phases,
+    required this.brief,
+    required this.contextLine,
+    required this.maxImageHeight,
+  });
+
+  final AydenImageSource source;
+  final List<String> phases;
+
+  /// "Kitchen · Warm Modern" — the two choices, as the reader's language names
+  /// them. Empty only if neither is known.
+  final String contextLine;
+
+  /// What the person typed on Step 4, given back to them while it is being
+  /// worked on. Empty when Step 4 was skipped, and then nothing is drawn —
+  /// an empty pair of quotation marks is worse than no line at all.
+  final String brief;
+
+  final double maxImageHeight;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Align(
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: kPwaVisionMaxWidth),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(PwaGap.radius),
+            // iOS's loading bubble and its result card share ONE height rule
+            // "so the shape doesn't jump between generating and generated";
+            // the photo sits inside at its own measured shape, on its own
+            // blurred continuation — see `pwa_render_canvas.dart`.
+            child: SizedBox(
+              // iOS's rule on the SCREEN height alone; the thread's own
+              // ceiling (`maxImageHeight`) is for the pre-canvas frame and
+              // would shrink this below the phone app's card on a desktop.
+              height: pwaRenderCanvasHeight(MediaQuery.sizeOf(context)),
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  PwaCanvasSurface(
+                    ambient: MemoryImage(source.bytes),
+                    aspect: pwaAspectOf(
+                      ref.watch(pwaRenderAspectsProvider),
+                      kPwaSourceAspectKey,
+                    ),
+                    child: PwaMemoryImage(
+                      key: const ValueKey('pwa-working-source'),
+                      bytes: source.bytes,
+                      aspectKey: kPwaSourceAspectKey,
+                      errorBuilder: (_, _, _) =>
+                          const ColoredBox(color: pwaImageFrame),
+                    ),
+                  ),
+                  // Enough veil that light copy stays legible on a bright
+                  // room, not so much that the photo stops being visible.
+                  const ColoredBox(color: Color(0xB3141210)),
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // What was asked for, on the screen while it is being
+                          // made. The desktop header carries this after the
+                          // fact; on a phone there is no header at all, so
+                          // without it the wait showed the photo and nothing
+                          // about the choices that photo was sent with.
+                          if (contextLine.isNotEmpty) ...[
+                            Text(
+                              contextLine,
+                              key: const ValueKey('pwa-session-context'),
+                              maxLines: 1,
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                              style: PwaType.caption(color: Colors.white70)
+                                  .copyWith(letterSpacing: 0.4),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                          PwaWorkingIndicator(
+                            key: const ValueKey('pwa-working-first-vision'),
+                            phases: phases,
+                            foreground: Colors.white,
+                          ),
+                          if (brief.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              '“$brief”',
+                              key: const ValueKey('pwa-session-brief'),
+                              maxLines: 3,
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                              style: PwaType.bodyMuted(
+                                color: Colors.white70,
+                              ).copyWith(fontStyle: FontStyle.italic),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
 class _V7InlineGenerating extends StatelessWidget {
   const _V7InlineGenerating({this.phases = kPwaRefinePhases});
 
@@ -932,7 +1077,7 @@ class _V7InlineGenerating extends StatelessWidget {
 /// The vision result in the chronology: a large render plus the three actions
 /// that belong to it. Everything deeper — Before/After, atmospheres, vision
 /// navigation — happens on `/reveal`, so the card stays a card.
-class _V7VisionCard extends StatelessWidget {
+class _V7VisionCard extends ConsumerWidget {
   const _V7VisionCard({
     super.key,
     required this.vision,
@@ -940,26 +1085,19 @@ class _V7VisionCard extends StatelessWidget {
     required this.highlighted,
     required this.maxImageHeight,
     required this.onOpenReveal,
-    required this.onRefine,
-    required this.onTryAtmosphere,
-    this.showActions = true,
   });
   final PwaVision vision;
   final String atmosphereName;
   final bool highlighted;
 
-  /// False on the FIRST vision, where the actions are placed after Ayden's
-  /// line so the reading order is image, then commentary, then actions.
-  final bool showActions;
+
 
   /// Ceiling for the render, derived from the space the thread actually has.
   final double maxImageHeight;
   final VoidCallback onOpenReveal;
-  final VoidCallback onRefine;
-  final VoidCallback onTryAtmosphere;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // THE IMAGE IS THE FIRST THING. It used to sit under a title strip inside
     // the card, so after a two-minute wait the first thing read was a label --
     // "Vision 1 . Warm Modern" -- and the render came second. The caption now
@@ -979,10 +1117,7 @@ class _V7VisionCard extends StatelessWidget {
         Align(
           alignment: Alignment.centerLeft,
           child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: kPwaVisionMaxWidth,
-              maxHeight: maxImageHeight,
-            ),
+            constraints: const BoxConstraints(maxWidth: kPwaVisionMaxWidth),
             child: AnimatedContainer(
               duration: Av7Motion.component,
               decoration: BoxDecoration(
@@ -995,13 +1130,21 @@ class _V7VisionCard extends StatelessWidget {
                 ),
               ),
               clipBehavior: Clip.antiAlias,
-              child: AspectRatio(
-                // THE RENDER'S OWN SHAPE. The engine returns 1536x1024, and a
-                // 16:9 frame was cover-cropping about a tenth off the top and
-                // bottom of the one image the person waited for. That the Full
-                // Reveal shows it uncropped is not a reason for the result
-                // screen to crop it.
-                aspectRatio: kPwaRenderAspect,
+              // TWO SHAPES, as on iOS. The OUTER canvas is iOS's result card:
+              // `(screenH * 0.52).clamp(280, 560)` tall, the column wide, and
+              // the same whatever the render's orientation. The INNER frame is
+              // the render's own measured ratio, centred, `cover` inside its
+              // own ratio (= no crop), on a blurred continuation of itself.
+              // A portrait render is therefore portrait artwork on a card,
+              // not a strip; a landscape one sits on the same card with the
+              // matte above and below it, exactly as the phone app draws it.
+              // Before this the frame WAS the image, so a 2:3 render made a
+              // 2:3 card. Before Round 3 the frame was 3:2 and CROPPED. Neither
+              // is iOS. See `pwa_render_canvas.dart` for the source lines.
+              child: SizedBox(
+                key: ValueKey('vision-canvas-${vision.versionId}'),
+                height: pwaRenderCanvasHeight(MediaQuery.sizeOf(context)),
+                width: double.infinity,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -1013,10 +1156,14 @@ class _V7VisionCard extends StatelessWidget {
                         cursor: SystemMouseCursors.click,
                         child: GestureDetector(
                           onTap: onOpenReveal,
-                          child: PwaStoredImage(
+                          child: PwaRenderCanvas(
                             key: ValueKey('vision-card-${vision.versionId}'),
                             reference: vision.afterAsset,
-                            placeholderColor: pwaWell,
+                            aspect: pwaAspectOf(
+                              ref.watch(pwaRenderAspectsProvider),
+                              vision.afterAsset,
+                              fallbackKey: kPwaSourceAspectKey,
+                            ),
                           ),
                         ),
                       ),
@@ -1040,127 +1187,7 @@ class _V7VisionCard extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: PwaType.bodyMuted(),
         ),
-        if (showActions) ...[
-          const SizedBox(height: 12),
-          _VisionActions(
-            onOpenReveal: onOpenReveal,
-            onRefine: onRefine,
-            onTryAtmosphere: onTryAtmosphere,
-          ),
-        ],
       ],
-    );
-  }
-}
-
-/// What can be done with a vision: open it, refine it, or try another
-/// direction. Its own widget because the FIRST result places it after Ayden's
-/// line rather than directly under the render — image, commentary, actions.
-class _VisionActions extends StatelessWidget {
-  const _VisionActions({
-    required this.onOpenReveal,
-    required this.onRefine,
-    required this.onTryAtmosphere,
-  });
-
-  final VoidCallback onOpenReveal;
-  final VoidCallback onRefine;
-  final VoidCallback onTryAtmosphere;
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, c) => Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _VisionAction(
-              icon: Icons.open_in_full_rounded,
-              label: context.pwaL10n.viewFullReveal,
-              primary: true,
-              maxWidth: c.maxWidth,
-              onTap: onOpenReveal,
-            ),
-            _VisionAction(
-              icon: Icons.tune_rounded,
-              label: context.pwaL10n.refineThis,
-              maxWidth: c.maxWidth,
-              onTap: onRefine,
-            ),
-            _VisionAction(
-              icon: Icons.auto_awesome,
-              label: context.pwaL10n.tryAnotherAtmosphere,
-              maxWidth: c.maxWidth,
-              onTap: onTryAtmosphere,
-            ),
-          ],
-        ),
-      );
-}
-
-/// One action attached to a vision card. The primary one is filled; the others
-/// are outlined, so the card reads as a result with a clear next step rather
-/// than a toolbar.
-class _VisionAction extends StatelessWidget {
-  const _VisionAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    required this.maxWidth,
-    this.primary = false,
-  });
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  /// The width of the row these pills wrap inside — see the note on the
-  /// constraint below.
-  final double maxWidth;
-  final bool primary;
-
-  @override
-  Widget build(BuildContext context) {
-    // The product's own two buttons: the primary is the ink pill, the others
-    // are hairline pills. Gold is left to the accents it marks -- a selection,
-    // a glyph -- rather than carrying a CTA.
-    final fg = primary ? pwaSurface : pwaInk;
-    return Semantics(
-      button: true,
-      label: label,
-      child: Material(
-        color: primary ? pwaInk : pwaSurface,
-        borderRadius: BorderRadius.circular(PwaGap.radiusPill),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(PwaGap.radiusPill),
-          onTap: onTap,
-          child: Container(
-            height: 40,
-            // See _V7QuickActions: a Wrap gives loose constraints, so without
-            // a ceiling a long French or Khmer label overflows instead of
-            // ellipsizing.
-            constraints: BoxConstraints(maxWidth: maxWidth),
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(PwaGap.radiusPill),
-              border: primary ? null : Border.all(color: pwaHairline),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 15, color: primary ? pwaSurface : pwaGold),
-                const SizedBox(width: 7),
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: PwaType.button(color: fg).copyWith(fontSize: 13.5),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

@@ -1,3 +1,15 @@
+/// Phase 4, as corrected in round 1 — the wait, INSIDE the Design Session.
+///
+/// The screen these tests were written against is gone. It was a full-screen
+/// loading page between Create and the conversation, and the round-1 phone
+/// acceptance found it (with the unveiling after it) to be the thing that made
+/// a generated vision feel like a separate product the person then had to
+/// leave. iOS has never worked that way: the loading is a bubble in the
+/// thread, and the render replaces it in place.
+///
+/// The two contracts below did NOT change with the container, so they are held
+/// here still, against the Architect instead of against the deleted screen.
+///
 /// Phase 4 — the New Design Session, and the wait inside it.
 ///
 /// Two things are being protected here, and they pull in opposite directions.
@@ -23,11 +35,14 @@ import 'package:ai_home_architect/core/media/ayden_image_source.dart';
 import 'package:ai_home_architect/features/pwa/application/pwa_controller.dart';
 import 'package:ai_home_architect/features/pwa/data/mock_pwa_experience_repository.dart';
 import 'package:ai_home_architect/features/pwa/data/pwa_generation_service.dart';
+import 'package:ai_home_architect/features/pwa/domain/pwa_models.dart';
 import 'package:ai_home_architect/features/pwa/l10n/pwa_l10n.dart';
-import 'package:ai_home_architect/features/pwa/presentation/pwa_design_session_screen.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_architect_screen.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_experience.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_loading_screen.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_render_aspect.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_theme.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_working_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -128,15 +143,17 @@ void unawaited(Future<void> f) {}
 
 void main() {
   group('SESSION01  the transition from Create loses nothing', () {
-    testWidgets('the session is reached, and it is the session screen',
+    testWidgets('Generate enters the SESSION, and the work runs inside it',
         (tester) async {
       final c = await _pumpSession(tester);
-      expect(c.read(pwaControllerProvider).phase, PwaPhase.loading);
+      // The container is the conversation, from the tap onward.
+      expect(c.read(pwaControllerProvider).phase, PwaPhase.architect);
+      expect(find.byType(PwaArchitectScreen), findsOneWidget);
+      // …and the wait is a card in the thread, not a page.
       expect(
-        find.byKey(const ValueKey('pwa-design-session')),
+        find.byKey(const ValueKey('pwa-working-first-vision')),
         findsOneWidget,
       );
-      expect(find.byType(PwaDesignSessionScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -149,26 +166,24 @@ void main() {
       expect(s.source!.bytes, _png);
       expect(s.selectedRoomId, 'kitchen');
       expect(s.selectedAtmosphereId, 'warm_modern');
-      // …and the screen SHOWS them, which is the part that matters. A session
+      // …and the SESSION shows them, which is the part that matters. A wait
       // that holds the context in state and renders a bare spinner is exactly
-      // the form-submission feeling this phase exists to remove.
+      // the form-submission feeling this phase exists to remove. The photo is
+      // in the working card; the room names the session in its header.
+      final photo = find.byKey(const ValueKey('pwa-working-source'));
+      expect(photo, findsOneWidget);
+      // The keyed widget is the measuring wrapper; the picture is inside it.
+      final img = tester.widget<Image>(
+          find.descendant(of: photo, matching: find.byType(Image)));
+      expect((img.image as MemoryImage).bytes, _png);
       final l = pwaL10nFor(const Locale('en'));
+      // The session header names them, joined into one line, so this reads
+      // the line rather than expecting two standalone labels.
       expect(
-        find.text('${l.roomCardLabel('kitchen', 'Kitchen')} · Warm Modern'),
-        findsOneWidget,
+        find.textContaining(l.roomCardLabel('kitchen', 'Kitchen')),
+        findsWidgets,
       );
-      expect(find.byType(Image), findsWidgets);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('a delegated room reads as Ayden Decide, never as a blank',
-        (tester) async {
-      await _pumpSession(tester, room: null);
-      final l = pwaL10nFor(const Locale('en'));
-      expect(
-        find.text('${l.uplAiDecide} · Warm Modern'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('Warm Modern'), findsWidgets);
       expect(tester.takeException(), isNull);
     });
 
@@ -212,56 +227,45 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the progress line is indeterminate, not a fill',
-        (tester) async {
+    testWidgets('there is no progress bar of any kind', (tester) async {
       await _pumpSession(tester);
-      // A determinate bar would be a LinearProgressIndicator with a value, or
-      // a fraction driven by elapsed time. Neither is present: the travelling
-      // highlight is a fixed-width band that moves.
+      // The old screen carried a travelling band of constant width — motion
+      // without a claim. The in-session indicator does not even have that: a
+      // breathing dot, the phase sentence, and an ellipsis. Anything that
+      // could be read as an amount of remaining work is absent, and this test
+      // says so in the same terms the old one did.
       expect(find.byType(LinearProgressIndicator), findsNothing);
       expect(find.byType(CircularProgressIndicator), findsNothing);
-      final line = find.byKey(const ValueKey('pwa-session-progress'));
-      expect(line, findsOneWidget);
-      final band = tester.widget<FractionallySizedBox>(
-        find.descendant(of: line, matching: find.byType(FractionallySizedBox)),
-      );
-      expect(
-        band.widthFactor,
-        0.34,
-        reason: 'the band is a constant width — it travels, it does not fill',
-      );
+      expect(find.byType(FractionallySizedBox), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
-    test('the narrative advances once and then holds', () {
-      const n = 7;
-      // It starts at the beginning…
-      expect(pwaSessionPhaseFor(Duration.zero, n), 0);
-      // …advances on the widening cadence…
-      expect(pwaSessionPhaseFor(const Duration(milliseconds: 3199), n), 0);
-      expect(pwaSessionPhaseFor(const Duration(milliseconds: 3201), n), 1);
-      expect(pwaSessionPhaseFor(const Duration(milliseconds: 7201), n), 2);
-      // …never goes backwards…
-      var last = 0;
-      for (var ms = 0; ms < 240000; ms += 250) {
-        final i = pwaSessionPhaseFor(Duration(milliseconds: ms), n);
-        expect(i, greaterThanOrEqualTo(last));
-        expect(i, lessThan(n));
-        last = i;
+    // The deleted screen owned its own phrase cadence (`pwaSessionPhaseFor`,
+    // a pure function over elapsed time). The session's indicator has always
+    // owned its own — `PwaWorkingIndicator`, on `kPwaPhaseDuration` — so there
+    // is now ONE cadence in the product instead of two, and no pure function
+    // to call. What survives the merge is the rule that mattered: the phrases
+    // are the approved dictionary's, they start at the beginning, and the last
+    // one HOLDS rather than looping back to "Reading your space…" and telling
+    // someone the work had restarted.
+    test('the wait speaks the approved dictionary, and holds on the last', () {
+      final l = pwaL10nFor(const Locale('en'));
+      final phases = pwaWorkingPhasesFor(PwaWorkKind.firstVision, '', l);
+      // The SHARED dictionary's seven, which is what the phone says for the
+      // same beat (`chat_screen.dart:3661`) — not the web's own shorter four.
+      expect(phases, l.shared.genInitPhrases);
+      expect(phases.first, 'Reading your space…');
+      expect(phases, isNotEmpty);
+      // The indicator clamps into the list rather than wrapping, which is what
+      // makes the last beat hold for as long as the render takes.
+      for (final i in [0, phases.length - 1, phases.length, 999]) {
+        expect(
+          phases[i.clamp(0, phases.length - 1)],
+          isNotEmpty,
+          reason: 'beat $i must resolve to a real sentence, never wrap to 0',
+        );
       }
-      // …and HOLDS on the last beat for as long as the render takes. Looping
-      // back to "Reading your space…" after four minutes would tell the person
-      // the work had restarted, and it has not.
-      expect(pwaSessionPhaseFor(const Duration(minutes: 2), n), n - 1);
-      expect(pwaSessionPhaseFor(const Duration(minutes: 10), n), n - 1);
-    });
-
-    test('a shorter or longer dictionary cannot break the cadence', () {
-      expect(pwaSessionPhaseFor(const Duration(minutes: 5), 1), 0);
-      expect(pwaSessionPhaseFor(Duration.zero, 1), 0);
-      // More phrases than dwell entries: the last dwell repeats rather than
-      // throwing.
-      expect(pwaSessionPhaseFor(const Duration(minutes: 5), 12), 11);
+      expect(phases[999.clamp(0, phases.length - 1)], phases.last);
     });
 
     testWidgets('the first thing it says is the approved mobile sentence',
@@ -280,26 +284,26 @@ void main() {
       final scaffold = tester.widget<Scaffold>(
         find
             .descendant(
-              of: find.byKey(const ValueKey('pwa-design-session')),
+              of: find.byType(PwaArchitectScreen),
               matching: find.byType(Scaffold),
             )
             .first,
       );
-      expect(scaffold.backgroundColor, pwaCanvas);
       expect(scaffold.backgroundColor, isNot(Colors.black));
       expect(scaffold.backgroundColor, isNot(pwaBlack));
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the retired loading screen is not what gets mounted',
-        (tester) async {
+    testWidgets('no retired loading screen is mounted', (tester) async {
       // `PwaLoadingScreen` is kept on disk, unreferenced, as the fast way back
       // if this needs reverting — the same terms as the dark Home and the dark
       // Create. This asserts the router actually stopped using it, which is
-      // the only part a reader cannot see from the file being present.
+      // the only part a reader cannot see from the file being present. Its
+      // successor, the full-screen Design Session, is now deleted outright:
+      // there is no third loading surface left to mount.
       await _pumpSession(tester);
       expect(find.byType(PwaLoadingScreen), findsNothing);
-      expect(find.byType(PwaDesignSessionScreen), findsOneWidget);
+      expect(find.byType(PwaArchitectScreen), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -336,49 +340,30 @@ void main() {
       expect(find.byKey(const ValueKey('pwa-generation-retry')), findsOneWidget);
       // A failed generation is never dressed up as a success.
       expect(s.versions, isEmpty);
-      expect(find.byType(PwaDesignSessionScreen), findsNothing);
+      expect(find.byKey(const ValueKey('pwa-working-first-vision')),
+          findsNothing);
     });
 
-    testWidgets('the source photo is CONTAINed, never cropped',
-        (tester) async {
-      await _pumpSession(tester);
-      // THE FOCAL image — the one the person actually reads their room in.
-      // Cover-cropping it would cut away part of the space they are asking to
-      // have redesigned, which is the one thing this screen exists to show.
-      final photo = tester.widget<Image>(
-        find.byKey(const ValueKey('pwa-session-photo')),
-      );
-      expect(photo.fit, BoxFit.contain);
-      expect(photo.image, isA<MemoryImage>());
-
-      // The ambient backdrop DOES cover, and must: it is a blurred, ink-muted
-      // wash filling whatever the photo's own shape does not. It is only ever
-      // reached through RevealCanvas's ImageFiltered, so the two can never be
-      // mistaken for one another by this test or by a later reader.
-      final ambient = find.descendant(
-        of: find.byType(ImageFiltered),
-        matching: find.byType(Image),
-      );
-      expect(ambient, findsOneWidget);
-      expect(tester.widget<Image>(ambient).fit, BoxFit.cover);
-
-      // ...and both read the SAME bytes, so the decode is shared.
-      expect(
-        (tester.widget<Image>(ambient).image as MemoryImage).bytes,
-        (photo.image as MemoryImage).bytes,
-      );
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('there is no navigation out while a generation is in flight',
+    testWidgets('the working card takes the shape the render will take',
         (tester) async {
       final c = await _pumpSession(tester);
-      // A second entry into Create is a second billable request. The surest
-      // way not to offer one is not to draw it.
-      expect(find.byIcon(Icons.arrow_back), findsNothing);
-      expect(find.byIcon(Icons.close), findsNothing);
-      expect(find.byType(BackButton), findsNothing);
-      expect(c.read(pwaControllerProvider).generating, isTrue);
+      // iOS's own rule for this moment: "Card height matches the _LoadingBubble
+      // formula so the shape doesn't jump between generating and generated."
+      // The render takes the PHOTO's orientation (the engine sizes its output
+      // from the source), so the working card frames the photo at the photo's
+      // own measured shape — and the engine's 3:2 until it is measured. The
+      // test's photo is a 1x1 PNG, so once decoded the frame is square; the
+      // render of that photo would be square too.
+      final ratio = tester.widget<AspectRatio>(
+        find
+            .ancestor(
+              of: find.byKey(const ValueKey('pwa-working-source')),
+              matching: find.byType(AspectRatio),
+            )
+            .first,
+      );
+      final measured = c.read(pwaRenderAspectsProvider)[kPwaSourceAspectKey];
+      expect(ratio.aspectRatio, measured ?? kPwaRenderAspect);
       expect(tester.takeException(), isNull);
     });
 
@@ -392,7 +377,7 @@ void main() {
       ]) {
         await _pumpSession(tester, size: size, brief: 'warmer, more light');
         expect(
-          find.byKey(const ValueKey('pwa-design-session')),
+          find.byKey(const ValueKey('pwa-working-first-vision')),
           findsOneWidget,
           reason: '$size',
         );
@@ -411,7 +396,7 @@ void main() {
       await tester.pump(const Duration(seconds: 30));
       final s = c.read(pwaControllerProvider);
       expect(s.generating, isTrue);
-      expect(s.phase, PwaPhase.loading);
+      expect(s.phase, PwaPhase.architect);
       expect(s.versions, isEmpty);
       expect(tester.takeException(), isNull);
     });
@@ -481,9 +466,30 @@ void main() {
     // approximately is a test that will eventually be wrong about it.
     final config =
         jsonDecode(File('firebase.json').readAsStringSync()) as Map;
-    final headers = ((config['hosting'] as Map)['headers'] as List)
-        .cast<Map>()
-        .toList();
+    // `hosting` became a LIST the day preprod got its own Firebase site
+    // (B1.5). Every target must satisfy this rule — asserting only the first
+    // would let a second site freeze browsers — so the rules are flattened and
+    // each one is checked. A single-target config still parses, so the test
+    // does not depend on which shape the file happens to have.
+    final rawHosting = config['hosting'];
+    final targets = (rawHosting is List ? rawHosting : [rawHosting]).cast<Map>();
+    final headers = [
+      for (final t in targets) ...(t['headers'] as List).cast<Map>(),
+    ];
+
+    test('every hosting target carries the shell rules', () {
+      expect(targets, isNotEmpty);
+      for (final t in targets) {
+        final sources = (t['headers'] as List)
+            .cast<Map>()
+            .map((r) => r['source'] as String)
+            .toSet();
+        for (final path in const ['/main.dart.js', '/index.html', '/']) {
+          expect(sources, contains(path),
+              reason: 'target ${t['target'] ?? 'default'} is missing $path');
+        }
+      }
+    });
 
     String? cacheFor(String source) {
       for (final rule in headers) {

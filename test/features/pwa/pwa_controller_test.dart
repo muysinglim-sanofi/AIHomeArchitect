@@ -65,7 +65,6 @@ void main() {
     // they already do for mobile. What is asserted now is the DELEGATION.
     test('every typed line reaches the canonical pipeline', () async {
       final c = await generated();
-      c.continueToArchitect();
       final before = c.state.versions.length;
 
       c.sendUserText('What do you think about opening this wall?');
@@ -90,7 +89,6 @@ void main() {
 
     test('an empty line does nothing at all', () async {
       final c = await generated();
-      c.continueToArchitect();
       final before = c.state.messages.length;
       c.sendUserText('   ');
       await pumpEventQueue();
@@ -98,15 +96,12 @@ void main() {
     });
   });
 
-  group('Primary flow + first reveal (§31)', () {
+  group('Primary flow — the session IS the container (§31)', () {
     test(
-      'generateFirstVision → first reveal, then architect + Vision 1',
+      'generateFirstVision → the architect, holding Vision 1',
       () async {
         final c = await generated();
-        // The first vision is unveiled full-screen before the conversation.
-        expect(c.state.phase, PwaPhase.firstReveal);
-        expect(c.state.previewedVision, isNotNull);
-        c.continueToArchitect();
+        // No unveiling in between: the render arrives in the conversation.
         expect(c.state.phase, PwaPhase.architect);
         expect(c.state.versions, hasLength(1));
         expect(c.state.hasSource, isTrue); // the "Original" source is preserved
@@ -138,7 +133,6 @@ void main() {
         final c = rig.controller;
         c.setSource(fakeSource());
         await c.generateFirstVision();
-        c.continueToArchitect();
         final beforeVer = c.state.versions.length;
         final beforeReveal = c.state.currentVision!.versionId;
 
@@ -173,7 +167,6 @@ void main() {
       final c = rig.controller;
       c.setSource(fakeSource());
       await c.generateFirstVision();
-      c.continueToArchitect();
 
       rig.generation.advisory = const PwaGenerationAdvisory(
         verdict: 'red',
@@ -221,7 +214,6 @@ void main() {
       final c = rig.controller;
       c.setSource(fakeSource());
       await c.generateFirstVision();
-      c.continueToArchitect();
       rig.generation.advisory = const PwaGenerationAdvisory(
         verdict: 'yellow',
         message: 'Which wall?',

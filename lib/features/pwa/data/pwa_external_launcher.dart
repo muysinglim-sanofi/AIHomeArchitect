@@ -23,6 +23,16 @@ abstract class PwaExternalLauncher {
   /// custom scheme was handled, and a Boolean here would be a guess the UI
   /// would then be tempted to branch on.
   void open(String url);
+
+  /// Send the browser to [url] in a SEPARATE tab, leaving this one running.
+  ///
+  /// Distinct from [open] because the two have opposite correct behaviours.
+  /// [open] carries an `abamobile://` scheme, where staying in the same tab is
+  /// right — a custom scheme opened in a new tab strands an empty tab on every
+  /// mobile browser. This carries ABA's `https` checkout, where staying in the
+  /// same tab is a defect: it unloads the Flutter app, and the Wallet, the
+  /// payment attempt and the poll that is waiting on it all die with it.
+  void openNewTab(String url);
 }
 
 /// The default outside a browser (tests, the mock build): do nothing.
@@ -35,6 +45,9 @@ class PwaNoopExternalLauncher implements PwaExternalLauncher {
 
   @override
   void open(String url) {}
+
+  @override
+  void openNewTab(String url) {}
 }
 
 final pwaExternalLauncherProvider = Provider<PwaExternalLauncher>(

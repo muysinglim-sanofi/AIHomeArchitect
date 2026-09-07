@@ -123,12 +123,28 @@ void main() {
     });
 
     test(
-      'LIVE07: first-vision loading stays on /create (no durable project URL until Architect settles)',
+      'LIVE07: a session whose first vision is still being made stays on '
+      '/create (no durable project URL until it settles)',
       () {
-        final r = _state(phase: PwaPhase.loading).canonicalRoute;
+        // The phase is now the Architect from the moment Generate is tapped —
+        // the work happens inside the session — but there is no saved project
+        // to name until the first vision lands, so the ADDRESS must not claim
+        // one. Step 6A, held through the flow change.
+        final r = _state(phase: PwaPhase.architect).canonicalRoute;
         expect(r.page, PwaPage.create);
       },
     );
+
+    test('LIVE07b: …and becomes the project URL as soon as it has a vision',
+        () {
+      final r = _state(
+        phase: PwaPhase.architect,
+        versions: [_vision('v1', 'p1', 1)],
+        currentVisionId: 'v1',
+      ).canonicalRoute;
+      expect(r.page, PwaPage.architect);
+      expect(r.location, '/projects/p1/architect');
+    });
   });
 
   group('applyRoute (LIVE08-12)', () {

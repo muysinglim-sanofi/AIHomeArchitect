@@ -3,6 +3,7 @@
 # `firebase hosting:channel:deploy`.
 #
 #   ./tool/deploy_pwa.sh phase10-acceptance      # a preview channel
+#   ./tool/deploy_pwa.sh --preprod               # preprod.aydenstudio.com
 #   ./tool/deploy_pwa.sh --live                  # live staging (asks first)
 #
 # WHY THE GUARD IS HERE AND NOT IN firebase.json
@@ -20,7 +21,7 @@ cd "$(dirname "$0")/.."
 
 TARGET="${1:-}"
 if [[ -z "$TARGET" ]]; then
-  echo "usage: $0 <preview-channel> | --live" >&2
+  echo "usage: $0 <preview-channel> | --preprod | --live" >&2
   exit 2
 fi
 
@@ -36,15 +37,23 @@ const cfg = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
 const SHELL = ['/', '/index.html', '/main.dart.js', '/flutter_bootstrap.js',
                '/flutter.js', '/version.json', '/manifest.json',
                '/flutter_service_worker.js'];
-const rules = cfg.hosting.headers || [];
+// `hosting` became an ARRAY the day preprod got its own site, and EVERY
+// target must satisfy this rule — a guard that read only the first one
+// would wave through a preprod config that freezes browsers. Both shapes
+// are accepted, so a config rewrite cannot silently skip the check.
+const targets = Array.isArray(cfg.hosting) ? cfg.hosting : [cfg.hosting];
 const bad = [];
-for (const path of SHELL) {
-  const rule = rules.find((r) => r.source === path);
-  const cc = rule && (rule.headers || []).find(
-    (h) => h.key.toLowerCase() === 'cache-control');
-  if (!cc) { bad.push(path + ': no rule'); continue; }
-  if (!/no-cache/.test(cc.value) || /immutable/.test(cc.value)) {
-    bad.push(path + ': ' + cc.value);
+for (const t of targets) {
+  const name = t.target || 'default';
+  const rules = t.headers || [];
+  for (const path of SHELL) {
+    const rule = rules.find((r) => r.source === path);
+    const cc = rule && (rule.headers || []).find(
+      (h) => h.key.toLowerCase() === 'cache-control');
+    if (!cc) { bad.push(name + ' ' + path + ': no rule'); continue; }
+    if (!/no-cache/.test(cc.value) || /immutable/.test(cc.value)) {
+      bad.push(name + ' ' + path + ': ' + cc.value);
+    }
   }
 }
 if (bad.length) {
@@ -52,7 +61,8 @@ if (bad.length) {
     + bad.join('\n  ') + '\n');
   process.exit(2);
 }
-console.log('==> cache guard: the shell revalidates');
+console.log('==> cache guard: the shell revalidates on '
+  + targets.length + ' target(s)');
 JS
 
 if [[ "$TARGET" == "--live" ]]; then
@@ -61,7 +71,19 @@ if [[ "$TARGET" == "--live" ]]; then
   echo "everyone who has the link is running."
   read -r -p "Type the word live to continue: " ok
   [[ "$ok" == "live" ]] || { echo "aborted"; exit 1; }
-  exec firebase deploy --only hosting
+  # `--only hosting` would deploy EVERY target, live and preprod together.
+  # Named explicitly, so one command touches exactly one site.
+  exec firebase deploy --only hosting:live
+fi
+
+if [[ "$TARGET" == "--preprod" ]]; then
+  # The dedicated preproduction site (ayden-studio-preprod), behind
+  # preprod.aydenstudio.com. It carries the SAME staging build as every
+  # preview channel — same API, same Supabase project, same PayWay sandbox
+  # — and keeps its own release history, so rolling it back never touches
+  # live. No confirmation prompt: nothing public depends on it.
+  echo "==> deploying to PREPROD (ayden-studio-preprod). Live is untouched."
+  exec firebase deploy --only hosting:preprod
 fi
 
 exec firebase hosting:channel:deploy "$TARGET" --expires 30d

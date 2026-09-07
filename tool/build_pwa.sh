@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+#
+# --no-web-resources-cdn (both modes)
+# ------------------------------------
+# Flutter's own flag for "do not use Web static resources hosted on a CDN"
+# (`flutter build web --help`, Flutter 3.41.9). Without it the generated
+# bootstrap falls through to
+#   https://www.gstatic.com/flutter-canvaskit/<engineRevision>/canvaskit.wasm
+# and every cold start pulls 7.15 MB from a third-party host — measured at
+# 4.7 s on a warm CDN edge and ~20 s on a cold one — while the SAME files are
+# already deployed at /canvaskit/** with `max-age=31536000, immutable`.
+# The flag sets `useLocalCanvasKit: true` in the build config, which is the
+# condition the loader checks before reaching for gstatic.
+#
+# Web-only: it is an argument to `flutter build web`, so no mobile artefact
+# and no frozen source is affected.
 # THE canonical PWA web build. Use this, not `flutter build web`.
 #
 # WHY THIS SCRIPT EXISTS
@@ -69,7 +84,7 @@ case "$MODE" in
   mock)
     echo "==> PWA build: MOCK (offline, no backend)"
     flutter build web --release -t "$ENTRY" \
-      --dart-define=AYDEN_ENV=mock
+      --dart-define=AYDEN_ENV=mock       --no-web-resources-cdn
     strip_dotenv
     ;;
   staging)
@@ -92,11 +107,45 @@ case "$MODE" in
       --dart-define=AYDEN_STAGING_SUPABASE_URL=https://eedcahzekpgxvvfxufbk.supabase.co \
       --dart-define=AYDEN_STAGING_PROJECT_REF=eedcahzekpgxvvfxufbk \
       --dart-define=AYDEN_STAGING_SUPABASE_PUBLISHABLE_KEY="$KEY" \
-      --dart-define=AYDEN_STAGING_BACKEND_URL=https://ayden-api-staging.fly.dev
+      --dart-define=AYDEN_STAGING_BACKEND_URL=https://ayden-api-staging.fly.dev       --no-web-resources-cdn
+    strip_dotenv
+    ;;
+  production)
+    # PRODUCTION. Same entrypoint, same guards, different project and API.
+    #
+    # The publishable key is read from a SEPARATE gitignored file so a
+    # production build cannot silently pick up the staging one:
+    # backend/.env.pwa-production.local, or AYDEN_PROD_ENV_FILE. It is the
+    # PUBLISHABLE key only — a service-role key would be refused by
+    # PwaEnvironment.assertPublishableKeyAllowed, and by this script.
+    PROD_ENV_FILE="${AYDEN_PROD_ENV_FILE:-../AIHomeArchitect/backend/.env.pwa-production.local}"
+    if [[ ! -f "$PROD_ENV_FILE" ]]; then
+      echo "REFUSING: $PROD_ENV_FILE not found." >&2
+      echo "A production build needs the production PUBLISHABLE key. Set" >&2
+      echo "AYDEN_PROD_ENV_FILE, or create that gitignored file." >&2
+      exit 2
+    fi
+    PKEY="$(grep -E '^SUPABASE_PUBLISHABLE_KEY=' "$PROD_ENV_FILE" | head -1 | cut -d= -f2- | tr -d '"'"'"' 
+')"
+    if [[ -z "$PKEY" ]]; then
+      echo "REFUSING: SUPABASE_PUBLISHABLE_KEY is empty in $PROD_ENV_FILE" >&2
+      exit 2
+    fi
+    case "$PKEY" in
+      sb_secret_*)
+        echo "REFUSING: that is a SECRET key. The web bundle ships the" >&2
+        echo "publishable key only." >&2
+        exit 2 ;;
+    esac
+    echo "==> PWA build: PRODUCTION"
+    echo "    entrypoint : $ENTRY"
+    echo "    supabase   : vtxkciupyafukhdsgxgw (production)"
+    echo "    api        : https://api.aydenstudio.com  (prefix /pwa)"
+    flutter build web --release -t "$ENTRY"       --dart-define=AYDEN_ENV=production       --dart-define=AYDEN_PROD_SUPABASE_URL=https://vtxkciupyafukhdsgxgw.supabase.co       --dart-define=AYDEN_PROD_PROJECT_REF=vtxkciupyafukhdsgxgw       --dart-define=AYDEN_PROD_SUPABASE_PUBLISHABLE_KEY="$PKEY"       --dart-define=AYDEN_PROD_BACKEND_URL=https://api.aydenstudio.com       --no-web-resources-cdn
     strip_dotenv
     ;;
   *)
-    echo "usage: $0 [staging|mock]" >&2
+    echo "usage: $0 [staging|production|mock]" >&2
     exit 2
     ;;
 esac
@@ -104,10 +153,25 @@ esac
 # The marker the DEPLOY guard reads (tool/verify_pwa_build.mjs, wired into
 # firebase.json's predeploy). Written last, so it can only exist if the build
 # above actually finished. It holds no secret.
+# WHAT THIS BUILD IS WIRED TO — the diagnostic proof, fetchable at
+# `<origin>/ayden-build.json` and shown to nobody. It carries ADDRESSES only:
+# the environment name, the Supabase project ref, the API origin and the route
+# prefix. No key, no token, no secret — the same three facts the health
+# endpoint already publishes, on the frontend side, so an operator can prove
+# which backend a deployed page talks to without reading the bundle.
+case "$MODE" in
+  staging)    DIAG_REF="eedcahzekpgxvvfxufbk"; DIAG_API="https://ayden-api-staging.fly.dev"; DIAG_PREFIX="/pwa/staging" ;;
+  production) DIAG_REF="vtxkciupyafukhdsgxgw"; DIAG_API="https://api.aydenstudio.com";      DIAG_PREFIX="/pwa" ;;
+  *)          DIAG_REF="(none)";               DIAG_API="(none)";                          DIAG_PREFIX="(none)" ;;
+esac
+
 cat > build/web/ayden-build.json <<JSON
 {
   "entrypoint": "$ENTRY",
   "mode": "$MODE",
+  "supabaseProjectRef": "$DIAG_REF",
+  "apiOrigin": "$DIAG_API",
+  "apiPrefix": "$DIAG_PREFIX",
   "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 JSON
