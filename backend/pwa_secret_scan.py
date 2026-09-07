@@ -57,6 +57,19 @@ BUNDLE_FORBIDDEN = (
     "qr_image_template",
 )
 
+#: The ONE gateway URL the bundle is allowed to carry, verbatim.
+#:
+#: ABA's website integration (their guidance of 2026-09-05) requires the
+#: merchant page to load their checkout plugin from this exact address; it is
+#: how the popup is presented and it is not ours to host or rename. It is
+#: removed from the text before the needles above are applied, so the rule
+#: "the bundle speaks no PayWay protocol" still holds for everything else on
+#: that host — the API paths, the sandbox host, the option names — and a
+#: second script from `checkout.payway.com.kh` would still fail this check.
+BUNDLE_ALLOWED_VERBATIM = (
+    "https://checkout.payway.com.kh/plugins/checkout2-0.js",
+)
+
 # The PayWay list above answers "does the browser speak the gateway's
 # protocol". It does not answer the OTHER question a public bundle raises:
 # does it carry a private credential of any kind. A scanner that checks one
@@ -262,15 +275,24 @@ def main() -> int:  # noqa: PLR0915
         bundle = [p for p in WEB_BUILD.rglob("*")
                   if p.is_file() and p.suffix.lower() not in _BINARY]
         found = []
+        allowed_seen = []
         for path in bundle:
             try:
                 text = path.read_bytes().decode("utf-8", "ignore")
             except OSError:
                 continue
+            # The plugin include is struck out BEFORE the needles run, so the
+            # host name it contains cannot satisfy them — and nothing else on
+            # that host can hide behind it, because only this exact string goes.
+            for verbatim in BUNDLE_ALLOWED_VERBATIM:
+                if verbatim in text:
+                    allowed_seen.append(f"{path.name}: {verbatim}")
+                    text = text.replace(verbatim, "")
             for needle in BUNDLE_FORBIDDEN:
                 if needle in text:
                     found.append(f"{path.name}: {needle}")
-        verdict(f"the web bundle ({len(bundle)} files) speaks NO PayWay protocol",
+        verdict(f"the web bundle ({len(bundle)} files) speaks NO PayWay protocol "
+                f"(ABA's plugin include excepted, seen {len(allowed_seen)}x)",
                 not found, "; ".join(found[:5]))
 
         # The same files, asked the other question.

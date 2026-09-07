@@ -102,15 +102,56 @@ def test_config() -> None:
     _env(PAYWAY_API_KEY=FAKE_KEY)
     check("PW02 api key alone is not enough", not payway.is_configured())
 
+    # ── The production gate (2026-09-04) ────────────────────────────────────
+    # `production` is no longer refused outright; it is refused UNLESS every
+    # condition holds. These assertions are the conditions, one by one, and the
+    # last one is the only combination that may move real money.
     _env(PAYWAY_MERCHANT_ID=FAKE_MERCHANT, PAYWAY_API_KEY=FAKE_KEY,
          PAYWAY_ENV="production")
+    os.environ.pop("PWA_TARGET", None)
     try:
         payway.load_config()
-        check("PW01 PAYWAY_ENV=production is refused", False)
+        check("PW01 production from a STAGING deployment is refused", False)
     except payway.PayWayNotConfigured as exc:
-        check("PW01 PAYWAY_ENV=production is refused", True)
-        check("PW01 the refusal names the production host it will not dial",
-              payway.PRODUCTION_BASE in str(exc))
+        check("PW01 production from a STAGING deployment is refused", True)
+        check("PW01 the refusal names the target that is missing",
+              "PWA_TARGET=production" in str(exc), str(exc)[:120])
+
+    _env(PAYWAY_MERCHANT_ID=FAKE_MERCHANT, PAYWAY_API_KEY=FAKE_KEY,
+         PAYWAY_ENV="production", PWA_TARGET="production")
+    try:
+        payway.load_config()
+        check("PW01 production with no callback is refused", False)
+    except payway.PayWayNotConfigured as exc:
+        check("PW01 production with no callback is refused",
+              "PAYWAY_CALLBACK_URL" in str(exc), str(exc)[:120])
+
+    _env(PAYWAY_MERCHANT_ID=FAKE_MERCHANT, PAYWAY_API_KEY=FAKE_KEY,
+         PAYWAY_ENV="production", PWA_TARGET="production",
+         PAYWAY_CALLBACK_URL="https://api.aydenstudio.com/pwa/payments/payway/callback",
+         PAYWAY_CALLBACK_SIGNATURE_MODE="optional",
+         PAYWAY_RETURN_BASE_URL="https://app.aydenstudio.com")
+    try:
+        payway.load_config()
+        check("PW01 production with an OPTIONAL signature is refused", False)
+    except payway.PayWayNotConfigured as exc:
+        check("PW01 production with an OPTIONAL signature is refused",
+              "SIGNATURE_MODE" in str(exc), str(exc)[:120])
+
+    _env(PAYWAY_MERCHANT_ID=FAKE_MERCHANT, PAYWAY_API_KEY=FAKE_KEY,
+         PAYWAY_ENV="production", PWA_TARGET="production",
+         PAYWAY_CALLBACK_URL="https://api.aydenstudio.com/pwa/payments/payway/callback",
+         PAYWAY_RETURN_BASE_URL="https://app.aydenstudio.com")
+    prod = payway.load_config()
+    check("PW01 a complete production configuration is accepted",
+          prod.environment == "production")
+    check("PW01 production dials the PRODUCTION gateway",
+          prod.base_url == payway.PRODUCTION_BASE, prod.base_url)
+    check("PW01 production requires a signed pushback",
+          prod.require_callback_signature)
+    check("PW01 production has a public callback",
+          prod.has_public_callback)
+    os.environ.pop("PWA_TARGET", None)
 
     cfg = _configured()
     check("PW01 sandbox resolves to the official sandbox base",

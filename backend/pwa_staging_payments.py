@@ -86,6 +86,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
@@ -95,13 +96,18 @@ import httpx
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+import pwa_target
 import payway
+import pwa_qr
 
 log = logging.getLogger("aih")
 
-router = APIRouter(prefix="/pwa/staging/payments", tags=["pwa-staging-payments"])
+_TARGET = pwa_target.current()
 
-_SCHEMA = "pwa_staging"
+router = APIRouter(prefix=_TARGET.payments_prefix,
+                   tags=[f"pwa-{_TARGET.name}-payments"])
+
+_SCHEMA = _TARGET.schema
 _TABLE = "payway_transactions"
 
 #: The acquisition RAIL, as `public.orders.provider` / `public.payments.provider`
@@ -130,6 +136,17 @@ _CHECK_MIN_INTERVAL_S = 3.0
 #: How long a QR-less attempt may sit before a sweep calls it expired. Only used
 #: when PayWay never answered at all.
 _CREATED_GRACE = timedelta(minutes=5)
+
+#: How long a PLUGIN checkout may answer "tran_id not found" before that is
+#: taken as the truth. On the plugin path the BROWSER posts the purchase, ~1-2 s
+#: after the fields are issued, and the first poll follows at ~3 s — so a
+#: not-found in the first seconds can be a race against a slow gateway. Beyond
+#: this window it cannot be: PayWay creates the transaction on the POST, before
+#: any scanning happens, so a transaction that still does not exist 30 s later
+#: was refused before creation (whitelist Error 6, a rejected signature, a
+#: browser that never submitted). Measured 2026-09-05 on preprod: Error 6 is
+#: answered within the same second as the POST.
+_NOT_CREATED_GRACE = timedelta(seconds=30)
 
 
 class PayWayDisabled(HTTPException):
@@ -406,7 +423,8 @@ class CheckoutRequest(BaseModel):
     attempt_key: str = Field(min_length=8, max_length=64)
 
 
-async def start_checkout(*, user_id: str, sku: str, attempt_key: str) -> dict:
+async def start_checkout(*, user_id: str, sku: str, attempt_key: str,
+                         origin: str = "") -> dict:
     """Create (or re-join) a payment attempt and return what the browser renders.
 
     The product is resolved BEFORE the gateway configuration is checked, and the
@@ -428,6 +446,10 @@ async def start_checkout(*, user_id: str, sku: str, attempt_key: str) -> dict:
         log.info("[payway-seam] rejoin tran=%s state=%s", tran_id, existing.get("state"))
         return public_view(existing)
 
+    # Where the browser returns: the page that started this checkout when it is
+    # an allowed origin, else the deployment default. Computed once, used for
+    # both the success and the cancel URL.
+    return_base = return_base_for(cfg, origin)
     expires_at = _now() + timedelta(minutes=cfg.lifetime_minutes)
     won = await _claim(tran_id=tran_id, user_id=user_id, product=product,
                        attempt_key=attempt_key, expires_at=expires_at,
@@ -459,8 +481,10 @@ async def start_checkout(*, user_id: str, sku: str, attempt_key: str) -> dict:
             # Where the BROWSER is sent afterwards. Neither URL is trusted for
             # anything: landing on one changes no state, and the PWA's next poll
             # asks the server — which asks PayWay — what actually happened.
-            continue_success_url=return_url_for(cfg, tran_id, "success"),
-            cancel_url=return_url_for(cfg, tran_id, "cancel"),
+            continue_success_url=return_url_for(cfg, tran_id, "success",
+                                                base=return_base),
+            cancel_url=return_url_for(cfg, tran_id, "cancel",
+                                      base=return_base),
         )
     except payway.PayWayError as exc:
         reason = ("DUPLICATE_TRAN_ID" if str(exc.code) == "403"
@@ -487,6 +511,25 @@ async def start_checkout(*, user_id: str, sku: str, attempt_key: str) -> dict:
                     "retryable": True},
         ) from exc
 
+    # THE PAYLOAD BECOMES PIXELS HERE, AND ONLY HERE.
+    #
+    # ABA hands back the payment as a string and never as an image on this rail,
+    # so the customer has nothing to scan until something draws it. This is the
+    # single call site: the value encoded is the one PayWay just returned for
+    # the order just created, byte for byte. There is no route that renders a
+    # caller-supplied payload, and the browser never sends one.
+    #
+    # A failure to encode must not lose a checkout that is otherwise fine — the
+    # deeplink and the checkout URL still work — so it is logged and the image
+    # is left empty, which the payment sheet already renders as "no QR".
+    qr_image = ""
+    if checkout.qr_string:
+        try:
+            qr_image = pwa_qr.render_khqr_png_b64(checkout.qr_string)
+        except pwa_qr.KhqrRenderError:
+            log.exception("[payway-seam] KHQR render failed tran=%s "
+                          "(checkout still usable)", tran_id)
+
     await _update(tran_id, {
         "state": AWAITING_PAYMENT,
         "checkout_url": checkout.checkout_url,
@@ -495,6 +538,7 @@ async def start_checkout(*, user_id: str, sku: str, attempt_key: str) -> dict:
         # is not a degraded state: the checkout URL is what the customer needs,
         # and ABA renders the QR on its own page.
         "qr_string": checkout.qr_string,
+        "qr_image": qr_image,
         "deeplink": checkout.deeplink,
         "qr_issued_at": _iso(_now()),
         "expires_at": _iso(expires_at),
@@ -507,7 +551,53 @@ async def start_checkout(*, user_id: str, sku: str, attempt_key: str) -> dict:
     return public_view(row or {"tran_id": tran_id, "state": AWAITING_PAYMENT})
 
 
-def return_url_for(cfg: payway.PayWayConfig, tran_id: str, outcome: str) -> str:
+def allowed_browser_origins() -> tuple[list[str], str]:
+    """The origins this deployment serves, as CORS already defines them.
+
+    Read from the SAME two variables the launcher hands to CORSMiddleware
+    (`PWA_ALLOWED_ORIGINS`, `PWA_ALLOWED_ORIGIN_REGEX`), so there is one
+    allowlist in this system and not two that can disagree.
+    """
+    raw = os.environ.get("PWA_ALLOWED_ORIGINS", "")
+    origins = [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+    return origins, os.environ.get("PWA_ALLOWED_ORIGIN_REGEX", "").strip()
+
+
+def return_base_for(cfg: payway.PayWayConfig, origin: str) -> str:
+    """Where the BROWSER comes back to — the page that started the checkout,
+    when it is one this deployment serves; otherwise the configured default.
+
+    WHY THIS EXISTS. `PAYWAY_RETURN_BASE_URL` is one value for the whole
+    deployment, and one value cannot be right for a deployment that is reached
+    from several addresses: the live staging site, a preview channel, and now
+    preprod.aydenstudio.com all talk to the same API, and a person paying from
+    preprod was being handed back to a different host — a different browser
+    origin, therefore a different session, therefore an apparently lost payment.
+
+    WHAT IT DOES NOT CHANGE. Nothing about authority. This URL is navigation
+    only (see `return_url_for`), and the origin is trusted for exactly one
+    thing: choosing between addresses the operator already allowed. An
+    unrecognised Origin is ignored, not honoured, so an attacker cannot use a
+    checkout to make PayWay send anybody to a host of their choosing.
+    """
+    candidate = (origin or "").strip().rstrip("/")
+    if not candidate:
+        return cfg.return_base_url
+    origins, pattern = allowed_browser_origins()
+    if candidate in origins:
+        return candidate
+    if pattern:
+        try:
+            if re.fullmatch(pattern, candidate):
+                return candidate
+        except re.error:
+            log.warning("[payway-seam] PWA_ALLOWED_ORIGIN_REGEX is not a valid "
+                        "regex — ignoring it for the return URL")
+    return cfg.return_base_url
+
+
+def return_url_for(cfg: payway.PayWayConfig, tran_id: str, outcome: str,
+                   *, base: str = "") -> str:
     """Where PayWay hands the browser back, or "" when nowhere is configured.
 
     THE RULE THIS ENCODES: these URLs are navigation, not evidence.
@@ -525,13 +615,14 @@ def return_url_for(cfg: payway.PayWayConfig, tran_id: str, outcome: str) -> str:
     page and the customer navigates back on their own; the payment still
     completes, because completion was never the browser's job.
     """
-    if not cfg.has_return_target:
+    target = (base or "").rstrip("/") or cfg.return_base_url
+    if not target:
         return ""
     # A PATH, not a fragment. The PWA's history bridge reads
     # `location.pathname + location.search` and ignores `#` entirely, so a
     # hash-routed return URL would arrive as a bare "/" with the tran_id lost —
     # recoverable (the server still remembers the attempt) but needlessly blind.
-    return (f"{cfg.return_base_url}/?pay_return=1"
+    return (f"{target}/?pay_return=1"
             f"&tran_id={quote(tran_id, safe='')}&outcome={quote(outcome, safe='')}")
 
 
@@ -667,6 +758,38 @@ async def verify_and_settle(row: dict, *, force: bool = False) -> dict:
         "paid_amount": status.paid_amount,
         "paid_currency": status.currency or None,
     }
+
+    if not status.found:
+        # PayWay has no such transaction. Two very different situations share
+        # this answer, and the clock separates them.
+        #
+        # Within the grace window it is a race: the browser may still be
+        # submitting the plugin's form. Record the check and keep waiting.
+        #
+        # Beyond it, on the plugin path, it means the purchase was refused
+        # before a transaction existed — the case the phone review hit, where
+        # ABA answered "Requested Domain is not in whitelist" and the app then
+        # sat in a 30-minute "waiting for your payment" for a payment that had
+        # no transaction to wait for. That is NOT_CREATED: terminal, zero
+        # grant, and the poll stops. A new Buy is a new attempt.
+        #
+        # The server-side Purchase path is left alone: there, this process made
+        # the purchase and saw PayWay accept it, so a later not-found is an
+        # anomaly to log rather than a state to conclude.
+        issued = _parse_ts(row.get("qr_issued_at"))
+        on_plugin = row.get("checkout_mode") == CHECKOUT_MODE_PLUGIN
+        if on_plugin and issued and _now() - issued > _NOT_CREATED_GRACE:
+            log.warning("[payway-seam] NOT_CREATED tran=%s — PayWay reports "
+                        "no transaction %ss after the fields were issued "
+                        "(envelope=%s %r)", tran_id,
+                        int((_now() - issued).total_seconds()),
+                        status.envelope_code, status.envelope_message)
+            patch.update({"state": FAILED, "failure_reason": "NOT_CREATED"})
+            await _update(tran_id, patch, only_if=OPEN)
+            await _fail(tran_id, "NOT_CREATED")
+            return await _load(tran_id) or row
+        await _update(tran_id, patch, only_if=OPEN)
+        return await _load(tran_id) or row
 
     if status.approved:
         mismatch = _mismatch(row, status)
@@ -834,14 +957,174 @@ async def payments_config() -> dict:
     }
 
 
+#: The one `payment_option` ABA's website integration accepts for KHQR.
+#: Their guidance (2026-09-05): "For website integration the payment_option
+#: value must be abapay_khqr or cards". Cards are not offered here, so this is
+#: the only admissible value on the plugin path — and the plugin itself keys
+#: its mobile sheet height on exactly this string (`checkout.prod.js`,
+#: `_abaCheckoutIsAbapayKhqr = value === 'abapay_khqr'`).
+PLUGIN_PAYMENT_OPTION = "abapay_khqr"
+
+#: Mode recorded on the row when the BROWSER, not this server, posts the
+#: purchase. Distinguishes it from 'redirect' (server got a Location) and
+#: 'json' (server got a payload) in support and in tests.
+CHECKOUT_MODE_PLUGIN = "plugin"
+
+#: The one field of the signed body that is presentation metadata rather than
+#: part of the purchase: `view_type` is not among the 24 hashed fields, ABA's
+#: official form does not carry it, and the plugin adds `is_plugin_js=true`
+#: itself to say how the request is being presented.
+_PLUGIN_UNSENT = ("view_type",)
+
+
+def plugin_form_fields(cfg: payway.PayWayConfig, *, tran_id: str,
+                       amount, return_params: str) -> dict:
+    """The signed purchase request, shaped for ABA's own JavaScript to post.
+
+    WHAT CHANGES, AND WHAT DOES NOT. Until 2026-09-05 this server made the
+    Purchase call itself and handed the browser a URL. ABA's website guidance
+    is the other way round: the merchant page holds a form with the signed
+    fields, and ABA's `checkout2-0.js` submits that form into an iframe it
+    owns (`target="aba_webservice"` names that iframe). So the SIGNING is
+    unchanged and stays here, keyed by `PAYWAY_API_KEY` which never leaves this
+    process; only the party that sends the signed request moves.
+
+    WHAT THE BROWSER RECEIVES. Exactly what ABA's published sample puts in
+    hidden inputs: `merchant_id`, `tran_id`, `amount`, `req_time`, the `hash`
+    and the rest. `merchant_id` is an identifier and `hash` is a signature
+    OUTPUT over these specific fields — neither is a credential, and neither
+    lets anyone sign a different request. The api key is the credential, and
+    it is not in this dict.
+
+    WHY BOTH RETURN URLS ARE EMPTY. The plugin reacts to them with top-level
+    navigation: on success it sets `location.href = continue_success_url`, and
+    on close it sets `location.href = cancel_url`. Either would unload the
+    Flutter app mid-payment. Sent empty, the plugin's own code takes the other
+    branch — `closeCheckoutByContinueUrl()` on success, a plain hide on close
+    (with `hide-close=2`) — and the Wallet underneath, with its poll, survives.
+    Nothing about authority moves: the poll asks this server, which asks
+    Check Transaction.
+    """
+    if cfg.payment_option != PLUGIN_PAYMENT_OPTION:
+        # Fail closed. A form carrying any other option would either offer
+        # cards (forbidden here) or hand the plugin a value it does not size
+        # for. The deployment must say abapay_khqr explicitly.
+        raise HTTPException(
+            status_code=503,
+            detail={"error_code": "PAYMENT_UNAVAILABLE",
+                    "payment_state": CREATED,
+                    "reason": "plugin_option_misconfigured",
+                    "retryable": False},
+        )
+    body = payway.build_purchase_request(
+        cfg=cfg, tran_id=tran_id, amount=amount, currency=cfg.currency,
+        lifetime_minutes=cfg.lifetime_minutes, return_params=return_params,
+        continue_success_url="", cancel_url="")
+    for key in _PLUGIN_UNSENT:
+        body.pop(key, None)
+    return body
+
+
+async def start_plugin_checkout(*, user_id: str, sku: str,
+                                attempt_key: str) -> dict:
+    """Open a payment for ABA's checkout plugin to present.
+
+    Identical to `start_checkout` up to the moment the purchase is sent, and
+    deliberately so: same product resolution, same tran_id, same rejoin rule,
+    same claim, same canonical order. It then STOPS — it signs the fields and
+    returns them, and the browser's form post is the Purchase call.
+
+    A rejoin returns the row WITHOUT fields. PayWay accepts exactly one
+    Purchase per tran_id ("Duplicated Transaction ID" on the second), and the
+    signature carries `req_time`, so the fields cannot be re-derived anyway.
+    The client that rejoins is already polling, which is the right thing to be
+    doing with an open payment.
+    """
+    product = await resolve_web_product(sku)
+    cfg = _config_or_refuse()
+
+    tran_id = tran_id_for(user_id, product.sku, attempt_key)
+    existing = await _load(tran_id)
+    if existing and existing.get("state") not in (CREATED,):
+        log.info("[payway-seam] plugin rejoin tran=%s state=%s",
+                 tran_id, existing.get("state"))
+        return public_view(existing)
+
+    expires_at = _now() + timedelta(minutes=cfg.lifetime_minutes)
+    won = await _claim(tran_id=tran_id, user_id=user_id, product=product,
+                       attempt_key=attempt_key, expires_at=expires_at,
+                       currency=cfg.currency)
+    if not won:
+        row = await _load(tran_id)
+        if row:
+            return public_view(row)
+        raise HTTPException(
+            status_code=409,
+            detail={"error_code": "CHECKOUT_BUSY", "payment_state": CREATED,
+                    "reason": "claim_lost", "retryable": True},
+        )
+
+    await _open_order(user_id=user_id, product=product, tran_id=tran_id,
+                      currency=cfg.currency)
+
+    fields = plugin_form_fields(
+        cfg, tran_id=tran_id, amount=product.price,
+        return_params=json.dumps({"t": tran_id}, separators=(",", ":")))
+
+    # AWAITING the moment the fields leave: from here the browser may post at
+    # any time, the pushback may arrive at any time, and the poll must already
+    # be treating this row as live.
+    await _update(tran_id, {
+        "state": AWAITING_PAYMENT,
+        "checkout_url": "",
+        "checkout_mode": CHECKOUT_MODE_PLUGIN,
+        "qr_string": "",
+        "qr_image": "",
+        "deeplink": "",
+        "qr_issued_at": _iso(_now()),
+        "expires_at": _iso(expires_at),
+    }, only_if=(CREATED,))
+
+    row = await _load(tran_id)
+    log.info("[payway-seam] plugin checkout opened tran=%s sku=%s amount=%s %s "
+             "credits=%d", tran_id, product.sku, product.price, cfg.currency,
+             product.credits)
+    view = public_view(row or {"tran_id": tran_id, "state": AWAITING_PAYMENT})
+    view["plugin"] = {
+        "form_action": f"{cfg.base_url}{payway.PATH_PURCHASE}",
+        "fields": fields,
+    }
+    return view
+
+
+@router.post("/checkout/plugin")
+async def payments_checkout_plugin(
+    body: CheckoutRequest,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """The active Web checkout since 2026-09-05: ABA's plugin presents, this
+    server signs. The browser still gets to say exactly two things — a sku and
+    an attempt key — and the amount, the product and the grant are still read
+    from the catalogue and from Check Transaction."""
+    user_id = await _caller(authorization)
+    return await start_plugin_checkout(user_id=user_id, sku=body.sku,
+                                       attempt_key=body.attempt_key)
+
+
 @router.post("/checkout")
 async def payments_checkout(
     body: CheckoutRequest,
     authorization: str | None = Header(default=None),
+    origin: str | None = Header(default=None),
 ) -> dict:
+    """The browser's Origin decides only where PayWay hands it BACK, and only
+    if that origin is one this deployment already serves (`return_base_for`).
+    Everything that decides money — the product, the price, the grant — is read
+    from the catalogue and from Check Transaction, never from a header."""
     user_id = await _caller(authorization)
     return await start_checkout(user_id=user_id, sku=body.sku,
-                                attempt_key=body.attempt_key)
+                                attempt_key=body.attempt_key,
+                                origin=origin or "")
 
 
 @router.get("/order/{tran_id}")

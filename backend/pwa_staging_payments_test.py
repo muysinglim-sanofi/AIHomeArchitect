@@ -41,6 +41,8 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import base64
+from pathlib import Path
 import os
 import pathlib
 import sys
@@ -72,6 +74,7 @@ os.environ.pop("PAYWAY_CALLBACK_URL", None)
 from fastapi import HTTPException  # noqa: E402
 
 import payway  # noqa: E402
+import pwa_qr  # noqa: E402
 import pwa_staging_payments as seam  # noqa: E402
 
 _passed: list[str] = []
@@ -279,6 +282,11 @@ class _FakeGateway:
         self.qr_calls: list[str] = []
         self.check_calls: list[str] = []
         self.qr_error: Exception | None = None
+        # 'json' is what `abapay_khqr_deeplink` answers with, and what this
+        # deployment has run since 2026-09-05: HTTP 200 carrying the official
+        # KHQR payload and ABA Mobile deeplink as first-level fields. 'redirect'
+        # is the older `abapay_khqr` shape, kept so both remain exercised.
+        self.checkout_shape = "json"
         self.last_body: dict = {}
         self.status_for: dict[str, payway.TransactionStatus] = {}
         self.default_status = _status(payment_status_code=payway.STATUS_PENDING,
@@ -297,16 +305,36 @@ class _FakeGateway:
             lifetime_minutes=lifetime_minutes, return_params=return_params,
             continue_success_url=continue_success_url, cancel_url=cancel_url)
         self.last_body = body
-        # The `redirect` shape — what `hosted_view` really answers with, and the
-        # default this deployment runs. No QR: ABA draws that on its own page.
+        if self.checkout_shape == "redirect":
+            # The older `abapay_khqr` shape: a 302 whose Location is the whole
+            # answer. No QR — the payload exists only inside the opaque token.
+            return payway.PurchaseCheckout(
+                tran_id=tran_id,
+                checkout_url=f"https://checkout-sandbox.payway.com.kh/{tran_id}",
+                mode="redirect", trace_id="trace-1")
         return payway.PurchaseCheckout(
             tran_id=tran_id,
             checkout_url=f"https://checkout-sandbox.payway.com.kh/{tran_id}",
-            mode="redirect", trace_id="trace-1")
+            mode="json", qr_string=KHQR_FIXTURE,
+            deeplink="abamobilebank://ababank.com?type=payway&qrcode=x",
+            trace_id="trace-1")
 
     async def check_transaction(self, *, cfg, tran_id):
         self.check_calls.append(tran_id)
         return self.status_for.get(tran_id, self.default_status)
+
+
+#: A REAL-SHAPED KHQR payload, fixed so the rendered symbol is a stable
+#: artefact a reviewer can re-derive. Same structure as the sandbox returns:
+#: EMV tag 00 payload format, tag 30 merchant account with the ABA acquirer id,
+#: amount, country, merchant name, and the tag 63 CRC.
+KHQR_FIXTURE = (
+    "00020101021230510016abaakhppxxx@abaa0115111111111111111"
+    "0208ABA Bank52045999530384054047.995802KH5903M L6000623"
+    "1050701284200716TEST0000000000019975001317885783500830011"
+    "317885801503716671700134F1BF016411FDA6804PONL6908purchase"
+    "63041234"
+)
 
 
 def _status(**kw) -> payway.TransactionStatus:
@@ -432,6 +460,7 @@ def _reset() -> None:
     GATEWAY.qr_calls.clear()
     GATEWAY.check_calls.clear()
     GATEWAY.qr_error = None
+    GATEWAY.checkout_shape = "json"
     GATEWAY.status_for.clear()
     ENGINE.grants.clear()
     ENGINE.ledger.clear()
@@ -498,8 +527,13 @@ async def test_aba01_checkout() -> None:
           view["checkout_url"])
     check("ABA01 the checkout is on ABA's domain, never on Ayden's",
           "payway.com.kh" in view["checkout_url"], view["checkout_url"])
+    # 'json', not 'redirect', since the deployment moved to
+    # `abapay_khqr_deeplink` on 2026-09-05 — the shape that returns the KHQR
+    # payload and the ABA Mobile deeplink as first-level fields. The mode is
+    # recorded so a support question can be answered without guessing which
+    # rail a given transaction took; QR14 still covers the redirect shape.
     check("ABA01 the answer mode is recorded for support",
-          view["checkout_mode"] == "redirect", view["checkout_mode"])
+          view["checkout_mode"] == "json", view["checkout_mode"])
 
     check("ABA01 the amount comes from the CATALOGUE", view["amount"] == 4.99,
           str(view["amount"]))
@@ -945,6 +979,423 @@ async def test_unconfigured() -> None:
         os.environ["PAYWAY_API_KEY"] = saved
 
 
+
+
+
+async def test_not_created_is_terminal_after_the_grace_window() -> None:
+    """ERR01-ERR06 — a purchase PayWay refused before creating a transaction
+    must not become a 30-minute wait.
+
+    Found on the phone: ABA answered "Requested Domain is not in whitelist"
+    (Error 6), Check Transaction answered "tran_id not found", and the app kept
+    polling and counting down for a transaction that did not exist. On the
+    plugin path the browser posts the purchase, so a not-found in the first
+    seconds is a race — and after that it is the answer.
+    """
+    section("NOT_CREATED  no transaction is not a pending transaction")
+    _reset()
+    os.environ["PAYWAY_PAYMENT_OPTION"] = "abapay_khqr"
+    try:
+        view = await seam.start_plugin_checkout(user_id=USER, sku="pack_10",
+                                                attempt_key="att-notcreated")
+        tran = view["tran_id"]
+        GATEWAY.status_for[tran] = _status(
+            tran_id=tran, envelope_code="6", envelope_message="tran_id not found")
+
+        # ERR01 — inside the grace window it is a race, and we keep waiting.
+        one = await seam.verify_and_settle(_row(tran), force=True)
+        check("ERR01 within the grace window the row stays AWAITING",
+              one["state"] == seam.AWAITING_PAYMENT, one.get("state"))
+        check("ERR01 and the check was recorded",
+              int(one.get("check_count") or 0) == 1, one.get("check_count"))
+
+        # ERR02 — past it, PayWay's not-found is the truth.
+        r = _row(tran)
+        r["qr_issued_at"] = seam._iso(seam._now() - timedelta(seconds=45))
+        two = await seam.verify_and_settle(_row(tran), force=True)
+        check("ERR02 past the grace window the row is FAILED",
+              two["state"] == seam.FAILED, two.get("state"))
+        check("ERR02 with reason NOT_CREATED",
+              two.get("failure_reason") == "NOT_CREATED", two.get("failure_reason"))
+
+        # ERR03 — the browser is told it is over: terminal, with the reason.
+        pv = seam.public_view(_row(tran))
+        check("ERR03 the public view is terminal",
+              pv.get("terminal") is True, pv.get("terminal"))
+        check("ERR03 and names the reason",
+              pv.get("failure_reason") == "NOT_CREATED", pv.get("failure_reason"))
+
+        # ERR04 — nothing was granted.
+        check("ERR04 zero grants", len(ENGINE.credited_grants) == 0,
+              len(ENGINE.credited_grants))
+
+        # ERR05 — and nothing is asked again: FAILED returns before any check.
+        before = GATEWAY.check_calls.count(tran)
+        three = await seam.verify_and_settle(_row(tran), force=True)
+        check("ERR05 a settled row is not re-checked",
+              three["state"] == seam.FAILED
+              and GATEWAY.check_calls.count(tran) == before,
+              (three.get("state"), GATEWAY.check_calls.count(tran), before))
+
+        # ERR06 — the canonical order followed.
+        orders = [o for o in DB.tables["public.orders"]
+                  if o.get("provider_transaction_id") == tran
+                  or o.get("tran_id") == tran]
+        check("ERR06 the canonical order is not PENDING any more",
+              all((o.get("status") or "").upper() != "PENDING" for o in orders)
+              if orders else True,
+              [o.get("status") for o in orders])
+    finally:
+        os.environ.pop("PAYWAY_PAYMENT_OPTION", None)
+
+
+async def test_not_created_never_fires_on_the_server_side_path() -> None:
+    """ERR07 — the rule is scoped to the plugin path. On the server-side
+    Purchase path this process saw PayWay accept the purchase, so a later
+    not-found is an anomaly, not a conclusion."""
+    section("NOT_CREATED  scoped to the plugin path")
+    _reset()
+    GATEWAY.checkout_shape = "redirect"
+    view = await seam.start_checkout(user_id=USER, sku="pack_10",
+                                     attempt_key="att-redirect-nf")
+    tran = view["tran_id"]
+    GATEWAY.status_for[tran] = _status(
+        tran_id=tran, envelope_code="6", envelope_message="tran_id not found")
+    r = _row(tran)
+    r["qr_issued_at"] = seam._iso(seam._now() - timedelta(seconds=120))
+    after = await seam.verify_and_settle(_row(tran), force=True)
+    check("ERR07 a server-side checkout is not concluded by not-found",
+          after["state"] == seam.AWAITING_PAYMENT, after.get("state"))
+    GATEWAY.checkout_shape = "json"
+
+
+async def test_plugin_checkout_signs_and_does_not_post() -> None:
+    """PLUGIN01-PLUGIN10 — the active Web path: this server signs, ABA's
+    JavaScript posts.
+
+    ABA's website guidance (2026-09-05): the merchant page holds a form of
+    signed hidden inputs and their plugin submits it into an iframe it owns.
+    So the Purchase call moves from this process to the browser, and the ONLY
+    thing that must not move is the signing key. These assertions pin exactly
+    that boundary.
+    """
+    section("PLUGIN  the server signs the form; the browser posts it")
+    _reset()
+    os.environ["PAYWAY_PAYMENT_OPTION"] = "abapay_khqr"
+    try:
+        view = await seam.start_plugin_checkout(user_id=USER, sku="pack_10",
+                                                attempt_key="att-plugin")
+        row = _row(view["tran_id"])
+
+        # PLUGIN01 — no Purchase call left this process.
+        check("PLUGIN01 payway.purchase was NOT called",
+              GATEWAY.qr_calls == [], GATEWAY.qr_calls)
+
+        # PLUGIN02 — the row is live and says which rail it is on.
+        check("PLUGIN02 the row is AWAITING_PAYMENT",
+              row["state"] == seam.AWAITING_PAYMENT, row.get("state"))
+        check("PLUGIN02 and records the plugin mode",
+              row["checkout_mode"] == seam.CHECKOUT_MODE_PLUGIN,
+              row.get("checkout_mode"))
+        check("PLUGIN02 with no QR and no deeplink of its own",
+              not row.get("qr_string") and not row.get("qr_image")
+              and not row.get("deeplink"))
+
+        # PLUGIN03 — the handoff: an action and signed fields.
+        plugin = view.get("plugin") or {}
+        fields = plugin.get("fields") or {}
+        check("PLUGIN03 the answer carries a plugin handoff",
+              bool(plugin) and bool(fields), sorted(plugin.keys()))
+        check("PLUGIN03 the form action is PayWay's Purchase endpoint",
+              plugin.get("form_action", "").endswith(payway.PATH_PURCHASE)
+              and plugin.get("form_action", "").startswith("https://"),
+              plugin.get("form_action"))
+
+        # PLUGIN04 — the fields are what ABA's sample puts in hidden inputs.
+        for k in ("hash", "tran_id", "amount", "merchant_id", "req_time",
+                  "payment_option", "currency", "type", "lifetime"):
+            check(f"PLUGIN04 field {k} is present", k in fields, sorted(fields))
+
+        # PLUGIN05 — and what they must NOT contain: the credential.
+        cfg = payway.load_config()
+        joined = json.dumps(fields)
+        check("PLUGIN05 the api key is NOT in the handoff",
+              cfg.api_key not in joined)
+        check("PLUGIN05 no field is named like a key",
+              not any("key" in k.lower() or "secret" in k.lower()
+                      for k in fields), sorted(fields))
+
+        # PLUGIN06 — ABA's website option, and nothing that opens cards.
+        check("PLUGIN06 payment_option is abapay_khqr",
+              fields["payment_option"] == "abapay_khqr",
+              fields["payment_option"])
+
+        # PLUGIN07 — no return URLs: the plugin navigates the top window on
+        # them, which would unload the app mid-payment. Their absence takes
+        # the plugin's in-place branches instead.
+        check("PLUGIN07 continue_success_url is not sent",
+              "continue_success_url" not in fields)
+        check("PLUGIN07 cancel_url is not sent", "cancel_url" not in fields)
+        # The pushback URL rides along only when the deployment has a public
+        # callback (Fly does; this harness does not). What matters here is
+        # that its presence follows the config and is never invented.
+        check("PLUGIN07 the pushback URL follows PAYWAY_CALLBACK_URL",
+              bool(fields.get("return_url")) == cfg.has_public_callback,
+              (bool(fields.get("return_url")), cfg.has_public_callback))
+
+        # PLUGIN08 — view_type is presentation metadata the official form omits.
+        check("PLUGIN08 view_type is not sent", "view_type" not in fields)
+
+        # PLUGIN09 — the signature is over what is sent: recompute it.
+        expected = payway.sign(payway.purchase_hash_payload(
+            {k: v for k, v in fields.items() if k != "hash"}), cfg.api_key)
+        check("PLUGIN09 the hash matches the fields as sent",
+              fields["hash"] == expected)
+
+        # PLUGIN10 — the amount is the catalogue's, formatted as PayWay wants.
+        check("PLUGIN10 the amount is server-authoritative",
+              fields["amount"] == payway.format_amount(4.99, "USD"),
+              fields["amount"])
+    finally:
+        os.environ.pop("PAYWAY_PAYMENT_OPTION", None)
+
+
+async def test_plugin_rejoin_returns_no_fields() -> None:
+    """PLUGIN11 — one Purchase per tran_id, so a rejoin gets the row and no
+    second set of fields to post."""
+    section("PLUGIN  a rejoin polls; it does not post twice")
+    _reset()
+    os.environ["PAYWAY_PAYMENT_OPTION"] = "abapay_khqr"
+    try:
+        first = await seam.start_plugin_checkout(user_id=USER, sku="pack_10",
+                                                 attempt_key="att-rejoin")
+        again = await seam.start_plugin_checkout(user_id=USER, sku="pack_10",
+                                                 attempt_key="att-rejoin")
+        check("PLUGIN11 the first call hands over fields",
+              bool(first.get("plugin")))
+        check("PLUGIN11 the rejoin does NOT",
+              "plugin" not in again, sorted(again.keys()))
+        check("PLUGIN11 and it is the same transaction",
+              again["tran_id"] == first["tran_id"])
+    finally:
+        os.environ.pop("PAYWAY_PAYMENT_OPTION", None)
+
+
+async def test_plugin_refuses_any_other_option() -> None:
+    """PLUGIN12 — a deployment pinned to anything but abapay_khqr cannot open
+    a plugin checkout. Cards are not offered here, and a value the plugin does
+    not recognise is a popup sized for the wrong thing."""
+    section("PLUGIN  the option is abapay_khqr or nothing")
+    for bad in ("", "abapay_khqr_deeplink", "cards"):
+        _reset()
+        os.environ["PAYWAY_PAYMENT_OPTION"] = bad
+        try:
+            await seam.start_plugin_checkout(user_id=USER, sku="pack_10",
+                                             attempt_key=f"att-bad-{bad or 'empty'}")
+            check(f"PLUGIN12 option {bad!r} is refused", False)
+        except HTTPException as exc:
+            check(f"PLUGIN12 option {bad!r} is refused (503)",
+                  exc.status_code == 503
+                  and exc.detail.get("reason") == "plugin_option_misconfigured",
+                  exc.detail)
+        finally:
+            os.environ.pop("PAYWAY_PAYMENT_OPTION", None)
+
+
+async def test_plugin_path_grants_exactly_once_via_check_transaction() -> None:
+    """PLUGIN13 — the presentation moved; the authority did not. A plugin
+    checkout is settled by Check Transaction like any other, and once."""
+    section("PLUGIN  Check Transaction still decides, exactly once")
+    _reset()
+    os.environ["PAYWAY_PAYMENT_OPTION"] = "abapay_khqr"
+    try:
+        view = await seam.start_plugin_checkout(user_id=USER, sku="pack_10",
+                                                attempt_key="att-grant")
+        tran_id = view["tran_id"]
+        GATEWAY.status_for[tran_id] = _status(
+            tran_id=tran_id, payment_status_code=payway.STATUS_APPROVED,
+            payment_status="APPROVED", total_amount=4.99, currency="USD")
+        # `verify_and_settle` is what the /order poll route runs on the row:
+        # Check Transaction, then the grant, then the projection.
+        one = await seam.verify_and_settle(_row(tran_id))
+        two = await seam.verify_and_settle(_row(tran_id))
+        check("PLUGIN13 the first poll after APPROVED grants",
+              one["state"] == seam.GRANTED, one.get("state"))
+        check("PLUGIN13 the second poll does not grant again",
+              two["state"] == seam.GRANTED
+              and len(ENGINE.credited_grants) == 1,
+              (two.get("state"), len(ENGINE.credited_grants)))
+    finally:
+        os.environ.pop("PAYWAY_PAYMENT_OPTION", None)
+
+
+async def test_the_qr_is_abas_payload_and_nothing_else() -> None:
+    """QR01-QR06 — Ayden draws ABA's string. It does not author a payment.
+
+    ABA returns the payment as a STRING on this rail and never as an image
+    (measured 2026-09-05: `abapay_khqr_deeplink` answers with `qr_string`,
+    `abapay_deeplink`, `checkout_qr_url`, `description`, `status` — no image
+    field, and `download_qr` lives only inside the opaque checkout token). A
+    customer cannot scan a string, so the server encodes it.
+
+    Encoding is the whole of what is permitted. These assertions pin the line
+    between rendering a payment and inventing one.
+    """
+    section("QR   the symbol is ABA's payload, rendered, and nothing more")
+    _reset()
+    GATEWAY.checkout_shape = "json"
+
+    view = await seam.start_checkout(user_id=USER, sku="pack_10",
+                                     attempt_key="att-qr")
+    row = _row(view["tran_id"])
+
+    # QR01 — the payload is stored EXACTLY as PayWay sent it.
+    check("QR01 the stored payload is byte-identical to PayWay's",
+          row["qr_string"] == KHQR_FIXTURE, len(row.get("qr_string") or ""))
+
+    # QR02 — an image now exists, and it is a PNG.
+    img = row.get("qr_image") or ""
+    raw = base64.b64decode(img) if img else b""
+    check("QR02 a PNG was rendered for it", raw[:8] == b"\x89PNG\r\n\x1a\n",
+          raw[:8])
+
+    # QR03 — DETERMINISTIC. The same payload always gives the same bytes, which
+    # is what lets a reviewer re-derive the image from the string themselves.
+    again = pwa_qr.render_khqr_png_b64(KHQR_FIXTURE)
+    check("QR03 rendering is deterministic", again == img)
+
+    # QR04 — and it is a function of the payload: one character changes it.
+    other = pwa_qr.render_khqr_png_b64(KHQR_FIXTURE[:-1] + "5")
+    check("QR04 a different payload gives a different symbol", other != img)
+
+    # QR05 — nothing renders when there is nothing to render. Empty is a state
+    # the payment sheet already draws, not an error.
+    check("QR05 an empty payload renders nothing",
+          pwa_qr.render_khqr_png_b64("") == "")
+
+    # QR06 — the browser is handed the image, and the payload it came from.
+    check("QR06 the public view carries the image",
+          (view.get("qr_image") or "") == img)
+    check("QR06 and the untouched payload beside it",
+          view.get("qr_string") == KHQR_FIXTURE)
+
+
+async def test_no_endpoint_renders_a_caller_supplied_payload() -> None:
+    """QR07-QR10 — there is exactly ONE call site, and the browser is not it.
+
+    A QR renderer that accepts input is a way to put an attacker's payment code
+    on our own payment screen. This asserts, from the source, that no such route
+    exists and that the only caller passes the value PayWay just returned.
+    """
+    section("QR   no route renders a payload a caller chose")
+    seam_src = Path(seam.__file__).read_text(encoding="utf-8")
+
+    # QR07 — one call site.
+    check("QR07 the seam renders a QR in exactly one place",
+          seam_src.count("pwa_qr.render_khqr_png_b64(") == 1,
+          seam_src.count("pwa_qr.render_khqr_png_b64("))
+
+    # QR08 — and it renders the value that came back from PayWay.
+    check("QR08 and it encodes PayWay's own field",
+          "pwa_qr.render_khqr_png_b64(checkout.qr_string)" in seam_src)
+
+    # QR09 — no route exposes the renderer.
+    routes = [ln for ln in seam_src.splitlines()
+              if ln.strip().startswith("@router.")]
+    check("QR09 no route mentions qr rendering",
+          not any("qr" in r.lower() and "render" in r.lower() for r in routes),
+          routes)
+
+    # QR10 — the renderer module itself parses nothing. It must not contain the
+    # vocabulary of a payload BUILDER: no field assembly, no CRC, no EMV tags.
+    qr_src = Path(pwa_qr.__file__).read_text(encoding="utf-8")
+    for banned in ("crc", "emv", "tag_", "payload[", "split(", "replace("):
+        check(f"QR10 the renderer does not {banned!r} the payload",
+              banned not in qr_src.lower().split('"""')[-1].lower(), banned)
+
+
+async def test_the_deeplink_is_abas_and_is_never_built_here() -> None:
+    """QR11-QR13 — the ABA Mobile link comes from ABA."""
+    section("QR   the ABA Mobile deeplink is PayWay's, verbatim")
+    _reset()
+    GATEWAY.checkout_shape = "json"
+    view = await seam.start_checkout(user_id=USER, sku="pack_10",
+                                     attempt_key="att-dl")
+    row = _row(view["tran_id"])
+    check("QR11 the deeplink is stored as received",
+          row["deeplink"] == "abamobilebank://ababank.com?type=payway&qrcode=x")
+    check("QR12 and handed to the browser unchanged",
+          view["deeplink"] == row["deeplink"])
+    seam_src = Path(seam.__file__).read_text(encoding="utf-8")
+    check("QR13 the seam never constructs an abamobilebank:// URL",
+          "abamobilebank://" not in seam_src)
+
+
+async def test_the_redirect_shape_still_works_and_renders_no_qr() -> None:
+    """QR14 — the older rail is not broken by any of this."""
+    section("QR   the 302 rail still opens a checkout, with no QR")
+    _reset()
+    GATEWAY.checkout_shape = "redirect"
+    view = await seam.start_checkout(user_id=USER, sku="pack_10",
+                                     attempt_key="att-redir")
+    row = _row(view["tran_id"])
+    check("QR14 a redirect checkout is still opened",
+          view["state"] == seam.AWAITING_PAYMENT and view["checkout_url"])
+    check("QR14 and carries no QR, which is normal for it",
+          not (row.get("qr_string") or "") and not (row.get("qr_image") or ""))
+    GATEWAY.checkout_shape = "json"
+
+
+async def test_return_follows_the_calling_origin() -> None:
+    """PREPROD (2026-09-04) — the browser comes back where it started.
+
+    One deployment, several addresses: the live staging site, every preview
+    channel, and now preprod.aydenstudio.com all talk to this API. A single
+    `PAYWAY_RETURN_BASE_URL` sent every payer to one of them, so a person paying
+    from preprod landed on a different origin — a different browser session, and
+    an apparently lost payment.
+
+    The Origin header now chooses, and it may only choose among origins the
+    operator already allowed for CORS. Nothing that decides money moves: the
+    product, the price and the grant are still read from the catalogue and from
+    Check Transaction.
+    """
+    section("ORIGIN  the return address follows the caller, within the allowlist")
+    cfg = payway.load_config()
+
+    os.environ["PWA_ALLOWED_ORIGINS"] = (
+        "https://ayden-studio.web.app,https://preprod.aydenstudio.com")
+    os.environ["PWA_ALLOWED_ORIGIN_REGEX"] = (
+        r"^https://ayden-studio--[a-z0-9-]+\.web\.app$")
+    try:
+        check("ORIGIN an allowed origin is honoured",
+              seam.return_base_for(cfg, "https://preprod.aydenstudio.com")
+              == "https://preprod.aydenstudio.com")
+        check("ORIGIN a trailing slash is normalised",
+              seam.return_base_for(cfg, "https://preprod.aydenstudio.com/")
+              == "https://preprod.aydenstudio.com")
+        check("ORIGIN a preview channel matches the regex",
+              seam.return_base_for(cfg, "https://ayden-studio--round4-x1.web.app")
+              == "https://ayden-studio--round4-x1.web.app")
+        check("ORIGIN an UNKNOWN origin is ignored, not honoured",
+              seam.return_base_for(cfg, "https://evil.example.com")
+              == cfg.return_base_url)
+        check("ORIGIN a lookalike does not pass the regex",
+              seam.return_base_for(cfg, "https://evil.com/?x=ayden-studio--a.web.app")
+              == cfg.return_base_url)
+        check("ORIGIN no Origin header falls back to the configured base",
+              seam.return_base_for(cfg, "") == cfg.return_base_url)
+        url = seam.return_url_for(cfg, "TR-1", "success",
+                                  base="https://preprod.aydenstudio.com")
+        check("ORIGIN the return URL is built on the chosen base",
+              url.startswith("https://preprod.aydenstudio.com/?pay_return=1"), url)
+        check("ORIGIN it still carries only the tran_id and the outcome",
+              "tran_id=TR-1" in url and "outcome=success" in url)
+    finally:
+        os.environ.pop("PWA_ALLOWED_ORIGINS", None)
+        os.environ.pop("PWA_ALLOWED_ORIGIN_REGEX", None)
+
+
 async def test_return_is_navigation_not_evidence() -> None:
     """RET — the return URL moves a browser. It cannot move money.
 
@@ -1246,6 +1697,17 @@ async def main_async() -> int:
     await test_aba14_terminal()
     await test_aba18_bypass()
     await test_return_is_navigation_not_evidence()
+    await test_not_created_is_terminal_after_the_grace_window()
+    await test_not_created_never_fires_on_the_server_side_path()
+    await test_plugin_checkout_signs_and_does_not_post()
+    await test_plugin_rejoin_returns_no_fields()
+    await test_plugin_refuses_any_other_option()
+    await test_plugin_path_grants_exactly_once_via_check_transaction()
+    await test_the_qr_is_abas_payload_and_nothing_else()
+    await test_no_endpoint_renders_a_caller_supplied_payload()
+    await test_the_deeplink_is_abas_and_is_never_built_here()
+    await test_the_redirect_shape_still_works_and_renders_no_qr()
+    await test_return_follows_the_calling_origin()
     await test_catalogue_is_the_price_authority()
     await test_metadata_is_presentation_only()
     await test_checkout_token_goes_stale()

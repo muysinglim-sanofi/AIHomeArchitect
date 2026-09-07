@@ -270,18 +270,51 @@ def load_config() -> PayWayConfig:
             + ". Set them in backend/.env.pwa-staging.local (gitignored).")
 
     environment = (_env("PAYWAY_ENV", "sandbox")).lower()
-    if environment != "sandbox":
+    if environment not in ("sandbox", "production"):
         # Named explicitly rather than silently downgraded: an operator who
-        # typed `production` must see that this build refuses, not quietly run
-        # against a sandbox they did not ask for.
+        # typed something else must see the refusal, not quietly run against a
+        # gateway they did not ask for.
         raise PayWayNotConfigured(
-            f"PAYWAY_ENV={environment!r} is refused by this build. Only "
-            f"'sandbox' is implemented; {PRODUCTION_BASE} is out of scope until "
-            f"the productionization phase.")
+            f"PAYWAY_ENV={environment!r} is not a PayWay environment. "
+            f"Use 'sandbox' or 'production'.")
 
     callback_url = _env("PAYWAY_CALLBACK_URL")
     if callback_url:
         _assert_public_callback(callback_url)
+
+    # ── The production gate (2026-09-04) ────────────────────────────────────
+    #
+    # `production` used to be refused outright, and that was right for as long
+    # as no production deployment existed. It is replaced by CONDITIONS rather
+    # than by a flag: real money may only move from a process that is itself a
+    # production deployment, that can be TOLD about a payment, that refuses an
+    # unsigned doorbell, and that knows where to send the browser back. Each
+    # condition is its own sentence so a failure names exactly what is missing.
+    #
+    # What is deliberately NOT relaxed: the authority rule. In production too,
+    # the pushback is a doorbell — `check_transaction` decides and the Billing
+    # Engine grants.
+    if environment == "production":
+        import pwa_target  # local: payway.py stays importable on its own
+
+        if not pwa_target.current().is_production:
+            raise PayWayNotConfigured(
+                "PAYWAY_ENV=production requires PWA_TARGET=production. A "
+                "staging deployment may not move real money.")
+        if not callback_url:
+            raise PayWayNotConfigured(
+                "PAYWAY_ENV=production requires PAYWAY_CALLBACK_URL. A rail "
+                "that cannot be told about a payment is poll-only, which is "
+                "not acceptable for real money.")
+        if _env("PAYWAY_CALLBACK_SIGNATURE_MODE", "required").lower() == "optional":
+            raise PayWayNotConfigured(
+                "PAYWAY_ENV=production refuses "
+                "PAYWAY_CALLBACK_SIGNATURE_MODE=optional: an unsigned pushback "
+                "must never be accepted in production.")
+        if not _env("PAYWAY_RETURN_BASE_URL"):
+            raise PayWayNotConfigured(
+                "PAYWAY_ENV=production requires PAYWAY_RETURN_BASE_URL so the "
+                "browser returns to the production app.")
 
     try:
         lifetime = int(_env("PAYWAY_QR_LIFETIME_MINUTES", "30"))
@@ -317,7 +350,7 @@ def load_config() -> PayWayConfig:
     return PayWayConfig(
         merchant_id=merchant_id,
         api_key=api_key,
-        base_url=SANDBOX_BASE,
+        base_url=PRODUCTION_BASE if environment == "production" else SANDBOX_BASE,
         environment=environment,
         callback_url=callback_url,
         require_callback_signature=(

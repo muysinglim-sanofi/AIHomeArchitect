@@ -18,7 +18,13 @@ primary_region = "sin"
   BIMODAL_ENABLED = "1"
   # THE browser origins allowed to make credentialed calls to this API.
   # Everything else is refused at the preflight. Add a host here, redeploy.
-  PWA_ALLOWED_ORIGINS = "https://ayden-studio.web.app,https://ayden-studio.firebaseapp.com,https://aydenstudio.app,https://www.aydenstudio.app"
+  # `aydenstudio.app` / `www.aydenstudio.app` do not resolve (audited
+  # 2026-09-03) and are kept only because removing an origin nobody uses is not
+  # worth a redeploy on its own. `preprod.aydenstudio.com` is the DEDICATED Web
+  # preproduction site (Firebase site `ayden-studio-preprod`), added 2026-09-04:
+  # it runs the SAME staging build against this same staging API, and it is the
+  # address phone validation now uses.
+  PWA_ALLOWED_ORIGINS = "https://ayden-studio.web.app,https://ayden-studio.firebaseapp.com,https://preprod.aydenstudio.com,https://ayden-studio-preprod.web.app,https://aydenstudio.app,https://www.aydenstudio.app"
   # Firebase preview channels get a generated hostname per channel, so a fixed
   # list refuses every review deployment. Narrow on purpose: this project's own
   # preview subdomains, https only, anchored — not a wildcard.
@@ -39,6 +45,53 @@ primary_region = "sin"
   # Billing Engine grants. Faster, not more trusting.
   PAYWAY_CALLBACK_URL = "https://ayden-api-staging.fly.dev/pwa/staging/payments/payway/callback"
   PAYWAY_VIEW_TYPE = "hosted_view"
+  # ABA KHQR, and nothing else — enforced AT THE SOURCE rather than by hiding
+  # options in Ayden's UI.
+  #
+  # `abapay_khqr` again since 2026-09-05 (evening). ABA's website guidance,
+  # received the same day, is explicit: "For website integration the
+  # payment_option value must be abapay_khqr or cards", and the checkout is to
+  # be presented by THEIR JavaScript plugin, which sizes its mobile sheet on
+  # exactly the string `abapay_khqr`. The plugin path (`/checkout/plugin`)
+  # refuses to sign any other value.
+  #
+  # The server-side Purchase path (`/checkout`) is dormant but kept. Under this
+  # option it would answer as it did before 2026-09-05 morning; the notes below
+  # on the two options are retained because they were measured and remain true:
+  #
+  #   abapay_khqr           HTTP 302, Location only. No first-level fields at
+  #                         all — the payload exists solely inside the opaque
+  #                         checkout token, and the only way to show a customer
+  #                         anything is to embed ABA's hosted page.
+  #   abapay_khqr_deeplink  HTTP 200 JSON with `qr_string` (the official EMV
+  #                         KHQR payload) and `abapay_deeplink` (the official
+  #                         ABA Mobile link) as documented first-level fields.
+  #
+  # The hosted page was measured at 340 / 360 / 390 / 420 px iframe widths on
+  # 2026-09-05 and has NO mobile breakpoint: it renders the same ~1180 px
+  # desktop composition at every width, instruction column and postal footer
+  # included. It cannot be the compact modal ABA approved without scaling or
+  # cropping their page, which is not ours to do. So the modal is built from the
+  # two official fields above and ABA's page is not embedded at all.
+  #
+  # WHY. ABA's merchant review (2026-09-04) asks that KHQR be the only payment
+  # method offered. Left empty, this integration sends no `payment_option` at
+  # all, and PayWay then draws its OWN chooser — which, decoded from a real
+  # sandbox checkout token on 2026-08-19, offers `cards`, `abapay_deeplink`,
+  # `abapay_khqr_deeplink` and `abapay_khqr`. Any recette capture taken against
+  # that configuration would show a Credit/Debit Card button and contradict the
+  # approved deck.
+  #
+  # ONE CAVEAT, measured 2026-09-05 and worth knowing: under this option the
+  # hosted page's own label reads "ABA Pay" rather than "ABA KHQR". The
+  # transaction is unchanged (same KHQR payload, same `abapay_khqr_request_qr`
+  # step) and no customer is ever sent to that page — but anyone who opened it
+  # would read the other name. The token lifetime also halves, 300s -> 180s,
+  # which the seam already models as `checkout_stale`.
+  #
+  # ROLLBACK is this line: delete it and PayWay's own chooser comes back,
+  # Credit/Debit Card included.
+  PAYWAY_PAYMENT_OPTION = "abapay_khqr"
   PAYWAY_CURRENCY = "USD"
 
 [http_service]
