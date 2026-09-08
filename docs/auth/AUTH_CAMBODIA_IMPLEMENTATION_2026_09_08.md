@@ -10,6 +10,8 @@ untouched — proved in §19.
 
 Start HEADs: PWA `94e6308`, backend `fcdd208` (tags
 `auth-cambodia-start-pwa-2026-09-08`, `auth-cambodia-start-backend-2026-09-08`).
+Final HEADs: PWA `951c0e1` (commits `6361edd`, `951c0e1`), backend `55301b7`
+(+ this report's follow-up). Nothing pushed.
 
 ---
 
@@ -368,8 +370,14 @@ Preprod: deployed (`tool/deploy_pwa.sh --preprod`), and the served
 `docs/auth-cambodia/shots/live-m-profile-guest.png` — the Guest card
 (*Guest / Your designs are saved on this device.*), the *Secure my account*
 primary, the *Already use Ayden Studio? Sign in* line, then Spaces and the
-settings rows, nav bar intact. With Facebook and phone OFF on the staging
-project, the live sheet is the email-only one (unchanged since August).
+settings rows, nav bar intact. `live-m-sheet-email-only.png` — the sheet
+opened live from *Secure my account*: with Facebook and phone OFF on the
+staging project it is the email-only one (unchanged since August), no
+console error (`docs/round3-final/cdp_tap_console.mjs` listens while
+tapping). `live-d-profile-guest.png` — the same Profile at 1440×900 in
+French (*Sécuriser mon compte*). Note for the next operator: the driver's
+`click` command left this button pressed without lifting the pointer on
+the live page; a plain touchStart/touchEnd (the helper above) works.
 
 The Cambodia sheet itself was captured from the review harness
 (`lib/dev/pwa_auth_sheet_preview.dart`, the production widget over a
