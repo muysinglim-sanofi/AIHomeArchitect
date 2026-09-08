@@ -704,8 +704,6 @@ class PwaL10n {
   String get acceptWeAccept => _get('pwaAcceptWeAccept');
   String get payMethodTitle => _get('pwaPayMethodTitle');
   String get payMethodBody => _get('pwaPayMethodBody');
-  String get payStartDesigning => _get('pwaPayStartDesigning');
-  String get payMaybeLater => _get('pwaPayMaybeLater');
   String get payHandoffBodyDesktop => _get('pwaPayHandoffBodyDesktop');
   String get payHandoffBodyPhone => _get('pwaPayHandoffBodyPhone');
   String get payLinkExpiredTitle => _get('pwaPayLinkExpiredTitle');
@@ -719,9 +717,6 @@ class PwaL10n {
   String get payConfirmingBody => _get('pwaPayConfirmingBody');
   String get payActivatingTitle => _get('pwaPayActivatingTitle');
   String get payActivatingBody => _get('pwaPayActivatingBody');
-  String get payDoneTitle => _get('pwaPayDoneTitle');
-  String payDoneBody(int n) =>
-      _get('pwaPayDoneBody').replaceAll('{n}', '$n');
   String get payContinue => _get('pwaPayContinue');
   String get payExpiredTitle => _get('pwaPayExpiredTitle');
   String get payExpiredBody => _get('pwaPayExpiredBody');
@@ -731,6 +726,18 @@ class PwaL10n {
   String get payUnreachableTitle => _get('pwaPayUnreachableTitle');
   String get payUnreachableBody => _get('pwaPayUnreachableBody');
   String get payRetry => _get('pwaPayRetry');
+
+  // Ayden's RESULT card, after ABA's checkout (`pwa_payment_result.dart`):
+  // the verdict, the purchase summary, the one action.
+  String get payResultSuccessTitle => _get('pwaPayResultSuccessTitle');
+  String payResultSuccessBody(int n) =>
+      _get('pwaPayResultSuccessBody').replaceAll('{n}', '$n');
+  String get payResultSummaryTitle => _get('pwaPayResultSummaryTitle');
+  String get payResultNewBalance => _get('pwaPayResultNewBalance');
+  String get payResultContinue => _get('pwaPayResultContinue');
+  String get payResultFailedTitle => _get('pwaPayResultFailedTitle');
+  String get payResultFailedBody => _get('pwaPayResultFailedBody');
+  String get payResultFailedHint => _get('pwaPayResultFailedHint');
   String get payCancel => _get('pwaPayCancel');
   String get paySafeNote => _get('pwaPaySafeNote');
 

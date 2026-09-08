@@ -18,6 +18,7 @@
 /// `backend/pwa_staging_payway_db_test.py`.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -32,6 +33,7 @@ import 'package:ai_home_architect/features/pwa/data/pwa_aba_plugin.dart';
 import 'package:ai_home_architect/features/pwa/data/pwa_external_launcher.dart';
 import 'package:ai_home_architect/features/pwa/l10n/pwa_l10n.dart';
 import 'package:ai_home_architect/features/pwa/l10n/pwa_translations.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_payment_result.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_payment_sheet.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_aba_marks.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_nav_shell.dart';
@@ -572,7 +574,7 @@ void main() {
       expect(controller.state.state, PwaPaymentState.awaitingPayment,
           reason: "opening ABA's checkout is not evidence of payment");
       expect(entitlement.refreshes, 0);
-      expect(find.text(pwaL10nFor(const Locale('en')).payDoneTitle),
+      expect(find.text(pwaL10nFor(const Locale('en')).payResultSuccessTitle),
           findsNothing);
       await _teardown(tester);
     });
@@ -587,10 +589,10 @@ void main() {
         'AWAITING_PAYMENT': (l) => l.payContinueToAba,
         'PAID_PENDING_VERIFICATION': (l) => l.payConfirmingTitle,
         'VERIFIED': (l) => l.payActivatingTitle,
-        'GRANTED': (l) => l.payDoneTitle,
-        'EXPIRED': (l) => l.payExpiredTitle,
-        'CANCELLED': (l) => l.payCancelledTitle,
-        'FAILED': (l) => l.payFailedTitle,
+        'GRANTED': (l) => l.payResultSuccessTitle,
+        'EXPIRED': (l) => l.payResultFailedTitle,
+        'CANCELLED': (l) => l.payResultFailedTitle,
+        'FAILED': (l) => l.payResultFailedTitle,
       };
 
       for (final code in ['km', 'en', 'fr']) {
@@ -688,8 +690,12 @@ void main() {
         'pwaPayBuy', 'pwaPayTitle', 'pwaPayPreparing', 'pwaPayScanTitle',
         'pwaPayScanBody', 'pwaPayOpenAba', 'pwaPayOrScan', 'pwaPayExpiresIn',
         'pwaPayWaiting', 'pwaPayConfirmingTitle', 'pwaPayConfirmingBody',
-        'pwaPayActivatingTitle', 'pwaPayActivatingBody', 'pwaPayDoneTitle',
-        'pwaPayDoneBody', 'pwaPayContinue', 'pwaPayExpiredTitle',
+        'pwaPayActivatingTitle', 'pwaPayActivatingBody',
+        'pwaPayResultSuccessTitle', 'pwaPayResultSuccessBody',
+        'pwaPayResultSummaryTitle', 'pwaPayResultNewBalance',
+        'pwaPayResultContinue', 'pwaPayResultFailedTitle',
+        'pwaPayResultFailedBody', 'pwaPayResultFailedHint',
+        'pwaPayContinue', 'pwaPayExpiredTitle',
         'pwaPayExpiredBody', 'pwaPayCancelledTitle', 'pwaPayCancelledBody',
         'pwaPayFailedTitle', 'pwaPayFailedBody', 'pwaPayFailedDeclined',
         'pwaPayFailedAmount', 'pwaPayFailedProvider', 'pwaPayFailedNewAttempt',
@@ -795,8 +801,8 @@ void main() {
       await _teardown(tester);
     });
 
-    testWidgets('PAYWAY23 a paid sheet offers the WORK, never the packs again',
-        (tester) async {
+    testWidgets('PAYWAY23 a paid sheet is the result card: one verdict, one '
+        'action, never the packs again', (tester) async {
       final server =
           _FakeServer(checkoutAnswer: _server(state: 'GRANTED'));
       final controller = PwaPaymentController(server.gateway, null);
@@ -804,16 +810,20 @@ void main() {
 
       await tester.pumpWidget(_app(
         const PwaPaymentSheet(product: _pack),
-        overrides: [pwaPaymentProvider.overrideWith((ref) => controller)],
+        overrides: [
+          pwaPaymentProvider.overrideWith((ref) => controller),
+          pwaEntitlementProvider.overrideWith((ref) => _CountingEntitlement()),
+        ],
       ));
       await tester.pump();
 
       final l = pwaL10nFor(const Locale('en'));
-      expect(find.text(l.payDoneTitle), findsOneWidget);
-      expect(find.widgetWithText(FilledButton, l.payStartDesigning),
-          findsOneWidget,
-          reason: 'what someone wants after paying is to use what they bought');
-      expect(find.widgetWithText(TextButton, l.payMaybeLater), findsOneWidget);
+      expect(find.text(l.payResultSuccessTitle), findsOneWidget);
+      expect(find.byKey(const ValueKey('pwa-pay-result-continue')),
+          findsOneWidget, reason: 'Continue is the one action');
+      expect(find.byType(FilledButton), findsNothing);
+      expect(find.byType(TextButton), findsNothing,
+          reason: 'no "maybe later", no second choice');
       // The single most common way a good purchase flow ends badly.
       expect(find.text(l.payContinueToAba), findsNothing);
       await _teardown(tester);
@@ -828,8 +838,8 @@ void main() {
           l.payHandoffBodyPhone,
           l.payLinkExpiredTitle,
           l.payLinkExpiredBody,
-          l.payStartDesigning,
-          l.payMaybeLater,
+          l.payResultSuccessTitle,
+          l.payResultFailedHint,
         ]) {
           expect(value, isNotEmpty, reason: code);
           // A missing key falls back to the key itself — which always starts
@@ -1008,16 +1018,16 @@ void main() {
       await tester.pump();
 
       final l = pwaL10nFor(const Locale('en'));
-      expect(find.text(l.payDoneTitle), findsOneWidget,
+      expect(find.text(l.payResultSuccessTitle), findsOneWidget,
           reason: 'this IS the success card');
       expect(find.text('ABA KHQR'), findsNothing,
-          reason: 'no payment-method name on the success header');
+          reason: 'no payment-method name on the result card');
       expect(find.byKey(const ValueKey('pwa-aba-method-mark')), findsNothing,
-          reason: 'no ABA tile on the success header');
-      expect(find.byKey(const ValueKey('pwa-pay-close')), findsOneWidget,
-          reason: 'the way out stays');
-      expect(find.text(l.payStartDesigning), findsOneWidget);
-      expect(find.text(l.payMaybeLater), findsOneWidget);
+          reason: 'no ABA tile on the result card');
+      expect(find.byKey(const ValueKey('pwa-pay-close')), findsNothing,
+          reason: 'one card, one action: Continue is the way out');
+      expect(find.byKey(const ValueKey('pwa-pay-result-continue')),
+          findsOneWidget);
       await _teardown(tester);
     });
 
@@ -1199,7 +1209,7 @@ void main() {
           reason: 'closing a card is not a payment outcome');
       expect(entitlement.refreshes, 0);
       final l = pwaL10nFor(const Locale('en'));
-      expect(find.text(l.payDoneTitle), findsNothing);
+      expect(find.text(l.payResultSuccessTitle), findsNothing);
       await _teardown(tester);
     });
 
@@ -1451,6 +1461,417 @@ void main() {
       ]) {
         expect(dart.contains(generated), isFalse,
             reason: 'the generated mark "$generated" must not be referenced');
+      }
+    });
+  });
+
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // THE RESULT CARD — Ayden's verdict after ABA's checkout (2026-09-08).
+  // Near-black, one action, the server's figures. No provider branding.
+  // ══════════════════════════════════════════════════════════════════════════
+  group('payment result cards', () {
+    Future<PwaPaymentController> settled(String state,
+        {int credits = 10, double amount = 1.99}) async {
+      final server = _FakeServer(
+          checkoutAnswer:
+              _server(state: state, credits: credits, amount: amount));
+      final controller = PwaPaymentController(server.gateway, null);
+      await controller.start('pack_10');
+      return controller;
+    }
+
+    Future<void> pumpCard(
+      WidgetTester tester,
+      PwaPaymentController controller, {
+      required PwaEntitlementController entitlement,
+      String locale = 'en',
+      Size size = const Size(390, 844),
+    }) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(_app(
+        const PwaPaymentSheet(product: _pack),
+        overrides: [
+          pwaPaymentProvider.overrideWith((ref) => controller),
+          pwaEntitlementProvider.overrideWith((ref) => entitlement),
+        ],
+        locale: locale,
+      ));
+      await tester.pump(); // the card
+      await tester.pump(); // the entitlement re-read settles
+    }
+
+    PwaEntitlementController holding(int credits) =>
+        PwaEntitlementController(() async => {
+              'can_generate': true,
+              'access_source': 'pass',
+              'has_active_pass': true,
+              'watermarked': false,
+              'pass_credits': credits,
+              'credits_available': credits,
+            });
+
+    String textOf(WidgetTester tester, String key) =>
+        tester.widget<Text>(find.byKey(ValueKey(key))).data ?? '';
+
+    for (final (credits, amount, price) in [
+      (10, 4.99, r'$4.99'),
+      (30, 7.99, r'$7.99'),
+      (300, 47.99, r'$47.99'),
+    ]) {
+      testWidgets('RESULT01 pack of $credits: the success card carries the '
+          'server\'s figures and one Continue', (tester) async {
+        final controller =
+            await settled('GRANTED', credits: credits, amount: amount);
+        await pumpCard(tester, controller, entitlement: holding(credits));
+
+        final l = pwaL10nFor(const Locale('en'));
+        expect(find.byKey(const ValueKey('pwa-pay-result-success')),
+            findsOneWidget);
+        expect(l.payResultSuccessTitle, 'Payment successful');
+        expect(find.text('Payment successful'), findsOneWidget);
+        expect(find.text('$credits spaces added to your wallet'),
+            findsOneWidget);
+        expect(find.text('Purchase summary'), findsOneWidget);
+        // The pack line and the amount are the server's echo of the ORDER.
+        expect(textOf(tester, 'pwa-pay-result-pack'), '$credits spaces');
+        expect(textOf(tester, 'pwa-pay-result-amount'), price);
+        // The new balance is what the entitlement answered after the grant.
+        expect(find.text('New balance'), findsOneWidget);
+        expect(textOf(tester, 'pwa-pay-result-balance'), '$credits spaces');
+        expect(find.byKey(const ValueKey('pwa-pay-result-continue')),
+            findsOneWidget);
+        expect(find.text('Continue'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await _teardown(tester);
+      });
+    }
+
+    for (final state in ['FAILED', 'CANCELLED', 'EXPIRED']) {
+      testWidgets('RESULT02 $state renders the failure card: no credits, '
+          'Try again', (tester) async {
+        final controller = await settled(state);
+        final entitlement = _CountingEntitlement();
+        await pumpCard(tester, controller, entitlement: entitlement);
+
+        final l = pwaL10nFor(const Locale('en'));
+        expect(find.byKey(const ValueKey('pwa-pay-result-failure')),
+            findsOneWidget);
+        expect(l.payResultFailedTitle, 'Payment failed / cancelled');
+        expect(find.text('Payment failed / cancelled'), findsOneWidget);
+        expect(find.text('No credits were added'), findsOneWidget);
+        expect(find.text(l.payResultFailedHint), findsOneWidget);
+        expect(find.byKey(const ValueKey('pwa-pay-result-retry')),
+            findsOneWidget);
+        expect(find.text(l.payRetry), findsOneWidget);
+        // Nothing that belongs to a success.
+        expect(find.byKey(const ValueKey('pwa-pay-result-success')),
+            findsNothing);
+        expect(find.byKey(const ValueKey('pwa-pay-result-balance')),
+            findsNothing);
+        expect(entitlement.refreshes, 0,
+            reason: 'a failed payment changed no balance; nothing to re-read');
+        expect(tester.takeException(), isNull);
+        await _teardown(tester);
+      });
+    }
+
+    test('RESULT03 the retired result copy is gone from every locale and from '
+        'the sheet', () {
+      for (final dict in [
+        pwaEnTranslations,
+        pwaKmTranslations,
+        pwaFrTranslations,
+      ]) {
+        for (final key in [
+          'pwaPayDoneTitle',
+          'pwaPayDoneBody',
+          'pwaPayStartDesigning',
+          'pwaPayMaybeLater',
+        ]) {
+          expect(dict.containsKey(key), isFalse, reason: '$key must be gone');
+        }
+      }
+      expect(
+          pwaEnTranslations.values.any((v) =>
+              v.contains('You are all set') ||
+              v.contains('Start a new design') ||
+              v == 'Maybe later'),
+          isFalse);
+      final sheet = File(
+        'lib/features/pwa/presentation/pwa_payment_sheet.dart',
+      ).readAsStringSync();
+      expect(sheet.contains('pwa-pay-balance'), isFalse,
+          reason: 'no standalone balance pill');
+      expect(sheet.contains('_BalanceAfterPurchase'), isFalse);
+    });
+
+    testWidgets('RESULT04 neither card carries payment-provider branding, '
+        'and neither has a second control', (tester) async {
+      for (final state in ['GRANTED', 'FAILED']) {
+        final controller = await settled(state);
+        await pumpCard(tester, controller, entitlement: _CountingEntitlement());
+        expect(find.textContaining('ABA'), findsNothing, reason: state);
+        expect(find.textContaining('PayWay'), findsNothing, reason: state);
+        expect(find.textContaining('KHQR'), findsNothing, reason: state);
+        expect(find.byKey(const ValueKey('pwa-aba-method-mark')), findsNothing);
+        expect(find.byKey(const ValueKey('pwa-accept-mark')), findsNothing);
+        expect(find.byKey(const ValueKey('pwa-pay-close')), findsNothing,
+            reason: 'one card, one action');
+        await _teardown(tester);
+      }
+    });
+
+    testWidgets('RESULT05 the new balance is the refreshed entitlement, never '
+        'the pack added to anything', (tester) async {
+      // The server says the account now holds 25 — say a balance that was
+      // already there plus this grant. The pack bought was 10. The card must
+      // say 25, and must never have worked that out itself.
+      final controller = await settled('GRANTED', credits: 10, amount: 4.99);
+      await pumpCard(tester, controller, entitlement: holding(25));
+      expect(textOf(tester, 'pwa-pay-result-balance'), '25 spaces');
+      expect(textOf(tester, 'pwa-pay-result-pack'), '10 spaces');
+      await _teardown(tester);
+    });
+
+    testWidgets('RESULT06 until the entitlement has been re-read the balance '
+        'shows nothing, not the old number', (tester) async {
+      final controller = await settled('GRANTED');
+      final gate = Completer<Map<String, Object?>>();
+      final entitlement = PwaEntitlementController(() => gate.future);
+      await pumpCard(tester, controller, entitlement: entitlement);
+      expect(textOf(tester, 'pwa-pay-result-balance'), '—',
+          reason: 'no stale figure next to "New balance"');
+
+      gate.complete({
+        'can_generate': true,
+        'access_source': 'pass',
+        'has_active_pass': true,
+        'pass_credits': 10,
+        'credits_available': 10,
+      });
+      await tester.pump();
+      await tester.pump();
+      expect(textOf(tester, 'pwa-pay-result-balance'), '10 spaces');
+      await _teardown(tester);
+    });
+
+    test('RESULT07 only terminal states are verdicts; the return watcher '
+        'opens the card on those alone', () {
+      expect(pwaPaymentResultKindFor(PwaPaymentState.granted),
+          PwaPaymentResultKind.success);
+      for (final s in [
+        PwaPaymentState.failed,
+        PwaPaymentState.cancelled,
+        PwaPaymentState.expired,
+      ]) {
+        expect(pwaPaymentResultKindFor(s), PwaPaymentResultKind.failure);
+      }
+      for (final s in [
+        PwaPaymentState.idle,
+        PwaPaymentState.starting,
+        PwaPaymentState.created,
+        PwaPaymentState.awaitingPayment,
+        PwaPaymentState.paidPendingVerification,
+        PwaPaymentState.verified,
+        PwaPaymentState.unreachable,
+        PwaPaymentState.unavailable,
+      ]) {
+        expect(pwaPaymentResultKindFor(s), isNull,
+            reason: '$s: PayWay may still legitimately say PENDING');
+      }
+      final watcher = File(
+        'lib/features/pwa/presentation/pwa_experience.dart',
+      ).readAsStringSync();
+      expect(watcher.contains('pwaPaymentResultKindFor(next) == null'), isTrue,
+          reason: 'the return watcher shows the card on verdicts only');
+    });
+
+    testWidgets('RESULT08 Continue closes the card as PAID and resets the '
+        'attempt', (tester) async {
+      final controller = await settled('GRANTED');
+      PwaPaymentExit? exit;
+      await tester.pumpWidget(_app(
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () async {
+              exit = await showDialog<PwaPaymentExit>(
+                context: context,
+                builder: (_) => const PwaPaymentSheet(product: _pack),
+              );
+            },
+            child: const Text('open'),
+          ),
+        ),
+        overrides: [
+          pwaPaymentProvider.overrideWith((ref) => controller),
+          pwaEntitlementProvider.overrideWith((ref) => _CountingEntitlement()),
+        ],
+      ));
+      await tester.pump(); // localisations load before the first frame
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pwa-pay-result-continue')));
+      await tester.pumpAndSettle();
+      expect(exit, PwaPaymentExit.paid);
+      expect(controller.state.state, PwaPaymentState.idle,
+          reason: 'the attempt is over; the Wallet shows nothing for it');
+      await _teardown(tester);
+    });
+
+    testWidgets('RESULT09 Try again closes the card and starts the SAME '
+        'purchase over, beneath it', (tester) async {
+      var starts = 0;
+      final gateway = PwaPaymentGateway(
+        startCheckout: ({required sku, required attemptKey}) async {
+          starts++;
+          return _server(
+              state: starts == 1 ? 'FAILED' : 'AWAITING_PAYMENT',
+              failureReason: starts == 1 ? 'DECLINED' : '');
+        },
+        orderStatus: (_) async => _server(state: 'AWAITING_PAYMENT'),
+        openOrder: () async => const {'ok': true, 'open': false},
+        cancelOrder: (_) async => _server(state: 'CANCELLED'),
+      );
+      final controller = PwaPaymentController(gateway, null);
+      await controller.start('pack_10');
+      expect(controller.state.state, PwaPaymentState.failed);
+
+      PwaPaymentExit? exit;
+      await tester.pumpWidget(_app(
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () async {
+              exit = await showDialog<PwaPaymentExit>(
+                context: context,
+                builder: (_) => const PwaPaymentSheet(product: _pack),
+              );
+            },
+            child: const Text('open'),
+          ),
+        ),
+        overrides: [
+          pwaPaymentProvider.overrideWith((ref) => controller),
+          pwaEntitlementProvider.overrideWith((ref) => _CountingEntitlement()),
+        ],
+      ));
+      await tester.pump(); // localisations load before the first frame
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('pwa-pay-result-retry')));
+      await tester.pump();
+      await tester.pump();
+      expect(exit, PwaPaymentExit.none, reason: 'nothing was paid');
+      expect(starts, 2, reason: 'the same attempt is opened again');
+      expect(controller.state.state, PwaPaymentState.awaitingPayment);
+      expect(find.byKey(const ValueKey('pwa-pay-result-failure')),
+          findsNothing, reason: 'the verdict closed before the new checkout');
+      await _teardown(tester);
+    });
+
+    testWidgets('RESULT10 the return surface is Ayden\'s near-black card with '
+        'a gold (success) or red (failure) edge', (tester) async {
+      for (final (state, edge) in [
+        ('GRANTED', kPwaResultGold),
+        ('FAILED', kPwaResultRed),
+      ]) {
+        final controller = await settled(state);
+        await tester.pumpWidget(_app(
+          Consumer(
+            builder: (context, ref, _) => TextButton(
+              onPressed: () => showPwaPaymentReturn(context, ref),
+              child: const Text('return'),
+            ),
+          ),
+          overrides: [
+            pwaPaymentProvider.overrideWith((ref) => controller),
+            pwaEntitlementProvider
+                .overrideWith((ref) => _CountingEntitlement()),
+          ],
+        ));
+        await tester.pump(); // localisations load before the first frame
+        await tester.tap(find.text('return'));
+        await tester.pumpAndSettle();
+
+        final dialog = tester.widget<Dialog>(find.byType(Dialog));
+        expect(dialog.backgroundColor, kPwaResultSurface, reason: state);
+        final shape = dialog.shape! as RoundedRectangleBorder;
+        expect(shape.side.color.withValues(alpha: 1.0),
+            edge.withValues(alpha: 1.0),
+            reason: '$state edge');
+        expect(shape.side.color.a, lessThan(0.6),
+            reason: 'a tint at the edge, not a frame');
+        await _teardown(tester);
+      }
+    });
+
+    testWidgets('RESULT12 a verdict can be dismissed from outside (a person '
+        'who cancelled must be able to return); a confirming card cannot',
+        (tester) async {
+      for (final (state, dismissible) in [
+        ('FAILED', true),
+        ('GRANTED', true),
+        ('VERIFIED', false),
+      ]) {
+        final controller = await settled(state);
+        PwaPaymentExit? exit;
+        var closed = false;
+        await tester.pumpWidget(_app(
+          Consumer(
+            builder: (context, ref, _) => TextButton(
+              onPressed: () async {
+                exit = await showPwaPaymentReturn(context, ref);
+                closed = true;
+              },
+              child: const Text('return'),
+            ),
+          ),
+          overrides: [
+            pwaPaymentProvider.overrideWith((ref) => controller),
+            pwaEntitlementProvider
+                .overrideWith((ref) => _CountingEntitlement()),
+          ],
+        ));
+        await tester.pump();
+        await tester.tap(find.text('return'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.byType(Dialog), findsOneWidget, reason: state);
+
+        // A tap on the scrim, well outside the 400-wide card.
+        await tester.tapAt(const Offset(4, 4));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(closed, dismissible,
+            reason: '$state: dismissible from outside = $dismissible');
+        if (dismissible) {
+          expect(exit, PwaPaymentExit.none,
+              reason: 'leaving by the scrim is not paying');
+        } else {
+          expect(find.byType(Dialog), findsOneWidget,
+              reason: 'the confirming card stays until the verdict');
+        }
+        await _teardown(tester);
+      }
+    });
+
+    testWidgets('RESULT11 both cards fit a phone and a desktop without '
+        'overflow, in every locale', (tester) async {
+      for (final size in [const Size(390, 844), const Size(1440, 900)]) {
+        for (final locale in ['en', 'km', 'fr']) {
+          for (final state in ['GRANTED', 'FAILED']) {
+            final controller = await settled(state);
+            await pumpCard(tester, controller,
+                entitlement: _CountingEntitlement(),
+                locale: locale,
+                size: size);
+            expect(tester.takeException(), isNull,
+                reason: '$state / $locale / ${size.width.toInt()}');
+            await _teardown(tester);
+          }
+        }
       }
     });
   });

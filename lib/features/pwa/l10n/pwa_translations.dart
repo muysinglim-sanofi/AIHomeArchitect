@@ -301,8 +301,6 @@ const Map<String, String> pwaEnTranslations = {
   'pwaPayBuy': 'Buy',
   'pwaPayTitle': 'Pay with ABA PayWay',
   'pwaPayContinueToAba': 'Continue to ABA PayWay',
-  'pwaPayStartDesigning': 'Start a new design',
-  'pwaPayMaybeLater': 'Maybe later',
   'pwaPayHandoffBodyDesktop':
       "You will pay with ABA KHQR, on ABA PayWay's own page below. Scan the "
       'code with any banking app that supports KHQR.',
@@ -353,8 +351,6 @@ const Map<String, String> pwaEnTranslations = {
       'spaces.',
   'pwaPayActivatingTitle': 'Activating your spaces',
   'pwaPayActivatingBody': 'Payment confirmed. Adding it to your account now.',
-  'pwaPayDoneTitle': 'You are all set',
-  'pwaPayDoneBody': '{n} spaces are on your account. Keep designing.',
   'pwaPayContinue': 'Continue designing',
   'pwaPayExpiredTitle': 'This code expired',
   'pwaPayExpiredBody':
@@ -376,6 +372,17 @@ const Map<String, String> pwaEnTranslations = {
       'Your payment may still be going through. Stay on this screen — we will '
       'keep checking.',
   'pwaPayRetry': 'Try again',
+  // Ayden's result card (2026-09-08). The pack line reuses pwaPaywallSpaces.
+  'pwaPayResultSuccessTitle': 'Payment successful',
+  'pwaPayResultSuccessBody': '{n} spaces added to your wallet',
+  'pwaPayResultSummaryTitle': 'Purchase summary',
+  'pwaPayResultNewBalance': 'New balance',
+  'pwaPayResultContinue': 'Continue',
+  'pwaPayResultFailedTitle': 'Payment failed / cancelled',
+  'pwaPayResultFailedBody': 'No credits were added',
+  'pwaPayResultFailedHint':
+      'Your wallet remains unchanged. You can return safely or retry the '
+      'payment when ready.',
   'pwaPayCancel': 'Cancel payment',
   'pwaPaySafeNote': 'Ayden never sees your banking details.',
 
@@ -699,8 +706,6 @@ const Map<String, String> pwaKmTranslations = {
   'pwaPayBuy': 'ទិញ',
   'pwaPayTitle': 'ទូទាត់​ដោយ ABA PayWay',
   'pwaPayContinueToAba': 'បន្ត​ទៅ ABA PayWay',
-  'pwaPayStartDesigning': 'ចាប់​ផ្ដើម​រចនា​ថ្មី',
-  'pwaPayMaybeLater': 'ពេល​ក្រោយ',
   'pwaPayHandoffBodyDesktop':
       'អ្នក​នឹង​ទូទាត់​ដោយ ABA KHQR នៅ​លើ​ទំព័រ​របស់ ABA PayWay ខាង​ក្រោម។ '
       'ស្កេន​កូដ​ដោយ​កម្មវិធី​ធនាគារ​ណា​មួយ​ដែល​គាំទ្រ KHQR។',
@@ -743,8 +748,6 @@ const Map<String, String> pwaKmTranslations = {
   'pwaPayActivatingTitle': 'កំពុង​ដំណើរការ Spaces របស់​អ្នក',
   'pwaPayActivatingBody':
       'ការ​ទូទាត់​ត្រូវ​បាន​បញ្ជាក់។ កំពុង​បន្ថែម​ទៅ​គណនី​របស់​អ្នក។',
-  'pwaPayDoneTitle': 'រួចរាល់​ហើយ',
-  'pwaPayDoneBody': '{n} Spaces មាន​ក្នុង​គណនី​របស់​អ្នក​ហើយ។ បន្ត​រចនា​ត​ទៅ។',
   'pwaPayContinue': 'បន្ត​រចនា',
   'pwaPayExpiredTitle': 'កូដ​នេះ​ផុត​កំណត់​ហើយ',
   'pwaPayExpiredBody':
@@ -771,6 +774,16 @@ const Map<String, String> pwaKmTranslations = {
       'ការ​ទូទាត់​របស់​អ្នក​អាច​កំពុង​ដំណើរការ​នៅ​ឡើយ។ '
       'សូម​នៅ​លើ​អេក្រង់​នេះ — យើង​នឹង​បន្ត​ពិនិត្យ។',
   'pwaPayRetry': 'ព្យាយាម​ម្ដង​ទៀត',
+  'pwaPayResultSuccessTitle': 'ការ​ទូទាត់​បាន​ជោគជ័យ',
+  'pwaPayResultSuccessBody': '{n} Spaces ត្រូវ​បាន​បន្ថែម​ទៅ​កាបូប​របស់​អ្នក',
+  'pwaPayResultSummaryTitle': 'សង្ខេប​ការ​ទិញ',
+  'pwaPayResultNewBalance': 'សមតុល្យ​ថ្មី',
+  'pwaPayResultContinue': 'បន្ត',
+  'pwaPayResultFailedTitle': 'ការ​ទូទាត់​បរាជ័យ / ត្រូវ​បាន​បោះបង់',
+  'pwaPayResultFailedBody': 'មិន​មាន​ឥណទាន​ត្រូវ​បាន​បន្ថែម​ទេ',
+  'pwaPayResultFailedHint':
+      'កាបូប​របស់​អ្នក​នៅ​ដដែល។ អ្នក​អាច​ត្រឡប់​ក្រោយ​ដោយ​សុវត្ថិភាព '
+      'ឬ​ព្យាយាម​ទូទាត់​ម្ដង​ទៀត​នៅ​ពេល​រួចរាល់។',
   'pwaPayCancel': 'បោះបង់​ការ​ទូទាត់',
   'pwaPaySafeNote': 'Ayden មិន​ដែល​ឃើញ​ព័ត៌មាន​ធនាគារ​របស់​អ្នក​ទេ។',
 
@@ -1096,8 +1109,6 @@ const Map<String, String> pwaFrTranslations = {
   'pwaPayBuy': 'Acheter',
   'pwaPayTitle': 'Payer avec ABA PayWay',
   'pwaPayContinueToAba': 'Continuer vers ABA PayWay',
-  'pwaPayStartDesigning': 'Créer un nouveau design',
-  'pwaPayMaybeLater': 'Plus tard',
   'pwaPayHandoffBodyDesktop':
       "Vous paierez avec ABA KHQR, sur la page d'ABA PayWay ci-dessous. "
       'Scannez le code avec une application bancaire compatible KHQR.',
@@ -1141,8 +1152,6 @@ const Map<String, String> pwaFrTranslations = {
       "d'ajouter vos Spaces.",
   'pwaPayActivatingTitle': 'Activation de vos Spaces',
   'pwaPayActivatingBody': 'Paiement confirmé. Ajout à votre compte en cours.',
-  'pwaPayDoneTitle': 'Tout est prêt',
-  'pwaPayDoneBody': '{n} Spaces sont sur votre compte. Continuez à créer.',
   'pwaPayContinue': 'Continuer à créer',
   'pwaPayExpiredTitle': 'Ce code a expiré',
   'pwaPayExpiredBody':
@@ -1167,6 +1176,16 @@ const Map<String, String> pwaFrTranslations = {
       'Votre paiement est peut-être toujours en cours. Restez sur cet écran — '
       'nous continuons à vérifier.',
   'pwaPayRetry': 'Réessayer',
+  'pwaPayResultSuccessTitle': 'Paiement réussi',
+  'pwaPayResultSuccessBody': '{n} Spaces ajoutés à votre portefeuille',
+  'pwaPayResultSummaryTitle': 'Récapitulatif de l’achat',
+  'pwaPayResultNewBalance': 'Nouveau solde',
+  'pwaPayResultContinue': 'Continuer',
+  'pwaPayResultFailedTitle': 'Paiement échoué / annulé',
+  'pwaPayResultFailedBody': 'Aucun crédit n’a été ajouté',
+  'pwaPayResultFailedHint':
+      'Votre portefeuille est inchangé. Vous pouvez revenir en toute sécurité '
+      'ou réessayer le paiement quand vous le souhaitez.',
   'pwaPayCancel': 'Annuler le paiement',
   'pwaPaySafeNote': 'Ayden ne voit jamais vos informations bancaires.',
 

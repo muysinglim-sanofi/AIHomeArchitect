@@ -20,6 +20,7 @@ import '../billing/pwa_entitlement_controller.dart';
 import '../billing/pwa_payment.dart';
 import '../billing/pwa_payment_controller.dart';
 import 'pwa_payment_sheet.dart';
+import 'pwa_payment_result.dart';
 import 'pwa_paywall.dart';
 import 'pwa_architect_screen.dart';
 import 'pwa_create_ios.dart';
@@ -97,11 +98,13 @@ class PwaExperience extends ConsumerWidget {
 ///
 /// WHAT IT WILL AND WILL NOT DO
 ///
-/// It presents the outcome ONLY when money actually moved (`verified` or
-/// `granted`). An abandoned attempt still sitting at `awaitingPayment` opens
-/// nothing: someone who chose not to pay must not be met by a payment sheet on
-/// every visit, which is the same mistake the replayed pending generation was
-/// making. Nothing here writes payment state — the server is asked, and the
+/// It presents the outcome when money actually moved (`verified`, `granted`)
+/// and when the server reached a verdict against it (`failed`, `cancelled`,
+/// `expired`). An attempt still sitting at `awaitingPayment` opens nothing:
+/// someone who chose not to pay must not be met by a payment sheet on every
+/// visit, which is the same mistake the replayed pending generation was
+/// making — and nothing is shown while PayWay may still legitimately say
+/// PENDING. Nothing here writes payment state — the server is asked, and the
 /// answer is shown.
 class _PwaPaymentReturnWatcher extends ConsumerStatefulWidget {
   const _PwaPaymentReturnWatcher();
@@ -143,17 +146,20 @@ class _PwaPaymentReturnWatcherState
           return;
         }
         if (_shown) return;
+        // Money moving (verified, granted) or a VERDICT against it (failed,
+        // cancelled, expired). Never awaiting/pending: while PayWay may still
+        // say PENDING there is nothing to conclude.
         if (next != PwaPaymentState.verified &&
-            next != PwaPaymentState.granted) {
+            pwaPaymentResultKindFor(next) == null) {
           return;
         }
         _shown = true;
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           if (!mounted) return;
-          // The payment sheet already renders both of these states — the
-          // spinner while the grant runs, then the success outcome with its
-          // own two actions. Reusing it keeps one description of a payment in
-          // the product rather than a second success screen that could drift.
+          // The payment sheet renders all of these — the spinner while the
+          // grant runs, then Ayden's result card with its one action. Reusing
+          // it keeps one description of a payment in the product rather than
+          // a second success screen that could drift.
           await showPwaPaymentReturn(context, ref);
           if (!mounted) return;
           // The balance changed. Ask, never assume by how much.

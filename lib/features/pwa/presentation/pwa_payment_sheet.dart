@@ -28,7 +28,8 @@
 /// No success path the browser can reach on its own. There is no timer that
 /// concludes, no "I have paid" button that unlocks, no reading of the browser
 /// regaining focus after ABA Mobile, and no interpretation of the URL PayWay
-/// returned to. The only widget that says "you are all set" is behind
+/// returned to. The only widget that says the payment succeeded — Ayden's own
+/// result card, `pwa_payment_result.dart` — is behind
 /// `PwaPaymentState.granted`, which the SERVER writes after PayWay's Check
 /// Transaction and the Billing Engine's grant.
 ///
@@ -44,34 +45,31 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/pwa_layout.dart';
 import '../billing/pwa_entitlement.dart';
-import '../billing/pwa_entitlement_controller.dart';
 import '../billing/pwa_payment.dart';
 import '../billing/pwa_payment_controller.dart';
 import '../data/pwa_external_launcher.dart';
 import '../l10n/pwa_l10n.dart';
 import 'pwa_aba_marks.dart';
+import 'pwa_payment_result.dart';
 import 'pwa_theme.dart';
 import 'pwa_widgets.dart' show pwaSerif;
 
-/// How the payment sheet was left. Three outcomes, because they mean three
-/// different things to the screen underneath.
+/// How the payment sheet was left. Two outcomes, because they mean two
+/// different things to the screen underneath: a paid attempt closes the
+/// paywall behind it; anything else leaves it where it was.
 enum PwaPaymentExit {
-  /// Paid, and the person chose to go and use it.
-  startDesigning,
+  /// Paid. The result card was acknowledged with Continue.
+  paid,
 
-  /// Paid, and the person chose to stay where they were.
-  later,
-
-  /// Not paid.
+  /// Not paid — closed, retried, or never concluded.
   none,
 }
 
 /// Open the payment surface for [product] and start the checkout.
 ///
-/// Returns how it ended. A GRANTED payment closes the paywall behind it either
-/// way — nobody should be left looking at a purchase screen for something they
-/// have just bought — and [PwaPaymentExit.startDesigning] additionally says the
-/// person asked to go and use it.
+/// Returns how it ended. A GRANTED payment closes the paywall behind it —
+/// nobody should be left looking at a purchase screen for something they have
+/// just bought — and [PwaPaymentExit.paid] is how it says so.
 Future<PwaPaymentExit> showPwaPaymentSheetFor(
   BuildContext context,
   WidgetRef ref,
@@ -125,7 +123,11 @@ Future<PwaPaymentExit> showPwaPaymentReturn(
     // full-height sheet was the rejected treatment — it read as a separate
     // screen wearing a sheet's clothes.
     barrierColor: Colors.black.withValues(alpha: 0.38),
-    barrierDismissible: false,
+    // A VERDICT never traps the person: the failure card's one action is
+    // "Try again", and someone who cancelled on purpose must be able to
+    // return without paying — a tap outside, or Escape. While money is still
+    // being confirmed the frame refuses to pop (see `_PaymentModalFrame`).
+    barrierDismissible: true,
     builder: (_) => _PaymentModalFrame(product: product),
   );
   return exit ?? PwaPaymentExit.none;
@@ -153,7 +155,7 @@ Future<bool> showPwaPaymentSheet(
 /// This is the other half of the same decision: the payment is now composed
 /// from the two official fields PayWay returns (`qr_string`, `abapay_deeplink`)
 /// inside Ayden's own small card, so the card can be as small as its contents.
-class _PaymentModalFrame extends StatelessWidget {
+class _PaymentModalFrame extends ConsumerWidget {
   const _PaymentModalFrame({required this.product});
 
   final PwaProduct product;
@@ -163,16 +165,36 @@ class _PaymentModalFrame extends StatelessWidget {
   static const double maxWidth = 400;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(pwaPaymentProvider.select((p) => p.state));
+    final kind = pwaPaymentResultKindFor(state);
+    // Ayden's RESULT surface is near-black, like the Wallet it concludes — from
+    // the moment money is being confirmed through to the verdict, so the card
+    // never flips from white to dark in front of the person. The white card is
+    // the dormant server-side checkout's, and stays as it was.
+    final dark = kind != null || pwaPaymentIsConfirming(state);
     final screen = MediaQuery.sizeOf(context);
-    // 16 a side on a phone, which is the smallest gutter that still reads as a
-    // modal rather than as a page. On a wide screen the ceiling takes over.
-    final width = (screen.width - 32).clamp(240.0, maxWidth).toDouble();
-    return Dialog(
-      backgroundColor: Colors.white,
-      surfaceTintColor: Colors.white,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    // 20 a side on a phone: a comfortable gutter that still reads as a card
+    // over the Wallet rather than as a page. On a wide screen the ceiling
+    // takes over.
+    final width = (screen.width - 40).clamp(240.0, maxWidth).toDouble();
+    final edge = kind != null
+        ? pwaPaymentResultBorder(kind)
+        : dark
+            ? kPwaResultLine
+            : Colors.transparent;
+    return PopScope(
+      // The confirming states cannot be dismissed from outside: the grant is
+      // seconds away and the card is what tells the person it landed.
+      canPop: kind != null,
+      child: Dialog(
+      backgroundColor: dark ? kPwaResultSurface : Colors.white,
+      surfaceTintColor: dark ? kPwaResultSurface : Colors.white,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: dark ? BorderSide(color: edge) : BorderSide.none,
+      ),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -183,6 +205,7 @@ class _PaymentModalFrame extends StatelessWidget {
           maxHeight: screen.height - 48,
         ),
         child: PwaPaymentSheet(product: product),
+      ),
       ),
     );
   }
@@ -199,6 +222,32 @@ class PwaPaymentSheet extends ConsumerWidget {
     final form = pwaFormFactorForWidth(MediaQuery.sizeOf(context).width);
     final onPhone = form == PwaFormFactor.mobile;
 
+    // A VERDICT. Ayden's own result card, and nothing of the checkout with it:
+    // no price header, no method mark, no close glyph — one card, one action.
+    if (pwaPaymentResultKindFor(payment.state) != null) {
+      final notifier = ref.read(pwaPaymentProvider.notifier);
+      return SingleChildScrollView(
+        child: PwaPaymentResultCard(
+          payment: payment,
+          onContinue: () {
+            notifier.reset();
+            Navigator.of(context).pop(PwaPaymentExit.paid);
+          },
+          onRetry: () {
+            // Close the verdict first, then start over beneath it: ABA's
+            // checkout must present over the Wallet, not over this card.
+            Navigator.of(context).pop(PwaPaymentExit.none);
+            final sku = payment.sku.isNotEmpty ? payment.sku : product.sku;
+            notifier.retry(sku);
+          },
+        ),
+      );
+    }
+
+    // Money is being CONFIRMED: the same near-black surface as the verdict,
+    // with no controls — the server settles this in seconds, and nothing a
+    // person taps here can hurry it or take it back.
+    final confirming = pwaPaymentIsConfirming(payment.state);
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
@@ -206,10 +255,12 @@ class PwaPaymentSheet extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Header(product: product, payment: payment),
-            const SizedBox(height: PwaGap.md),
-            _Body(payment: payment, onPhone: onPhone),
-            _Actions(product: product, payment: payment),
+            if (!confirming) ...[
+              _Header(product: product, payment: payment),
+              const SizedBox(height: PwaGap.md),
+            ],
+            _Body(payment: payment, onPhone: onPhone, onDark: confirming),
+            if (!confirming) _Actions(product: product, payment: payment),
           ],
         ),
       ),
@@ -234,26 +285,21 @@ class _Header extends StatelessWidget {
         ? payment.amountLabel
         : product.priceLabel;
     // ABA merchant review (2026-09-08): "Please remove ABA KHQR on your
-    // success screen header." The method is named while a person is PAYING
-    // with it; once the payment has an outcome — granted, expired, cancelled,
-    // failed — the card is Ayden's, about Ayden's account, and carries no
-    // payment-method branding.
-    final showMethod = !payment.isTerminal;
+    // success screen header." This header exists only while a person is
+    // PAYING; a verdict renders Ayden's result card instead, which carries no
+    // payment-method branding at all.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            if (showMethod) ...[
-              const PwaAbaMethodMark(size: 26),
-              const SizedBox(width: 8),
-              // The method's own name, never translated.
-              Expanded(
-                child: Text('ABA KHQR',
-                    style: pwaSans(fontSize: 17, fontWeight: FontWeight.w700)),
-              ),
-            ] else
-              const Spacer(),
+            const PwaAbaMethodMark(size: 26),
+            const SizedBox(width: 8),
+            // The method's own name, never translated.
+            Expanded(
+              child: Text('ABA KHQR',
+                  style: pwaSans(fontSize: 17, fontWeight: FontWeight.w700)),
+            ),
             // Always reachable, in every state. A payment card with no way out
             // is the one thing worse than a payment card that is too big.
             IconButton(
@@ -287,10 +333,14 @@ class _Header extends StatelessWidget {
 }
 
 class _Body extends StatelessWidget {
-  const _Body({required this.payment, required this.onPhone});
+  const _Body(
+      {required this.payment, required this.onPhone, this.onDark = false});
 
   final PwaPayment payment;
   final bool onPhone;
+
+  /// True on the near-black confirming surface, where ink-on-dark is invisible.
+  final bool onDark;
 
   @override
   Widget build(BuildContext context) {
@@ -307,42 +357,20 @@ class _Body extends StatelessWidget {
       PwaPaymentState.paidPendingVerification => _Working(
           label: l.payConfirmingTitle,
           body: l.payConfirmingBody,
+          onDark: onDark,
         ),
       PwaPaymentState.verified => _Working(
           label: l.payActivatingTitle,
           body: l.payActivatingBody,
+          onDark: onDark,
         ),
-      PwaPaymentState.granted => _Outcome(
-          icon: Icons.check_circle_outline,
-          tone: pwaGold,
-          title: l.payDoneTitle,
-          body: l.payDoneBody(payment.credits),
-          // What was ADDED is on the line above; this is what the account NOW
-          // HOLDS — and it is asked for, never added up here. The two are
-          // different numbers whenever anything was left over, and a purchase
-          // screen that only ever showed the grant left a person to do the
-          // arithmetic themselves.
-          footer: const _BalanceAfterPurchase(),
-        ),
-      PwaPaymentState.expired => _Outcome(
-          icon: Icons.hourglass_disabled_outlined,
-          tone: pwaMuted,
-          title: l.payExpiredTitle,
-          body: l.payExpiredBody,
-        ),
-      PwaPaymentState.cancelled => _Outcome(
-          icon: Icons.remove_circle_outline,
-          tone: pwaMuted,
-          title: l.payCancelledTitle,
-          body: l.payCancelledBody,
-        ),
-      PwaPaymentState.failed => _Outcome(
-          icon: Icons.error_outline,
-          tone: pwaMuted,
-          title: l.payFailedTitle,
-          body: l.payFailedBody(payment.failureReason,
-              newAttemptRequired: payment.newAttemptRequired),
-        ),
+      // Verdicts never reach this switch: `PwaPaymentSheet` renders Ayden's
+      // result card for them before building a body at all.
+      PwaPaymentState.granted ||
+      PwaPaymentState.expired ||
+      PwaPaymentState.cancelled ||
+      PwaPaymentState.failed =>
+        const SizedBox.shrink(),
       PwaPaymentState.unreachable => _Outcome(
           icon: Icons.wifi_off_outlined,
           tone: pwaMuted,
@@ -365,10 +393,11 @@ class _Body extends StatelessWidget {
 /// quantity to report, and a bar that filled itself would be a lie told with
 /// animation.
 class _Working extends StatelessWidget {
-  const _Working({required this.label, this.body = ''});
+  const _Working({required this.label, this.body = '', this.onDark = false});
 
   final String label;
   final String body;
+  final bool onDark;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -383,12 +412,18 @@ class _Working extends StatelessWidget {
             const SizedBox(height: PwaGap.md),
             Text(label,
                 textAlign: TextAlign.center,
-                style: pwaSans(fontSize: 15, fontWeight: FontWeight.w600)),
+                style: pwaSans(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: onDark ? kPwaResultText : pwaInk)),
             if (body.isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(body,
                   textAlign: TextAlign.center,
-                  style: pwaSans(fontSize: 13, color: pwaMuted, height: 1.5)),
+                  style: pwaSans(
+                      fontSize: 13,
+                      color: onDark ? kPwaResultMuted : pwaMuted,
+                      height: 1.5)),
             ],
           ],
         ),
@@ -666,17 +701,12 @@ class _Outcome extends StatelessWidget {
     required this.tone,
     required this.title,
     required this.body,
-    this.footer,
   });
 
   final IconData icon;
   final Color tone;
   final String title;
   final String body;
-
-  /// An optional line under the message. Used by the success state to state
-  /// the balance the account is left holding.
-  final Widget? footer;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -692,41 +722,9 @@ class _Outcome extends StatelessWidget {
             Text(body,
                 textAlign: TextAlign.center,
                 style: pwaSans(fontSize: 13, color: pwaMuted, height: 1.55)),
-            if (footer != null) ...[
-              const SizedBox(height: PwaGap.md),
-              footer!,
-            ],
           ],
         ),
       );
-}
-
-/// The balance after a purchase, read from the entitlement.
-///
-/// It renders NOTHING until the server has answered. A number that appeared
-/// instantly here would be one this screen worked out from the grant and the
-/// balance it remembered — which is exactly the local arithmetic the whole
-/// billing layer is built to avoid, and which would be wrong the moment a
-/// second tab, a refund or a promo touched the same ledger.
-class _BalanceAfterPurchase extends ConsumerWidget {
-  const _BalanceAfterPurchase();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final e = ref.watch(pwaEntitlementProvider);
-    if (!e.isKnown || e.creditsAvailable <= 0) return const SizedBox.shrink();
-    final l = context.pwaL10n;
-    return Container(
-      key: const ValueKey('pwa-pay-balance'),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: pwaGoldSoft.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(l.passSpacesLeft(e.creditsAvailable),
-          style: pwaSans(fontSize: 13, fontWeight: FontWeight.w600)),
-    );
-  }
 }
 
 class _Actions extends ConsumerWidget {
@@ -739,49 +737,6 @@ class _Actions extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l = context.pwaL10n;
     final notifier = ref.read(pwaPaymentProvider.notifier);
-
-    // PAID. What this person wants next is to USE what they bought — so the
-    // primary action is the work, not the wallet. Deliberately NOT a route back
-    // to the pack list: showing someone the thing they just bought, again, as
-    // the next mandatory step reads as "buy more" and is the single most common
-    // way a good purchase flow ends badly.
-    if (payment.state == PwaPaymentState.granted) {
-      return Column(
-        children: [
-          FilledButton(
-            onPressed: () {
-              notifier.reset();
-              Navigator.of(context).pop(PwaPaymentExit.startDesigning);
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: pwaInk,
-              foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(PwaGap.radius),
-              ),
-            ),
-            // The THIRD instance of the ink-on-ink label, and the worst
-            // placed: the primary action offered the moment a purchase
-            // succeeds. `pwaSans` defaults to ink and an explicit style on the
-            // child beats the button's `foregroundColor`.
-            child: Text(l.payStartDesigning,
-                style: pwaSans(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white)),
-          ),
-          TextButton(
-            onPressed: () {
-              notifier.reset();
-              Navigator.of(context).pop(PwaPaymentExit.later);
-            },
-            child: Text(l.payMaybeLater,
-                style: pwaSans(fontSize: 13, color: pwaMuted)),
-          ),
-        ],
-      );
-    }
 
     return Column(
       children: [
@@ -810,7 +765,7 @@ class _Actions extends ConsumerWidget {
                 ref.read(pwaPaymentProvider).state == PwaPaymentState.granted;
             notifier.reset();
             Navigator.of(context)
-                .pop(granted ? PwaPaymentExit.later : PwaPaymentExit.none);
+                .pop(granted ? PwaPaymentExit.paid : PwaPaymentExit.none);
           },
           child: Text(
             payment.isTerminal ? l.paywallClose : l.payCancel,
