@@ -574,6 +574,27 @@ def test_purchase_contract() -> None:
           "payment_gate" not in payway.PURCHASE_HASH_FIELDS
           and "view_type" not in payway.PURCHASE_HASH_FIELDS)
 
+    # ABA-REVIEW-05 (2026-09-08) — ABA's reviewer asked for their own Success
+    # page to be skipped ("submit parameter: skip_success_page = 1"). It is the
+    # LAST hashed field, so a value that is sent but not signed, or signed but
+    # not sent, is a silent hash failure — both directions are pinned here.
+    check("ABA-REVIEW-05 skip_success_page is NOT sent unless asked for",
+          "skip_success_page" not in body, str(body.get("skip_success_page")))
+    body_skip = payway.build_purchase_request(
+        cfg=cfg, tran_id="A0123456789abcdef012", amount=7.99, currency="USD",
+        continue_success_url="https://app.example.com/ok",
+        cancel_url="https://app.example.com/no", skip_success_page=True, now=now)
+    check("ABA-REVIEW-05 skip_success_page is sent as the literal '1'",
+          body_skip.get("skip_success_page") == "1",
+          str(body_skip.get("skip_success_page")))
+    expected_skip = expected + "1"
+    independent_skip = base64.b64encode(
+        hmac.new(FAKE_KEY.encode(), expected_skip.encode(), hashlib.sha512).digest()
+    ).decode()
+    check("ABA-REVIEW-05 the hash covers skip_success_page in LAST position",
+          body_skip["hash"] == independent_skip
+          and body_skip["hash"] != body["hash"], "digest mismatch")
+
     # A configured public callback becomes `return_url`, base64 as documented.
     cfg2 = _configured(PAYWAY_CALLBACK_URL="https://api.example.com/cb")
     body2 = payway.build_purchase_request(cfg=cfg2, tran_id="A1", amount=1.99, now=now)

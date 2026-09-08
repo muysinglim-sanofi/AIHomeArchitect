@@ -572,9 +572,17 @@ def build_purchase_request(
     return_params: str = "",
     continue_success_url: str = "",
     cancel_url: str = "",
+    skip_success_page: bool = False,
     now: Optional[datetime] = None,
 ) -> dict:
     """The signed Purchase body. Pure — no I/O, so a test can read the hash.
+
+    `skip_success_page` (ABA merchant review, 2026-09-08). ABA's reviewer:
+    "You already have your own success screen. So you can skip ABA success
+    screen by submit parameter: skip_success_page = 1". It is the LAST of the
+    twenty-four hashed fields, so it is set before the hash below, as the
+    literal "1", and only when asked for — the dormant server-side path keeps
+    sending nothing, exactly as before.
 
     Encoding, and why each field is treated differently
     ---------------------------------------------------
@@ -624,6 +632,8 @@ def build_purchase_request(
         body["cancel_url"] = cancel_url
     if return_params:
         body["return_params"] = return_params
+    if skip_success_page:
+        body["skip_success_page"] = "1"
     body["hash"] = sign(purchase_hash_payload(body), cfg.api_key)
     return body
 

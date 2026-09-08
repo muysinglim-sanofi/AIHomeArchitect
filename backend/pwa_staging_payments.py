@@ -1019,7 +1019,12 @@ def plugin_form_fields(cfg: payway.PayWayConfig, *, tran_id: str,
     body = payway.build_purchase_request(
         cfg=cfg, tran_id=tran_id, amount=amount, currency=cfg.currency,
         lifetime_minutes=cfg.lifetime_minutes, return_params=return_params,
-        continue_success_url="", cancel_url="")
+        continue_success_url="", cancel_url="",
+        # ABA merchant review (2026-09-08): Ayden shows its own success card,
+        # so ABA's redundant Success page is skipped. Presentation only —
+        # nothing about settlement moves: the poll still asks this server,
+        # which still asks Check Transaction, which alone drives the grant.
+        skip_success_page=True)
     for key in _PLUGIN_UNSENT:
         body.pop(key, None)
     return body

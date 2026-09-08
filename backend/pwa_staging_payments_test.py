@@ -1136,6 +1136,13 @@ async def test_plugin_checkout_signs_and_does_not_post() -> None:
         check("PLUGIN07 continue_success_url is not sent",
               "continue_success_url" not in fields)
         check("PLUGIN07 cancel_url is not sent", "cancel_url" not in fields)
+
+        # ABA-REVIEW-05 (2026-09-08) — ABA's Success page is skipped; Ayden
+        # shows its own. The plugin form carries the literal "1", and it is
+        # signed (the rail test pins its position in the hash).
+        check("ABA-REVIEW-05 skip_success_page=1 rides in the plugin form",
+              fields.get("skip_success_page") == "1",
+              str(fields.get("skip_success_page")))
         # The pushback URL rides along only when the deployment has a public
         # callback (Fly does; this harness does not). What matters here is
         # that its presence follows the config and is never invented.
@@ -1686,9 +1693,33 @@ async def test_generate_qr_is_unreachable() -> None:
           payway.PATH_PURCHASE)
 
 
+async def test_check_transaction_cadence_is_pinned() -> None:
+    """ABA-REVIEW-11 — the Check Transaction timing ABA was told about.
+
+    ABA's reviewer asked how often we call Check Transaction, when we stop and
+    for how long at most. The answer (docs/aba/ABA_REVIEW_RESPONSE_2026_09_08.md
+    in the PWA repo) quotes these three values; a change to any of them must
+    change that answer too, so they are pinned here as data.
+    """
+    section("ABA-REVIEW-11  the cadence ABA was told about is the cadence")
+    check("ABA-REVIEW-11 the server floor between two real checks is 3.0 s",
+          seam._CHECK_MIN_INTERVAL_S == 3.0, str(seam._CHECK_MIN_INTERVAL_S))
+    src = pathlib.Path(seam.__file__).read_text(encoding="utf-8")
+    check("ABA-REVIEW-11 the client is told to poll every 3000 ms",
+          '"poll_interval_ms": 3000' in src)
+    rail = pathlib.Path(payway.__file__).read_text(encoding="utf-8")
+    check("ABA-REVIEW-11 the transaction lifetime defaults to 30 minutes",
+          '_env("PAYWAY_QR_LIFETIME_MINUTES", "30")' in rail)
+    check("ABA-REVIEW-11 NOT_CREATED still waits 30 s before concluding",
+          seam._NOT_CREATED_GRACE.total_seconds() == 30.0)
+    check("ABA-REVIEW-11 GRANTED / FAILED / CANCELLED stop the checks",
+          "if state == GRANTED:" in src and "if state in (FAILED, CANCELLED):" in src)
+
+
 async def main_async() -> int:
     _install()
     await test_identity()
+    await test_check_transaction_cadence_is_pinned()
     await test_aba01_checkout()
     await test_aba02_aba03_tampering()
     await test_aba04_aba10_aba11_idempotency()
