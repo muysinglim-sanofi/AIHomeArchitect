@@ -531,11 +531,6 @@ class _PwaPaywallSheetState extends ConsumerState<PwaPaywallSheet> {
                               .read(pwaPaymentProvider.notifier)
                               .cancel(),
                         ),
-                      const SizedBox(height: PwaGap.md),
-                      Text(l.paywallSecureNote,
-                          textAlign: TextAlign.center,
-                          style:
-                              pwaSans(fontSize: 11.5, color: _pwTextDim)),
                     ],
                   ],
 

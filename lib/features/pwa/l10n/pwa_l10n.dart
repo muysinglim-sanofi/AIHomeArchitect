@@ -679,9 +679,8 @@ class PwaL10n {
       };
   String get paywallRestore => _get('pwaPaywallRestore');
   String get paywallClose => _get('pwaPaywallClose');
-  String get paywallSecureNote => _get('pwaPaywallSecureNote');
 
-  // ── Payment (ABA PayWay / KHQR) ────────────────────────────────────────────
+  // ── Payment (ABA KHQR) ─────────────────────────────────────────────────────
   //
   // Every string a person sees while paying goes through here, including the
   // failure copy. The backend sends MACHINE codes — `AMOUNT_MISMATCH`,
@@ -689,7 +688,6 @@ class PwaL10n {
   // a code into a sentence, so no widget ever renders a reason string raw and
   // no locale can drift from another.
   String get payBuy => _get('pwaPayBuy');
-  String get payTitle => _get('pwaPayTitle');
   String get payPreparing => _get('pwaPayPreparing');
   String get payScanTitle => _get('pwaPayScanTitle');
   String get payScanBody => _get('pwaPayScanBody');
@@ -700,16 +698,11 @@ class PwaL10n {
   String get payInlineCancel => _get('pwaPayInlineCancel');
   String get payOrScan => _get('pwaPayOrScan');
   String get payContinueToAba => _get('pwaPayContinueToAba');
-  String get payOpenInNewTab => _get('pwaPayOpenInNewTab');
   String get acceptWeAccept => _get('pwaAcceptWeAccept');
   String get payMethodTitle => _get('pwaPayMethodTitle');
   String get payMethodBody => _get('pwaPayMethodBody');
-  String get payHandoffBodyDesktop => _get('pwaPayHandoffBodyDesktop');
-  String get payHandoffBodyPhone => _get('pwaPayHandoffBodyPhone');
   String get payLinkExpiredTitle => _get('pwaPayLinkExpiredTitle');
   String get payLinkExpiredBody => _get('pwaPayLinkExpiredBody');
-  String get payReturnTitle => _get('pwaPayReturnTitle');
-  String get payReturnBody => _get('pwaPayReturnBody');
   String payExpiresIn(String remaining) =>
       _get('pwaPayExpiresIn').replaceAll('{t}', remaining);
   String get payWaiting => _get('pwaPayWaiting');

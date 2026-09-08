@@ -550,14 +550,13 @@ void main() {
       'Living Room',           // example-asset labels routed as EN room labels
       'Bedroom',
       'Kitchen',
-      'ABA PayWay',            // the payment brand, and the accessible title of
-                               // the embedded checkout frame. Never translated,
-                               // by the same rule pwa_translations.dart states
-                               // for 'KHQR' and 'ABA Mobile': it is the name
-                               // printed on the thing the person is paying
-                               // with, and translating a brand is how an
-                               // interface becomes unrecognisable.
-      'ABA KHQR',              // same rule — the payment method's own name.
+      'ABA KHQR',              // the payment method's own name, on ABA's tile.
+                               // Never translated, by the rule
+                               // pwa_translations.dart states for 'KHQR' and
+                               // 'ABA Mobile': it is the name printed on the
+                               // thing the person is paying with. ('ABA
+                               // PayWay' left this list with the provider
+                               // copy — Ayden's UI no longer says it.)
     };
 
     // Files whose English literals are a DOCUMENTED fallback rather than what a

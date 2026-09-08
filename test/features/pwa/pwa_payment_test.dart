@@ -687,7 +687,7 @@ void main() {
 
     test('PAYWAY17 every locale carries the whole payment vocabulary', () {
       const required = [
-        'pwaPayBuy', 'pwaPayTitle', 'pwaPayPreparing', 'pwaPayScanTitle',
+        'pwaPayBuy', 'pwaPayPreparing', 'pwaPayScanTitle',
         'pwaPayScanBody', 'pwaPayOpenAba', 'pwaPayOrScan', 'pwaPayExpiresIn',
         'pwaPayWaiting', 'pwaPayConfirmingTitle', 'pwaPayConfirmingBody',
         'pwaPayActivatingTitle', 'pwaPayActivatingBody',
@@ -834,8 +834,6 @@ void main() {
         final l = pwaL10nFor(Locale(code));
         for (final value in [
           l.payContinueToAba,
-          l.payHandoffBodyDesktop,
-          l.payHandoffBodyPhone,
           l.payLinkExpiredTitle,
           l.payLinkExpiredBody,
           l.payResultSuccessTitle,
@@ -992,10 +990,13 @@ void main() {
           findsOneWidget);
 
       // AND NOT the rejected treatment: no embedded hosted page, and no
-      // paragraph of Ayden instructions duplicating what ABA's QR already says.
+      // paragraph of Ayden instructions duplicating what ABA's QR already says
+      // — the handoff paragraphs are retired; one instruction line remains,
+      // and it names no provider.
       final l = pwaL10nFor(const Locale('en'));
-      expect(find.text(l.payHandoffBodyDesktop), findsNothing);
-      expect(find.text(l.payHandoffBodyPhone), findsNothing);
+      expect(find.textContaining('own page'), findsNothing);
+      expect(find.text(l.payScanBody), findsOneWidget);
+      expect(l.payScanBody.contains('ABA'), isFalse);
       await _teardown(tester);
     });
 
@@ -1090,16 +1091,16 @@ void main() {
         'Apple Pay', 'Google Pay',
       ];
       const surfaces = [
-        'pwaPayHandoffBodyDesktop',
-        'pwaPayHandoffBodyPhone',
         'pwaPayMethodTitle',
         'pwaPayMethodBody',
-        'pwaPaywallSecureNote',
-        'pwaPayTitle',
         'pwaPayScanTitle',
         'pwaPayScanBody',
         'pwaPayOrScan',
         'pwaAcceptWeAccept',
+        'pwaPayInlineChecking',
+        'pwaPayFailedNotCreated',
+        'pwaPayPluginOpen',
+        'pwaPayContinueToAba',
       ];
       for (final table in [
         pwaEnTranslations,
@@ -1109,10 +1110,9 @@ void main() {
         for (final key in surfaces) {
           final value = table[key];
           if (value == null) continue;
-          // The gateway's own name contains a banned method name — "ABA Pay"
-          // is a substring of "ABA PayWay" — so the brand is removed before
-          // the check reads what is left.
-          final hay = value.replaceAll('ABA PayWay', '').toLowerCase();
+          // Nothing to strip any more: Ayden's copy names no provider, so
+          // "ABA Pay" can only appear if a method is actually being named.
+          final hay = value.toLowerCase();
           for (final word in forbidden) {
             expect(hay.contains(word.toLowerCase()), isFalse,
                 reason: '$key names "$word", which ABA no longer offers');
@@ -1121,27 +1121,66 @@ void main() {
       }
     });
 
-    testWidgets('ABA04 the security note does not claim the payment happens '
-        'outside the browser', (tester) async {
-      for (final table in [
-        pwaEnTranslations,
-        pwaKmTranslations,
-        pwaFrTranslations,
+    test('ABA04 / ABA-REVIEW-13 Ayden writes no sentence about the provider: '
+        'the note under Buy is gone and no dictionary value says PayWay', () {
+      // ABA's second review round (2026-09-08): "Can you please remove all
+      // those message please? There is no requirement UI related to ABA
+      // Payway." The note under Buy is retired in every locale, with the
+      // unused handoff copy that said the same thing; the provider's name
+      // survives only where it IS the name on screen.
+      const retired = [
+        'pwaPaywallSecureNote',
+        'pwaPayTitle',
+        'pwaPayOpenInNewTab',
+        'pwaPayHandoffBodyDesktop',
+        'pwaPayHandoffBodyPhone',
+        'pwaPayReturnTitle',
+        'pwaPayReturnBody',
+      ];
+      for (final (name, table) in [
+        ('en', pwaEnTranslations),
+        ('km', pwaKmTranslations),
+        ('fr', pwaFrTranslations),
       ]) {
-        final note = table['pwaPaywallSecureNote']!;
-        expect(note.contains('Ayden'), isFalse,
-            reason: 'ABA handles the payment, not Ayden');
-        expect(note.toLowerCase().contains('never in your browser'), isFalse);
-        expect(note.toLowerCase().contains('jamais dans votre navigateur'),
-            isFalse);
-        expect(note.contains('ABA'), isTrue);
+        for (final key in retired) {
+          expect(table.containsKey(key), isFalse,
+              reason: '$name still carries $key');
+        }
+        for (final entry in table.entries) {
+          expect(entry.value.contains('PayWay'), isFalse,
+              reason: '$name:${entry.key} names the provider');
+          // 'ABA' may appear only inside the payment method's own name or
+          // the name of the bank app a deeplink opens — never in a
+          // sentence of ours.
+          final residue = entry.value
+              .replaceAll('ABA KHQR', '')
+              .replaceAll('ABA Mobile', '');
+          expect(residue.contains('ABA'), isFalse,
+              reason: '$name:${entry.key} talks about ABA: ${entry.value}');
+        }
       }
+      // The two lines ABA's reviewer still meets, word for word.
+      final en = pwaL10nFor(const Locale('en'));
+      expect(en.payInlineChecking, 'Checking your payment…');
+      expect(en.payFailedBody('NOT_CREATED'),
+          'Payment could not start. Please try again.');
+      // And the getter behind the note is gone, so no widget can bring it
+      // back without a dictionary change that this test would see.
+      expect(
+          File('lib/features/pwa/l10n/pwa_l10n.dart')
+              .readAsStringSync()
+              .contains('paywallSecureNote'),
+          isFalse);
+      expect(
+          File('lib/features/pwa/presentation/pwa_paywall.dart')
+              .readAsStringSync()
+              .contains('SecureNote'),
+          isFalse);
     });
 
     testWidgets('ABA05 every locale carries the payment vocabulary',
         (tester) async {
       const added = [
-        'pwaPayOpenInNewTab',
         'pwaAcceptWeAccept',
         'pwaPayMethodTitle',
         'pwaPayMethodBody',
@@ -1158,7 +1197,8 @@ void main() {
           expect(table[key], isNotNull, reason: '$key is missing');
           expect(table[key]!.trim(), isNotEmpty);
         }
-        expect(table['pwaPayTitle']!.contains('ABA PayWay'), isTrue);
+        expect(table.containsKey('pwaPayTitle'), isFalse,
+            reason: 'retired with the provider copy (ABA04)');
       }
     });
 
@@ -2255,6 +2295,39 @@ void main() {
       expect(find.text(l.payPluginOpen), findsNothing,
           reason: 'no "checkout is open" card');
       expect(find.text(l.payWaiting), findsNothing);
+      await _teardown(tester);
+    });
+
+    testWidgets('DM07 / ABA-REVIEW-13 the Wallet says nothing about the '
+        'provider — before Buy, and while the payment is being checked',
+        (tester) async {
+      final w = await pumpWallet(tester, onStatus: _pluginServer);
+      final l = pwaL10nFor(const Locale('en'));
+      Iterable<String> visible() => tester
+          .widgetList<Text>(find.byType(Text))
+          .map((t) => t.data ?? t.textSpan?.toPlainText() ?? '');
+      void noProviderProse(String when) {
+        for (final s in visible()) {
+          expect(s.contains('PayWay'), isFalse, reason: '$when: "$s"');
+          expect(s.replaceAll('ABA KHQR', '').contains('ABA'), isFalse,
+              reason: '$when: "$s"');
+        }
+        expect(find.textContaining('secure page'), findsNothing,
+            reason: when);
+      }
+      // The method is named exactly once: ABA's tile, "ABA KHQR", their
+      // description — and nothing under Buy.
+      expect(find.text('ABA KHQR'), findsOneWidget);
+      expect(find.text(l.payMethodBody), findsOneWidget);
+      noProviderProse('before Buy');
+
+      await tester.tap(find.byKey(const ValueKey('pwa-paywall-continue')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(w.plugin.launches.length, 1);
+      // The status line is kept — useful feedback — without a provider in it.
+      expect(find.text('Checking your payment…'), findsOneWidget);
+      noProviderProse('while checking');
       await _teardown(tester);
     });
 

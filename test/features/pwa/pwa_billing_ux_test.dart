@@ -628,7 +628,6 @@ void main() {
         for (final s in [
           l.paywallFreeUsedTitle,
           l.payBuy,
-          l.paywallSecureNote,
           l.productBadge('starter'),
           l.productBadge('popular'),
           l.productBadge('best_value'),

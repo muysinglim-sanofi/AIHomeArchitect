@@ -291,64 +291,52 @@ const Map<String, String> pwaEnTranslations = {
   'pwaProductBadgeBestValue': 'BEST VALUE',
   'pwaPaywallRestore': 'I already paid',
   'pwaPaywallClose': 'Not now',
-  'pwaPaywallSecureNote':
-      "Payment is handled by ABA PayWay, on ABA's own secure page.",
 
-  // -- Payment (ABA PayWay / KHQR) -------------------------------------------
+  // -- Payment (ABA KHQR) ----------------------------------------------------
   // Cambodia-first wording. 'KHQR' and 'ABA Mobile' stay untranslated in all
   // three locales: they are the names printed on the thing a person is about to
   // tap, and translating a brand is how an interface becomes unrecognisable.
+  // Ayden's OWN sentences name no provider (ABA's merchant review, 2026-09-08:
+  // "there is no requirement UI related to ABA PayWay"). The provider's name
+  // appears only where it IS the name of the thing on screen: the payment
+  // method 'ABA KHQR' (their tile, in pwa_aba_marks.dart) and the bank app a
+  // deeplink button opens ('ABA Mobile').
   'pwaPayBuy': 'Buy',
-  'pwaPayTitle': 'Pay with ABA PayWay',
-  'pwaPayContinueToAba': 'Continue to ABA PayWay',
-  'pwaPayHandoffBodyDesktop':
-      "You will pay with ABA KHQR, on ABA PayWay's own page below. Scan the "
-      'code with any banking app that supports KHQR.',
-  'pwaPayHandoffBodyPhone':
-      "You will pay with ABA KHQR, on ABA PayWay's own page below. Open ABA "
-      'Mobile, or scan the code with any banking app that supports KHQR.',
-  // The escape hatch under the embedded checkout. Named for what it DOES —
-  // a new tab — because the whole point is that this one keeps running.
-  'pwaPayOpenInNewTab': 'Open ABA PayWay in a new tab',
+  'pwaPayContinueToAba': 'Continue to payment',
   'pwaAcceptWeAccept': 'We accept',
   'pwaPayMethodTitle': 'Payment method',
   'pwaPayMethodBody': 'Scan to pay with any banking app',
   'pwaPayLinkExpiredTitle': 'This payment link has expired',
   'pwaPayLinkExpiredBody':
-      'ABA payment links are only valid for a few minutes. Nothing was '
+      'Payment links are only valid for a few minutes. Nothing was '
       'charged — start again to get a fresh one.',
-  'pwaPayReturnTitle': 'Checking your payment',
-  'pwaPayReturnBody':
-      'We are confirming this with ABA. This only takes a moment, and you do '
-      'not need to pay again.',
   'pwaPayPreparing': 'Preparing your payment...',
   'pwaPayScanTitle': 'Scan to pay',
   'pwaPayScanBody':
-      'Open ABA Mobile — or any Cambodian bank app that reads KHQR — and scan '
-      'this code.',
+      'Open any Cambodian bank app that reads KHQR and scan this code.',
   'pwaPayClose': 'Close',
   // Shown BEHIND ABA's popup, and after it closes: the payment is still open
   // and this card will change on its own when the server hears from ABA.
   'pwaPayPluginOpen':
-      "ABA PayWay's secure checkout is open. Finish there — this will update "
-      'by itself.',
+      'The secure checkout is open. Finish there — this will update by '
+      'itself.',
   // The line under Buy while a transaction is live. No countdown, no
   // "waiting for your payment": the popup says what is open, and this only
   // says that the server is checking.
-  'pwaPayInlineChecking': 'Checking your payment with ABA PayWay…',
+  'pwaPayInlineChecking': 'Checking your payment…',
   'pwaPayInlineCancel': 'Cancel this payment',
   // NOT_CREATED — PayWay refused the purchase before a transaction existed
   // (a domain not yet whitelisted, a rejected request). Nothing to wait for.
   'pwaPayFailedNotCreated':
-      'ABA PayWay could not start the payment. Please try again.',
+      'Payment could not start. Please try again.',
   'pwaPayOpenAba': 'Open ABA Mobile',
   'pwaPayOrScan': 'or scan the code with another bank app',
   'pwaPayExpiresIn': 'This code expires in {t}',
   'pwaPayWaiting': 'Waiting for your payment',
   'pwaPayConfirmingTitle': 'Confirming your payment',
   'pwaPayConfirmingBody':
-      'Your bank has told us. We are checking with ABA before adding your '
-      'spaces.',
+      'Your bank has told us. We are confirming the payment before adding '
+      'your spaces.',
   'pwaPayActivatingTitle': 'Activating your spaces',
   'pwaPayActivatingBody': 'Payment confirmed. Adding it to your account now.',
   'pwaPayContinue': 'Continue designing',
@@ -699,44 +687,29 @@ const Map<String, String> pwaKmTranslations = {
   'pwaProductBadgeBestValue': 'តម្លៃ​ល្អ​បំផុត',
   'pwaPaywallRestore': 'ខ្ញុំ​បាន​ទូទាត់​រួច​ហើយ',
   'pwaPaywallClose': 'មិន​ទាន់​ទេ',
-  'pwaPaywallSecureNote':
-      'ការ​ទូទាត់​ត្រូវ​បាន​គ្រប់គ្រង​ដោយ ABA PayWay នៅ​លើ​ទំព័រ​សុវត្ថិភាព​របស់ ABA ផ្ទាល់។',
 
-  // -- Payment (ABA PayWay / KHQR) -------------------------------------------
+  // -- Payment (ABA KHQR) ----------------------------------------------------
   'pwaPayBuy': 'ទិញ',
-  'pwaPayTitle': 'ទូទាត់​ដោយ ABA PayWay',
-  'pwaPayContinueToAba': 'បន្ត​ទៅ ABA PayWay',
-  'pwaPayHandoffBodyDesktop':
-      'អ្នក​នឹង​ទូទាត់​ដោយ ABA KHQR នៅ​លើ​ទំព័រ​របស់ ABA PayWay ខាង​ក្រោម។ '
-      'ស្កេន​កូដ​ដោយ​កម្មវិធី​ធនាគារ​ណា​មួយ​ដែល​គាំទ្រ KHQR។',
-  'pwaPayHandoffBodyPhone':
-      'អ្នក​នឹង​ទូទាត់​ដោយ ABA KHQR នៅ​លើ​ទំព័រ​របស់ ABA PayWay ខាង​ក្រោម។ '
-      'បើក ABA Mobile ឬ​ស្កេន​កូដ​ដោយ​កម្មវិធី​ធនាគារ​ណា​មួយ​ដែល​គាំទ្រ KHQR។',
-  'pwaPayOpenInNewTab': 'បើក ABA PayWay ក្នុង​ផ្ទាំង​ថ្មី',
+  'pwaPayContinueToAba': 'បន្ត​ទៅ​ការ​ទូទាត់',
   'pwaAcceptWeAccept': 'យើង​ទទួល',
   'pwaPayMethodTitle': 'មធ្យោបាយ​ទូទាត់',
   'pwaPayMethodBody': 'ស្កេន​ដើម្បី​ទូទាត់​ដោយ​កម្មវិធី​ធនាគារ​ណា​មួយ',
   'pwaPayLinkExpiredTitle': 'តំណ​ទូទាត់​នេះ​ផុត​កំណត់​ហើយ',
   'pwaPayLinkExpiredBody':
-      'តំណ​ទូទាត់ ABA មាន​សុពលភាព​តែ​ប៉ុន្មាន​នាទី​ប៉ុណ្ណោះ។ គ្មាន​ការ​កាត់​ប្រាក់​ទេ — '
+      'តំណ​ទូទាត់​មាន​សុពលភាព​តែ​ប៉ុន្មាន​នាទី​ប៉ុណ្ណោះ។ គ្មាន​ការ​កាត់​ប្រាក់​ទេ — '
       'សូម​ចាប់​ផ្ដើម​ម្ដង​ទៀត​ដើម្បី​ទទួល​តំណ​ថ្មី។',
-  'pwaPayReturnTitle': 'កំពុង​ពិនិត្យ​ការ​ទូទាត់​របស់​អ្នក',
-  'pwaPayReturnBody':
-      'យើង​កំពុង​បញ្ជាក់​ជាមួយ ABA។ វា​ចំណាយ​ពេល​តែ​មួយ​ភ្លែត ហើយ​អ្នក​មិន​ចាំបាច់ '
-      'ទូទាត់​ម្ដង​ទៀត​ទេ។',
   'pwaPayPreparing': 'កំពុង​រៀបចំ​ការ​ទូទាត់​របស់​អ្នក...',
   'pwaPayScanTitle': 'ស្កេន​ដើម្បី​ទូទាត់',
   'pwaPayScanBody':
-      'បើក ABA Mobile — ឬ​កម្មវិធី​ធនាគារ​កម្ពុជា​ណា​មួយ​ដែល​អាន KHQR បាន — '
-      'រួច​ស្កេន​កូដ​នេះ។',
+      'បើក​កម្មវិធី​ធនាគារ​កម្ពុជា​ណា​មួយ​ដែល​អាន KHQR បាន រួច​ស្កេន​កូដ​នេះ។',
   'pwaPayClose': 'បិទ',
   'pwaPayPluginOpen':
-      'ទំព័រ​ទូទាត់​សុវត្ថិភាព​របស់ ABA PayWay បាន​បើក​ហើយ។ សូម​បញ្ចប់​នៅ​ទីនោះ — '
+      'ទំព័រ​ទូទាត់​សុវត្ថិភាព​បាន​បើក​ហើយ។ សូម​បញ្ចប់​នៅ​ទីនោះ — '
       'ទំព័រ​នេះ​នឹង​ធ្វើ​បច្ចុប្បន្នភាព​ដោយ​ខ្លួន​ឯង។',
-  'pwaPayInlineChecking': 'កំពុង​ពិនិត្យ​ការ​ទូទាត់​របស់​អ្នក​ជាមួយ ABA PayWay…',
+  'pwaPayInlineChecking': 'កំពុង​ពិនិត្យ​ការ​ទូទាត់​របស់​អ្នក…',
   'pwaPayInlineCancel': 'បោះបង់​ការ​ទូទាត់​នេះ',
   'pwaPayFailedNotCreated':
-      'ABA PayWay មិន​អាច​ចាប់ផ្ដើម​ការ​ទូទាត់​បាន​ទេ។ សូម​ព្យាយាម​ម្ដង​ទៀត។',
+      'មិន​អាច​ចាប់ផ្ដើម​ការ​ទូទាត់​បាន​ទេ។ សូម​ព្យាយាម​ម្ដង​ទៀត។',
   'pwaPayOpenAba': 'បើក ABA Mobile',
   'pwaPayOrScan': 'ឬ​ស្កេន​កូដ​ដោយ​កម្មវិធី​ធនាគារ​ផ្សេង',
   'pwaPayExpiresIn': 'កូដ​នេះ​ផុត​កំណត់​ក្នុង​រយៈពេល {t}',
@@ -744,7 +717,7 @@ const Map<String, String> pwaKmTranslations = {
   'pwaPayConfirmingTitle': 'កំពុង​បញ្ជាក់​ការ​ទូទាត់​របស់​អ្នក',
   'pwaPayConfirmingBody':
       'ធនាគារ​របស់​អ្នក​បាន​ជូន​ដំណឹង​មក​យើង​ហើយ។ '
-      'យើង​កំពុង​ផ្ទៀងផ្ទាត់​ជាមួយ ABA មុន​ពេល​បន្ថែម Spaces របស់​អ្នក។',
+      'យើង​កំពុង​ផ្ទៀងផ្ទាត់​ការ​ទូទាត់ មុន​ពេល​បន្ថែម Spaces របស់​អ្នក។',
   'pwaPayActivatingTitle': 'កំពុង​ដំណើរការ Spaces របស់​អ្នក',
   'pwaPayActivatingBody':
       'ការ​ទូទាត់​ត្រូវ​បាន​បញ្ជាក់។ កំពុង​បន្ថែម​ទៅ​គណនី​របស់​អ្នក។',
@@ -1102,53 +1075,38 @@ const Map<String, String> pwaFrTranslations = {
   'pwaProductBadgeBestValue': 'MEILLEURE OFFRE',
   'pwaPaywallRestore': "J'ai déjà payé",
   'pwaPaywallClose': 'Pas maintenant',
-  'pwaPaywallSecureNote':
-      "Le paiement est géré par ABA PayWay, sur la page sécurisée d'ABA.",
 
-  // -- Payment (ABA PayWay / KHQR) -------------------------------------------
+  // -- Payment (ABA KHQR) ----------------------------------------------------
   'pwaPayBuy': 'Acheter',
-  'pwaPayTitle': 'Payer avec ABA PayWay',
-  'pwaPayContinueToAba': 'Continuer vers ABA PayWay',
-  'pwaPayHandoffBodyDesktop':
-      "Vous paierez avec ABA KHQR, sur la page d'ABA PayWay ci-dessous. "
-      'Scannez le code avec une application bancaire compatible KHQR.',
-  'pwaPayHandoffBodyPhone':
-      "Vous paierez avec ABA KHQR, sur la page d'ABA PayWay ci-dessous. "
-      'Ouvrez ABA Mobile, ou scannez le code avec une application bancaire '
-      'compatible KHQR.',
-  'pwaPayOpenInNewTab': 'Ouvrir ABA PayWay dans un nouvel onglet',
+  'pwaPayContinueToAba': 'Continuer vers le paiement',
   'pwaAcceptWeAccept': 'Nous acceptons',
   'pwaPayMethodTitle': 'Moyen de paiement',
   'pwaPayMethodBody':
       'Scannez pour payer avec n’importe quelle application bancaire',
   'pwaPayLinkExpiredTitle': 'Ce lien de paiement a expiré',
   'pwaPayLinkExpiredBody':
-      'Les liens de paiement ABA ne sont valables que quelques minutes. Rien '
+      'Les liens de paiement ne sont valables que quelques minutes. Rien '
       "n'a été débité — recommencez pour en obtenir un nouveau.",
-  'pwaPayReturnTitle': 'Vérification de votre paiement',
-  'pwaPayReturnBody':
-      "Nous confirmons avec ABA. Cela ne prend qu'un instant et vous n'avez "
-      'pas besoin de payer à nouveau.',
   'pwaPayPreparing': 'Préparation de votre paiement...',
   'pwaPayScanTitle': 'Scannez pour payer',
   'pwaPayScanBody':
-      'Ouvrez ABA Mobile — ou toute application bancaire cambodgienne qui lit '
-      'le KHQR — et scannez ce code.',
+      'Ouvrez une application bancaire cambodgienne qui lit le KHQR et '
+      'scannez ce code.',
   'pwaPayClose': 'Fermer',
   'pwaPayPluginOpen':
-      "Le paiement sécurisé d'ABA PayWay est ouvert. Terminez là-bas — cette "
-      'carte se mettra à jour toute seule.',
-  'pwaPayInlineChecking': 'Vérification de votre paiement avec ABA PayWay…',
+      'Le paiement sécurisé est ouvert. Terminez là-bas — cet écran se '
+      'mettra à jour tout seul.',
+  'pwaPayInlineChecking': 'Vérification de votre paiement…',
   'pwaPayInlineCancel': 'Annuler ce paiement',
   'pwaPayFailedNotCreated':
-      "ABA PayWay n'a pas pu démarrer le paiement. Veuillez réessayer.",
+      "Le paiement n'a pas pu démarrer. Veuillez réessayer.",
   'pwaPayOpenAba': 'Ouvrir ABA Mobile',
   'pwaPayOrScan': 'ou scannez le code avec une autre application bancaire',
   'pwaPayExpiresIn': 'Ce code expire dans {t}',
   'pwaPayWaiting': 'En attente de votre paiement',
   'pwaPayConfirmingTitle': 'Confirmation de votre paiement',
   'pwaPayConfirmingBody':
-      "Votre banque nous a prévenus. Nous vérifions auprès d'ABA avant "
+      'Votre banque nous a prévenus. Nous confirmons le paiement avant '
       "d'ajouter vos Spaces.",
   'pwaPayActivatingTitle': 'Activation de vos Spaces',
   'pwaPayActivatingBody': 'Paiement confirmé. Ajout à votre compte en cours.',
