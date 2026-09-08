@@ -54,11 +54,31 @@ const double kPwaProfileCardRadius = 16;
 /// The identity avatar. iOS: 64, circle, accentLight ground, accentDark letter.
 const double kPwaProfileAvatar = 64;
 
-class PwaProfileIos extends ConsumerWidget {
+class PwaProfileIos extends ConsumerStatefulWidget {
   const PwaProfileIos({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PwaProfileIos> createState() => _PwaProfileIosState();
+}
+
+class _PwaProfileIosState extends ConsumerState<PwaProfileIos> {
+  @override
+  void initState() {
+    super.initState();
+    // A Facebook round-trip lands HERE (`redirect_to` is /profile). Its
+    // outcome — kept your work, switched account, or a fork/refusal — is
+    // shown by the same sheet that started it, once. The sheet clears the
+    // flag when it closes, so a later visit to Profile shows nothing.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(pwaAuthProvider).oauthPending) {
+        showPwaAccountSheet(context);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l = context.pwaL10n;
     final controller = ref.read(pwaControllerProvider.notifier);
     final auth = ref.watch(pwaAuthProvider);
@@ -103,14 +123,15 @@ class PwaProfileIos extends ConsumerWidget {
                 const SizedBox(height: PwaGap.lg),
                 _IdentityCard(
                   identified: identified,
-                  email: auth.email,
+                  label: auth.identityLabel,
+                  connectedVia: auth.connectedVia,
                   canVerify: canVerify,
                 ),
                 if (canVerify && !identified) ...[
                   const SizedBox(height: PwaGap.md),
                   PwaPrimaryButton(
                     key: const ValueKey('pwa-profile-save-work'),
-                    label: l.accountTitle,
+                    label: l.authSecureCta,
                     onPressed: () async {
                       // The sheet OWNS the post-authentication hydration
                       // now — identity, entitlement and library all settle
@@ -166,6 +187,12 @@ class PwaProfileIos extends ConsumerWidget {
                       ),
                     ],
                   ),
+                ],
+                if (identified) ...[
+                  const SizedBox(height: PwaGap.lg),
+                  _SectionHeader(label: l.authMethodsTitle),
+                  const SizedBox(height: PwaGap.sm),
+                  _SignInMethodsCard(auth: auth, providers: authController.providers),
                 ],
                 const SizedBox(height: PwaGap.lg),
                 // iOS's `_StatsRow`: one number, the finished redesigns. The
@@ -292,28 +319,40 @@ double pwaProfileColumnWidth(double screenWidth) {
 class _IdentityCard extends StatelessWidget {
   const _IdentityCard({
     required this.identified,
-    required this.email,
+    required this.label,
+    required this.connectedVia,
     required this.canVerify,
   });
 
   final bool identified;
-  final String email;
+
+  /// The account's own name for itself: a Facebook name, an email, a MASKED
+  /// phone. Empty is legal (a phone-only account shows its masked number, a
+  /// Facebook account with no name shows the saved-state line) — nothing
+  /// here requires an email to exist.
+  final String label;
+  final PwaAuthMethod? connectedVia;
   final bool canVerify;
 
   @override
   Widget build(BuildContext context) {
     final l = context.pwaL10n;
-    final title = identified ? l.accountLinkedTitle : l.accountGuestLabel;
-    // A Guest is told how to keep their work ONLY where they can actually do
-    // it. In a build with no verification channel there is no email to add, so
-    // the card says who you are and promises nothing — rather than offering a
-    // step that leads to a button that is not there.
+    final title = identified
+        ? (label.isNotEmpty ? label : l.accountLinkedTitle)
+        : l.accountGuestLabel;
+    // A Guest is told, truthfully, where the work lives. An identified person
+    // is told HOW they are connected — the method, never the user id.
     final body = identified
-        ? (email.isNotEmpty ? email : l.accountLinkedBody)
-        : (canVerify ? l.accountBody : '');
-    final initial = identified && email.isNotEmpty
-        ? email.characters.first.toUpperCase()
+        ? (connectedVia != null ? l.authConnectedVia(connectedVia!) : '')
+        : l.authGuestBody;
+    final initial = identified && label.isNotEmpty && !label.startsWith('+')
+        ? label.characters.first.toUpperCase()
         : null;
+    final avatarIcon = switch (connectedVia) {
+      PwaAuthMethod.facebook => Icons.facebook,
+      PwaAuthMethod.phone => Icons.phone_iphone,
+      _ => Icons.person_outline,
+    };
 
     return Container(
       key: const ValueKey('pwa-profile-identity'),
@@ -340,8 +379,11 @@ class _IdentityCard extends StatelessWidget {
                       style: PwaType.screenTitle(color: AppColors.accentDark)
                           .copyWith(fontSize: 28),
                     )
-                  : const Icon(Icons.person_outline,
-                      size: 30, color: AppColors.textTertiary),
+                  : Icon(avatarIcon,
+                      size: 30,
+                      color: identified
+                          ? AppColors.accentDark
+                          : AppColors.textTertiary),
             ),
           ),
           const SizedBox(width: PwaGap.md),
@@ -476,6 +518,73 @@ class _WalletRow extends ConsumerWidget {
 }
 
 // ── iOS's settings furniture ────────────────────────────────────────────────
+
+/// "Sign-in methods": which identities the account has, and which it can add.
+///
+/// Each row is a method the PROJECT offers (`PwaAuthProviders`); a tick means
+/// it is attached, "Add" opens the sheet on that method in the LINK journey —
+/// the same user, one more way back in. Email is offered only when the account
+/// has none: GoTrue's secure email change for an account that already has one
+/// is a two-address confirmation this product does not run.
+class _SignInMethodsCard extends ConsumerWidget {
+  const _SignInMethodsCard({required this.auth, required this.providers});
+
+  final PwaAuthState auth;
+  final PwaAuthProviders providers;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l = context.pwaL10n;
+    final rows = <(PwaAuthMethod, IconData, String, bool)>[
+      if (providers.facebook)
+        (PwaAuthMethod.facebook, Icons.facebook, l.authMethodFacebook,
+            auth.hasProvider('facebook')),
+      if (providers.phone)
+        (PwaAuthMethod.phone, Icons.phone_iphone, l.authMethodPhone,
+            auth.hasProvider('phone') || auth.phone.isNotEmpty),
+      (PwaAuthMethod.email, Icons.alternate_email, l.authMethodEmail,
+          auth.hasProvider('email') || auth.email.isNotEmpty),
+    ];
+    return Container(
+      key: const ValueKey('pwa-profile-methods'),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(kPwaProfileCardRadius),
+        border: Border.all(color: AppColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            ListTile(
+              key: ValueKey('pwa-profile-method-${rows[i].$1.name}'),
+              leading: Icon(rows[i].$2, size: 22, color: AppColors.textSecondary),
+              title: Text(rows[i].$3, style: PwaType.body()),
+              trailing: rows[i].$4
+                  ? const Icon(Icons.check_rounded, size: 20, color: pwaGold)
+                  : TextButton(
+                      key: ValueKey('pwa-profile-add-${rows[i].$1.name}'),
+                      onPressed: () =>
+                          showPwaAccountSheet(context, method: rows[i].$1),
+                      child: Text(l.authAdd,
+                          style: PwaType.bodyMuted(color: pwaGold)
+                              .copyWith(fontWeight: FontWeight.w600)),
+                    ),
+              // A row that is already attached does nothing on tap. Unlinking
+              // is deliberately absent: a recovery method removed by a tap is
+              // an account lost by a tap.
+              onTap: rows[i].$4
+                  ? null
+                  : () => showPwaAccountSheet(context, method: rows[i].$1),
+            ),
+            if (i < rows.length - 1)
+              const Divider(height: 1, color: AppColors.borderLight),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.label});

@@ -419,6 +419,58 @@ const Map<String, String> pwaEnTranslations = {
   'pwaAuthErrUnknown': 'Something went wrong. Please try again.',
   'pwaAuthUnavailable': 'Accounts are not available in this build.',
 
+  // -- Cambodia auth: Facebook + phone first, email second -------------------
+  'pwaAuthSecureTitle': 'Secure your Ayden account',
+  'pwaAuthSecureBody': 'Access your designs and Spaces from any device.',
+  'pwaAuthSignInChooserBody': 'Sign in to the account you already have.',
+  'pwaAuthContinueFacebook': 'Continue with Facebook',
+  'pwaAuthContinuePhone': 'Continue with phone number',
+  'pwaAuthOr': 'or',
+  'pwaAuthUseEmail': 'Use email instead',
+  'pwaAuthChooseAnother': 'Choose another way',
+  'pwaAuthPhoneTitle': 'Your phone number',
+  'pwaAuthPhoneBody': "We'll text you a 6-digit code.",
+  'pwaAuthPhoneSignInBody': "We'll text a 6-digit code to the number on your account.",
+  'pwaAuthPhoneLabel': 'Phone number',
+  'pwaAuthPhoneHint': '12 345 678',
+  'pwaAuthDialCodeLabel': 'Code',
+  'pwaAuthContinue': 'Continue',
+  'pwaAuthPhoneCodeBody': 'We sent a 6-digit code to {phone}.',
+  'pwaAuthChangePhone': 'Use a different number',
+  'pwaAuthResendIn': 'Send it again in {seconds}s',
+  'pwaAuthCodeExpiry': 'Codes expire after a few minutes.',
+  'pwaAuthWelcomeBack': 'Welcome back',
+  'pwaAuthExistsFacebook':
+      'This Facebook account already has an Ayden account.',
+  'pwaAuthExistsPhone': 'This phone number already has an Ayden account.',
+  'pwaAuthExistsEmail': 'This email already has an Ayden account.',
+  'pwaAuthContinueExisting': 'Continue to my existing account',
+  'pwaAuthErrInvalidPhone': 'That phone number does not look right.',
+  'pwaAuthErrContested':
+      'A verification for this number is still in progress. Please try '
+      'again in a few minutes.',
+  'pwaAuthErrMismatch':
+      "That code didn't attach to this account. Nothing was changed — "
+      'please try again.',
+  'pwaAuthErrCancelled': 'Facebook sign-in was cancelled.',
+  'pwaAuthErrNoEmail':
+      "Facebook didn't share an email address, so it can't be attached to "
+      'this account. Use your phone number to secure it instead.',
+  'pwaAuthErrProvider':
+      "Facebook sign-in isn't available right now. Try your phone number or "
+      'email.',
+  'pwaAuthFacebookLeaving': 'Taking you to Facebook…',
+  'pwaAuthConnectedFacebook': 'Connected with Facebook',
+  'pwaAuthConnectedPhone': 'Connected with phone',
+  'pwaAuthConnectedEmail': 'Connected with email',
+  'pwaAuthMethodsTitle': 'Sign-in methods',
+  'pwaAuthMethodFacebook': 'Facebook',
+  'pwaAuthMethodPhone': 'Phone',
+  'pwaAuthMethodEmail': 'Email',
+  'pwaAuthAdd': 'Add',
+  'pwaAuthGuestBody': 'Your designs are saved on this device.',
+  'pwaAuthSecureCta': 'Secure my account',
+
   // ── Errors ─────────────────────────────────────────────────────────────────
   'pwaErrSessionExpired': 'Your session expired. Reload the page to continue.',
   'pwaErrBackendUnreachable': 'This build cannot reach a generation backend.',
@@ -804,6 +856,59 @@ const Map<String, String> pwaKmTranslations = {
   'pwaAuthErrUnavailable': 'យើង​មិន​អាច​ភ្ជាប់​ទៅ​សេវា​ផ្ទៀងផ្ទាត់​បាន​ទេ។',
   'pwaAuthErrUnknown': 'មាន​អ្វី​មួយ​មិន​ប្រក្រតី។ សូម​ព្យាយាម​ម្ដង​ទៀត។',
   'pwaAuthUnavailable': 'គណនី​មិន​មាន​នៅ​ក្នុង​កំណែ​នេះ​ទេ។',
+
+  // -- Cambodia auth: Facebook + phone first, email second -------------------
+  'pwaAuthSecureTitle': 'ការពារ​គណនី Ayden របស់​អ្នក',
+  'pwaAuthSecureBody':
+      'ចូល​មើល​ការ​រចនា និង Spaces របស់​អ្នក​ពី​ឧបករណ៍​ណា​ក៏​បាន។',
+  'pwaAuthSignInChooserBody': 'ចូល​ទៅ​គណនី​ដែល​អ្នក​មាន​រួច​ហើយ។',
+  'pwaAuthContinueFacebook': 'បន្ត​ជាមួយ Facebook',
+  'pwaAuthContinuePhone': 'បន្ត​ជាមួយ​លេខ​ទូរស័ព្ទ',
+  'pwaAuthOr': 'ឬ',
+  'pwaAuthUseEmail': 'ប្រើ​អ៊ីមែល​ជំនួស​វិញ',
+  'pwaAuthChooseAnother': 'ជ្រើស​វិធី​ផ្សេង',
+  'pwaAuthPhoneTitle': 'លេខ​ទូរស័ព្ទ​របស់​អ្នក',
+  'pwaAuthPhoneBody': 'យើង​នឹង​ផ្ញើ​សារ​លេខ​កូដ ៦ ខ្ទង់​ទៅ​អ្នក។',
+  'pwaAuthPhoneSignInBody':
+      'យើង​នឹង​ផ្ញើ​សារ​លេខ​កូដ ៦ ខ្ទង់​ទៅ​លេខ​នៅ​លើ​គណនី​របស់​អ្នក។',
+  'pwaAuthPhoneLabel': 'លេខ​ទូរស័ព្ទ',
+  'pwaAuthPhoneHint': '០១២ ៣៤៥ ៦៧៨',
+  'pwaAuthDialCodeLabel': 'កូដ',
+  'pwaAuthContinue': 'បន្ត',
+  'pwaAuthPhoneCodeBody': 'យើង​បាន​ផ្ញើ​លេខ​កូដ ៦ ខ្ទង់​ទៅ {phone}។',
+  'pwaAuthChangePhone': 'ប្រើ​លេខ​ផ្សេង',
+  'pwaAuthResendIn': 'ផ្ញើ​ម្ដង​ទៀត​ក្នុង {seconds} វិនាទី',
+  'pwaAuthCodeExpiry': 'លេខ​កូដ​ផុត​កំណត់​បន្ទាប់​ពី​ពីរ​បី​នាទី។',
+  'pwaAuthWelcomeBack': 'សូម​ស្វាគមន៍​ការ​ត្រឡប់​មក​វិញ',
+  'pwaAuthExistsFacebook': 'គណនី Facebook នេះ​មាន​គណនី Ayden រួច​ហើយ។',
+  'pwaAuthExistsPhone': 'លេខ​ទូរស័ព្ទ​នេះ​មាន​គណនី Ayden រួច​ហើយ។',
+  'pwaAuthExistsEmail': 'អ៊ីមែល​នេះ​មាន​គណនី Ayden រួច​ហើយ។',
+  'pwaAuthContinueExisting': 'បន្ត​ទៅ​គណនី​ដែល​មាន​ស្រាប់​របស់​ខ្ញុំ',
+  'pwaAuthErrInvalidPhone': 'លេខ​ទូរស័ព្ទ​នោះ​មើល​ទៅ​មិន​ត្រឹមត្រូវ​ទេ។',
+  'pwaAuthErrContested':
+      'ការ​ផ្ទៀងផ្ទាត់​សម្រាប់​លេខ​នេះ​កំពុង​ដំណើរការ​នៅ​ឡើយ។ '
+      'សូម​ព្យាយាម​ម្ដង​ទៀត​ក្នុង​ពីរ​បី​នាទី​ទៀត។',
+  'pwaAuthErrMismatch':
+      'លេខ​កូដ​នោះ​មិន​បាន​ភ្ជាប់​ទៅ​គណនី​នេះ​ទេ។ គ្មាន​អ្វី​ត្រូវ​បាន​ផ្លាស់​ប្ដូរ​ទេ '
+      '— សូម​ព្យាយាម​ម្ដង​ទៀត។',
+  'pwaAuthErrCancelled': 'ការ​ចូល​ជាមួយ Facebook ត្រូវ​បាន​បោះបង់។',
+  'pwaAuthErrNoEmail':
+      'Facebook មិន​បាន​ចែក​រំលែក​អាសយដ្ឋាន​អ៊ីមែល​ទេ ដូច្នេះ​មិន​អាច​ភ្ជាប់​ទៅ'
+      '​គណនី​នេះ​បាន​ទេ។ សូម​ប្រើ​លេខ​ទូរស័ព្ទ​របស់​អ្នក​ដើម្បី​ការពារ​វា​ជំនួស​វិញ។',
+  'pwaAuthErrProvider':
+      'ការ​ចូល​ជាមួយ Facebook មិន​អាច​ប្រើ​បាន​ឥឡូវ​នេះ​ទេ។ '
+      'សូម​ព្យាយាម​លេខ​ទូរស័ព្ទ ឬ​អ៊ីមែល​របស់​អ្នក។',
+  'pwaAuthFacebookLeaving': 'កំពុង​នាំ​អ្នក​ទៅ Facebook…',
+  'pwaAuthConnectedFacebook': 'បាន​ភ្ជាប់​ជាមួយ Facebook',
+  'pwaAuthConnectedPhone': 'បាន​ភ្ជាប់​ជាមួយ​ទូរស័ព្ទ',
+  'pwaAuthConnectedEmail': 'បាន​ភ្ជាប់​ជាមួយ​អ៊ីមែល',
+  'pwaAuthMethodsTitle': 'វិធី​ចូល​គណនី',
+  'pwaAuthMethodFacebook': 'Facebook',
+  'pwaAuthMethodPhone': 'ទូរស័ព្ទ',
+  'pwaAuthMethodEmail': 'អ៊ីមែល',
+  'pwaAuthAdd': 'បន្ថែម',
+  'pwaAuthGuestBody': 'ការ​រចនា​របស់​អ្នក​ត្រូវ​បាន​រក្សា​ទុក​នៅ​លើ​ឧបករណ៍​នេះ។',
+  'pwaAuthSecureCta': 'ការពារ​គណនី​របស់​ខ្ញុំ',
 
   // ── Errors ─────────────────────────────────────────────────────────────────
   'pwaErrSessionExpired': 'វគ្គ​របស់​អ្នក​ផុត​កំណត់។ សូម​ផ្ទុក​ទំព័រ​ឡើង​វិញ​ដើម្បី​បន្ត។',
@@ -1194,6 +1299,59 @@ const Map<String, String> pwaFrTranslations = {
   'pwaAuthErrUnknown': "Une erreur s'est produite. Veuillez réessayer.",
   'pwaAuthUnavailable':
       'Les comptes ne sont pas disponibles dans cette version.',
+
+  // -- Cambodia auth: Facebook + phone first, email second -------------------
+  'pwaAuthSecureTitle': 'Sécurisez votre compte Ayden',
+  'pwaAuthSecureBody':
+      "Retrouvez vos créations et vos Spaces depuis n'importe quel appareil.",
+  'pwaAuthSignInChooserBody': 'Connectez-vous au compte que vous avez déjà.',
+  'pwaAuthContinueFacebook': 'Continuer avec Facebook',
+  'pwaAuthContinuePhone': 'Continuer avec un numéro de téléphone',
+  'pwaAuthOr': 'ou',
+  'pwaAuthUseEmail': 'Utiliser un e-mail',
+  'pwaAuthChooseAnother': 'Choisir une autre méthode',
+  'pwaAuthPhoneTitle': 'Votre numéro de téléphone',
+  'pwaAuthPhoneBody': 'Nous vous enverrons un code à 6 chiffres par SMS.',
+  'pwaAuthPhoneSignInBody':
+      'Nous enverrons un code à 6 chiffres au numéro de votre compte.',
+  'pwaAuthPhoneLabel': 'Numéro de téléphone',
+  'pwaAuthPhoneHint': '012 345 678',
+  'pwaAuthDialCodeLabel': 'Indicatif',
+  'pwaAuthContinue': 'Continuer',
+  'pwaAuthPhoneCodeBody': 'Nous avons envoyé un code à 6 chiffres au {phone}.',
+  'pwaAuthChangePhone': 'Utiliser un autre numéro',
+  'pwaAuthResendIn': 'Renvoyer dans {seconds} s',
+  'pwaAuthCodeExpiry': 'Les codes expirent après quelques minutes.',
+  'pwaAuthWelcomeBack': 'Bon retour',
+  'pwaAuthExistsFacebook': 'Ce compte Facebook a déjà un compte Ayden.',
+  'pwaAuthExistsPhone': 'Ce numéro de téléphone a déjà un compte Ayden.',
+  'pwaAuthExistsEmail': 'Cet e-mail a déjà un compte Ayden.',
+  'pwaAuthContinueExisting': 'Continuer vers mon compte existant',
+  'pwaAuthErrInvalidPhone': 'Ce numéro de téléphone ne semble pas valide.',
+  'pwaAuthErrContested':
+      'Une vérification est encore en cours pour ce numéro. Réessayez dans '
+      'quelques minutes.',
+  'pwaAuthErrMismatch':
+      "Ce code n'a pas été rattaché à ce compte. Rien n'a été modifié — "
+      'veuillez réessayer.',
+  'pwaAuthErrCancelled': 'La connexion Facebook a été annulée.',
+  'pwaAuthErrNoEmail':
+      "Facebook n'a pas partagé d'adresse e-mail, elle ne peut donc pas être "
+      'rattachée à ce compte. Utilisez plutôt votre numéro de téléphone.',
+  'pwaAuthErrProvider':
+      "La connexion Facebook n'est pas disponible pour le moment. Essayez "
+      'votre numéro de téléphone ou votre e-mail.',
+  'pwaAuthFacebookLeaving': 'Redirection vers Facebook…',
+  'pwaAuthConnectedFacebook': 'Connecté avec Facebook',
+  'pwaAuthConnectedPhone': 'Connecté par téléphone',
+  'pwaAuthConnectedEmail': 'Connecté par e-mail',
+  'pwaAuthMethodsTitle': 'Méthodes de connexion',
+  'pwaAuthMethodFacebook': 'Facebook',
+  'pwaAuthMethodPhone': 'Téléphone',
+  'pwaAuthMethodEmail': 'E-mail',
+  'pwaAuthAdd': 'Ajouter',
+  'pwaAuthGuestBody': 'Vos créations sont enregistrées sur cet appareil.',
+  'pwaAuthSecureCta': 'Sécuriser mon compte',
 
   // ── Errors ─────────────────────────────────────────────────────────────────
   'pwaErrSessionExpired':

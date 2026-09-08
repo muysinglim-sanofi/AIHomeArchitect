@@ -52,6 +52,36 @@ enum PwaVerificationFailure {
   /// The transport could not be reached.
   unavailable,
 
+  /// Another verification for this NUMBER is still in flight on a different
+  /// account (a `phone_change` that was started and abandoned minutes ago).
+  ///
+  /// GoTrue resolves a `phone_change` verification by NUMBER, not by session
+  /// (`verify.go`, `FindUserByPhoneChangeAndAudience`), so while such a row
+  /// exists the code could be checked against the wrong account. The backend
+  /// clears rows that are past their expiry; one still inside it is reported
+  /// here and the person is asked to wait rather than gamble.
+  destinationContested,
+
+  /// The verification finished on a DIFFERENT user than the one that started
+  /// it, on a journey that promised to keep the same user. The previous
+  /// session was restored and nothing was attached. Never silently accepted.
+  identityMismatch,
+
+  /// The person closed or refused the provider's own screen. Not an error to
+  /// apologise for — they changed their mind.
+  cancelled,
+
+  /// The provider (Facebook) did not share an email address, and GoTrue will
+  /// not attach an email-less social identity to an account that has no email
+  /// of its own (`linkIdentityToUser`, `internal/api/identity.go`). The
+  /// account is untouched; phone or email can still secure it.
+  providerNoEmail,
+
+  /// The provider flow could not run: switched off on the project, manual
+  /// linking disabled, a bad callback, a stale state. Configuration, not the
+  /// person — so the copy says "not available right now", not "wrong".
+  providerRefused,
+
   /// Anything else. The UI shows a generic message; the code is logged.
   unknown,
 }

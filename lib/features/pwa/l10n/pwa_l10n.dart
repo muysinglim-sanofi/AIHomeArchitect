@@ -37,6 +37,7 @@ import '../../../core/l10n/app_localizations.dart';
 import '../../../core/models/atmosphere_style.dart';
 import '../../../core/providers/locale_provider.dart';
 import 'pwa_translations.dart';
+import '../auth/pwa_auth_service.dart' show PwaAuthMethod;
 import '../auth/pwa_verification_channel.dart' show PwaVerificationFailure;
 import '../domain/pwa_project.dart' show PwaProjectSort;
 
@@ -802,21 +803,86 @@ class PwaL10n {
   String get accountBackToLink => _get('pwaAccountBackToLink');
   String get authUnavailable => _get('pwaAuthUnavailable');
 
+  // ── Cambodia auth: Facebook + phone first, email second ───────────────────
+  String get authSecureTitle => _get('pwaAuthSecureTitle');
+  String get authSecureBody => _get('pwaAuthSecureBody');
+  String get authSignInChooserBody => _get('pwaAuthSignInChooserBody');
+  String get authContinueFacebook => _get('pwaAuthContinueFacebook');
+  String get authContinuePhone => _get('pwaAuthContinuePhone');
+  String get authOr => _get('pwaAuthOr');
+  String get authUseEmail => _get('pwaAuthUseEmail');
+  String get authChooseAnother => _get('pwaAuthChooseAnother');
+  String get authPhoneTitle => _get('pwaAuthPhoneTitle');
+  String get authPhoneBody => _get('pwaAuthPhoneBody');
+  String get authPhoneSignInBody => _get('pwaAuthPhoneSignInBody');
+  String get authPhoneLabel => _get('pwaAuthPhoneLabel');
+  String get authPhoneHint => _get('pwaAuthPhoneHint');
+  String get authDialCodeLabel => _get('pwaAuthDialCodeLabel');
+  String get authContinue => _get('pwaAuthContinue');
+  String authPhoneCodeBody(String phone) =>
+      _get('pwaAuthPhoneCodeBody').replaceAll('{phone}', phone);
+  String get authChangePhone => _get('pwaAuthChangePhone');
+  String authResendIn(int seconds) =>
+      _get('pwaAuthResendIn').replaceAll('{seconds}', '$seconds');
+  String get authCodeExpiry => _get('pwaAuthCodeExpiry');
+  String get authWelcomeBack => _get('pwaAuthWelcomeBack');
+  String get authExistsFacebook => _get('pwaAuthExistsFacebook');
+  String get authExistsPhone => _get('pwaAuthExistsPhone');
+  String get authExistsEmail => _get('pwaAuthExistsEmail');
+  String get authContinueExisting => _get('pwaAuthContinueExisting');
+  String get authFacebookLeaving => _get('pwaAuthFacebookLeaving');
+  String get authConnectedFacebook => _get('pwaAuthConnectedFacebook');
+  String get authConnectedPhone => _get('pwaAuthConnectedPhone');
+  String get authConnectedEmail => _get('pwaAuthConnectedEmail');
+  String get authMethodsTitle => _get('pwaAuthMethodsTitle');
+  String get authMethodFacebook => _get('pwaAuthMethodFacebook');
+  String get authMethodPhone => _get('pwaAuthMethodPhone');
+  String get authMethodEmail => _get('pwaAuthMethodEmail');
+  String get authAdd => _get('pwaAuthAdd');
+  String get authGuestBody => _get('pwaAuthGuestBody');
+  String get authSecureCta => _get('pwaAuthSecureCta');
+
+  /// "This X already has an Ayden account", per method.
+  String authExistsFor(PwaAuthMethod m) => switch (m) {
+        PwaAuthMethod.facebook => authExistsFacebook,
+        PwaAuthMethod.phone => authExistsPhone,
+        PwaAuthMethod.email => authExistsEmail,
+      };
+
+  String authConnectedVia(PwaAuthMethod m) => switch (m) {
+        PwaAuthMethod.facebook => authConnectedFacebook,
+        PwaAuthMethod.phone => authConnectedPhone,
+        PwaAuthMethod.email => authConnectedEmail,
+      };
+
   /// A verification failure -> the sentence a person reads.
   ///
   /// `destinationAlreadyRegistered` is deliberately ABSENT: it is not an error
   /// message, it is a fork in the journey, and the sheet renders a whole screen
   /// for it. Anything that fell through to here would be mislabelled.
-  String verificationFailure(PwaVerificationFailure f) {
+  String verificationFailure(PwaVerificationFailure f,
+      {PwaAuthMethod method = PwaAuthMethod.email}) {
     switch (f) {
       case PwaVerificationFailure.invalidDestination:
-        return _get('pwaAuthErrInvalidEmail');
+        return method == PwaAuthMethod.phone
+            ? _get('pwaAuthErrInvalidPhone')
+            : _get('pwaAuthErrInvalidEmail');
       case PwaVerificationFailure.invalidCode:
         return _get('pwaAuthErrInvalidCode');
       case PwaVerificationFailure.rateLimited:
         return _get('pwaAuthErrRateLimited');
       case PwaVerificationFailure.unavailable:
         return _get('pwaAuthErrUnavailable');
+      case PwaVerificationFailure.destinationContested:
+        return _get('pwaAuthErrContested');
+      case PwaVerificationFailure.identityMismatch:
+        return _get('pwaAuthErrMismatch');
+      case PwaVerificationFailure.cancelled:
+        return _get('pwaAuthErrCancelled');
+      case PwaVerificationFailure.providerNoEmail:
+        return _get('pwaAuthErrNoEmail');
+      case PwaVerificationFailure.providerRefused:
+        return _get('pwaAuthErrProvider');
       case PwaVerificationFailure.destinationAlreadyRegistered:
       case PwaVerificationFailure.unknown:
         return _get('pwaAuthErrUnknown');

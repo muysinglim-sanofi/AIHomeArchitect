@@ -103,6 +103,7 @@ void main() {
       // would mean a language was never actually translated.
       const brandIdentical = {
         'pwaArchitectLabel', // AYDEN ARCHITECT
+        'pwaAuthMethodFacebook', // Facebook — a brand, in every language
       };
       for (final code in ['km', 'fr']) {
         final same = _dict(code).entries

@@ -422,7 +422,11 @@ void main() {
         'lib/features/pwa/presentation/pwa_paywall.dart',
       ]) {
         final src = File(f).readAsStringSync();
-        expect(src, contains('accountTitle'), reason: f);
+        // Profile's guest CTA became "Secure my account" with Cambodia auth
+        // (`authSecureCta`); the paywall and the header keep "Save my designs"
+        // at the moment work has just been made. Both are dictionary keys.
+        expect(src, anyOf(contains('accountTitle'), contains('authSecureCta')),
+            reason: f);
         expect(src, contains('accountSignInTitle'), reason: f);
       }
       // The question line belongs to the two surfaces with room for it.

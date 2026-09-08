@@ -418,8 +418,9 @@ void main() {
 
       final l = pwaL10nFor(const Locale('en'));
       expect(c.read(pwaAuthProvider).stage, PwaAuthStage.identified);
-      expect(find.text(l.accountLinkedTitle), findsOneWidget);
+      // Titled by the address, and says how it is connected (Cambodia auth).
       expect(find.text('someone@example.com'), findsOneWidget);
+      expect(find.text(l.authConnectedEmail), findsOneWidget);
       expect(find.text(l.accountGuestLabel), findsNothing);
       // Nothing left to save — the CTA is gone.
       expect(find.byKey(const ValueKey('pwa-profile-save-work')), findsNothing);
@@ -912,6 +913,14 @@ void main() {
     testWidgets('it opens, and starts no onboarding funnel', (tester) async {
       final c = await _pump(tester);
       final before = c.read(pwaControllerProvider).phase;
+      // The identity block above the settings grew (Cambodia auth: the guest
+      // card now says where the work lives), so the row sits below the 600 px
+      // test viewport. Scroll to it the way a reader does.
+      // The row sits under the bottom navigation bar on a 390×844 phone once
+      // the guest card says where the work lives (Cambodia auth). Scroll the
+      // way a reader does, then tap.
+      await tester.drag(find.byType(CustomScrollView).first, const Offset(0, -400));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('pwa-profile-guide')));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('pwa-guide-sheet')), findsOneWidget);
@@ -922,6 +931,11 @@ void main() {
 
     testWidgets('it can be replayed', (tester) async {
       await _pump(tester);
+      // The row sits under the bottom navigation bar on a 390×844 phone once
+      // the guest card says where the work lives (Cambodia auth). Scroll the
+      // way a reader does, then tap.
+      await tester.drag(find.byType(CustomScrollView).first, const Offset(0, -400));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('pwa-profile-guide')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('pwa-guide-replay')));

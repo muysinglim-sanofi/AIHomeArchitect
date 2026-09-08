@@ -48,6 +48,17 @@ class WebPwaUrlBridge implements PwaUrlBridge {
   }
 }
 
+/// The page's own origin (`https://preprod.aydenstudio.com`), for the OAuth
+/// `redirect_to` — GoTrue must send the browser back to THIS deployment, and
+/// deriving it from the page is the only way one bundle serves preview
+/// channels, preprod and live alike. It is an address, not a credential.
+String webPwaOrigin() => web.window.location.origin;
+
+/// The FULL boot URL, fragment included. `WebPwaUrlBridge.current` drops the
+/// fragment on purpose (routes never live there); the OAuth return does not
+/// have that luxury, because GoTrue still mirrors its errors into the hash.
+Uri webPwaBootUri() => Uri.parse(web.window.location.href);
+
 /// Real `window.sessionStorage` — survives F5, cleared when the tab closes, so
 /// the cinematic plays once per tab session (§7).
 class WebPwaSessionStore implements PwaSessionStore {

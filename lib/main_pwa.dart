@@ -30,8 +30,10 @@ import 'features/pwa/application/pwa_controller.dart';
 import 'features/pwa/application/pwa_intro_gate.dart';
 import 'features/pwa/application/pwa_route.dart';
 import 'features/pwa/application/pwa_url_bridge.dart';
+import 'features/pwa/auth/pwa_auth_availability.dart';
 import 'features/pwa/auth/pwa_auth_controller.dart';
 import 'features/pwa/auth/pwa_auth_service.dart';
+import 'features/pwa/auth/pwa_phone_otp_channel.dart';
 import 'features/pwa/billing/pwa_entitlement_controller.dart';
 import 'features/pwa/billing/pwa_payment_controller.dart';
 import 'features/pwa/config/pwa_environment.dart';
@@ -205,6 +207,17 @@ Future<void> _bootPwaStaging(
   PwaUrlBridge bridge,
   PwaRoute bootRoute,
 ) async {
+  // A Facebook round-trip lands on THIS boot. Read both halves of it BEFORE
+  // the SDK initialises: supabase_flutter exchanges a `?code=` during
+  // `Supabase.initialize` and reports a `#error_description=` through a
+  // stream nobody is subscribed to yet, so the URL is the only place the
+  // outcome can be read from. The hand-off is taken (read and cleared) in
+  // every case — a hand-off without a return is a flow the person abandoned,
+  // and it must not explain some later, unrelated reload.
+  final oauthReturn = PwaOAuthReturn.parse(webPwaBootUri());
+  final handoffStore = WebPwaSessionStore();
+  final oauthHandoff = PwaAuthHandoff.take(handoffStore);
+
   final client = await PwaStagingSupabaseClient.create(env);
   final installationId = await _pwaStagingInstallationId();
   final persistence = SupabasePwaPersistenceRepository(
@@ -232,8 +245,6 @@ Future<void> _bootPwaStaging(
   // construct its own. Both are null in mock builds, where there is no backend
   // to be honest with — and an auth UI that pretended otherwise would be a lie
   // the demo tells.
-  final auth = PwaAuthService(auth: client.client.auth);
-
   // Private images are rendered through short-lived signed URLs minted from the
   // durable path. The path is what is stored; this is only how a pixel arrives.
   final resolver = PwaImageUrlResolver(signer: persistence.signedImageUrl);
@@ -241,7 +252,45 @@ Future<void> _bootPwaStaging(
   final pendingStore = PwaPrefsPendingGenerationStore(
     await SharedPreferences.getInstance(),
   );
-  final base = await pwaResolveBootRestore(persistence, route: bootRoute);
+  // Which sign-in doors exist is the PROJECT's answer (`/auth/v1/settings`),
+  // read alongside the library restore rather than after it. Fails closed to
+  // email only, which is the screen that shipped before Cambodia auth.
+  final (base, providers) = await (
+    pwaResolveBootRestore(persistence, route: bootRoute),
+    fetchPwaAuthProviders(
+      supabaseUrl: env.supabaseUrl!,
+      publishableKey: env.publishableKey!,
+    ),
+  ).wait;
+
+  final auth = PwaAuthService(
+    auth: client.client.auth,
+    providers: providers,
+    // The phone link's PREPARE step: the backend clears expired
+    // `phone_change` rows for the number and reports any still live.
+    phoneLinkChannel: providers.phone
+        ? PwaPhoneOtpChannel.linkNewIdentity(
+            client.client.auth,
+            prepare: (e164) async {
+              final r = await api.preparePhoneLink(e164);
+              return PwaPhonePrepareResult(
+                ok: r['ok'] == true,
+                contested: (r['contested'] as num?)?.toInt() ?? 0,
+                cleared: (r['cleared'] as num?)?.toInt() ?? 0,
+              );
+            },
+          )
+        : null,
+    handoffStore: handoffStore,
+    // GoTrue sends the browser back HERE. Profile is where the outcome is
+    // shown; the origin is the page's own, so preview, preprod and live each
+    // come back to themselves. It must be in the project's redirect
+    // allow-list (`uri_allow_list`), or GoTrue falls back to its site URL.
+    oauthRedirectTo: '${webPwaOrigin()}/profile',
+    projectIds: () => [for (final s in base.library) s.projectId],
+    bootHandoff: oauthHandoff,
+    bootReturn: oauthReturn,
+  );
   // A generation that was in flight when the tab was reloaded. Carried into the
   // restore so the controller can replay it with the SAME key on the first
   // frame — the backend then returns the vision it already made, if it made one.

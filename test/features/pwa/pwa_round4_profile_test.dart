@@ -239,7 +239,7 @@ void main() {
       expect(find.text(l.accountGuestLabel), findsOneWidget);
       expect(find.byKey(const ValueKey('pwa-profile-save-work')), findsOneWidget);
       expect(find.byKey(const ValueKey('pwa-profile-sign-in')), findsOneWidget);
-      expect(find.text(l.accountTitle), findsOneWidget); // Save my designs
+      expect(find.text(l.authSecureCta), findsOneWidget); // Secure my account
       expect(find.text(l.accountSignInTitle), findsOneWidget); // Sign in
       // Spaces: the server's figure, and the voluntary door to more.
       expect(find.text(l.passSpacesLeft(300)), findsOneWidget);
@@ -292,8 +292,12 @@ void main() {
       await _pump(tester, c);
       final l = pwaL10nFor(const Locale('en'));
 
+      // The card is titled by the account's own label (the address) and says
+      // HOW it is connected; "Your work is saved" is the sheet's line, not
+      // the profile's, since Cambodia auth.
       expect(find.text('someone@example.com'), findsOneWidget);
-      expect(find.text(l.accountLinkedTitle), findsOneWidget);
+      expect(find.text(l.authConnectedEmail), findsOneWidget);
+      expect(find.byKey(const ValueKey('pwa-profile-methods')), findsOneWidget);
       expect(find.byKey(const ValueKey('pwa-profile-save-work')), findsNothing);
       expect(find.byKey(const ValueKey('pwa-profile-sign-in')), findsNothing);
       expect(find.text(l.passSpacesLeft(300)), findsOneWidget);

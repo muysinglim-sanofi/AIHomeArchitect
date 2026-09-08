@@ -489,6 +489,36 @@ class PwaGenerationApi {
     }
   }
 
+  /// Before a phone is attached: ask the backend to clear EXPIRED
+  /// `phone_change` rows for this number and to count any still live on other
+  /// accounts. See `PwaPhoneOtpChannel` for why that step exists.
+  ///
+  /// Fails OPEN as `ok: false`: an unreachable backend must not stop a person
+  /// from securing their account, because the user-id check after
+  /// verification still refuses a wrong-account result. It only loses the
+  /// early "please wait" warning.
+  Future<Map<String, Object?>> preparePhoneLink(String e164) async {
+    const silent = <String, Object?>{'ok': false};
+    if (_disposed) return silent;
+    final token = await _tokenProvider();
+    if (token == null || token.isEmpty) return silent;
+    try {
+      final res = await _dio.post<Object?>(
+        '$_prefix/auth/phone/prepare',
+        data: {'phone': e164},
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          receiveTimeout: const Duration(seconds: 15),
+        ),
+      );
+      final code = res.statusCode ?? 0;
+      if (code < 200 || code >= 300 || res.data is! Map) return silent;
+      return {'ok': true, ...(res.data! as Map).cast<String, Object?>()};
+    } catch (_) {
+      return silent;
+    }
+  }
+
   /// The stateless verify SECOND call — free, and never on the critical path.
   ///
   /// Mobile fires it after the image is already on screen and shows a report

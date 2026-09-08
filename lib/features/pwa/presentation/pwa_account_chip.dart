@@ -38,9 +38,11 @@ class PwaAccountChip extends ConsumerWidget {
 
     final fg = onDark ? const Color(0xFFF4F1EC) : const Color(0xFF1C1917);
     final identified = auth.stage == PwaAuthStage.identified;
-    final label = identified && auth.email.isNotEmpty
-        ? l.accountSignedInAs(auth.email)
-        : l.accountGuestLabel;
+    // The account's own label — a name, an email, a MASKED phone. An account
+    // with no email is still an account; it used to read as "Guest" here.
+    final label = identified && auth.identityLabel.isNotEmpty
+        ? l.accountSignedInAs(auth.identityLabel)
+        : (identified ? l.accountLinkedTitle : l.accountGuestLabel);
     // Someone whose free vision is spent should be able to find that out — and
     // do something about it — without first uploading a photo and being turned
     // away. Offered in this menu, so it is available and never in the way (§8).

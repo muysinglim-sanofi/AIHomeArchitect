@@ -217,6 +217,10 @@ void main() {
       // The probe says this cannot happen. If it ever did, the UI must not keep
       // promising "your work is saved" — so the promise is derived from the
       // measurement, not from the journey.
+      // Cambodia auth (2026-09-08) hardened this further: a LINK that came
+      // back as a different user is not a success of any kind. It is refused
+      // as `identityMismatch`, the previous session is restored, and nothing
+      // is claimed — see AUTH26 in pwa_auth_cambodia_test.dart.
       final auth = _FakeAuth(userId: 'u-42');
       final link = _FakeChannel(
           onVerified: () => auth.becomeDifferentUser('u-99', 'me@example.com'));
@@ -225,7 +229,9 @@ void main() {
       final state = await s.submitCode('me@example.com', '123456');
 
       expect(state.identityPreserved, isFalse);
-      expect(state.switchedAccount, isTrue);
+      expect(state.switchedAccount, isFalse);
+      expect(state.stage, isNot(PwaAuthStage.identified));
+      expect(state.failure, PwaVerificationFailure.identityMismatch);
     });
 
     test(
@@ -411,9 +417,13 @@ void main() {
       await tester.tap(find.text(l.accountSend));
       await tester.pumpAndSettle();
 
-      expect(find.text(l.accountExistsTitle), findsOneWidget);
+      // Cambodia auth: the fork reads "Welcome back" for every method, names
+      // the method, keeps the rule that guest work stays put, and offers the
+      // sign-in as ONE explicit action.
+      expect(find.text(l.authWelcomeBack), findsOneWidget);
+      expect(find.text(l.authExistsEmail), findsOneWidget);
       expect(find.text(l.accountExistsBody), findsOneWidget);
-      expect(find.text(l.accountSignInInstead), findsOneWidget);
+      expect(find.text(l.authContinueExisting), findsOneWidget);
       expect(find.text(l.accountChangeEmail), findsOneWidget);
     });
 
