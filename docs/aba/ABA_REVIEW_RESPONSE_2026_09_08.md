@@ -39,13 +39,14 @@ lifetime ~320-325), PWA `pwa_payment_controller.dart` (~224-256) and
 
 Unchanged in this pass: polling interval and lifetime (ABA did not object to them).
 
-## Open point for ABA (needed to confirm item 2 end to end)
+## Verified with a real sandbox payment (2026-09-08, tran `Ad0b4f40c21180850350`)
 
-With `skip_success_page=1` and no `continue_success_url` in the request, the documentation
-says the merchant-profile "Success URL for Web Continuation" is used. If that field is
-**empty** on the sandbox merchant, ABA's popup closes in place after payment and Ayden's
-own success screen follows; if it is **set**, the plugin navigates the page away. We
-therefore ask ABA to confirm the profile value (see message).
+With `skip_success_page=1` and no `continue_success_url` in the request, ABA's checkout
+closed in place after the approval (no ABA success page, no page navigation) and Ayden's
+own success screen followed; Check Transaction APPROVED, exactly one credit grant. Per the
+documentation this relies on the merchant-profile "Success URL for Web Continuation" being
+empty, which is evidently the case on the sandbox merchant; the message asks ABA to keep it
+so for production.
 
 ## Message for the ABA Telegram group
 
@@ -62,7 +63,7 @@ therefore ask ABA to confirm the profile value (see message).
 > • Stop conditions: we stop on the first definitive answer — APPROVED (we verify amount and currency, credit the customer once, and mark the order granted), DECLINED / CANCELLED / REFUNDED (order failed), a "transaction not found" answer more than 30 seconds after checkout (order failed), the customer cancelling (one last check first), or our transaction lifetime expiring (one last check, then expired). Your pushback, once its signature is verified, triggers one immediate Check Transaction and settles the order on our side.
 > • Maximum duration: 30 minutes per transaction (the lifetime we send in the Purchase request), i.e. at most about 450 calls per transaction. If the customer closes the browser, polling stops with it.
 >
-> One question for skip_success_page: our request sends no continue_success_url, so per your documentation the profile-level "Success URL for Web Continuation" applies. Could you confirm that this field is empty for our sandbox merchant (and will be for production), so that the checkout closes in place after payment?
+> We tested skip_success_page = 1 with a sandbox payment today: your checkout closes in place after approval and our own success screen follows. Our request sends no continue_success_url, so the profile-level "Success URL for Web Continuation" applies — could you please keep that field empty for our production merchant as well, so the behaviour stays the same?
 >
 > Preprod URL for your review: https://preprod.aydenstudio.com
 > Thank you again — we look forward to your feedback.

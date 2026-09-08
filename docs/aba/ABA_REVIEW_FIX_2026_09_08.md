@@ -38,14 +38,24 @@ Deployed: preprod bundle `main.dart.js` sha256 `ebd2b850…` (Firebase site
 `ayden-studio-preprod`), backend Fly `ayden-api-staging` release **v11**; `/config`
 unchanged (sandbox, `abapay_khqr`).
 
-## What remains unverified live
+## Live end-to-end with a real sandbox payment (2026-09-08, `Ad0b4f40c21180850350`)
 
-`skip_success_page=1` end to end needs a real sandbox payment. Per the PayWay docs, with no
-`continue_success_url` in the request the **merchant-profile** "Success URL for Web
-Continuation" applies: empty → the plugin closes in place and Ayden's success card follows;
-set → the plugin navigates the page away (SPA reload; balance correct, success card not
-guaranteed). The question is in the ABA message. A fresh QR is issued for Mike at the end
-of this pass; nothing is simulated.
+The product owner scanned the KHQR issued from the driven mobile browser (iPhone UA,
+`skip_success_page=1` in the posted form). Observed and recorded:
+
+| Step | Result |
+|---|---|
+| PayWay | Check Transaction `00` **APPROVED** code 0, 4.99 USD |
+| Settlement | 1 order PAID, 1 payment SUCCESS, **exactly 1 GRANT +10**, user total 1 GRANT; recount minutes later unchanged |
+| Entitlement (same guest) | before `credits_available 1 / pass 0 / free` → after `credits_available 10 / pass_credits 10 / access_source pass / watermarked false` |
+| ABA success page | **skipped**: the sheet slid away on its own (`aria-hidden=true`), no ABA "Success" screen |
+| SPA | **no reload, no navigation** (single `navigate` entry, 1071 s since load) — so the sandbox merchant profile has no "Success URL for Web Continuation"; production must match (asked in the ABA message) |
+| Ayden | the paywall closed and the success card appeared once, **without ABA KHQR header** (`F1`, `F2`); Profile reads "10 spaces left" (`F3`); footer present; no duplicate success screen, no stuck overlay |
+
+Timing (rail row, UTC): QR issued 08:32:38.9 → signed pushback received 08:35:15.5
+(`callback_count 1`, signature OK) → forced Check Transaction 08:35:16.3 (37th check) →
+ledger GRANT 08:35:16.9 → `granted_at` 08:35:17.0. Pushback to grant: 1.5 s; the browser
+read GRANTED on its next poll and showed the success card.
 
 ## Tests and gates (all exit 0)
 
