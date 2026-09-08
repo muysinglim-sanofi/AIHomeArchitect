@@ -154,19 +154,38 @@ def _scan(paths, needles: dict[str, str], *, label: str,
           binary_ok: bool = True) -> list[str]:
     """Return the HITS as 'path: which needle' — never the needle's value."""
     hits = []
+    # Files are read in WINDOWS, not whole: `backend.log` is 2.2 GB and a
+    # single `read_bytes()` of it raised MemoryError (2026-09-08), which
+    # turned the scan into a crash instead of a verdict. Each window overlaps
+    # the previous by more than the longest needle, so a value straddling a
+    # boundary is still seen exactly once per window pair.
+    window = 32 * 1024 * 1024
+    overlap = max((len(v.encode("utf-8")) for v in needles.values() if v),
+                  default=0) + 16
+    pending = {name: value.encode("utf-8") for name, value in needles.items() if value}
     for path in paths:
         if not path.is_file():
             continue
+        found: set[str] = set()
         try:
-            blob = path.read_bytes()
+            with path.open("rb") as fh:
+                head = fh.read(1024)
+                if not binary_ok and b"\x00" in head:
+                    continue
+                fh.seek(0)
+                tail = b""
+                while True:
+                    chunk = fh.read(window)
+                    if not chunk:
+                        break
+                    blob = tail + chunk
+                    for name, value in pending.items():
+                        if name not in found and value in blob:
+                            found.add(name)
+                    tail = blob[-overlap:] if overlap else b""
         except OSError:
             continue
-        if not binary_ok and b"\x00" in blob[:1024]:
-            continue
-        text = blob.decode("utf-8", "ignore")
-        for name, value in needles.items():
-            if value and value in text:
-                hits.append(f"{path.relative_to(path.anchor)}: {name}")
+        hits.extend(f"{path.relative_to(path.anchor)}: {name}" for name in sorted(found))
     del label
     return hits
 

@@ -181,6 +181,14 @@ def main() -> None:
     canonical.app.include_router(pwa_staging_api.router)
     print('[pwa-staging] adapter mounted at /pwa/staging')
 
+    # 5a) Web auth helpers (Cambodia auth, 2026-09-08): the phone-link PREPARE
+    #     step that releases stale `auth.users.phone_change` rows. Mounted here
+    #     for the same reason as the adapter. Nothing in main.py changes.
+    import pwa_staging_auth_api  # noqa: PLC0415
+
+    canonical.app.include_router(pwa_staging_auth_api.router)
+    print('[pwa-staging] auth      : phone/prepare mounted')
+
     # 5b) The KHQR payment rail (ABA PayWay SANDBOX). Mounted here for the same
     #     reason as the adapter: `main.py` stays byte-identical and the mobile
     #     launch path gains no payment endpoint.
