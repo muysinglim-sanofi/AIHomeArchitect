@@ -35,3 +35,10 @@ par ABA lors de la revue marchand (copies pristines dans `docs/aba/official/`). 
 rendus générés utilisés pour la première revue préprod ont été retirés de l'UI active ;
 leur historique reste dans `REJECTED_AI_GENERATED/README.md`. Les captures antérieures
 au 2026-09-08 montrent donc l'ancienne marque.
+
+## Revue ABA round 2 (2026-09-08) — copie PayWay retirée, libellé « Payment method »
+
+Hors dépôt : les deux captures desktop prises pendant que le popup ABA était ouvert
+(QR KHQR sandbox scannable, transaction annulée ensuite). Les captures conservées dans
+`shots/copy-2026-09-08/` (Wallet mobile/desktop, ligne d'état, carte de verdict) ne
+contiennent aucun QR.

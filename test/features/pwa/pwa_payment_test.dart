@@ -2331,6 +2331,58 @@ void main() {
       await _teardown(tester);
     });
 
+    testWidgets('WAL04 / ABA-REVIEW-14 "Payment method" titles the ABA KHQR '
+        'card: directly above it, once, and the card itself is untouched',
+        (tester) async {
+      await pumpWallet(tester, onStatus: _pluginServer);
+      final l = pwaL10nFor(const Locale('en'));
+      // The exact English label ABA asked for, once — no duplicate heading.
+      expect(l.payMethodTitle, 'Payment method');
+      expect(find.text('Payment method'), findsOneWidget);
+      final title = find.byKey(const ValueKey('pwa-paywall-method-title'));
+      expect(title, findsOneWidget);
+      expect(find.descendant(of: title, matching: find.text('Payment method')),
+          findsOneWidget);
+      // Directly above the card: nothing between the two, left edges
+      // aligned, the gap a single small step.
+      final row = find.byKey(const ValueKey('pwa-aba-method-row'));
+      expect(row, findsOneWidget);
+      final t = tester.getRect(title);
+      final r = tester.getRect(row);
+      expect(t.bottom, lessThanOrEqualTo(r.top));
+      expect(r.top - t.bottom, lessThan(16)); // under one PwaGap.md step
+      expect((t.left - r.left).abs(), lessThan(4));
+      for (final text in tester.widgetList<Text>(find.byType(Text))) {
+        final rect = tester.getRect(find.byWidget(text));
+        final between = rect.top >= t.bottom - 0.5 && rect.bottom <= r.top + 0.5;
+        expect(between, isFalse,
+            reason: '"${text.data}" sits between the title and the card');
+      }
+      // The card is ABA's, unchanged: their tile, their name, their line.
+      expect(find.descendant(of: row,
+              matching: find.byKey(const ValueKey('pwa-aba-method-mark'))),
+          findsOneWidget);
+      expect(find.descendant(of: row, matching: find.text('ABA KHQR')),
+          findsOneWidget);
+      expect(find.descendant(of: row,
+              matching: find.text('Scan to pay with any banking app')),
+          findsOneWidget);
+      // And the title is a title — not a provider sentence.
+      expect(l.payMethodTitle.contains('ABA'), isFalse);
+      expect(l.payMethodTitle.contains('PayWay'), isFalse);
+      // Localised, not left in English, in the other two languages.
+      for (final code in ['fr', 'km']) {
+        final other = pwaL10nFor(Locale(code)).payMethodTitle;
+        expect(other, isNotEmpty, reason: code);
+        expect(other.startsWith('pwa'), isFalse, reason: code);
+        expect(other, isNot('Payment method'), reason: code);
+      }
+      expect(pwaL10nFor(const Locale('fr')).payMethodTitle,
+          'Moyen de paiement');
+      expect(tester.takeException(), isNull);
+      await _teardown(tester);
+    });
+
     testWidgets('DM05/DM06 Ayden builds no checkout iframe; the plugin does',
         (tester) async {
       for (final path in [

@@ -487,7 +487,23 @@ class _PwaPaywallSheetState extends ConsumerState<PwaPaywallSheet> {
                       // pay with. There is exactly one method, and the
                       // deployment enforces that at the source
                       // (`PAYWAY_PAYMENT_OPTION=abapay_khqr`), not by hiding
-                      // choices in this UI.
+                      // choices in this UI. Their second round asks for
+                      // the section to be titled — "Payment method",
+                      // directly above their card. A title, in the
+                      // sheet's quiet secondary tone: not a second heading
+                      // competing with the headline, and not a sentence
+                      // about the provider (those are gone, ABA04).
+                      Padding(
+                        key: const ValueKey('pwa-paywall-method-title'),
+                        padding:
+                            const EdgeInsets.only(left: 2, bottom: PwaGap.sm),
+                        child: Text(l.payMethodTitle,
+                            style: pwaSans(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: _pwPlanMuted,
+                                letterSpacing: 0.2)),
+                      ),
                       const PwaAbaMethodRow(tone: PwaMarkTone.dark),
                       const SizedBox(height: PwaGap.md),
                       // ONE call to action, for the pack that is selected. The
