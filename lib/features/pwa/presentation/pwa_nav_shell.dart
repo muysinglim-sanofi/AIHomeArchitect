@@ -27,7 +27,6 @@ library;
 import 'package:flutter/material.dart';
 
 import '../l10n/pwa_l10n.dart';
-import 'pwa_aba_marks.dart';
 import 'pwa_theme.dart';
 import 'pwa_type.dart';
 
@@ -129,11 +128,11 @@ class PwaBottomNav extends StatelessWidget {
       // the labels sit in the swipe area on a notched iPhone.
       child: SafeArea(
         top: false,
+        // The bar carries the three destinations and NOTHING else. The ABA
+        // acceptance lockup rode the Profile label here until ABA's merchant
+        // review (2026-09-08) asked for it in the website FOOTER; it now lives
+        // in the site footer widget, at the foot of each tab page.
         child: Row(
-          // TOP-ALIGNED, because one column is taller than the others. Profile
-          // carries the payment acceptance mark beneath it; stretching the
-          // other two to match would push Home and Projects off their baseline.
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (final entry in items.entries)
               Expanded(
@@ -144,35 +143,6 @@ class PwaBottomNav extends StatelessWidget {
                   selected: entry.key == current,
                   enabled: _on(entry.key),
                   onTap: () => onSelect(entry.key),
-                  // THE ACCEPTANCE MARK, AND THE ONE PLACE IT LIVES.
-                  //
-                  // It belongs to the navigation bar, not to a strip above it.
-                  // An earlier pass added a standalone full-width row between
-                  // the page and the nav on Home and on Profile; it read as a
-                  // banner bolted onto the product and was rejected. Putting it
-                  // inside the shared bar means every screen that already has
-                  // the bar inherits it, no screen grows a second footer, and no
-                  // screen has to opt in.
-                  //
-                  // It sits under PROFILE specifically: that is the account
-                  // corner of the product, which is where a person looks for who
-                  // they are paying and how.
-                  //
-                  // INLINE WITH THE LABEL — on the same line, to its right.
-                  //
-                  // Two earlier placements were rejected for the same reason in
-                  // different clothes. A sibling below the item inherited the
-                  // item's bottom padding as a gap and sat on the safe-area
-                  // edge; a second line inside the item's column still read as
-                  // a row of its own. Neither was a spacing problem: a lockup on
-                  // its own LINE is a footer, wherever that line happens to be.
-                  //
-                  // On the label's line it is what it should have been from the
-                  // start — trailing metadata belonging to the word "Profile",
-                  // costing the bar two pixels of height rather than a row.
-                  trailing: entry.key == PwaNavDestination.profile
-                      ? const PwaAcceptMark(height: 16)
-                      : null,
                 ),
               ),
           ],
@@ -190,13 +160,7 @@ class _NavItem extends StatelessWidget {
     required this.selected,
     required this.enabled,
     required this.onTap,
-    this.trailing,
   });
-
-  /// Secondary metadata set on the label's OWN LINE, immediately after it —
-  /// today, the payment acceptance mark beside Profile. It shares the label's
-  /// row, so it is positioned by the word and adds no row to the bar.
-  final Widget? trailing;
 
   final IconData icon;
   final IconData activeIcon;
@@ -230,28 +194,11 @@ class _NavItem extends StatelessWidget {
             children: [
               Icon(selected ? activeIcon : icon, size: 24, color: color),
               const SizedBox(height: 4),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // FLEXIBLE so the label yields first if a narrow phone ever
-                  // runs out of column. The mark is fixed and small; a label
-                  // that ellipsised by a character is a far smaller loss than a
-                  // lockup that wrapped to a second line, which is the exact
-                  // shape this placement exists to avoid.
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: PwaType.navigationLabel(color: color),
-                    ),
-                  ),
-                  if (trailing != null) ...[
-                    const SizedBox(width: 5),
-                    trailing!,
-                  ],
-                ],
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: PwaType.navigationLabel(color: color),
               ),
             ],
           ),

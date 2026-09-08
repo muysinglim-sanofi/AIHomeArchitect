@@ -237,10 +237,9 @@ void main() {
       final c = await _pump(tester, seed: false);
       expect(c.read(pwaControllerProvider).visibleProjects, isEmpty);
       expect(find.byKey(const ValueKey('pwa-projects-empty')), findsOneWidget);
-      // No demo projects in a person's own library, ever. The bottom bar's
-      // payment acceptance mark is not a project and is excluded by name —
-      // narrowing this rather than deleting it keeps the assertion that
-      // matters: an empty library shows no artwork of its own.
+      // No demo projects in a person's own library, ever. The footer's
+      // payment acceptance lockup is an SVG picture, not an Image, so it never
+      // trips this; the key exclusion is kept for the day it becomes one.
       final strays = tester
           .widgetList<Image>(find.byType(Image))
           .where((i) => i.key != const ValueKey('pwa-accept-mark'));
@@ -470,5 +469,26 @@ void main() {
         },
       );
     }
+  });
+
+
+  // ABA merchant review (2026-09-08): the "We accept" lockup lives in the
+  // website FOOTER of each tab page, reached by scrolling, never pinned.
+  group('website footer', () {
+    testWidgets('FOOT01 the footer is on the projects page, once (empty and grid)',
+        (tester) async {
+      for (final seed in [false, true]) {
+        await _pump(tester, seed: seed);
+        final footer = find.byKey(const ValueKey('pwa-site-footer'));
+        await tester.scrollUntilVisible(footer, 200,
+            scrollable: find.byType(Scrollable).first);
+        await tester.pump();
+        expect(footer, findsOneWidget);
+        expect(find.byKey(const ValueKey('pwa-accept-mark')), findsOneWidget);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      }
+    });
   });
 }

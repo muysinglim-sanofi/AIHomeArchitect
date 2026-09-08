@@ -314,7 +314,7 @@ const Map<String, String> pwaEnTranslations = {
   'pwaPayOpenInNewTab': 'Open ABA PayWay in a new tab',
   'pwaAcceptWeAccept': 'We accept',
   'pwaPayMethodTitle': 'Payment method',
-  'pwaPayMethodBody': 'Scan to pay with any banking app that supports KHQR.',
+  'pwaPayMethodBody': 'Scan to pay with any banking app',
   'pwaPayLinkExpiredTitle': 'This payment link has expired',
   'pwaPayLinkExpiredBody':
       'ABA payment links are only valid for a few minutes. Nothing was '
@@ -710,7 +710,7 @@ const Map<String, String> pwaKmTranslations = {
   'pwaPayOpenInNewTab': 'បើក ABA PayWay ក្នុង​ផ្ទាំង​ថ្មី',
   'pwaAcceptWeAccept': 'យើង​ទទួល',
   'pwaPayMethodTitle': 'មធ្យោបាយ​ទូទាត់',
-  'pwaPayMethodBody': 'ស្កេន​ដើម្បី​ទូទាត់​ដោយ​កម្មវិធី​ធនាគារ​ណា​មួយ​ដែល​គាំទ្រ KHQR។',
+  'pwaPayMethodBody': 'ស្កេន​ដើម្បី​ទូទាត់​ដោយ​កម្មវិធី​ធនាគារ​ណា​មួយ',
   'pwaPayLinkExpiredTitle': 'តំណ​ទូទាត់​នេះ​ផុត​កំណត់​ហើយ',
   'pwaPayLinkExpiredBody':
       'តំណ​ទូទាត់ ABA មាន​សុពលភាព​តែ​ប៉ុន្មាន​នាទី​ប៉ុណ្ណោះ។ គ្មាន​ការ​កាត់​ប្រាក់​ទេ — '
@@ -1109,7 +1109,7 @@ const Map<String, String> pwaFrTranslations = {
   'pwaAcceptWeAccept': 'Nous acceptons',
   'pwaPayMethodTitle': 'Moyen de paiement',
   'pwaPayMethodBody':
-      'Scannez pour payer avec une application bancaire compatible KHQR.',
+      'Scannez pour payer avec n’importe quelle application bancaire',
   'pwaPayLinkExpiredTitle': 'Ce lien de paiement a expiré',
   'pwaPayLinkExpiredBody':
       'Les liens de paiement ABA ne sont valables que quelques minutes. Rien '

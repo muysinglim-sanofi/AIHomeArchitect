@@ -1,5 +1,11 @@
 # ABA KHQR — final preprod implementation
 
+> **Superseded in part on 2026-09-08 (ABA merchant review):** the acceptance lockup moved from the bottom
+> navigation to a website footer, the generated PNG marks were replaced by ABA's official SVGs, the
+> payment-option subtitle became "Scan to pay with any banking app", and the success card lost its
+> ABA KHQR header. See `ABA_REVIEW_FIX_2026_09_08.md`. Sections 6–7 below describe the earlier state.
+
+
 Option B. Compact Wallet modal. Acceptance mark integrated in the bottom
 navigation. Preprod / sandbox only, no production touched, no real payment.
 

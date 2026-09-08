@@ -1,10 +1,13 @@
-# Provenance record — AUTHORISED FOR PREPROD BY THE OWNER
+# Provenance record — SUPERSEDED BY ABA'S OFFICIAL ARTWORK
+
+**Status, 2026-09-08: ABA supplied its official SVG artwork in the merchant
+review (`docs/aba/official/`). The two generated PNGs below have been removed
+from `web/aba/` and are referenced by no UI code.** This file stays as the
+provenance record of the interim.
 
 **Status, 2026-09-05: the owner has reviewed the finding below and explicitly
-authorised these two files for the PREPROD ABA review.** They are back in
-`web/aba/` and are used by the footer. This file is kept as the provenance
-record, not as a block. It must be re-read before any PRODUCTION use, and the
-official ABA brand kit should still replace them.
+authorised these two files for the PREPROD ABA review.** They were in
+`web/aba/` and used by the footer until 2026-09-08.
 
 The original finding follows, unchanged.
 

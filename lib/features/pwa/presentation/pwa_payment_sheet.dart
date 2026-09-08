@@ -233,18 +233,27 @@ class _Header extends StatelessWidget {
     final price = payment.amountLabel.isNotEmpty
         ? payment.amountLabel
         : product.priceLabel;
+    // ABA merchant review (2026-09-08): "Please remove ABA KHQR on your
+    // success screen header." The method is named while a person is PAYING
+    // with it; once the payment has an outcome — granted, expired, cancelled,
+    // failed — the card is Ayden's, about Ayden's account, and carries no
+    // payment-method branding.
+    final showMethod = !payment.isTerminal;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const PwaAbaMethodMark(size: 26),
-            const SizedBox(width: 8),
-            // The method's own name, never translated.
-            Expanded(
-              child: Text('ABA KHQR',
-                  style: pwaSans(fontSize: 17, fontWeight: FontWeight.w700)),
-            ),
+            if (showMethod) ...[
+              const PwaAbaMethodMark(size: 26),
+              const SizedBox(width: 8),
+              // The method's own name, never translated.
+              Expanded(
+                child: Text('ABA KHQR',
+                    style: pwaSans(fontSize: 17, fontWeight: FontWeight.w700)),
+              ),
+            ] else
+              const Spacer(),
             // Always reachable, in every state. A payment card with no way out
             // is the one thing worse than a payment card that is too big.
             IconButton(

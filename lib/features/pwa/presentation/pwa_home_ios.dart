@@ -49,6 +49,7 @@ import 'pwa_language_switcher.dart';
 import 'pwa_nav_shell.dart';
 import 'pwa_primitives.dart';
 import 'pwa_scaffold.dart';
+import 'pwa_site_footer.dart';
 import 'pwa_theme.dart';
 import 'pwa_type.dart';
 import 'pwa_widgets.dart' show pwaAfterImage, pwaBeforeImage, pwaRoomDisplayLabel;
@@ -161,7 +162,17 @@ class PwaHomeIos extends ConsumerWidget {
                   onSeeAll: controller.openLibrary,
                 ),
               ),
-            const SliverToBoxAdapter(child: SizedBox(height: PwaGap.lg)),
+            // The website footer (ABA merchant review): the last thing on the
+            // page, at the foot of the viewport when the content is short and
+            // at the end of the scroll when it is not. It never touches the
+            // pinned "New design session" button, which is the scaffold's.
+            const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: PwaSiteFooter(),
+              ),
+            ),
           ],
             ),
           ),

@@ -36,8 +36,10 @@ import 'package:ai_home_architect/features/pwa/presentation/pwa_payment_sheet.da
 import 'package:ai_home_architect/features/pwa/presentation/pwa_aba_marks.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_nav_shell.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_paywall.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_site_footer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -202,6 +204,9 @@ Map<String, Object?> _pluginServer({
         'req_time': '20260905170000',
         'payment_option': 'abapay_khqr',
         'currency': 'USD',
+        // ABA merchant review (2026-09-08): ABA's own Success page is skipped;
+        // the server signs the flag and the browser relays it untouched.
+        'skip_success_page': '1',
       },
     };
   }
@@ -212,6 +217,10 @@ Widget _app(Widget child, {required List<Override> overrides, String locale = 'e
     ProviderScope(
       overrides: [
         localeProvider.overrideWith((ref) => LocaleNotifier(deviceLocale: locale)),
+        // The marks are drawn from the checked-in files, so what these tests
+        // render is the artwork ABA supplied — not a stub, not a network call.
+        pwaMarkLoaderProvider.overrideWithValue(
+            (asset) => SvgFileLoader(File('web/$asset'))),
         ...overrides,
       ],
       child: MaterialApp(
@@ -980,6 +989,59 @@ void main() {
       await _teardown(tester);
     });
 
+    testWidgets('ABA09 / ABA-REVIEW-08 the SUCCESS card carries no ABA KHQR '
+        'header', (tester) async {
+      // ABA merchant review (2026-09-08): "Please remove ABA KHQR on your
+      // success screen header." Once the payment has an outcome the card is
+      // Ayden's, about Ayden's account.
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final server = _FakeServer(checkoutAnswer: _server(state: 'GRANTED'));
+      final controller = PwaPaymentController(server.gateway, null);
+      await controller.start('pack_10');
+      await tester.pumpWidget(_app(
+        const PwaPaymentSheet(product: _pack),
+        overrides: [pwaPaymentProvider.overrideWith((ref) => controller)],
+      ));
+      await tester.pump();
+
+      final l = pwaL10nFor(const Locale('en'));
+      expect(find.text(l.payDoneTitle), findsOneWidget,
+          reason: 'this IS the success card');
+      expect(find.text('ABA KHQR'), findsNothing,
+          reason: 'no payment-method name on the success header');
+      expect(find.byKey(const ValueKey('pwa-aba-method-mark')), findsNothing,
+          reason: 'no ABA tile on the success header');
+      expect(find.byKey(const ValueKey('pwa-pay-close')), findsOneWidget,
+          reason: 'the way out stays');
+      expect(find.text(l.payStartDesigning), findsOneWidget);
+      expect(find.text(l.payMaybeLater), findsOneWidget);
+      await _teardown(tester);
+    });
+
+    testWidgets('ABA10 while a person is PAYING the method is still named',
+        (tester) async {
+      // The header change is scoped to outcomes: during the payment the tile
+      // and "ABA KHQR" remain, because that is what the person is paying with.
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final controller = awaiting();
+      await controller.start('pack_10');
+      await tester.pumpWidget(_app(
+        const PwaPaymentSheet(product: _pack),
+        overrides: [pwaPaymentProvider.overrideWith((ref) => controller)],
+      ));
+      await tester.pump();
+
+      expect(find.text('ABA KHQR'), findsOneWidget);
+      expect(find.byKey(const ValueKey('pwa-aba-method-mark')), findsOneWidget);
+      await _teardown(tester);
+    });
+
     testWidgets('ABA02 the QR shown is the SERVER-rendered image of ABA\'s '
         'payload', (tester) async {
       tester.view.physicalSize = const Size(390, 844);
@@ -1177,7 +1239,9 @@ void main() {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  // THE ACCEPTANCE MARK — one place, and that place is the navigation bar.
+  // THE ACCEPTANCE LOCKUP — ABA's OFFICIAL artwork, in the website FOOTER.
+  // ABA's merchant review (2026-09-08) asked for it there; it no longer rides
+  // the Profile label in the navigation bar.
   // ══════════════════════════════════════════════════════════════════════════
   group('acceptance mark', () {
     Widget navBar() => PwaBottomNav(
@@ -1185,7 +1249,7 @@ void main() {
           onSelect: (_) {},
         );
 
-    testWidgets('NAV01 the mark lives INSIDE the bottom navigation',
+    testWidgets('NAV01 the bottom navigation carries NO acceptance mark',
         (tester) async {
       tester.view.physicalSize = const Size(390, 200);
       tester.view.devicePixelRatio = 1.0;
@@ -1194,9 +1258,8 @@ void main() {
       await tester.pumpWidget(_app(navBar(), overrides: []));
       await tester.pump();
 
-      expect(find.byKey(const ValueKey('pwa-accept-mark')), findsOneWidget,
-          reason: 'the bar is the single container for the mark');
-      // The three destinations are still there and still readable.
+      expect(find.byKey(const ValueKey('pwa-accept-mark')), findsNothing,
+          reason: 'the lockup moved to the website footer');
       final l = pwaL10nFor(const Locale('en'));
       expect(find.text(l.shared.navHome), findsOneWidget);
       expect(find.text(l.shared.navProjects), findsOneWidget);
@@ -1204,53 +1267,81 @@ void main() {
       await _teardown(tester);
     });
 
-    testWidgets('NAV02 the mark is the SUPPLIED artwork, from web/aba/',
-        (tester) async {
+    testWidgets('NAV02 / ABA-REVIEW-03 the footer shows ABA\'s official '
+        'lockup, byte for byte, with a localised caption', (tester) async {
       tester.view.physicalSize = const Size(390, 200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(_app(navBar(), overrides: []));
-      await tester.pump();
+      for (final locale in ['en', 'km', 'fr']) {
+        await tester.pumpWidget(
+            _app(const PwaSiteFooter(), overrides: [], locale: locale));
+        await tester.pump();
 
-      final img =
-          tester.widget<Image>(find.byKey(const ValueKey('pwa-accept-mark')));
-      expect((img.image as NetworkImage).url, kPwaAcceptMarkAsset);
-      expect(kPwaAcceptMarkAsset, 'aba/we_accept_aba_khqr.png');
-      expect(kPwaAbaMethodMarkAsset, 'aba/aba_khqr_logo.png');
+        expect(find.byKey(const ValueKey('pwa-site-footer')), findsOneWidget);
+        // An SVG picture, never a raster stand-in.
+        expect(
+            tester.widget<SvgPicture>(
+                find.byKey(const ValueKey('pwa-accept-mark'))),
+            isNotNull);
+        // The lockup has no words of its own, so the caption is REQUIRED —
+        // and it is the dictionary's, in the page's language.
+        final l = pwaL10nFor(Locale(locale));
+        expect(find.text(l.acceptWeAccept), findsOneWidget);
+        await _teardown(tester);
+      }
 
-      // One image, not a re-typeset lockup: no separate "We accept" Text and
-      // no pill beside it. Splitting a third party's lockup is redrawing it.
-      expect(find.text('We accept'), findsNothing);
-      await _teardown(tester);
+      // The constants name the official files under web/aba/ …
+      expect(kPwaAcceptMarkAsset, 'aba/abakhqr-we-accept.svg');
+      expect(kPwaAbaMethodMarkAsset, 'aba/aba_khqr_payment_option.svg');
+      // … and the served files ARE the files ABA sent, unchanged.
+      expect(File('web/aba/abakhqr-we-accept.svg').readAsBytesSync(),
+          File('docs/aba/official/abakhqr-we-accept.svg').readAsBytesSync(),
+          reason: 'the We accept lockup must be ABA\'s file, byte for byte');
+      expect(File('web/aba/aba_khqr_payment_option.svg').readAsBytesSync(),
+          File('docs/aba/official/ABA BANK.svg').readAsBytesSync(),
+          reason: 'the payment-option tile must be ABA\'s file, byte for byte');
     });
 
-    testWidgets('NAV03 there is NO standalone acceptance strip anywhere',
-        (tester) async {
-      // The rejected pattern: a full-width row inserted between the page and
-      // the navigation. It was added to Home, Profile and the Wallet, and read
-      // as a banner bolted onto the product.
-      for (final path in [
-        'lib/features/pwa/presentation/pwa_home_ios.dart',
-        'lib/features/pwa/presentation/pwa_profile_ios.dart',
-        'lib/features/pwa/presentation/pwa_paywall.dart',
-        'lib/features/pwa/presentation/pwa_architect_screen.dart',
-        'lib/features/pwa/presentation/pwa_reveal_screen.dart',
+    testWidgets('NAV03 the footer is placed on each tab page, and the lockup '
+        'nowhere else', (tester) async {
+      String src(String path) => File(path).readAsStringSync();
+      const dir = 'lib/features/pwa/presentation/';
+      // One footer per page; Projects declares it in both of its branches
+      // (empty library, grid) and only ever renders one.
+      expect('PwaSiteFooter('.allMatches(src('${dir}pwa_home_ios.dart')).length,
+          1);
+      expect(
+          'PwaSiteFooter('.allMatches(src('${dir}pwa_profile_ios.dart')).length,
+          1);
+      expect(
+          'PwaSiteFooter('.allMatches(src('${dir}pwa_projects_ios.dart')).length,
+          2);
+      // Never in the Wallet, the payment card, the working screens, or the bar.
+      for (final f in [
+        'pwa_paywall.dart',
+        'pwa_payment_sheet.dart',
+        'pwa_architect_screen.dart',
+        'pwa_reveal_screen.dart',
+        'pwa_create_ios.dart',
+        'pwa_nav_shell.dart',
       ]) {
-        final f = File(path);
-        if (!f.existsSync()) continue;
-        final src = f.readAsStringSync();
-        expect(src.contains('PwaAcceptStrip'), isFalse,
-            reason: '$path must not host a standalone acceptance strip');
-        expect(src.contains('PwaAcceptMark'), isFalse,
-            reason: '$path must inherit the mark from PwaBottomNav, not '
-                'place its own');
+        final text = src('$dir$f');
+        expect(text.contains('PwaSiteFooter'), isFalse,
+            reason: '$f must not host the website footer');
+        expect(text.contains('PwaAcceptMark'), isFalse,
+            reason: '$f must not place the lockup on its own');
       }
-      // And exactly one file places it.
-      final nav = File('lib/features/pwa/presentation/pwa_nav_shell.dart')
-          .readAsStringSync();
-      expect('PwaAcceptMark('.allMatches(nav).length, 1,
-          reason: 'one placement, in the shared bar');
+      // The lockup widget is defined in one file and placed by exactly one.
+      final users = Directory(dir)
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .where((f) => f.readAsStringSync().contains('PwaAcceptMark('))
+          .map((f) => f.path.split(RegExp(r'[\\/]')).last)
+          .toList()
+        ..sort();
+      expect(users, ['pwa_aba_marks.dart', 'pwa_site_footer.dart']);
     });
 
     testWidgets('NAV04 the bar does not overflow on a small phone',
@@ -1271,73 +1362,50 @@ void main() {
       }
     });
 
-    testWidgets('NAV06 the mark is INLINE with the Profile label',
-        (tester) async {
-      // Two placements were rejected before this one, and for the same reason:
-      // a lockup on its OWN LINE reads as a footer, whether that line sits
-      // under the item or under the bar. It now shares the label's line.
-      //
-      // Measured, because "inline" is a geometry and nothing else: the mark's
-      // vertical centre must sit on the label's, and its left edge must be to
-      // the right of the label's right edge.
-      for (final size in [const Size(320, 200), const Size(390, 200),
-                          const Size(430, 200)]) {
-        tester.view.physicalSize = size;
-        tester.view.devicePixelRatio = 1.0;
-        addTearDown(tester.view.resetPhysicalSize);
-
-        await tester.pumpWidget(_app(navBar(), overrides: []));
-        await tester.pump();
-
-        final l = pwaL10nFor(const Locale('en'));
-        final label = tester.getRect(find.text(l.shared.navProfile));
-        final mark =
-            tester.getRect(find.byKey(const ValueKey('pwa-accept-mark')));
-
-        expect(mark.center.dy, closeTo(label.center.dy, 2.0),
-            reason: 'at ${size.width.toInt()}px the mark must sit ON the '
-                'label\'s line, not on a line of its own');
-        expect(mark.left, greaterThanOrEqualTo(label.right),
-            reason: 'it follows the word, it does not sit under it');
-        expect(mark.left - label.right, lessThanOrEqualTo(8.0),
-            reason: 'and it stays attached to it');
-
-        // The bar is the label's row plus the icon, and nothing else: the mark
-        // must not have bought itself a second row of height.
-        final bar = tester.getRect(find.byType(PwaBottomNav));
-        final home = tester.getRect(find.text(l.shared.navHome));
-        expect(bar.bottom - label.bottom,
-            closeTo(bar.bottom - home.bottom, 2.0),
-            reason: 'Profile must end where Home ends — no extra row');
-        await _teardown(tester);
-      }
-    });
-
-    testWidgets('NAV07 the mark is small enough to read as metadata',
-        (tester) async {
+    testWidgets('NAV06 the footer is metadata: small, captioned, and not a '
+        'control', (tester) async {
       tester.view.physicalSize = const Size(390, 200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(_app(navBar(), overrides: []));
+      await tester.pumpWidget(_app(const PwaSiteFooter(), overrides: []));
       await tester.pump();
 
-      final l = pwaL10nFor(const Locale('en'));
-      final label = tester.getRect(find.text(l.shared.navProfile));
-      final mark =
-          tester.getRect(find.byKey(const ValueKey('pwa-accept-mark')));
-
-      // 16 px tall by the artwork's own 3.23:1, so ~52 px wide — it rides the
-      // label's line and must never grow into a fourth destination.
+      final mark = tester.getRect(find.byKey(const ValueKey('pwa-accept-mark')));
+      final caption =
+          tester.getRect(find.byKey(const ValueKey('pwa-site-footer-caption')));
       expect(mark.height, lessThanOrEqualTo(18.0),
-          reason: 'trust metadata, not a destination');
-      expect(label.width + 5 + mark.width, lessThan(390 / 3),
-          reason: 'label and mark together must fit the Profile column');
+          reason: 'a footer mark, not a banner');
+      expect(mark.width, greaterThan(mark.height * 3),
+          reason: 'the 72:20 lockup keeps its own proportions');
+      expect(caption.right, lessThanOrEqualTo(mark.left),
+          reason: 'the caption reads first, then the lockup');
+      expect((caption.center.dy - mark.center.dy).abs(), lessThan(3.0),
+          reason: 'one line');
+      final footer = find.byKey(const ValueKey('pwa-site-footer'));
+      expect(find.descendant(of: footer, matching: find.byType(InkWell)),
+          findsNothing);
+      expect(
+          find.descendant(of: footer, matching: find.byType(GestureDetector)),
+          findsNothing);
       await _teardown(tester);
     });
 
-    testWidgets('NAV05 Profile is still tappable with the mark beside it',
-        (tester) async {
+    testWidgets('NAV07 in production the marks are fetched same-origin from '
+        'web/aba/, and a missing file draws nothing', (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final loader =
+          container.read(pwaMarkLoaderProvider)(kPwaAcceptMarkAsset);
+      expect(loader, isA<PwaSvgUrlLoader>());
+      expect((loader as PwaSvgUrlLoader).url, 'aba/abakhqr-we-accept.svg');
+      // The trap this loader exists for: an error page handed to the SVG
+      // parser fails a widget test asynchronously even with an errorBuilder.
+      // Anything but a 200 becomes an empty picture instead.
+      expect(loader.provideSvg(null), contains('viewBox="0 0 0 0"'));
+    });
+
+    testWidgets('NAV05 Profile is still tappable', (tester) async {
       tester.view.physicalSize = const Size(390, 200);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -1355,9 +1423,35 @@ void main() {
       final l = pwaL10nFor(const Locale('en'));
       await tester.tap(find.text(l.shared.navProfile));
       await tester.pump();
-      expect(taps, [PwaNavDestination.profile],
-          reason: 'the mark must not steal the destination\'s hit target');
+      expect(taps, [PwaNavDestination.profile]);
       await _teardown(tester);
+    });
+
+    testWidgets('ABA-REVIEW-04 no generated ABA artwork is served or used',
+        (tester) async {
+      // The AI-generated PNG stand-ins of the first preprod review are gone
+      // from the served folder and from every Dart file.
+      final served = Directory('web/aba')
+          .listSync()
+          .whereType<File>()
+          .map((f) => f.path.split(RegExp(r'[\\/]')).last)
+          .toList()
+        ..sort();
+      expect(served, ['aba_khqr_payment_option.svg', 'abakhqr-we-accept.svg']);
+      final dart = Directory('lib/features/pwa')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .map((f) => f.readAsStringSync())
+          .join('\n');
+      for (final generated in [
+        'we_accept_aba_khqr',
+        'aba_khqr_logo',
+        'aba/we_accept',
+      ]) {
+        expect(dart.contains(generated), isFalse,
+            reason: 'the generated mark "$generated" must not be referenced');
+      }
     });
   });
 
@@ -1419,6 +1513,39 @@ void main() {
       expect('showPwaPaymentSheet('.allMatches(paywall).length, 1,
           reason: 'one checkout CTA on the Wallet, and it is Buy');
     });
+
+    testWidgets('WAL03 / ABA-REVIEW-01+02 the row follows ABA\'s payment '
+        'option format: their tile, "ABA KHQR", their one-line description',
+        (tester) async {
+      tester.view.physicalSize = const Size(390, 400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      await tester.pumpWidget(_app(
+        const PwaAbaMethodRow(tone: PwaMarkTone.dark),
+        overrides: [],
+      ));
+      await tester.pump();
+
+      // ABA's official tile, as an SVG picture of the file they supplied.
+      final tile = tester.widget<SvgPicture>(
+          find.byKey(const ValueKey('pwa-aba-method-mark')));
+      expect(tile, isNotNull);
+      expect(find.text('ABA KHQR'), findsOneWidget);
+      // The exact description, in English, with nothing added.
+      final en = pwaL10nFor(const Locale('en'));
+      expect(en.payMethodBody, 'Scan to pay with any banking app');
+      expect(find.text('Scan to pay with any banking app'), findsOneWidget);
+      expect(find.textContaining('supports KHQR'), findsNothing);
+      // Khmer and French say the same thing, translated, without the old tail.
+      for (final locale in ['km', 'fr']) {
+        final l = pwaL10nFor(Locale(locale));
+        expect(l.payMethodBody, isNot(en.payMethodBody));
+        expect(l.payMethodBody.contains('KHQR'), isFalse,
+            reason: 'the "that supports KHQR" tail is gone in $locale too');
+      }
+      await _teardown(tester);
+    });
   });
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1459,7 +1586,11 @@ void main() {
         'req_time': '20260905170000',
         'payment_option': 'abapay_khqr',
         'currency': 'USD',
+        'skip_success_page': '1',
       });
+      // ABA-REVIEW-05 (PWA side): the flag reaches the plugin as the server
+      // signed it — the client never decides what ABA shows after payment.
+      expect(plugin.launches.single.fields['skip_success_page'], '1');
       expect(controller.lastPluginLaunch, PwaAbaPluginLaunch.launched);
       expect(controller.state.state, PwaPaymentState.awaitingPayment,
           reason: 'opening the popup is not a payment');

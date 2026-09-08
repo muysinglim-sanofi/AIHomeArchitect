@@ -535,4 +535,20 @@ void main() {
       });
     }
   });
+
+
+  // ABA merchant review (2026-09-08): the "We accept" lockup lives in the
+  // website FOOTER of each tab page, reached by scrolling, never pinned.
+  group('website footer', () {
+    testWidgets('FOOT01 the footer is on the home page, once', (tester) async {
+      await _pump(tester, size: const Size(390, 844));
+      final footer = find.byKey(const ValueKey('pwa-site-footer'));
+      await tester.scrollUntilVisible(footer, 200,
+          scrollable: find.byType(Scrollable).first);
+      await tester.pump();
+      expect(footer, findsOneWidget);
+      expect(find.byKey(const ValueKey('pwa-accept-mark')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

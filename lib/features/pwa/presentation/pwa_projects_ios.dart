@@ -53,6 +53,7 @@ import 'pwa_nav_shell.dart';
 import 'pwa_primitives.dart';
 import 'pwa_projects_screen.dart' show PwaProjectCardMenu;
 import 'pwa_scaffold.dart';
+import 'pwa_site_footer.dart';
 import 'pwa_theme.dart';
 import 'pwa_type.dart';
 import 'pwa_widgets.dart' show pwaAfterImage, pwaRoomDisplayLabel;
@@ -140,9 +141,18 @@ class PwaProjectsIos extends ConsumerWidget {
               ),
             ),
             if (projects.isEmpty)
+              // One fill sliver, sharing the remaining height between the
+              // empty state and the footer at its foot (two consecutive fill
+              // slivers would not share it).
               SliverFillRemaining(
                 hasScrollBody: false,
-                child: _EmptyState(onCreate: controller.newProject),
+                child: Column(
+                  children: [
+                    Expanded(
+                        child: _EmptyState(onCreate: controller.newProject)),
+                    const PwaSiteFooter(),
+                  ],
+                ),
               )
             else ...[
               SliverPadding(
@@ -180,7 +190,15 @@ class PwaProjectsIos extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: PwaGap.xl)),
+              const SliverToBoxAdapter(child: SizedBox(height: PwaGap.md)),
+              // The website footer (ABA merchant review), last on the page.
+              const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: PwaSiteFooter(),
+                ),
+              ),
             ],
           ],
             ),

@@ -44,6 +44,7 @@ import 'pwa_paywall.dart';
 import 'pwa_profile_sheets.dart';
 import 'pwa_primitives.dart';
 import 'pwa_scaffold.dart';
+import 'pwa_site_footer.dart';
 import 'pwa_theme.dart';
 import 'pwa_type.dart';
 
@@ -88,10 +89,16 @@ class PwaProfileIos extends ConsumerWidget {
         child: Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: columnWidth),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                  PwaGap.page, PwaGap.lg, PwaGap.page, PwaGap.xl),
-              children: [
+            // A sliver list rather than a ListView, so the website footer can
+            // be anchored to the foot of the viewport on a short page and to
+            // the end of the scroll on a long one (ABA merchant review).
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(
+                      PwaGap.page, PwaGap.lg, PwaGap.page, PwaGap.md),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
                 Text(l.shared.profileTitle, style: PwaType.screenTitle()),
                 const SizedBox(height: PwaGap.lg),
                 _IdentityCard(
@@ -244,6 +251,16 @@ class PwaProfileIos extends ConsumerWidget {
                     ],
                   ),
                 ],
+                    ]),
+                  ),
+                ),
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: PwaSiteFooter(),
+                  ),
+                ),
               ],
             ),
           ),

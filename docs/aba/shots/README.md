@@ -22,6 +22,7 @@ le nom « Ayden Studio » et le montant étant décrits dans le texte.
 | `phase0/A-khqr-340.png`, `A-khqr-360.png`, `A-khqr-390.png`, `A-khqr-420.png`, `B-qrpage-340.png`, `B-qrpage-390.png` | `PHASE0_SPIKE_2026_09_05.md` |
 | `phone/E-wallet-modal.png` | (non citée) |
 | `../../preprod/iframe-khqr-only.png` | `REJECTED_AI_GENERATED/README.md` |
+| `review-2026-09-08/D1-mobile-plugin-sheet.png`, `review-2026-09-08/D2-desktop-plugin-popup.png` | `ABA_REVIEW_FIX_2026_09_08.md` |
 
 Également hors dépôt : les journaux CDP bruts `evidence/netlog-*.jsonl` (URLs de session
 checkout sandbox), remplacés par `evidence/e2e_network_2026_09_07.txt` (assaini), et les
@@ -29,6 +30,8 @@ copies de code tiers ABA (`checkout.prod.js.pretty.txt`, `aba_official_sample.ht
 
 ## Marques ABA / KHQR
 
-`web/aba/*.png` sont des rendus générés, pas des assets officiels ABA (voir
-`REJECTED_AI_GENERATED/README.md`). Autorisés par le product owner pour la revue préprod
-uniquement ; à remplacer par le brand kit officiel avant toute production.
+Depuis le 2026-09-08, `web/aba/` ne contient plus que les deux SVG **officiels** fournis
+par ABA lors de la revue marchand (copies pristines dans `docs/aba/official/`). Les
+rendus générés utilisés pour la première revue préprod ont été retirés de l'UI active ;
+leur historique reste dans `REJECTED_AI_GENERATED/README.md`. Les captures antérieures
+au 2026-09-08 montrent donc l'ancienne marque.

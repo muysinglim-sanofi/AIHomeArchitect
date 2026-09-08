@@ -54,6 +54,14 @@ dependencies:
   # transitively — declared directly so the direct import is lint-clean.
   web: ^1.1.1
 
+  # ABA merchant review (2026-09-08): ABA supplied its payment-option tile and
+  # "We accept" lockup as SVG, to be used exactly as supplied. Flutter web
+  # cannot decode SVG through Image.network (codec error, measured), so the two
+  # files are drawn by flutter_svg from the same same-origin URLs under web/aba/.
+  # `http` is the loader's fetch (already resolved transitively at 1.6.0).
+  flutter_svg: ^2.3.0
+  http: ^1.6.0
+
   # BUG 4 (device-key, Approche 2) — persiste la session Supabase (anonyme) dans le
   # Keychain iOS, qui SURVIT à la désinstallation/réinstallation (≠ SharedPreferences,
   # wipé au reinstall). → user_id stable au reinstall = free/pass/RC-appUserID conservés.
