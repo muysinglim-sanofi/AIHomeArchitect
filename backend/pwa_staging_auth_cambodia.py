@@ -54,8 +54,10 @@ _UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
        "(KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36 "
        "ayden-staging-auth-tool/1.0")
 
+PREPROD_ORIGIN = "https://preprod.aydenstudio.com"
+
 PREPROD_REDIRECTS = (
-    "https://preprod.aydenstudio.com/**",
+    f"{PREPROD_ORIGIN}/**",
     "https://ayden-studio-preprod.web.app/**",
 )
 
@@ -136,6 +138,24 @@ def desired(d):
         "sms_otp_exp": 300,
         "sms_max_frequency": 60,
         "rate_limit_sms_sent": 30,
+        # SITE URL — the ONLY target GoTrue can fall back to when the OAuth
+        # callback fails before the flow state can be read.
+        #
+        # `ExternalProviderCallback` (internal/api/external.go:141) computes its
+        # error-redirect URL with `getExternalRedirectURL(r)` on the RAW request,
+        # i.e. before `loadExternalState` puts the stored referrer into the
+        # context — so `getExternalReferrer(ctx)` is empty and the function
+        # returns `config.SiteURL` (external.go:894-903). Every pre-state error
+        # therefore lands on SITE_URL whatever `redirect_to` the flow stored.
+        #
+        # Measured on staging 2026-09-09: a real Facebook link whose 2FA ran
+        # past the 5-minute flow-state TTL answered
+        # `?error=invalid_request&error_code=bad_oauth_state&error_description=
+        # OAuth state has expired` — and, with SITE_URL still at the GoTrue
+        # default `http://localhost:3000`, sent it to a dead port
+        # (ERR_CONNECTION_REFUSED) instead of back into the app, which already
+        # translates that code into a readable refusal.
+        "site_url": PREPROD_ORIGIN,
     }
     fb_id, fb_secret = d.get("FACEBOOK_CLIENT_ID", ""), d.get("FACEBOOK_CLIENT_SECRET", "")
     if fb_id and fb_secret:

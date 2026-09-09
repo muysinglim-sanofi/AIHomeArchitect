@@ -503,6 +503,114 @@ figures. Guest A before any link: anonymous, no identity, 0 projects,
 namely 01 through 06 and 08. Everything a machine can verify without those
 credentials is green above.
 
+### 16ter. FIRST REAL FACEBOOK ATTEMPT — failed, diagnosed, config fixed
+
+A genuine end-to-end attempt was driven on preprod on 2026-09-09: guest A was
+given real data first (one real generation on the staging engine), then
+*Securiser mon compte* then *Continuer avec Facebook*. The human completed the
+Facebook password and 2FA. The browser did **not** come back to Ayden.
+
+**Guest A, prepared before the attempt (measured, not assumed).**
+
+| fact | value |
+|---|---|
+| uid | `253f7fa6-3380-4d0c-88aa-3c621687462d` |
+| anonymous / providers / identities | true / `[]` / none |
+| project | `899c10ee-fbad-4718-a32c-f8bd18d9d5a9` (Living Room, Warm Modern) |
+| vision | `656910e0-d25a-484c-b102-c2b85e8996c9` (number 1) |
+| storage path | `users/253f7fa6…/projects/899c10ee…/original/…` — keyed on the uid |
+| ledger | `TRIAL +1` (`trial:253f7fa6…`), `HOLD -1`, `COMMIT 0`, no pass |
+
+**The complete error, read from the browser (no secret shown).**
+
+```
+http://localhost:3000/?error=invalid_request
+   &error_code=bad_oauth_state
+   &error_description=OAuth+state+has+expired
+```
+
+**What the database proves.** `auth.flow_state` keeps both halves of the
+intent, and the row for this attempt says the client did everything right:
+
+| column | value |
+|---|---|
+| `provider_type` | `facebook` |
+| `authentication_method` | `oauth` |
+| `linking_target_id` | `253f7fa6-3380-4d0c-88aa-3c621687462d` — **guest A** |
+| `referrer` | `https://preprod.aydenstudio.com/profile` |
+| `email_optional` | `true` |
+| `auth_code_issued_at` | **null** — the callback never got as far as issuing a code |
+| created | 10:05:45Z; read back at 10:21Z, age 958 s |
+
+So the runtime `redirectTo` was correct and accepted (it was stored), and the
+journey was a genuine LINK aimed at A. Candidate causes A (missing
+`redirectTo`) and B (rejected by the allow list) are **refuted by evidence**.
+
+**Root cause, proved in GoTrue source.** The flow state has a hard 5-minute
+life: `defaultFlowStateExpiryDuration = 300 * time.Second`
+(`internal/conf/configuration.go:26`), and any configured value is clamped
+**up** to that floor (`configuration.go:1274-1275`). The hosted Management API
+exposes no knob for it (checked: no `flow`/`expiry` key in the auth config).
+The password-plus-2FA step ran past those five minutes, so the callback hit
+`external.go:566-567`:
+
+```go
+if flowState.IsExpired(config.External.FlowStateExpiryDuration) {
+    return ctx, apierrors.NewBadRequestError(
+        apierrors.ErrorCodeBadOAuthState, "OAuth state has expired")
+}
+```
+
+**Why it landed on localhost, which is the second, aggravating half.**
+`ExternalProviderCallback` fixes its error-redirect target *before* running
+the handler (`external.go:141`), and `getExternalRedirectURL`
+(`external.go:894-903`) reads the referrer from the request **context** —
+which `loadExternalState` has not populated yet at that point — so it falls
+through to `config.SiteURL`. `SITE_URL` was still GoTrue's default
+`http://localhost:3000`, so a recoverable in-app error was sent to a dead port
+and Chrome showed `ERR_CONNECTION_REFUSED`. The app already translates
+`bad_oauth_state` into a readable refusal (`providerRefused`, tests AUTH19 /
+AUTH24 / UI07); it simply never got the chance to.
+
+**Classification: D (an OAuth error fell back to SITE_URL), with C as the
+aggravating configuration.** Not a code defect: no product code was changed.
+
+**Fix, configuration only, staging only.** `site_url` set to
+`https://preprod.aydenstudio.com` (the allow list left exactly as it was),
+through `pwa_staging_auth_cambodia.py --apply`, one `PATCH … -> 200`.
+
+**Fix proved by a live callback, not by inference.** A callback carrying an
+unknown state now answers:
+
+```
+303  ->  https://preprod.aydenstudio.com/?error=invalid_request
+             &error_code=bad_oauth_state
+             &error_description=OAuth+state+not+found+or+expired
+```
+
+It lands back in Ayden. Production, read-only: `site_url` still
+`http://localhost:3000`, allow list empty, facebook false — untouched.
+
+**Nothing was created by the failed attempt.** Facebook identities in the
+whole project: **0**. Users created in the last hour: **0**. Guest A after the
+failure: same uid, still anonymous, providers `[]`, no identities, project and
+vision unchanged, ledger unchanged. The hand-off in `sessionStorage` was
+consumed and cleared on the next boot, exactly as designed for a flow that
+never returned.
+
+**Why the retry will not hit the same wall.** The Facebook session persisted in
+the driven browser (`c_user` and `xs` cookies present), so the provider hop is
+now a single authorization click of a few seconds, far inside the 5-minute
+window. The general lesson for any future manual run: authenticate at the
+provider FIRST, then start the Ayden link.
+
+**A residual worth naming, not patched.** An error that lands on the preprod
+ROOT rather than `/profile` is not shown immediately: the outcome is carried on
+the auth state and the account sheet opens from Profile. The person sees it the
+moment they open Profile, and nothing false is claimed in the meantime. Setting
+`site_url` to a deep link would surface it sooner but is not the conventional
+value for that setting, so it was left alone before launch.
+
 ### 17. External setup remaining (Mike only)
 
 1. **Meta app** — `docs/auth/META_FACEBOOK_SETUP_CHECKLIST_2026_09_08.md`
