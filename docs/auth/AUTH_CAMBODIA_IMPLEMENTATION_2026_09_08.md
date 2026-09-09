@@ -611,6 +611,119 @@ moment they open Profile, and nothing false is claimed in the meantime. Setting
 `site_url` to a deep link would surface it sooner but is not the conventional
 value for that setting, so it was left alone before launch.
 
+### 16quater. FACEBOOK LIVE VALIDATION — real, on preprod, 2026-09-09
+
+Driven end to end on `preprod.aydenstudio.com` against the staging project.
+Every verdict below is a row read from the database before and after the step
+(`backend/pwa_staging_auth_observe.py`), never a screen reading alone.
+
+**The three users this validation touched.**
+
+| | anon | email | providers | name | identities | projects | visions | ledger rows | passes |
+|---|---|---|---|---|---|---|---|---|---|
+| **A** `253f7fa6…` (linked) | false | yes | `["facebook"]` | Mike Lim | 1 | 1 | 1 | 3 | 0 |
+| **X** `4ed51f1a…` (collision guest) | true | no | none | - | 0 | 0 | 0 | 0 | 0 |
+| **G** `e3f670d5…` (minted by sign-out) | true | no | none | - | 0 | 0 | 0 | 0 | 0 |
+
+**FB-LIVE-01 — PASS.** Guest A was given real data first: one real generation
+on the staging engine, project `899c10ee-fbad-4718-a32c-f8bd18d9d5a9`, vision
+`656910e0-d25a-484c-b102-c2b85e8996c9`, ledger `TRIAL +1 / HOLD -1 /
+COMMIT 0`. Then *Securiser mon compte* then *Continuer avec Facebook*, real
+consent accepted at Facebook.
+
+```
+UID BEFORE = 253f7fa6-3380-4d0c-88aa-3c621687462d   anon=true   providers=[]
+UID AFTER  = 253f7fa6-3380-4d0c-88aa-3c621687462d   anon=false  providers=["facebook"]
+```
+
+Same uid. `is_anonymous` flipped true → false. One `auth.identities` row,
+provider `facebook`, created 11:12:46Z, carrying the email claim and the name
+claim `Mike Lim`. **Zero** users created in the surrounding 30 minutes, so no
+second account and no migration.
+
+**FB-LIVE-02 — PASS.** Project and vision keep their exact ids and their
+owner, and the Storage path still carries the same uid
+(`users/253f7fa6…/projects/899c10ee…/original/…`), so nothing was orphaned.
+The library renders the project with its generated image after the link
+(`docs/auth-cambodia/shots/fb04-projects.png`).
+
+**FB-LIVE-03 — PASS, strictly.** The ledger is the same three rows with the
+same idempotency keys (`trial:253f7fa6…`, `hold:pwa:31faa…`,
+`commit:pwa:31faa…`). Counted against the link instant (11:12:46Z): **0**
+ledger rows created after it, **0** passes, and the wallet row was last
+written at 10:04:00Z — during the generation, not by the link. No new wallet,
+no duplicate grant, no transfer.
+
+**FB-LIVE-04 — PASS.** A hard reload, and separately a full reopen through
+`about:blank`, both restore the same authenticated session: uid A, not
+anonymous, providers `["facebook"]`, and the project still listed.
+
+**FB-LIVE-05 — PASS.** Sign out minted a NEW anonymous guest
+`e3f670d5-63c8-49ef-b0d7-fbb1ea39996b` and dropped A's session, exactly as the
+frozen model prescribes. *Se connecter* then *Continuer avec Facebook* brought
+back **uid A**, not anonymous, providers `["facebook"]`, with its project,
+its vision and its ledger untouched. The intermediate guest stayed a separate
+user with nothing in it.
+
+**FB-LIVE-06 — PASS.** A clean Ayden guest X `4ed51f1a-9234-482f-9bb3-d9fbc2e03d24`
+tried to secure itself with the Facebook account already linked to A. GoTrue
+answered, on the return URL:
+
+```
+error=server_error
+error_code=identity_already_exists
+error_description=Identity is already linked to another user
+```
+
+The session **stayed guest X, anonymous, providers `[]`** — no silent merge and
+no switch. The app showed the fork
+(`docs/auth-cambodia/shots/fb06-02-welcome-back.png`): *Bon retour / Ce compte
+Facebook a déjà un compte Ayden. / Connectez-vous à ce compte. Votre travail
+d'invité reste sur ce navigateur et ne sera pas transféré.* with one explicit
+action, *Continuer vers mon compte existant*, and a way out. Only after that
+tap did the session become **A**. Guest X remains a separate user with 0
+projects, 0 visions and an empty ledger. Exactly **one** Facebook identity
+exists in the whole project, and it belongs to A.
+
+**FB-LIVE-07 — PASS (kept from the earlier run).** Abandoning at Facebook
+returned to the same guest uid with the hand-off consumed and nothing claimed.
+
+**FB-LIVE-08 — UNVERIFIED, measured rather than assumed.** Two routes to a
+genuinely email-less Facebook consent were checked. The Meta app has **0 test
+users**, and creating one is refused by Meta itself:
+`(#2900) This application has surpassed the limit of test accounts`. The only
+remaining route is a human editing the permissions inside Facebook's own
+consent dialog to decline email, which no automation may do. So the case
+stays UNVERIFIED. What IS in place: `external_facebook_email_optional = true`
+on the project (the setting that lets an email-less Facebook user sign in and
+be created), the refusal copy for the link case that GoTrue cannot complete
+(*Facebook didn't share an email address … Use your phone number to secure it
+instead*, covered by AUTH24 and UI07), and no fabricated email anywhere. The
+phone door itself is the next step and is not yet switched on.
+
+**Two honest observations, neither patched.**
+
+* The LINK path writes the provider's name into `auth.identities.identity_data`
+  but not into `raw_user_meta_data`, so straight after linking the profile card
+  showed the adopted email rather than *Mike Lim*
+  (`docs/auth-cambodia/shots/fb04-profile-linked.png`). The SIGN-IN path does
+  populate it, and the card then reads *Mike Lim / Connecté avec Facebook*
+  (`fb07-final-profile.png`). Cosmetic, and it resolves itself on the next
+  sign-in.
+* The *Méthodes de connexion* card ticks **E-mail** as well as Facebook, because
+  GoTrue adopted the Facebook email onto `auth.users.email`. That tick is
+  truthful: email OTP sign-in resolves by that column, so the person really can
+  come back that way.
+
+**A driving lesson worth keeping.** Synthetic touches at the right coordinates
+were silently dropped on the modal sheet, twice, with zero JS errors — while a
+tap on an unrelated row was equally inert, which is what proved the fault was
+the driver. The reliable path is Flutter's own semantics tree: click the
+placeholder to enable it, then click the `flt-semantics[role=button]` node.
+Its rects are the LIVE layout even when the paint is stale, and a DOM click on
+it is delivered as a real tap. Semantics resets on every full page load, so it
+must be re-enabled after each redirect.
+
 ### 17. External setup remaining (Mike only)
 
 1. **Meta app** — `docs/auth/META_FACEBOOK_SETUP_CHECKLIST_2026_09_08.md`
