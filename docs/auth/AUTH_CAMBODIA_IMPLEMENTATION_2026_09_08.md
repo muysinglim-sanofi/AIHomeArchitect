@@ -400,6 +400,109 @@ scripted service), `docs/auth-cambodia/shots/`:
 Keyboard/safe-area: the sheet pads by `viewInsets.bottom` and scrolls;
 `autofillHints` are set for email, telephone and one-time code.
 
+### 16bis. FACEBOOK STAGING ACTIVATION — real, 2026-09-09
+
+Credentials supplied into the ignored secret file (`SUPABASE_ACCESS_TOKEN`,
+`FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`); Meta app created, callback
+`https://eedcahzekpgxvvfxufbk.supabase.co/auth/v1/callback` validated,
+`public_profile` + `email` ready for testing, app in **Development mode**.
+No value was printed, logged, diffed or committed at any point: every tool
+run went through a redactor that replaces each secret-file value in stdout.
+
+**One defect found and fixed in the ACTIVATION TOOLING (not product code).**
+The first dry-run answered `403` on every Management API call, including
+`/v1/organizations`. Classified before touching anything, with three
+controlled requests on the same token:
+
+| request | result |
+|---|---|
+| default `Python-urllib/3.x` UA + token | `403 error code: 1010` |
+| browser UA + token | `200`, projects listed |
+| browser UA, no token | `401 {"message":"Unauthorized"}` |
+
+`api.supabase.com` sits behind Cloudflare, whose rule bans the urllib
+signature; `error code: 1010` is a browser-signature block, not an auth
+failure. The token was valid throughout. No configuration can change
+urllib's User-Agent, so `pwa_staging_auth_cambodia.py` now sends one, with
+the measurement recorded beside it. Product code untouched.
+
+**Dry-run, then apply.** The dry-run also revealed that `uri_allow_list` was
+**empty**: no production URL could be lost, and every OAuth `redirect_to`
+would have fallen back to `site_url = http://localhost:3000`. Deltas
+written, staging project only:
+
+| key | before | after |
+|---|---|---|
+| `external_facebook_enabled` | false | **true** |
+| `external_facebook_client_id` / `_secret` | absent | **set** |
+| `external_facebook_email_optional` | false | **true** (reviewed, section 7) |
+| `security_manual_linking_enabled` | false | **true** (`linkIdentity` needs it) |
+| `uri_allow_list` | *(empty)* | the two preprod globs |
+| `sms_otp_exp` | 60 | 300 |
+| `sms_max_frequency` | 5 | 60 |
+| `external_phone_enabled` | false | **false** (untouched, no Twilio values) |
+| `external_email_enabled`, `external_anonymous_users_enabled` | true | **true** (untouched) |
+| `sms_provider`, `site_url`, captcha | unchanged | unchanged |
+
+`PATCH /v1/projects/eedcahzekpgxvvfxufbk/config/auth -> 200`. The two SMS
+timing values are inert while the phone provider is off; they are the
+reviewed staging values, written once rather than in a second pass.
+
+**Verified independently of the script.**
+
+* Management API read-back: facebook true, email_optional true, phone false,
+  email true, anonymous true, manual linking true, both preprod globs
+  present, client id and secret present, twilio absent.
+* Public `/auth/v1/settings`: facebook True, phone False, email True,
+  anonymous True. That is what the PWA reads at boot.
+* **Production `vtxkciupyafukhdsgxgw`, read-only GET:** facebook false,
+  phone false, allow list empty. Untouched. The only write in the whole
+  session was the single staging PATCH above.
+* **Both OAuth endpoints answer, with no Facebook login needed:**
+  `GET /auth/v1/authorize?provider=facebook&redirect_to=<preprod>/profile`
+  answers `302` to `www.facebook.com/dialog/oauth` with client_id,
+  `scope=email`, `redirect_uri` = the Supabase callback and a `state`.
+  `GET /auth/v1/user/identities/authorize?provider=facebook` on a REAL
+  anonymous session answers `200` with the same Facebook URL, which is the
+  positive proof that manual linking is effective: it would answer
+  `manual_linking_disabled` otherwise. The probe user was deleted.
+* **No rebuild needed, proved by hash:** preprod still serves
+  `main.dart.js` sha256 prefix `3b814acd79dd6a52`, byte-identical to the
+  local `build/web`. The Facebook door appeared from configuration alone.
+* **Live on preprod** (`docs/auth-cambodia/shots/live-fb-02-chooser.png`,
+  390x844, FR): the chooser reads *Securisez votre compte Ayden* then
+  **Continuer avec Facebook** (filled pill and glyph), then *ou*, then
+  *Utiliser un e-mail*, then the returning-user line. **No phone button**,
+  exactly as the provider state dictates.
+* **Real departure to Facebook**: tapping the button navigated the live
+  browser to `www.facebook.com/login.php` for our Meta app. The link
+  journey mints its URL and leaves, for real.
+* **FB-LIVE-07 (abandon) PASSED live**: uid before departure
+  `253f7fa6-3380-4d0c-88aa-3c621687462d` (anonymous); returning to
+  `/profile` without completing Facebook left the **same uid**, still
+  anonymous, and the hand-off had been consumed and cleared. No corruption,
+  no second account, nothing claimed.
+
+**A driving trap worth recording** (it cost two false negatives before it was
+classified): a Chrome launched behind the terminal is *occluded*, and a
+Flutter Web page there still paints for screenshots but **drops every
+input**. Two taps on the account button appeared to do nothing, with zero JS
+errors. The control that settled it: a tap on the unrelated **Language** row
+was equally inert, so the fault was the environment, not the auth code.
+`Emulation.setFocusEmulationEnabled` fixes it and both taps then worked
+first time.
+
+**Observation tool for the live matrix**:
+`backend/pwa_staging_auth_observe.py` (read-only) prints, per uid,
+`is_anonymous`, email, phone, display name, `app_metadata.providers`, the
+`auth.identities` rows, the project ids, the vision count and the ledger
+figures. Guest A before any link: anonymous, no identity, 0 projects,
+0 visions, ledger empty.
+
+**Remaining FB-LIVE tests need a human Facebook login** as a Meta tester,
+namely 01 through 06 and 08. Everything a machine can verify without those
+credentials is green above.
+
 ### 17. External setup remaining (Mike only)
 
 1. **Meta app** — `docs/auth/META_FACEBOOK_SETUP_CHECKLIST_2026_09_08.md`

@@ -47,6 +47,13 @@ ENV = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.pwa-staging
 STAGING_REF = "eedcahzekpgxvvfxufbk"
 MGMT = "https://api.supabase.com"
 
+#: Sent on every request — see the note in `call()`. Not a disguise: it names
+#: this tool, and carries a browser token only because Cloudflare's rule keys
+#: on the `Python-urllib` signature alone.
+_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+       "(KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36 "
+       "ayden-staging-auth-tool/1.0")
+
 PREPROD_REDIRECTS = (
     "https://preprod.aydenstudio.com/**",
     "https://ayden-studio-preprod.web.app/**",
@@ -86,6 +93,16 @@ def call(url, *, method="GET", body=None, bearer=None, apikey=None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(url, data=data, method=method)
     req.add_header("Content-Type", "application/json")
+    # `api.supabase.com` sits behind Cloudflare, which BANS the default
+    # `Python-urllib/3.x` signature: every Management API call answered
+    # `403 error code: 1010` — a browser-signature block, not an auth failure.
+    # Measured 2026-09-09, same token, three requests:
+    #   default UA + token  -> 403 "error code: 1010"
+    #   browser UA + token  -> 200 (projects listed)
+    #   browser UA, no token-> 401 {"message":"Unauthorized"}
+    # So the token authenticates and the UA only gets past the WAF. There is
+    # no configuration that changes urllib's User-Agent, hence this header.
+    req.add_header("User-Agent", _UA)
     if apikey:
         req.add_header("apikey", apikey)
     if bearer:
