@@ -62,6 +62,9 @@ class PwaMockGenerationService implements PwaGenerationService {
     required String projectId,
     required String message,
     String uiLocale = 'en',
+    List<Map<String, String>> history = const [],
+    String pendingInstruction = '',
+
   }) async => const PwaChatTurn(aiMessage: '', shouldGenerate: true);
 
   /// Offline there is no durable lifecycle to consult — the render never left

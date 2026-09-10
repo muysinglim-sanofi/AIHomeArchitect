@@ -23,6 +23,8 @@ import 'package:ai_home_architect/features/pwa/presentation/pwa_architect_screen
     show kPwaRenderAspect;
 import 'package:ai_home_architect/features/pwa/presentation/pwa_architect_tokens.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_experience.dart';
+import 'package:ai_home_architect/features/pwa/presentation/pwa_reveal_screen.dart'
+    show pwaRevealExtraGap, pwaRevealStripHeight;
 import 'package:ai_home_architect/features/pwa/presentation/pwa_type.dart';
 import 'package:ai_home_architect/shared/widgets/reveal_hero.dart';
 import 'package:flutter/material.dart';
@@ -433,7 +435,13 @@ void main() {
       expect(w, closeTo(390 * 0.86, 1.0),
           reason: 'the native rail fills 86% of the screen, by iOS clamp');
       final h = cards.values.first.height;
-      expect(h, closeTo(221.0, 2.0), reason: 'and 0.82 of the strip');
+      // 0.82 of the strip AS LAID OUT. On a phone the rail gives up the
+      // toolbar air the Full Reveal gained on 2026-09-10 (pwaRevealExtraGap):
+      // 16pt of height, so the render keeps its size. The WIDTH above — the
+      // Round-2 complaint — is untouched.
+      final strip = pwaRevealStripHeight(844, 390) - pwaRevealExtraGap(844, 390);
+      expect(h, closeTo(strip * 0.82, 2.0), reason: 'and 0.82 of the strip');
+      expect(strip, closeTo(270 - 16, 0.01));
       // Every card the same size — that IS the rail.
       for (final r in cards.values) {
         expect(r.width, closeTo(w, 0.5));

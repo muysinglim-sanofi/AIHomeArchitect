@@ -15,13 +15,14 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../application/pwa_controller.dart' show pwaControllerProvider;
 import '../auth/pwa_auth_controller.dart';
 import '../auth/pwa_auth_service.dart';
 import '../billing/pwa_entitlement_controller.dart';
 import '../l10n/pwa_l10n.dart';
 import 'pwa_account_sheet.dart';
 import 'pwa_paywall.dart';
-import 'pwa_theme.dart' show pwaGold, pwaTextFallback;
+import 'pwa_theme.dart' show pwaGold, pwaMuted, pwaTextFallback;
 
 class PwaAccountChip extends ConsumerWidget {
   const PwaAccountChip({super.key, this.onDark = false});
@@ -63,8 +64,18 @@ class PwaAccountChip extends ConsumerWidget {
               case 'paywall':
                 await showPwaPaywall(context, ref);
               case 'account':
-                // The sheet owns the post-authentication hydration.
-                await showPwaAccountSheet(context);
+                // A GUEST's door. An identified account never reaches the
+                // sheet from here: the sheet is where an account is secured,
+                // and offering "Continue with Facebook" to someone already
+                // signed in with Facebook is the defect the phone found.
+                if (identified) {
+                  ref.read(pwaControllerProvider.notifier).openProfile();
+                } else {
+                  // The sheet owns the post-authentication hydration.
+                  await showPwaAccountSheet(context);
+                }
+              case 'profile':
+                ref.read(pwaControllerProvider.notifier).openProfile();
               case 'signin':
                 // The RETURNING user, from the header. Same call Profile
                 // makes, same separate journey underneath: sign-in switches
@@ -92,27 +103,74 @@ class PwaAccountChip extends ConsumerWidget {
                   ),
                 ),
               ),
-            // The identity block. A verified account sees WHO IT IS; a Guest
-            // sees the two things a Guest can do, and they are not equals:
-            // saving the work in front of them is the primary act, signing in
-            // to an account that already exists is the returning-user door.
-            //
-            // Round 1 gave Profile both and left this menu with only the
-            // first, so the two entry points disagreed about what was
-            // possible — the defect the phone review found. One behaviour,
-            // two entries, as the account sheet already had.
-            PopupMenuItem<String>(
-              key: const ValueKey('pwa-account-open'),
-              value: 'account',
-              child: Text(
-                identified ? label : l.accountTitle,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: identified ? FontWeight.w400 : FontWeight.w600,
-                  fontFamilyFallback: pwaTextFallback,
+            // THE IDENTITY, STATED — for an account that has one. The name
+            // and how it is connected, exactly as Profile shows it, and
+            // nothing to tap: it is a fact, not a door. It used to be a menu
+            // item that opened the account sheet, which for a Facebook
+            // account meant "Secure your Ayden account" and "Continue with
+            // Facebook" — the phone review's defect, and a way to start a
+            // second sign-in from inside the first.
+            if (identified) ...[
+              PopupMenuItem<String>(
+                key: const ValueKey('pwa-account-identity'),
+                enabled: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      auth.identityLabel.isNotEmpty
+                          ? auth.identityLabel
+                          : l.accountLinkedTitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF1C1917),
+                        fontFamilyFallback: pwaTextFallback,
+                      ),
+                    ),
+                    if (auth.connectedVia != null)
+                      Text(
+                        l.authConnectedVia(auth.connectedVia!),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: pwaMuted,
+                          fontFamilyFallback: pwaTextFallback,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            ),
+              const PopupMenuDivider(),
+              PopupMenuItem<String>(
+                key: const ValueKey('pwa-account-profile'),
+                value: 'profile',
+                child: Text(
+                  l.shared.profileTitle,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontFamilyFallback: pwaTextFallback,
+                  ),
+                ),
+              ),
+            ],
+            // A Guest sees the two things a Guest can do, and they are not
+            // equals: saving the work in front of them is the primary act,
+            // signing in to an account that already exists is the returning-
+            // user door. One behaviour, two entries, as Profile has.
+            if (!identified)
+              PopupMenuItem<String>(
+                key: const ValueKey('pwa-account-open'),
+                value: 'account',
+                child: Text(
+                  l.accountTitle,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    fontFamilyFallback: pwaTextFallback,
+                  ),
+                ),
+              ),
             if (!identified)
               PopupMenuItem<String>(
                 key: const ValueKey('pwa-account-signin'),

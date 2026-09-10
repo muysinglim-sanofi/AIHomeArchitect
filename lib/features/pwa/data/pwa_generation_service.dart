@@ -28,6 +28,7 @@ class PwaGeneratedVision {
     required this.visionNumber,
     required this.replayed,
     this.backendVisionId,
+    this.persisted = true,
     this.resolvedRoomType = '',
     this.resolvedAtmosphereId = '',
     this.resolvedAtmosphereLabel = '',
@@ -45,6 +46,10 @@ class PwaGeneratedVision {
   /// The id the backend persisted. Kept so a resumed session can be reconciled
   /// against the server's row rather than guessed at.
   final String? backendVisionId;
+
+  /// False when the backend made the image but could not write its row: the
+  /// vision is the client's to store (see [PwaGenerationResult.persisted]).
+  final bool persisted;
 
   /// What the ENGINE resolved. A delegated room and "Ayden Signature" are
   /// answered once, by one look at the photo, and the app adopts that answer
@@ -227,6 +232,12 @@ abstract class PwaGenerationService {
     required String projectId,
     required String message,
     String uiLocale = 'en',
+    /// The conversation so far, oldest first, [message] included. What lets
+    /// the server resolve a go-ahead against a pending design request.
+    List<Map<String, String>> history = const [],
+    /// The design instruction Ayden answered without performing, if one is
+    /// still outstanding. What a typed go-ahead resumes.
+    String pendingInstruction = '',
   });
 
   /// Where a generation this app already started has got to. Free, read-only,
@@ -323,6 +334,7 @@ class PwaStagingGenerationService implements PwaGenerationService {
     visionNumber: r.visionNumber,
     replayed: r.replayed,
     backendVisionId: r.visionId,
+    persisted: r.persisted,
     resolvedRoomType: r.resolvedRoomType,
     resolvedAtmosphereId: r.resolvedAtmosphereId,
     resolvedAtmosphereLabel: r.resolvedAtmosphereLabel,
@@ -335,7 +347,15 @@ class PwaStagingGenerationService implements PwaGenerationService {
     required String projectId,
     required String message,
     String uiLocale = 'en',
-  }) => _api.chat(projectId: projectId, message: message, uiLocale: uiLocale);
+    List<Map<String, String>> history = const [],
+    String pendingInstruction = '',
+  }) => _api.chat(
+        projectId: projectId,
+        message: message,
+        uiLocale: uiLocale,
+        history: history,
+        pendingInstruction: pendingInstruction,
+      );
 
   @override
   Future<PwaGenerationLifecycle> status(String idempotencyKey) async {
@@ -434,6 +454,13 @@ class PwaFakeGenerationService implements PwaGenerationService {
   );
   final List<String> chatCalls = <String>[];
 
+  /// What the controller reported as OUTSTANDING on each chat call — empty
+  /// when nothing was. Lets a test assert that an override was even offerable.
+  /// The conversation each `chat` call carried, newest call last.
+  final List<List<Map<String, String>>> historySeen =
+      <List<Map<String, String>>>[];
+  final List<String> pendingSeen = <String>[];
+
   final List<PwaGenerationIntent> calls = <PwaGenerationIntent>[];
   final Map<String, PwaGeneratedVision> _byIdempotencyKey = {};
 
@@ -442,8 +469,12 @@ class PwaFakeGenerationService implements PwaGenerationService {
     required String projectId,
     required String message,
     String uiLocale = 'en',
+    List<Map<String, String>> history = const [],
+    String pendingInstruction = '',
   }) async {
     chatCalls.add(message);
+    historySeen.add(history);
+    pendingSeen.add(pendingInstruction);
     return chatTurn;
   }
 

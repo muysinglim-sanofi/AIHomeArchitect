@@ -165,7 +165,7 @@ void main() {
 
     test('ORI04: on a phone the rail and the slot bound it — same for any '
         'orientation', () {
-      // 390x844 phone, 800-tall box: 366 + 48 + 34 = 448 > 374 available.
+      // 390x844 phone, 800-tall box: 366 + chrome + 34 > 374 available.
       for (final aspect in [2 / 3, 3 / 2, 1.0]) {
         final h = pwaRevealHeroHeight(
           blockH: pwaRevealBlockHeight(800),
@@ -176,18 +176,22 @@ void main() {
         expect(h, 374, reason: 'aspect $aspect plays no part in the block');
       }
       // The render inside that block is contained at its own ratio: a
-      // portrait render is 292 tall and ~195 wide, a landscape one 366 wide
-      // and 244 tall — both whole, both centred on the blurred matte.
-      final block = Size(366, 374 - chrome - foot);
+      // portrait render is as tall as the block and two thirds as wide, a
+      // landscape one keeps the FULL 366 width and is 244 tall — both whole,
+      // both centred on the blurred matte. (The 12pt toolbar gap, 2026-09-10,
+      // took its height from the block on a height-bound phone; it cannot
+      // touch a landscape render's width, which is the column's.)
+      final blockH = 374 - chrome - foot;
+      final block = Size(366, blockH);
       final portrait = PwaRenderCanvas.innerRect(block, 2 / 3).size;
-      expect(portrait.height, closeTo(292, 0.01));
-      expect(portrait.width, closeTo(194.67, 0.01));
+      expect(portrait.height, closeTo(blockH, 0.01));
+      expect(portrait.width, closeTo(blockH * 2 / 3, 0.01));
       final landscape = PwaRenderCanvas.innerRect(block, 3 / 2).size;
       expect(landscape.width, closeTo(366, 0.01));
       expect(landscape.height, closeTo(244, 0.01));
       final square = PwaRenderCanvas.innerRect(block, 1).size;
-      expect(square.width, closeTo(292, 0.01));
-      expect(square.height, closeTo(292, 0.01));
+      expect(square.width, closeTo(blockH, 0.01));
+      expect(square.height, closeTo(blockH, 0.01));
     });
 
     test('ORI05: clamped to what is available, floored at 160', () {

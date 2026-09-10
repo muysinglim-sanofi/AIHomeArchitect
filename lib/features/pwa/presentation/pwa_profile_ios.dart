@@ -195,13 +195,16 @@ class _PwaProfileIosState extends ConsumerState<PwaProfileIos> {
                   _SignInMethodsCard(auth: auth, providers: authController.providers),
                 ],
                 const SizedBox(height: PwaGap.lg),
-                // iOS's `_StatsRow`: one number, the finished redesigns. The
-                // web counts what Projects lists — a project with a vision —
-                // so Profile and Projects can never disagree about it.
+                // ONE NUMBER, AND IT MEANS WHAT IT SAYS. iOS's `_StatsRow`
+                // shows the PROJECT count under "Redesigns", and so did this —
+                // which is how an account with three finished renders in two
+                // projects read "2 Redesigns" while its Spaces said three were
+                // spent. The number is now every finished Vision, V1 included,
+                // off the durable vision rows; the label names exactly that.
                 PwaStatCard(
                   key: const ValueKey('pwa-profile-stats'),
-                  value: '${ref.watch(pwaControllerProvider.select((s) => s.visibleProjects.length))}',
-                  label: l.shared.projectsCount,
+                  value: '${ref.watch(pwaControllerProvider.select((s) => s.completedVisionCount))}',
+                  label: l.statVisions,
                 ),
                 const SizedBox(height: PwaGap.md),
                 const _WalletRow(),

@@ -118,6 +118,12 @@ class PwaL10n {
   String transformationsCount(int n) => n == 1
       ? _get('pwaRedesignOne')
       : '$n ${_mobile.transformations}';
+
+  /// The Profile's one number, named for what it counts: every finished
+  /// Vision, the first one included. "Vision" is the product's own word for a
+  /// render (Vision 1, Vision 2, "Votre vision gratuite"); "Redesigns" sat over
+  /// a count of PROJECTS, which is how 3 renders read as "2 Redesigns".
+  String get statVisions => _get('pwaStatVisions');
   String get navHome => _mobile.navHome;
   String get navProjects => _mobile.navProjects;
   String get chatPlaceholder => _mobile.chatPlaceholder;
@@ -601,6 +607,7 @@ class PwaL10n {
   String get errGenerationLost => _get('pwaErrGenerationLost');
   String get errCancelled => _get('pwaErrCancelled');
   String get errStillWorking => _get('pwaErrStillWorking');
+  String get errBusyElsewhere => _get('pwaErrBusyElsewhere');
   String get errUploadFailed => _get('pwaErrUploadFailed');
   String get errPrepareFailed => _get('pwaErrPrepareFailed');
   String get errSaveFailed => _get('pwaErrSaveFailed');
@@ -629,6 +636,8 @@ class PwaL10n {
         return errCancelled;
       case 'PROCESSING':
         return errStillWorking;
+      case 'BUSY_ELSEWHERE':
+        return errBusyElsewhere;
       case 'UPLOAD_FAILED':
         return errUploadFailed;
       case 'PREPARE_FAILED':
@@ -787,6 +796,8 @@ class PwaL10n {
   // The Full Reveal's own chrome, mapped from iOS's floating circle buttons.
   String get replayReveal => _get('pwaReplayReveal');
   String get shareVision => _get('pwaShareVision');
+  String get saveImage => _get('pwaSaveImage');
+  String get viewFullscreen => _get('pwaViewFullscreen');
   String shareVisionText(String title) =>
       _get('pwaShareVisionText').replaceAll('{title}', title);
   String get shareUnavailable => _get('pwaShareUnavailable');

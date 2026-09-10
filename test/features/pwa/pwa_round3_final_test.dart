@@ -323,20 +323,24 @@ void main() {
       final inner = tester.getRect(frame);
       expect(canvas.width, closeTo(366, 1));
       final box = tester.getSize(find.byKey(const ValueKey('pwa-full-reveal')));
+      // A phone's extra toolbar air is taken from the rail and added to the
+      // chrome band, point for point (`pwaRevealExtraGap`).
+      final extra = pwaRevealExtraGap(box.height, box.width);
       final available = box.height -
           (kPwaRevealSectionHeaderH +
-              pwaRevealStripHeight(box.height, box.width) +
+              pwaRevealStripHeight(box.height, box.width) -
+              extra +
               kPwaRevealSlotH +
               kPwaRevealSlotPadV);
       final heroH = pwaRevealHeroHeight(
         blockH: [pwaRevealBlockHeight(box.height), 366 / measured!]
             .reduce((a, b) => a > b ? a : b),
         available: available,
-        chromeH: kPwaRevealChromeH,
+        chromeH: kPwaRevealChromeH + extra,
         footH: kPwaRevealFootH,
       );
       expect(canvas.height,
-          closeTo(heroH - kPwaRevealChromeH - kPwaRevealFootH, 1));
+          closeTo(heroH - kPwaRevealChromeH - extra - kPwaRevealFootH, 1));
       final want = PwaRenderCanvas.innerRect(canvas.size, measured);
       expect(inner.width, closeTo(want.width, 1));
       expect(inner.height, closeTo(want.height, 1));

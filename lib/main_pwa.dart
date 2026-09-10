@@ -51,8 +51,10 @@ import 'features/pwa/data/pwa_thumbnail_bundle.dart';
 import 'features/pwa/data/pwa_khmer_font.dart';
 import 'features/pwa/data/supabase_pwa_persistence_repository.dart';
 import 'features/pwa/domain/pwa_project.dart';
+import 'features/pwa/presentation/pwa_image_viewer.dart';
 import 'features/pwa/presentation/pwa_mock_app.dart';
 import 'features/pwa/presentation/pwa_url_sync_scope.dart';
+import 'features/pwa/presentation/pwa_file_picker_anchor.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -331,6 +333,16 @@ Future<void> _bootPwaStaging(
         // lives with the other `package:web` adapters and is injected here.
         pwaExternalLauncherProvider
             .overrideWithValue(const WebPwaExternalLauncher()),
+        // Share and save a generated vision. Web-only, like the launcher above:
+        // it fetches the render from its signed URL and hands the FILE to
+        // `navigator.share`, which on an iPhone opens the system sheet where
+        // "Save Image" lives. Everywhere else it downloads the same bytes.
+        pwaImageExporterProvider
+            .overrideWithValue(WebPwaImageExporter()),
+        // Where the iPhone's photo menu opens: on the upload zone that was
+        // tapped, not in the page's top-left corner where the plugin leaves
+        // its input. See `pwa_file_picker_anchor.dart`.
+        pwaFilePickerAnchorProvider.overrideWithValue(pwaAnchorFilePicker),
         // ABA's checkout plugin — the active Web checkout. Present only here,
         // on the web entrypoint; the controller falls back to the server-side
         // path wherever this is null.

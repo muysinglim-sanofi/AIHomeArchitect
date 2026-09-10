@@ -221,7 +221,12 @@ class SupabasePwaPersistenceRepository implements PwaPersistenceRepository {
       );
       await _appendChildren(
         'pwa_messages',
-        records.messages,
+        records.messages.isEmpty
+            ? records.messages
+            : pwaWithStableClientOrder(
+                records.messages,
+                await _storedMessageOrder(snapshot.projectId),
+              ),
         kPwaMessageImmutableKeys,
         'message',
       );
@@ -458,6 +463,18 @@ class SupabasePwaPersistenceRepository implements PwaPersistenceRepository {
       if (i >= snapshot.visions.length || !snapshot.visions[i].remotePersisted)
         rows[i],
   ];
+
+  /// `id` and `client_order` of every message already stored for [projectId] —
+  /// what a save re-bases new messages on, so a stored one never moves.
+  Future<List<Map<String, dynamic>>> _storedMessageOrder(
+    String projectId,
+  ) async {
+    final res = await _db
+        .from('pwa_messages')
+        .select('id, client_order')
+        .eq('project_id', projectId);
+    return res.map((e) => Map<String, dynamic>.from(e)).toList();
+  }
 
   /// Insert only genuinely-new child rows (§ point 4). Reads the rows already
   /// stored that match a local `id` OR `idempotency_key`, plans the append with

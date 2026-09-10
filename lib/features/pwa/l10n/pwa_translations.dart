@@ -259,6 +259,7 @@ const Map<String, String> pwaEnTranslations = {
 
   // -- Paywall + account (Auth/Paywall foundation) ---------------------------
   'pwaRedesignOne': '1 redesign',
+  'pwaStatVisions': 'Visions',
   'pwaPaywallTitle': 'Keep designing',
   'pwaPaywallFreeUsedTitle': 'Your free vision is used',
   'pwaPaywallFreeUsedBody':
@@ -406,6 +407,8 @@ const Map<String, String> pwaEnTranslations = {
   'pwaAccountSignInTitle': 'Sign in',
   'pwaReplayReveal': 'Replay',
   'pwaShareVision': 'Share',
+  'pwaSaveImage': 'Save image',
+  'pwaViewFullscreen': 'View fullscreen',
   'pwaShareVisionText': 'Check out my AI home redesign — {title}!',
   'pwaShareUnavailable': 'Sharing is not available in this browser.',
   'pwaAccountHaveOne': 'Already use Ayden Studio?',
@@ -483,6 +486,9 @@ const Map<String, String> pwaEnTranslations = {
   'pwaErrCancelled': 'That request was cancelled.',
   'pwaErrStillWorking':
       'Ayden is still working on this one. Give it a moment, then try again.',
+  'pwaErrBusyElsewhere':
+      "Ayden is still finishing a vision in another project. "
+      "You can start this one as soon as it's ready.",
   'pwaErrUploadFailed': "Your photo couldn't be uploaded. Try again.",
   'pwaErrPrepareFailed': "Your vision couldn't be prepared. Try again.",
   'pwaErrSaveFailed': 'Your vision could not be saved. Try again.',
@@ -707,6 +713,7 @@ const Map<String, String> pwaKmTranslations = {
 
   // -- Paywall + account (Auth/Paywall foundation) ---------------------------
   'pwaRedesignOne': 'ការ​រចនា​ឡើង​វិញ 1',
+  'pwaStatVisions': 'ទស្សនៈ',
   'pwaPaywallTitle': 'បន្ត​រចនា​ត​ទៅ​ទៀត',
   'pwaPaywallFreeUsedTitle': 'ទស្សនៈ​ឥត​គិត​ថ្លៃ​របស់​អ្នក​ត្រូវ​បាន​ប្រើ​អស់​ហើយ',
   'pwaPaywallFreeUsedBody':
@@ -844,6 +851,8 @@ const Map<String, String> pwaKmTranslations = {
   'pwaAccountSignInTitle': 'ចូល​គណនី',
   'pwaReplayReveal': 'ចាក់​ឡើង​វិញ',
   'pwaShareVision': 'ចែក​រំលែក',
+  'pwaSaveImage': 'រក្សា​ទុក​រូបភាព',
+  'pwaViewFullscreen': 'មើល​ពេញ​អេក្រង់',
   'pwaShareVisionText': 'មើល​ការ​រចនា​ផ្ទះ​ឡើង​វិញ​ដោយ AI របស់​ខ្ញុំ — {title}!',
   'pwaShareUnavailable': 'ការ​ចែក​រំលែក​មិន​អាច​ប្រើ​បាន​ក្នុង​កម្មវិធី​រុករក​នេះ​ទេ។',
   'pwaAccountHaveOne': 'ប្រើ Ayden Studio រួច​ហើយ​មែន​ទេ?',
@@ -922,6 +931,8 @@ const Map<String, String> pwaKmTranslations = {
   'pwaErrCancelled': 'សំណើ​នោះ​ត្រូវ​បាន​បោះបង់។',
   'pwaErrStillWorking':
       'Ayden នៅ​តែ​កំពុង​ធ្វើការ​លើ​ការ​នេះ។ សូម​រង់ចាំ​បន្តិច រួច​ព្យាយាម​ម្ដង​ទៀត។',
+  'pwaErrBusyElsewhere':
+      'Ayden នៅ​តែ​កំពុង​បញ្ចប់​ទស្សនៈ​មួយ​ក្នុង​គម្រោង​ផ្សេង។ អ្នក​អាច​ចាប់ផ្ដើម​ការ​នេះ​បាន​ភ្លាមៗ​នៅ​ពេល​វា​រួចរាល់។',
   'pwaErrUploadFailed': 'រូបថត​របស់​អ្នក​មិន​អាច​ផ្ទុក​បាន​ទេ។ សូម​ព្យាយាម​ម្ដង​ទៀត។',
   'pwaErrPrepareFailed': 'ទស្សនៈ​របស់​អ្នក​មិន​អាច​រៀបចំ​បាន​ទេ។ សូម​ព្យាយាម​ម្ដង​ទៀត។',
   'pwaErrSaveFailed': 'ទស្សនៈ​របស់​អ្នក​មិន​អាច​រក្សា​ទុក​បាន​ទេ។ សូម​ព្យាយាម​ម្ដង​ទៀត។',
@@ -1147,6 +1158,7 @@ const Map<String, String> pwaFrTranslations = {
 
   // -- Paywall + account (Auth/Paywall foundation) ---------------------------
   'pwaRedesignOne': '1 redesign',
+  'pwaStatVisions': 'Visions',
   'pwaPaywallTitle': 'Continuer à créer',
   'pwaPaywallFreeUsedTitle': 'Votre vision gratuite est utilisée',
   'pwaPaywallFreeUsedBody':
@@ -1284,6 +1296,8 @@ const Map<String, String> pwaFrTranslations = {
   'pwaAccountSignInTitle': 'Se connecter',
   'pwaReplayReveal': 'Revoir',
   'pwaShareVision': 'Partager',
+  'pwaSaveImage': "Enregistrer l'image",
+  'pwaViewFullscreen': 'Afficher en plein écran',
   'pwaShareVisionText':
       "Découvrez le redesign de mon intérieur par l'IA — {title} !",
   'pwaShareUnavailable':
@@ -1367,6 +1381,9 @@ const Map<String, String> pwaFrTranslations = {
   'pwaErrCancelled': 'Cette demande a été annulée.',
   'pwaErrStillWorking':
       'Ayden travaille encore dessus. Patientez un instant, puis réessayez.',
+  'pwaErrBusyElsewhere':
+      "Ayden termine encore une vision dans un autre projet. "
+      "Vous pourrez lancer celle-ci dès qu'elle sera prête.",
   'pwaErrUploadFailed': "Votre photo n'a pas pu être importée. Réessayez.",
   'pwaErrPrepareFailed': "Votre vision n'a pas pu être préparée. Réessayez.",
   'pwaErrSaveFailed': "Votre vision n'a pas pu être enregistrée. Réessayez.",

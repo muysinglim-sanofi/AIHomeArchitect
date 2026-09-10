@@ -139,8 +139,20 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
     // of at the bottom of the thread.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final id = ref.read(pwaControllerProvider).previewVisionId;
-      if (id != null) _revealVision(id);
+      final s = ref.read(pwaControllerProvider);
+      final id = s.previewVisionId;
+      if (id != null) {
+        _revealVision(id);
+      } else if (s.generating) {
+        // ARRIVING MID-GENERATION. Confirming an atmosphere in the Full Reveal
+        // leaves that screen and mounts this one with the working card already
+        // appended at the end of the thread. `ref.listen` fires on CHANGES, so
+        // it does not fire for the build that mounts us, and a fresh scroll
+        // controller starts at the top: the person landed above a long
+        // conversation with the work happening off-screen below. That is
+        // ATM-02, and this is the one line that closes it.
+        _scrollChatToBottom();
+      }
     });
   }
 
@@ -374,6 +386,29 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
             ),
           ];
         }
+        // EVERY generation waits the same way. A switch or a refine used to
+        // wait as a small ivory bubble with three dots beside the avatar,
+        // while the FIRST vision waited on a full canvas — so after choosing a
+        // new atmosphere the person got a sentence far down a long thread and
+        // could not tell that anything had started. Reported from the phone,
+        // and the reason ATM-03/ATM-04 exist.
+        //
+        // The canvas is the same one, over the vision being transformed rather
+        // than the original photo: what is being reworked is what you are
+        // looking at. No second loading language was invented — this is V1's.
+        final working = state.currentVision;
+        if (working != null) {
+          return [
+            const _V7ChatGap(),
+            _V7GeneratingCanvas(
+              key: const ValueKey('pwa-working-canvas'),
+              reference: working.afterAsset,
+              phases: phases,
+              subject: m.workingSubject,
+              maxImageHeight: visionMaxH,
+            ),
+          ];
+        }
         return [const _V7ChatGap(), _V7InlineGenerating(phases: phases)];
       case PwaMessageKind.text:
         if (m.role == PwaRole.user) {
@@ -461,18 +496,26 @@ class _PwaArchitectScreenState extends ConsumerState<PwaArchitectScreen> {
         }
 
         // Later visions stay strictly chronological: Ayden answers, then shows.
+        //
+        // THE RENDER LEAVES THE SPEECH GROUP. `_V7AydenGroup` is a Row —
+        // a 32pt avatar, a 10pt gutter, then an Expanded column — so anything
+        // inside it is indented by 42pt. That is right for a sentence and
+        // wrong for a picture: Vision 1 is laid out at the thread's full
+        // width (above), and every later vision was 42pt narrower than it, a
+        // 12% loss on a 390pt phone. The reported symptom was exactly that —
+        // "V1 large, V2/V3 smaller cards".
+        //
+        // So the SPEECH keeps its avatar and its indent, and the RENDER is
+        // hoisted to the thread's own width, where Vision 1 already sat. The
+        // chronology is untouched: Ayden still answers first and shows second.
         return [
           const _V7ChatGap(),
-          _V7AydenGroup(
-            children: [
-              if (m.text.isNotEmpty) ...[
-                _V7AydenSpeech(text: m.text),
-                const SizedBox(height: 10),
-              ],
-              card,
-              ...guidance,
-            ],
-          ),
+          if (m.text.isNotEmpty) ...[
+            _V7AydenGroup(children: [_V7AydenSpeech(text: m.text)]),
+            const SizedBox(height: 10),
+          ],
+          card,
+          ...guidance,
         ];
     }
   }
@@ -712,17 +755,29 @@ class _V7ProjectsButton extends StatelessWidget {
 /// routed, never translated), so it is localised at display time through the
 /// same resolver Home and Projects use — the fix that stopped "Master Bedroom"
 /// appearing at the top of a Khmer conversation.
-List<String> pwaSessionContextBits(PwaState state, PwaL10n l) {
+/// The room this session is about, in the reader's language: the durable
+/// label off the project snapshot when there is one, the staged choice
+/// otherwise. Named separately because the file a vision is exported under
+/// wants it too, and there must be exactly one answer to "which room is this".
+String pwaSessionRoomLabel(PwaState state, PwaL10n l) {
   PwaProjectSnapshot? snap;
   for (final p in state.library) {
     if (p.projectId == state.activeProjectId) snap = p;
   }
-  final room = (snap?.roomLabel ?? '').isNotEmpty
+  return (snap?.roomLabel ?? '').isNotEmpty
       ? pwaRoomDisplayLabel(l, roomId: snap!.roomId, roomLabel: snap.roomLabel)
       : (state.selectedRoomId == null
           ? l.uplAiDecide
           : pwaRoomDisplayLabel(l,
               roomId: state.selectedRoomId, roomLabel: ''));
+}
+
+List<String> pwaSessionContextBits(PwaState state, PwaL10n l) {
+  PwaProjectSnapshot? snap;
+  for (final p in state.library) {
+    if (p.projectId == state.activeProjectId) snap = p;
+  }
+  final room = pwaSessionRoomLabel(state, l);
   final atmo = (snap?.atmosphereLabel ?? '').isNotEmpty
       ? snap!.atmosphereLabel
       : state.atmospheres
@@ -1034,6 +1089,92 @@ class _V7FirstVisionWorking extends ConsumerWidget {
       );
 }
 
+/// The waiting canvas for a SWITCH or a REFINE — V1's card, over the vision
+/// being transformed.
+///
+/// Same frame as `_V7FirstVisionWorking` and `_V7VisionCard`: the same max
+/// width, the same canvas height rule, the same veil, the same working
+/// indicator. What differs is only the picture underneath, which is the render
+/// currently on screen rather than the uploaded photo.
+class _V7GeneratingCanvas extends ConsumerWidget {
+  const _V7GeneratingCanvas({
+    super.key,
+    required this.reference,
+    required this.phases,
+    required this.subject,
+    required this.maxImageHeight,
+  });
+
+  /// The durable path of the vision being reworked.
+  final String reference;
+  final List<String> phases;
+
+  /// What this generation is FOR — the atmosphere being tried, when there is
+  /// one. Shown above the indicator, where V1 shows the room and atmosphere.
+  final String subject;
+  final double maxImageHeight;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => Align(
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: kPwaVisionMaxWidth),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(PwaGap.radius),
+            child: SizedBox(
+              height: pwaRenderCanvasHeight(MediaQuery.sizeOf(context)),
+              width: double.infinity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  PwaRenderCanvas(
+                    key: ValueKey('working-canvas-$reference'),
+                    reference: reference,
+                    aspect: pwaAspectOf(
+                      ref.watch(pwaRenderAspectsProvider),
+                      reference,
+                      fallbackKey: kPwaSourceAspectKey,
+                    ),
+                  ),
+                  // The same veil V1 uses: enough that light copy stays
+                  // legible over a bright room, not so much that the render
+                  // being reworked disappears.
+                  const ColoredBox(color: Color(0xB3141210)),
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (subject.trim().isNotEmpty) ...[
+                            Text(
+                              subject,
+                              key: const ValueKey('pwa-working-subject'),
+                              maxLines: 1,
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                              style: PwaType.caption(color: Colors.white70)
+                                  .copyWith(letterSpacing: 0.4),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
+                          PwaWorkingIndicator(
+                            key: const ValueKey('pwa-working-canvas-indicator'),
+                            phases: phases,
+                            foreground: Colors.white,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+}
+
 class _V7InlineGenerating extends StatelessWidget {
   const _V7InlineGenerating({this.phases = kPwaRefinePhases});
 
@@ -1171,6 +1312,14 @@ class _V7VisionCard extends ConsumerWidget {
                     Positioned(
                       top: 12,
                       right: 12,
+                      // Unchanged, and deliberately so: the expand control and
+                      // the image both open the Full Reveal. That is the
+                      // accepted contract (`pwa_architect_test`,
+                      // `pwa_result_parity_test` both hold it) and the gesture
+                      // iOS settled on. The fullscreen VIEWER — the picture
+                      // alone, zoomable, with Share and Save — is one control
+                      // further in, on the Reveal itself, which is where the
+                      // person said it was missing.
                       child: _ExpandRevealButton(onTap: onOpenReveal),
                     ),
                   ],
@@ -1397,13 +1546,18 @@ class _V7RefineConfirmCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final nextN = state.versionCount + 1;
     final busy = state.generating;
-    // RED is a refusal, not a warning. Mobile's contract is explicit — "YELLOW →
-    // [Try anyway] + [Edit request] ; RED → [Edit request] SEULEMENT (jamais
-    // forçable, aucun confirm=true possible depuis une carte RED)" — and its
-    // handler refuses one anyway (chat_screen.dart:1811). This card offered
-    // "Create vision" on every verdict, which let a person pay for a render the
-    // engine had already judged wrong. On red the override is not disabled, it
-    // is absent: a greyed button still says "this is available to you".
+    // AYDEN ADVISES. THE USER DECIDES — on every verdict.
+    //
+    // This card used to drop the override on RED, copying mobile's card
+    // contract ("RED → [Edit request] SEULEMENT", chat_screen.dart:1811). The
+    // product rule is the person's to set, and it is now explicit: "do it
+    // anyway" after "I don't recommend" executes the original. The advisor's
+    // own charter says the same ("RED rare, toujours override + alternative",
+    // refine/advisor.py), and the TYPED override already honours it — a card
+    // that refused what typing allows would put two answers on one screen.
+    //
+    // RED keeps its own wording on the secondary action: after a refusal the
+    // natural alternative to going ahead is to rephrase, not to "cancel".
     final isRed = advisoryVerdict == 'red';
     return Padding(
       padding: EdgeInsets.zero,
@@ -1429,21 +1583,19 @@ class _V7RefineConfirmCard extends StatelessWidget {
               '“$instruction”',
               style: PwaType.bodyMuted().copyWith(fontStyle: FontStyle.italic),
             ),
-            if (!isRed) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(Icons.auto_awesome, size: 14, color: pwaGold),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      context.pwaL10n.createsVisionUsesSpace(nextN),
-                      style: PwaType.caption(),
-                    ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.auto_awesome, size: 14, color: pwaGold),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    context.pwaL10n.createsVisionUsesSpace(nextN),
+                    style: PwaType.caption(),
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -1462,7 +1614,6 @@ class _V7RefineConfirmCard extends StatelessWidget {
                     child: Text(isRed ? context.pwaL10n.editRequest : context.pwaL10n.cancel),
                   ),
                 ),
-                if (!isRed) ...[
                 const SizedBox(width: 10),
                 Expanded(
                   flex: 2,
@@ -1489,7 +1640,6 @@ class _V7RefineConfirmCard extends StatelessWidget {
                     child: Text(busy ? context.pwaL10n.creating : context.pwaL10n.createVision),
                   ),
                 ),
-                ],
               ],
             ),
           ],

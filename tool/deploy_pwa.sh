@@ -56,6 +56,27 @@ for (const t of targets) {
     }
   }
 }
+// ASSETS WHOSE NAME IS FIXED WHILE THEIR BYTES CHANGE — the tree-shaken icon
+// font above all — must revalidate on preprod, and the rule saying so must be
+// the one that applies, i.e. listed after the font-extension rule. A week-long
+// cache here drew every newly used icon as an empty circle on a returning
+// phone (the Full Reveal fullscreen button, 2026-09-10).
+const pre = targets.find((t) => t.target === 'preprod');
+if (pre) {
+  const rules = pre.headers || [];
+  const at = rules.findIndex((r) => r.source === '/assets/**');
+  const cc = at >= 0 && (rules[at].headers || []).find(
+    (h) => h.key.toLowerCase() === 'cache-control');
+  // Firebase does not document which rule wins when two match one path, so
+  // the guard does not rely on order: NO other rule may give a font a cache.
+  const fontCached = rules.some((r, i) => i !== at
+    && /otf|ttf|woff/.test(r.source || '')
+    && (r.headers || []).some((h) => /max-age=[1-9]/.test(h.value || '')));
+  if (!cc || !/no-cache/.test(cc.value) || fontCached) {
+    bad.push('preprod /assets/**: must be no-cache, and no other rule may '
+      + 'cache a font (a stale icon font draws empty buttons)');
+  }
+}
 if (bad.length) {
   console.error('\nREFUSING TO DEPLOY: the app shell would be cached.\n  '
     + bad.join('\n  ') + '\n');

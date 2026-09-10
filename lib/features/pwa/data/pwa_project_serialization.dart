@@ -262,10 +262,19 @@ PwaProjectRecords pwaRecordsFromSnapshot(
       },
   ];
 
+  // A `loading` bubble is never stored — it stands for a request only the page
+  // that sent it can resolve, and stored it came back after a reload as a
+  // spinner nothing would ever end. `client_order` counts stored messages only
+  // (and the durable seam re-bases it on what is already stored — see
+  // [pwaWithStableClientOrder]).
+  final stored = [
+    for (final m in s.messages)
+      if (m.kind != PwaMessageKind.loading) m,
+  ];
   final messages = <Map<String, dynamic>>[
-    for (var i = 0; i < s.messages.length; i++)
+    for (var i = 0; i < stored.length; i++)
       () {
-        final m = s.messages[i];
+        final m = stored[i];
         return <String, dynamic>{
           'id': m.id,
           'project_id': s.projectId,
@@ -387,6 +396,36 @@ bool _scalarEquals(Object? a, Object? b) {
   return a == b;
 }
 
+/// Give each message row the `client_order` it will KEEP.
+///
+/// `client_order` was the message's index in the in-memory list, recomputed on
+/// every save. That list is not append-only — a bubble removed from the middle
+/// (a finished "thinking…", a failed render's placeholder) shifts every message
+/// after it — while stored rows are immutable. The first save after such a
+/// shift compared a stored message with its new index, called it a divergence
+/// and threw; the project row had already been updated, and from then on no
+/// message of that project was ever stored again (staging, 2026-09-10:
+/// revision 7, three messages).
+///
+/// A message already stored keeps its stored order; a new one goes after
+/// everything stored, in list order.
+List<Map<String, dynamic>> pwaWithStableClientOrder(
+  List<Map<String, dynamic>> rows,
+  List<Map<String, dynamic>> stored,
+) {
+  final orderById = <Object?, int>{};
+  var last = -1;
+  for (final r in stored) {
+    final o = r['client_order'];
+    if (o is! num) continue;
+    orderById[r['id']] = o.toInt();
+    if (o.toInt() > last) last = o.toInt();
+  }
+  return [
+    for (final r in rows) {...r, 'client_order': orderById[r['id']] ?? ++last},
+  ];
+}
+
 // ── records → snapshot ───────────────────────────────────────────────────────
 
 PwaProjectSnapshot pwaSnapshotFromRecords({
@@ -427,8 +466,13 @@ PwaProjectSnapshot pwaSnapshotFromRecords({
       }(),
   ];
 
-  final messageRows = [...messages]
-    ..sort(
+  // A `generation_status` row is a spinner a navigation once stored (never
+  // written since). It is not part of the conversation: restored, it was a
+  // "creating…" bubble no answer could ever replace.
+  final messageRows = [
+    for (final r in messages)
+      if (r['message_type'] != 'generation_status') r,
+  ]..sort(
       (a, b) =>
           _reqInt(a, 'client_order').compareTo(_reqInt(b, 'client_order')),
     );

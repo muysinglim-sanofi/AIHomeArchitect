@@ -212,7 +212,7 @@
           ]
         },
         {
-          "source": "/assets/**",
+          "source": "**/*.@(png|jpg|jpeg|svg)",
           "headers": [
             {
               "key": "Cache-Control",
@@ -221,11 +221,24 @@
           ]
         },
         {
-          "source": "**/*.@(png|jpg|jpeg|svg|ttf|otf|woff|woff2)",
+          "comment": [
+            "REVALIDATE assets/: THEIR NAMES DO NOT CHANGE WHEN THEIR BYTES DO.",
+            "The rule this replaces kept /assets/** for a week without asking,",
+            "on the premise (above) that the service worker content-checks it.",
+            "It does not: Flutter 3.41's flutter_service_worker.js only",
+            "unregisters itself. The icon font is TREE-SHAKEN per build under a",
+            "fixed name, so a returning browser ran this week's code against",
+            "last week's glyphs, and every icon added since drew an empty",
+            "circle - the Full Reveal fullscreen button, on a real iPhone.",
+            "no-cache keeps the copy and asks with its ETag: a 304 costs one",
+            "round trip, a stale glyph costs the icon. Listed AFTER the",
+            "extension rule so it is the rule that decides under assets/."
+          ],
+          "source": "/assets/**",
           "headers": [
             {
               "key": "Cache-Control",
-              "value": "public, max-age=604800"
+              "value": "no-cache"
             }
           ]
         },

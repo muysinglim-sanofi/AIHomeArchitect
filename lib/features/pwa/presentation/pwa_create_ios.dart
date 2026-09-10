@@ -68,6 +68,7 @@ import 'pwa_primitives.dart';
 import 'pwa_scaffold.dart';
 import 'pwa_theme.dart';
 import 'pwa_type.dart';
+import 'pwa_file_picker_anchor.dart';
 
 /// Where the stepper switches from a top rail to a side rail. iOS's own
 /// threshold in `upload_screen.dart`.
@@ -802,7 +803,12 @@ class _UploadZone extends StatelessWidget {
     final l = context.pwaL10n;
     final filled = bytes != null;
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        // The iPhone's photo menu grows from the input WebKit is clicking;
+        // put that input on this zone first (pwa_file_picker_anchor.dart).
+        pwaAnchorFilePickerTo(context);
+        onTap();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,

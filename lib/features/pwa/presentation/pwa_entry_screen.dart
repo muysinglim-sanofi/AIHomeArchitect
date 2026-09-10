@@ -33,6 +33,7 @@ import 'pwa_brand.dart';
 import 'pwa_select_card.dart';
 import 'pwa_theme.dart';
 import '../l10n/pwa_l10n.dart';
+import 'pwa_file_picker_anchor.dart';
 
 /// Which fast-path selector is expanded (one-open-at-a-time accordion).
 enum PwaExpandedSelector { none, room, atmosphere }
@@ -672,7 +673,11 @@ class _DropZoneState extends State<_DropZone> {
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(PwaGap.radiusLg),
       child: InkWell(
-        onTap: widget.onPick,
+        onTap: () {
+          // Anchor the iPhone's photo menu on this zone, then open it.
+          pwaAnchorFilePickerTo(context);
+          widget.onPick();
+        },
         onHover: (h) => setState(() => _hover = h),
         borderRadius: BorderRadius.circular(PwaGap.radiusLg),
         child: AnimatedContainer(

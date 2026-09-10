@@ -244,8 +244,9 @@ void main() {
       // Spaces: the server's figure, and the voluntary door to more.
       expect(find.text(l.passSpacesLeft(300)), findsOneWidget);
       expect(find.byKey(const ValueKey('pwa-profile-get-spaces')), findsOneWidget);
-      // The stat card counts what Projects lists.
-      final n = c.read(pwaControllerProvider).visibleProjects.length;
+      // The stat card counts every finished Vision, V1 included — not
+      // projects. Three renders in two projects is 3, never "2 Redesigns".
+      final n = c.read(pwaControllerProvider).completedVisionCount;
       expect(find.byKey(const ValueKey('pwa-profile-stats')), findsOneWidget);
       expect(
         find.descendant(
@@ -455,7 +456,7 @@ void main() {
         expect(find.text(s.helpCenter), findsOneWidget);
         expect(find.text(s.privacy), findsOneWidget);
         expect(find.text(s.about), findsOneWidget);
-        expect(find.text(s.projectsCount), findsOneWidget);
+        expect(find.text(l.statVisions), findsOneWidget);
         if (code != 'en') {
           expect(l.contactSupport, isNot(en.contactSupport), reason: code);
           expect(s.helpCenter, isNot(en.shared.helpCenter), reason: code);

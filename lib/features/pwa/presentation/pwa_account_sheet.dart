@@ -310,6 +310,22 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
     final controller = ref.read(pwaAuthProvider.notifier);
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
 
+    // AN ACCOUNT THAT ALREADY HAS A METHOD IS NEVER OFFERED IT AGAIN.
+    //
+    // The phone review found a Facebook account reaching this sheet from the
+    // header and being shown "Secure your Ayden account" and "Continue with
+    // Facebook". The header no longer routes an identified account here, and
+    // this is the second lock: whatever opens the sheet, the doors are derived
+    // from the identities actually attached — `app_metadata.providers` plus the
+    // verified e-mail and phone — never from the assumption of a Guest.
+    final adding = auth.isIdentified && !_signInMode;
+    final fbDoor =
+        controller.canFacebook && !(adding && auth.hasProvider('facebook'));
+    final phoneDoor = controller.canPhone &&
+        !(adding && (auth.hasProvider('phone') || auth.phone.isNotEmpty));
+    final emailDoor =
+        !(adding && (auth.hasProvider('email') || auth.email.isNotEmpty));
+
     Widget body;
     if (!controller.isAvailable) {
       body = _Message(title: l.accountTitle, body: l.authUnavailable);
@@ -375,6 +391,18 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
           }
         },
       );
+    } else if (adding && !fbDoor && !phoneDoor && !emailDoor) {
+      // Everything this project offers is already attached. There is nothing
+      // to secure and nothing to add — so the sheet says what IS, not what to
+      // do. Placed before the method steps on purpose: on a deployment that
+      // offers e-mail alone the sheet OPENS on the e-mail step, and an account
+      // that already has an e-mail must not be asked for one.
+      body = _Message(
+        title: l.accountLinkedTitle,
+        body: auth.connectedVia != null
+            ? l.authConnectedVia(auth.connectedVia!)
+            : l.accountLinkedBody,
+      );
     } else if (_method == PwaAuthMethod.phone) {
       body = _PhoneStep(
         dial: _dial,
@@ -408,8 +436,9 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
       body = _Chooser(
         signInMode: _signInMode,
         busy: auth.busy,
-        facebook: controller.canFacebook,
-        phone: controller.canPhone,
+        facebook: fbDoor,
+        phone: phoneDoor,
+        email: emailDoor,
         leaving: auth.busy && auth.method == PwaAuthMethod.facebook,
         failure: (_oauthShown || auth.method == PwaAuthMethod.facebook)
             ? auth.failure
@@ -464,6 +493,7 @@ class _Chooser extends StatelessWidget {
     required this.busy,
     required this.facebook,
     required this.phone,
+    this.email = true,
     required this.leaving,
     required this.failure,
     required this.onFacebook,
@@ -476,6 +506,10 @@ class _Chooser extends StatelessWidget {
   final bool busy;
   final bool facebook;
   final bool phone;
+
+  /// The e-mail door. Off only for an account that already has an e-mail: a
+  /// door to something you already have is not a choice.
+  final bool email;
   final bool leaving;
   final PwaVerificationFailure? failure;
   final VoidCallback onFacebook;
@@ -500,7 +534,7 @@ class _Chooser extends StatelessWidget {
           _PrimaryButton(
             key: const ValueKey('pwa-auth-facebook'),
             label: l.authContinueFacebook,
-            icon: Icons.facebook,
+            leading: const _FacebookMark(),
             busy: leaving,
             onPressed: busy ? null : onFacebook,
           ),
@@ -524,38 +558,58 @@ class _Chooser extends StatelessWidget {
         if (failure != null &&
             failure != PwaVerificationFailure.destinationAlreadyRegistered)
           _FailureLine(failure!, method: PwaAuthMethod.facebook),
-        const SizedBox(height: PwaGap.md),
-        Row(
-          children: [
-            const Expanded(child: Divider(color: pwaHairline, height: 1)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(l.authOr,
-                  style: pwaSans(fontSize: 12, color: pwaFaint)),
+        if (email) ...[
+          const SizedBox(height: PwaGap.lg),
+          Row(
+            children: [
+              const Expanded(child: Divider(color: pwaHairline, height: 1)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(l.authOr,
+                    style: pwaSans(fontSize: 12, color: pwaFaint)),
+              ),
+              const Expanded(child: Divider(color: pwaHairline, height: 1)),
+            ],
+          ),
+          const SizedBox(height: PwaGap.xs),
+          TextButton(
+            key: const ValueKey('pwa-auth-email'),
+            onPressed: busy ? null : onEmail,
+            child: Text(l.authUseEmail,
+                style: pwaSans(
+                    fontSize: 14, fontWeight: FontWeight.w600, color: pwaInk)),
+          ),
+        ],
+        const SizedBox(height: PwaGap.sm),
+        // The returning-user door, phrased as Profile phrases it: a muted
+        // question and a gold verb, so the eye separates "I already have an
+        // account" from the three ways of securing THIS one. A single grey
+        // sentence read as a fourth, quieter option.
+        Center(
+          child: TextButton(
+            onPressed: busy ? null : onToggleMode,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            const Expanded(child: Divider(color: pwaHairline, height: 1)),
-          ],
-        ),
-        const SizedBox(height: PwaGap.xs),
-        TextButton(
-          key: const ValueKey('pwa-auth-email'),
-          onPressed: busy ? null : onEmail,
-          child: Text(l.authUseEmail,
-              style: pwaSans(
-                  fontSize: 14, fontWeight: FontWeight.w600, color: pwaInk)),
-        ),
-        const SizedBox(height: PwaGap.xs),
-        // The returning-user door, phrased as Profile phrases it: a question
-        // and a verb — not "that account", which only makes sense after a
-        // collision has named one.
-        TextButton(
-          onPressed: busy ? null : onToggleMode,
-          child: Text(
-            signInMode
-                ? l.accountBackToLink
-                : '${l.accountHaveOne} ${l.accountSignInTitle}',
-            textAlign: TextAlign.center,
-            style: pwaSans(fontSize: 13, color: pwaMuted),
+            child: signInMode
+                ? Text(l.accountBackToLink,
+                    textAlign: TextAlign.center,
+                    style: pwaSans(fontSize: 13, color: pwaMuted))
+                : Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    children: [
+                      Text(l.accountHaveOne,
+                          style: pwaSans(fontSize: 13, color: pwaMuted)),
+                      Text(l.accountSignInTitle,
+                          style: pwaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: pwaGold)),
+                    ],
+                  ),
           ),
         ),
       ],
@@ -973,18 +1027,58 @@ class _FailureLine extends StatelessWidget {
       );
 }
 
+/// Facebook's "f", presented the way Meta's own guidance presents it on a
+/// dark button: the mark in Facebook Blue on a white disc, never recoloured
+/// and never redrawn.
+///
+/// The glyph is Flutter's Material `Icons.facebook`, which ships the brand's
+/// own letterform — deliberately NOT a hand-traced path. This repository has
+/// already learnt what a recreated brand asset costs (the ABA marks were
+/// quarantined for exactly that), so nothing here invents geometry. Dropping
+/// in the SVG from Meta's Brand Resource Centre later replaces this widget
+/// and nothing else.
+class _FacebookMark extends StatelessWidget {
+  const _FacebookMark();
+
+  /// The disc's diameter. The glyph is drawn two points larger so its own
+  /// ring lands on the disc's edge — that overlap is what makes it read as
+  /// the logo rather than as a letter inside a bubble.
+  static const double size = 22;
+
+  /// Facebook Blue, from Meta's brand guidance.
+  static const Color brandBlue = Color(0xFF1877F2);
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        // Slightly larger than the disc: the glyph is a circled "f" whose own
+        // ring lands on the disc's edge, which is what makes the mark read as
+        // the logo rather than as a letter in a bubble.
+        child: Icon(Icons.facebook, size: size + 2, color: brandBlue),
+      );
+}
+
 class _PrimaryButton extends StatelessWidget {
   const _PrimaryButton({
     super.key,
     required this.label,
     required this.onPressed,
-    this.icon,
+    this.leading,
     this.busy = false,
   });
 
   final String label;
   final VoidCallback? onPressed;
-  final IconData? icon;
+
+  /// A brand mark, when the action belongs to someone else. Ayden's own
+  /// actions carry no glyph at all: on a black pill the word is the affordance.
+  final Widget? leading;
   final bool busy;
 
   @override
@@ -1017,9 +1111,9 @@ class _PrimaryButton extends StatelessWidget {
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 20, color: fg),
-                  const SizedBox(width: 10),
+                if (leading != null) ...[
+                  Opacity(opacity: enabled ? 1 : 0.45, child: leading),
+                  const SizedBox(width: 12),
                 ],
                 // Wraps rather than truncates: French and Khmer both run
                 // long, and a clipped button label is a broken promise.

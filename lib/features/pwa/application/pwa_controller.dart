@@ -13,6 +13,7 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/widgets.dart' show Locale;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -555,6 +556,26 @@ class PwaState {
     return PwaProjectSnapshot.sortedBy(base, librarySort);
   }
 
+  /// Every finished Vision this person has, each counted once.
+  ///
+  /// Read off the durable record — the vision rows the library is hydrated
+  /// from, plus the session in hand, deduplicated by id so a reload or a
+  /// library resync can never count one render twice. A generation that
+  /// failed or was rolled back never became a vision row, so it is not here.
+  /// Nothing is derived from the wallet: Spaces are billing, this is history.
+  int get completedVisionCount {
+    final ids = <String>{};
+    for (final p in library) {
+      for (final v in p.visions) {
+        ids.add(v.versionId);
+      }
+    }
+    for (final v in versions) {
+      ids.add(v.versionId);
+    }
+    return ids.length;
+  }
+
   bool get hasSource => source != null;
   int get versionCount => versions.length;
 
@@ -758,14 +779,7 @@ class PwaController extends StateNotifier<PwaState> {
     // only the Retry button — an explicit act — runs it again.
     final p = r?.pending;
     if (p == null) return;
-    if (!p.isReplayableAt(DateTime.now())) {
-      Future<void>.microtask(() async {
-        if (!mounted || state.activeProjectId != p.projectId) return;
-        await _failGeneration(_lastAttemptFailed);
-      });
-      return;
-    }
-    Future<void>.microtask(() => _replayPending(p));
+    Future<void>.microtask(() => _resumeAtBoot(p));
   }
 
   /// What a boot can honestly say about an attempt that failed in an earlier
@@ -777,6 +791,57 @@ class PwaController extends StateNotifier<PwaState> {
     userMessage: "Ayden couldn't complete this vision. You can try again.",
     retryable: true,
   );
+
+  /// Reconcile a generation recorded before this page existed — by ASKING the
+  /// backend about its key before doing anything else.
+  ///
+  /// The record alone cannot tell "finished while the page was gone" from
+  /// "still rendering" from "failed" from "never sent", and each used to be met
+  /// with a guess: re-POST when the record was recent, "couldn't complete" when
+  /// it was not. So a vision that HAD been made was reported lost, and a render
+  /// that had failed server-side was re-run — and charged — without anyone
+  /// asking. The key is the operation; the backend knows what became of it:
+  ///
+  ///  * COMPLETED  → adopt that vision. No request, no charge.
+  ///  * PROCESSING → wait for it, with its bubble back. Never a second POST.
+  ///  * FAILED     → say so, with Retry — an explicit act.
+  ///  * UNKNOWN    → the backend never saw it. A recent record is sent now (it
+  ///                 IS the person's own request, reissued with its own key);
+  ///                 an old one is reported, never run.
+  Future<void> _resumeAtBoot(PwaPendingGeneration p) async {
+    if (!mounted || state.activeProjectId != p.projectId) return;
+    PwaGenerationLifecycle life;
+    try {
+      life = await _generation.status(p.idempotencyKey);
+    } catch (e) {
+      _trace('restore_status_unavailable', {'error': e});
+      life = const PwaGenerationLifecycle(state: 'UNKNOWN');
+    }
+    if (!mounted || state.activeProjectId != p.projectId) return;
+    final done = life.vision;
+    switch (life.state) {
+      case 'COMPLETED' when done != null:
+        await _replayPending(p, known: done);
+      case 'PROCESSING':
+        await _replayPending(p, attach: true);
+      case 'FAILED':
+        await _failGeneration(
+          PwaGenerationFailure(
+            code: life.errorCode.isEmpty ? 'GENERATION_FAILED' : life.errorCode,
+            userMessage:
+                'This vision could not be completed. You can try again.',
+            retryable: true,
+          ),
+          key: p.idempotencyKey,
+        );
+      default:
+        if (p.isReplayableAt(DateTime.now())) {
+          await _replayPending(p);
+        } else {
+          await _failGeneration(_lastAttemptFailed, key: p.idempotencyKey);
+        }
+    }
+  }
 
   /// Choose the FIRST-frame screen from the durable restore (§ boot order):
   /// no project → Hero; Draft → entry/Fast-Path (photo + cinematic skipped);
@@ -918,6 +983,29 @@ class PwaController extends StateNotifier<PwaState> {
   /// generation must be a new key, or it would silently replay the first.
   String? _activeGenerationKey;
 
+  /// WHAT [_activeGenerationKey] was minted for — the action, the project, the
+  /// parent and the choice. A key is ONE intent: a retry of the same intent
+  /// reuses it, anything else gets its own. It used to survive a failure and be
+  /// handed to the next generation whatever that was, so a failed switch to
+  /// Soft Luxury followed by a switch to Japandi asked the backend to replay the
+  /// Soft Luxury operation.
+  String? _activeGenerationIntent;
+
+  /// Generations still running, by the project that ASKED for them.
+  ///
+  /// THE BUG THIS EXISTS FOR (staging, 2026-09-10). A switch was started in a
+  /// project; the person went to Profile, then Home; and the render came back
+  /// into whatever session was on screen by then — a fresh, empty Create whose
+  /// default photo is a showcase condo. It became "Vision 1" of a project nobody
+  /// made, with somebody else's original, while the real project kept a spinner
+  /// for ever. A generation belongs to the project it was started in, and it
+  /// lands there, wherever the person happens to be.
+  final Map<String, _GenerationJob> _jobs = {};
+
+  /// A generation that FAILED while its project was not on screen. Said once,
+  /// when the person comes back to that project — never in the one they are in.
+  final Map<String, PwaGenerationFailure> _failedAway = {};
+
   /// Serialises durable saves so rapid mutations persist IN ORDER, never
   /// concurrently — the simplest local ordering (no queue/stream/state machine).
   Future<void> _saveChain = Future.value();
@@ -945,10 +1033,211 @@ class PwaController extends StateNotifier<PwaState> {
   // Real UUIDs (id / idempotency_key are uuid columns in staging). The same
   // UUID is created once and reused on retry — no derived/remote id.
   String _nextId(String prefix) => const Uuid().v4();
-  int _nextOrder() => state.versions.isEmpty
+  static int _nextOrderIn(List<PwaVision> versions) => versions.isEmpty
       ? 1
-      : (state.versions.map((v) => v.order).reduce((a, b) => a > b ? a : b) +
+      : (versions.map((v) => v.order).reduce((a, b) => a > b ? a : b) + 1);
+
+  /// The number the NEXT vision of [versions] asks for: one past the highest in
+  /// use, never the count — a copy of the project that is missing a row must not
+  /// ask for a number that is taken. The backend has the final word and stores
+  /// the vision under its own; this is only what is asked.
+  static int _nextVisionNumberIn(List<PwaVision> versions) => versions.isEmpty
+      ? 1
+      : (versions.map((v) => v.visionNumber).reduce((a, b) => a > b ? a : b) +
             1);
+
+  // ── Generation ownership ──────────────────────────────────────────────────
+
+  bool _isCurrent(_GenerationJob job) =>
+      mounted && state.project.projectId == job.projectId;
+
+  /// The key for [intent]: the same one while the intent is the same (a retry),
+  /// a new one the moment it is not.
+  String _keyFor(String intent) {
+    if (_activeGenerationKey == null || _activeGenerationIntent != intent) {
+      _activeGenerationKey = const Uuid().v4();
+      _activeGenerationIntent = intent;
+    }
+    return _activeGenerationKey!;
+  }
+
+  void _forgetKey() {
+    _activeGenerationKey = null;
+    _activeGenerationIntent = null;
+  }
+
+  /// Register a generation as belonging to the project on screen NOW — called
+  /// synchronously, before the first await, so nothing about it is read later
+  /// from whichever project happens to be open by then.
+  _GenerationJob _startJob({
+    required String key,
+    required PwaMessage loading,
+    PwaMessage? request,
+  }) {
+    final job = _GenerationJob(
+      projectId: state.project.projectId,
+      key: key,
+      loading: loading,
+      request: request,
+      base: _activeSnapshot(bumpUpdated: false, pure: true),
+      titlePinned: state.activeTitleOverride != null,
+    );
+    _jobs[job.projectId] = job;
+    _failedAway.remove(job.projectId);
+    // There is ONE pending slot and it now holds this job's record, so a failure
+    // left in another project can no longer be retried under its own key. It is
+    // still shown when the person gets there — as information, not as a button.
+    for (final id in _failedAway.keys.toList()) {
+      final f = _failedAway[id]!;
+      if (!f.retryable) continue;
+      _failedAway[id] = PwaGenerationFailure(
+        code: f.code,
+        userMessage: f.userMessage,
+        retryable: false,
+        billingState: f.billingState,
+        paywall: f.paywall,
+      );
+    }
+    return job;
+  }
+
+  /// The job is over. False when its result has nowhere to go any more — the
+  /// page is gone, the project was deleted, or the identity changed — in which
+  /// case the backend keeps what it made and this page lands nothing.
+  bool _endJob(_GenerationJob job) {
+    final owned = identical(_jobs[job.projectId], job);
+    if (owned) _jobs.remove(job.projectId);
+    if (!owned) {
+      _trace('job_dropped', {'project': job.projectId});
+    }
+    return owned && mounted;
+  }
+
+  /// ONE generation at a time, wherever it was started.
+  ///
+  /// The recorded intent that makes a reload free has a single slot. A second
+  /// generation started in another project while the first one ran would
+  /// overwrite it — and the first one's recovery with it. So the second one is
+  /// refused, and the person told why, instead of silently racing the first.
+  bool _refuseWhileBusy() {
+    if (_jobs.isEmpty) return false;
+    final here = _jobs.containsKey(state.project.projectId);
+    _trace('refused_busy', {'running': _jobs.keys.join(',')});
+    state = state.copyWith(clearGenerationError: true);
+    state = state.copyWith(
+      generationError: here
+          ? 'Ayden is still working on this one. '
+                'Give it a moment, then try again.'
+          : 'Ayden is still finishing a vision in another project. '
+                "You can start this one as soon as it's ready.",
+      generationErrorCode: here ? 'PROCESSING' : 'BUSY_ELSEWHERE',
+      generationRetryable: false,
+    );
+    return true;
+  }
+
+  /// A failure, surfaced where it belongs: on screen if its project is, and
+  /// otherwise kept for when the person comes back to it.
+  Future<void> _landFailure(_GenerationJob job, PwaGenerationFailure f) async {
+    if (_isCurrent(job)) {
+      await _failGeneration(f, removeMessageId: job.loading.id, key: job.key);
+      return;
+    }
+    _trace('failed_away', {
+      'project': job.projectId,
+      'code': f.code,
+      'retryable': f.retryable,
+    });
+    if (f.isAuthoritativeBillingRefusal) {
+      await _clearPendingIf(job.key);
+    } else {
+      await _settlePendingIf(job.key);
+    }
+    _failedAway[job.projectId] = f;
+  }
+
+  /// Land a finished vision in its OWN project while that project is not the
+  /// one on screen: the working copy and the durable row both get it, the
+  /// session on screen is not touched, and nothing is created anywhere else.
+  void _landAway(
+    _GenerationJob job,
+    PwaGeneratedVision made, {
+    required PwaActionType actionType,
+    required String requestedAtmosphereId,
+    required String title,
+    required PwaMessage Function(PwaVision v, PwaAtmosphere chosen) reveal,
+    String? parentVersionId,
+    String? sourceMessageId,
+    String instruction = '',
+  }) {
+    // The freshest copy of the owner is the one the navigation that left it
+    // saved. A first vision has none (a Create session is not a project until
+    // its first vision exists), so the session as it stood at the start
+    // stands in — with its own photo, never a placeholder.
+    var s = _repo.openProject(job.projectId) ?? job.base;
+    final chosen = _atmosphere(
+      _resolvedAtmosphereId(made, requestedAtmosphereId),
+    );
+    final recordAs = actionType == PwaActionType.signature
+        ? chosen.id
+        : requestedAtmosphereId;
+    // Mobile's rule for a delegated room — adopt only when none was chosen —
+    // applied to the project the answer is about.
+    final roomId = _roomIdForResolved(made.resolvedRoomType);
+    if (roomId != null && s.roomId == null) {
+      s = s.copyWith(roomId: roomId, roomLabel: _repo.roomLabel(roomId));
+    }
+    final v = _visionFrom(
+      made,
+      projectId: job.projectId,
+      siblings: s.visions,
+      actionType: actionType,
+      atmosphereId: recordAs,
+      title: actionType == PwaActionType.signature ? chosen.name : title,
+      parentVersionId: parentVersionId,
+      sourceMessageId: sourceMessageId,
+      instruction: instruction,
+    );
+    if (s.visions.any((o) => o.versionId == v.versionId)) {
+      _trace('landed_already', {'vision': v.versionId, 'project': job.projectId});
+      return;
+    }
+    final request = job.request;
+    final first = s.visions.isEmpty;
+    final landed = s.copyWith(
+      title: first && !job.titlePinned
+          ? _titleForRoom(_repo, s.roomId)
+          : s.title,
+      visions: [for (final o in s.visions) o.copyWith(isCurrent: false), v],
+      messages: [
+        for (final m in s.messages)
+          if (m.kind != PwaMessageKind.loading) m,
+        if (request != null && !s.messages.any((m) => m.id == request.id))
+          request,
+        reveal(v, chosen),
+      ],
+      currentVisionId: v.versionId,
+      coverVisionId: v.versionId,
+      selectedAtmosphereId: recordAs,
+      atmosphereLabel: _atmosphere(recordAs).name,
+      status: PwaProjectStatus.active,
+      createdOrder: s.createdOrder > 0
+          ? s.createdOrder
+          : _repo.nextLibraryOrder(),
+      updatedOrder: _repo.nextLibraryOrder(),
+      updatedAt: DateTime.now(),
+      updatedLabel: 'Updated today',
+    );
+    _repo.saveProject(landed);
+    state = state.copyWith(library: _repo.listProjects());
+    _enqueueDurable((p) => p.saveProject(landed));
+    _trace('landed_away', {
+      'project': job.projectId,
+      'vision': v.versionId,
+      'number': v.visionNumber,
+      'open': state.project.projectId,
+    });
+  }
 
   PwaAtmosphere _atmosphere(String id) => state.atmospheres.firstWhere(
     (a) => a.id == id,
@@ -967,28 +1256,41 @@ class PwaController extends StateNotifier<PwaState> {
   /// backend can act on: the project row must exist and the photo must be a
   /// private Storage object the backend is allowed to read. Offline there is
   /// neither, so the bundle asset is reported unchanged.
-  Future<PwaOriginalUpload> _prepareOriginal() async {
+  Future<PwaOriginalUpload> _prepareOriginal(_GenerationJob job) async {
     final p = _persistence;
     if (p == null) {
       return PwaOriginalUpload.forPath(
-        state.project.projectId,
-        state.project.originalAsset,
+        job.projectId,
+        job.base.originalImageAsset,
       );
     }
-    final src = state.source;
+    final src = job.base.source;
     // Only a genuine Replace-photo re-uploads: a retry of the same generation
     // reuses the object already in Storage.
     final replace = src != null && !identical(src, _persistedSource);
+    // Read while the owner is still the session on screen — this runs before a
+    // generation's first await — exactly the snapshot the upload always took.
+    final snapshot = _isCurrent(job)
+        ? _activeSnapshot(bumpUpdated: false)
+        : job.base;
     final upload = await p.prepareGeneration(
-      _activeSnapshot(bumpUpdated: false),
+      snapshot,
       replaceOriginal: replace,
     );
+    // The job keeps the durable path whatever happens next: it is what a result
+    // landing while the person is elsewhere is stored against.
+    job.base = snapshot.copyWith(originalImageAsset: upload.originalStoragePath);
+    // Everything below is about the SESSION ON SCREEN, and only true of it if
+    // it is still the owner. Written unconditionally, it gave the project the
+    // person had moved to the other project's photo — and marked that photo as
+    // the one already uploaded, so its own next save uploaded it again.
+    if (!_isCurrent(job)) return upload;
     _persistedSource = src;
     // Adopt the durable path as the session's original, so the in-memory project
     // describes itself exactly as the stored row does — before and after a
     // refresh — and the Before pane has something to resolve if the bytes are
     // ever absent.
-    if (mounted && state.project.originalAsset != upload.originalStoragePath) {
+    if (state.project.originalAsset != upload.originalStoragePath) {
       state = state.copyWith(
         project: PwaProject(
           projectId: state.project.projectId,
@@ -1001,8 +1303,8 @@ class PwaController extends StateNotifier<PwaState> {
   }
 
   /// Describe one generation completely enough to reissue it verbatim.
-  PwaPendingGeneration _pendingFor({
-    required String idempotencyKey,
+  PwaPendingGeneration _pendingFor(
+    _GenerationJob job, {
     required PwaActionType actionType,
     required String atmosphereId,
     required String originalStoragePath,
@@ -1012,12 +1314,15 @@ class PwaController extends StateNotifier<PwaState> {
     bool confirm = false,
   }) {
     final atmo = _atmosphere(atmosphereId);
+    // All of it the OWNER's, captured before the first await. Read from `state`
+    // here — after the upload — it was whichever project was open by then:
+    // project B's id and room sent with project A's photo.
     return PwaPendingGeneration(
-      projectId: state.project.projectId,
-      idempotencyKey: idempotencyKey,
+      projectId: job.projectId,
+      idempotencyKey: job.key,
       actionType: pwaActionToDb(actionType),
-      roomId: state.selectedRoomId ?? '',
-      roomLabel: _repo.roomLabel(state.selectedRoomId),
+      roomId: job.base.roomId ?? '',
+      roomLabel: job.base.roomLabel,
       atmosphereId: atmo.id,
       atmosphereLabel: atmo.name,
       originalStoragePath: originalStoragePath,
@@ -1072,8 +1377,23 @@ class PwaController extends StateNotifier<PwaState> {
           ? p.idempotencyKey
           : held.idempotencyKey);
     }
-    await _pending.clear();
+    await _clearPendingIf(p.idempotencyKey);
     return made;
+  }
+
+  /// Clear the recorded intent — only if it is still THIS one. A generation that
+  /// answers late must never erase the record of one started after it.
+  Future<void> _clearPendingIf(String key) async {
+    final cur = await _pending.read();
+    if (cur == null || cur.idempotencyKey == key) await _pending.clear();
+  }
+
+  /// Settle the recorded intent as failed — again only if it is still this one.
+  Future<void> _settlePendingIf(String key) async {
+    final cur = await _pending.read();
+    if (cur != null && cur.idempotencyKey == key && !cur.failed) {
+      await _pending.write(cur.asFailed());
+    }
   }
 
   /// How long a claim held elsewhere is waited on before the app gives up and
@@ -1178,6 +1498,9 @@ class PwaController extends StateNotifier<PwaState> {
             e.kind != PwaErrorKind.configuration,
       );
     }
+    // Never swallowed: the person reads a generic sentence, the console keeps
+    // the cause.
+    _trace('generation_unexpected_error', {'error': e});
     return const PwaGenerationFailure(
       code: 'UNKNOWN',
       userMessage: 'Something went wrong. Try again.',
@@ -1207,6 +1530,12 @@ class PwaController extends StateNotifier<PwaState> {
     if (roomId != null && state.selectedRoomId == null) {
       state = state.copyWith(selectedRoomId: roomId);
     }
+    return _resolvedAtmosphereId(made, requested);
+  }
+
+  /// The atmosphere half of [_adoptResolved]. Touches nothing, so it also serves
+  /// a project that is not the one on screen.
+  String _resolvedAtmosphereId(PwaGeneratedVision made, String requested) {
     final resolved = made.resolvedAtmosphereId.trim();
     if (resolved.isEmpty || resolved == requested) return requested;
     // Only an atmosphere this build can actually show. An unknown id would fall
@@ -1255,27 +1584,36 @@ class PwaController extends StateNotifier<PwaState> {
   /// rather than minting a second identity for the same vision.
   PwaVision _visionFrom(
     PwaGeneratedVision made, {
+    required String projectId,
+    required List<PwaVision> siblings,
     required PwaActionType actionType,
     required String atmosphereId,
     required String title,
-    required int visionNumber,
     String? parentVersionId,
     String? sourceMessageId,
     String instruction = '',
   }) => PwaVision(
     versionId: made.backendVisionId ?? _nextId('v'),
-    projectId: state.project.projectId,
-    visionNumber: visionNumber,
+    // The project that ASKED for it — never "whichever one is open now".
+    projectId: projectId,
+    // The number the BACKEND stored it under; it owns the ordinal. A client with
+    // a stale copy of the project used to send a number already taken, and the
+    // session then showed a number the database did not hold.
+    visionNumber: made.visionNumber > 0
+        ? made.visionNumber
+        : _nextVisionNumberIn(siblings),
     title: title,
     atmosphereId: atmosphereId,
     actionType: actionType,
     afterAsset: made.imagePath,
-    order: _nextOrder(),
+    order: _nextOrderIn(siblings),
     parentVersionId: parentVersionId,
     sourceMessageId: sourceMessageId,
     instruction: instruction,
     isCurrent: true,
-    remotePersisted: made.backendVisionId != null,
+    // A row the backend could NOT write (`persisted: false`) is the client's to
+    // write. Marked remote, it was a vision that existed nowhere but here.
+    remotePersisted: made.backendVisionId != null && made.persisted,
   );
 
   /// Surface a failure without inventing anything: the loading placeholder is
@@ -1306,7 +1644,33 @@ class PwaController extends StateNotifier<PwaState> {
   Future<void> _failGeneration(
     PwaGenerationFailure f, {
     String? removeMessageId,
+    String? key,
   }) async {
+    // The cause is always on record, whatever sentence the person reads.
+    _trace('generation_failed', {
+      'code': f.code,
+      'retryable': f.retryable,
+      'billing': f.billingState,
+    });
+    _showFailure(f, removeMessageId: removeMessageId);
+    if (f.isAuthoritativeBillingRefusal) {
+      if (key == null) {
+        await _pending.clear();
+      } else {
+        await _clearPendingIf(key);
+      }
+      return;
+    }
+    if (key == null) {
+      final p = await _pending.read();
+      if (p != null && !p.failed) await _pending.write(p.asFailed());
+    } else {
+      await _settlePendingIf(key);
+    }
+  }
+
+  /// The on-screen half of [_failGeneration]: exactly one surface per outcome.
+  void _showFailure(PwaGenerationFailure f, {String? removeMessageId}) {
     final billing = f.isBillingRefusal;
     // `copyWith` reads a null as "unchanged", so the error fields cannot be
     // blanked by passing null. Clear the whole outcome group first, then write
@@ -1333,12 +1697,6 @@ class PwaController extends StateNotifier<PwaState> {
             generationErrorCode: f.code,
             generationRetryable: f.retryable,
           );
-    if (f.isAuthoritativeBillingRefusal) {
-      await _pending.clear();
-      return;
-    }
-    final p = await _pending.read();
-    if (p != null && !p.failed) await _pending.write(p.asFailed());
   }
 
   /// Dismiss a generation error (the user chose to move on).
@@ -1357,15 +1715,18 @@ class PwaController extends StateNotifier<PwaState> {
   /// Run (or re-run) a recorded generation and fold its result into the
   /// session. Shared by the retry button and the after-reload resume, so both
   /// converge on exactly one vision.
-  Future<void> _replayPending(PwaPendingGeneration p) async {
+  ///
+  /// [known] is a result the lifecycle already reported (adopted as it is, no
+  /// request); [attach] waits for a render the backend is still holding (polls,
+  /// never re-POSTs). Neither can start a second generation.
+  Future<void> _replayPending(
+    PwaPendingGeneration p, {
+    PwaGeneratedVision? known,
+    bool attach = false,
+  }) async {
     if (!mounted || state.generating) return;
     if (state.activeProjectId != p.projectId) return;
-    // Already reconciled (the reload restored the vision the backend made) —
-    // nothing to replay, and the record is stale.
-    if (state.versions.any((v) => v.visionNumber == p.visionNumber)) {
-      await _pending.clear();
-      return;
-    }
+    if (_refuseWhileBusy()) return;
     final isFirst = state.versions.isEmpty;
     // A retry inside the conversation must SHOW that it restarted. The failure
     // banner removed the original placeholder, so without putting one back the
@@ -1390,36 +1751,28 @@ class PwaController extends StateNotifier<PwaState> {
       clearGenerationError: true,
       messages: [...state.messages, loadingMsg],
     );
+    final job = _startJob(key: p.idempotencyKey, loading: loadingMsg);
     final PwaGeneratedVision made;
     try {
-      made = await _execute(p);
+      made = known ??
+          (attach
+              ? await _awaitHeldGeneration(p.idempotencyKey)
+              : await _execute(p));
     } catch (e) {
-      if (!mounted) return;
-      await _failGeneration(_asFailure(e), removeMessageId: loadingMsg.id);
-      if (isFirst) state = state.copyWith(phase: PwaPhase.entry);
+      if (!_endJob(job)) return;
+      await _landFailure(job, _asFailure(e));
+      if (isFirst && _isCurrent(job)) {
+        state = state.copyWith(phase: PwaPhase.entry);
+      }
       return;
     }
-    if (!mounted) return;
-    _activeGenerationKey = null;
+    if (!_endJob(job)) return;
+    // `_execute` clears its own record; an adopted or awaited result has to.
+    if (known != null || attach) await _clearPendingIf(p.idempotencyKey);
+    if (_activeGenerationKey == p.idempotencyKey) _forgetKey();
     final action = pwaActionFromDb(p.actionType);
-    // Capture what `_adoptResolved` decided instead of discarding it: Ayden's
-    // opening line names the direction, and on a delegated Signature the
-    // resolved atmosphere is the only one worth naming. Called exactly once,
-    // as before — it mutates `selectedRoomId`, so a second call would be a
-    // second write.
-    final resolvedAtmo = _atmosphere(_adoptResolved(made, p.atmosphereId));
-    final v = _visionFrom(
-      made,
-      actionType: action,
-      atmosphereId: p.atmosphereId,
-      title: action == PwaActionType.refine
-          ? p.userInstruction
-          : p.atmosphereLabel,
-      visionNumber: p.visionNumber,
-      parentVersionId: p.parentVisionId.isEmpty ? null : p.parentVisionId,
-      instruction: p.userInstruction,
-    );
-    final reveal = PwaMessage(
+    final parentId = p.parentVisionId.isEmpty ? null : p.parentVisionId;
+    PwaMessage revealFor(PwaVision v, PwaAtmosphere resolvedAtmo) => PwaMessage(
       id: _nextId('m'),
       role: PwaRole.ayden,
       kind: PwaMessageKind.reveal,
@@ -1435,8 +1788,46 @@ class PwaController extends StateNotifier<PwaState> {
       },
       visionId: v.versionId,
     );
+    final title = action == PwaActionType.refine
+        ? p.userInstruction
+        : p.atmosphereLabel;
+    if (!_isCurrent(job)) {
+      _landAway(
+        job,
+        made,
+        actionType: action,
+        requestedAtmosphereId: p.atmosphereId,
+        title: title,
+        parentVersionId: parentId,
+        instruction: p.userInstruction,
+        reveal: revealFor,
+      );
+      return;
+    }
+    // Capture what `_adoptResolved` decided instead of discarding it: Ayden's
+    // opening line names the direction, and on a delegated Signature the
+    // resolved atmosphere is the only one worth naming. Called exactly once,
+    // as before — it mutates `selectedRoomId`, so a second call would be a
+    // second write.
+    final resolvedAtmo = _atmosphere(_adoptResolved(made, p.atmosphereId));
+    // A first vision is recorded under the atmosphere the engine RESOLVED, as
+    // the direct path records it — "Ayden Signature" is a choice, not a look.
+    final recordAs = action == PwaActionType.signature
+        ? resolvedAtmo.id
+        : p.atmosphereId;
+    final v = _visionFrom(
+      made,
+      projectId: job.projectId,
+      siblings: state.versions,
+      actionType: action,
+      atmosphereId: recordAs,
+      title: action == PwaActionType.signature ? resolvedAtmo.name : title,
+      parentVersionId: parentId,
+      instruction: p.userInstruction,
+    );
+    final reveal = revealFor(v, resolvedAtmo);
     if (isFirst) {
-      await _settleFirstVision(v, reveal, p.atmosphereId,
+      await _settleFirstVision(v, reveal, recordAs,
           replaceLoadingId: loadingMsg.id);
     } else {
       _commitNewVision(
@@ -1481,7 +1872,7 @@ class PwaController extends StateNotifier<PwaState> {
   }) {
     // A different photo is a different generation: the previous attempt's key
     // must not be reused, or the backend would replay a render of the old one.
-    _activeGenerationKey = null;
+    _forgetKey();
     state = state.copyWith(
       source: src,
       sourceOrigin: origin,
@@ -1535,6 +1926,8 @@ class PwaController extends StateNotifier<PwaState> {
     // §Generate 1 — validate the local creation session (Room may be Ayden
     // Decide / null; Atmosphere defaults to Ayden Signature). A photo is required.
     if (state.source == null) return;
+    // One at a time: a render still running elsewhere holds the pending slot.
+    if (_refuseWhileBusy()) return;
     // Set synchronously, BEFORE the first await: a second tap finds `generating`
     // already true and returns, so one click is one upload and one generation.
     // ENTER THE SESSION NOW. Tapping Generate opens the Design Session and the
@@ -1558,17 +1951,21 @@ class PwaController extends StateNotifier<PwaState> {
     );
     final atmosphereId = state.selectedAtmosphereId ?? 'ayden_signature';
     // Kept across a retry of THIS generation, minted fresh for a new one.
-    final key = _activeGenerationKey ??= const Uuid().v4();
+    final key = _keyFor(
+      'initial|${state.project.projectId}|$atmosphereId|'
+      '${userInstruction.trim()}',
+    );
+    final job = _startJob(key: key, loading: loadingMsg);
 
     final PwaGeneratedVision made;
     try {
       // §Generate 2-4 — the durable project row and the original photo in
       // private Storage FIRST (the backend downloads that exact path and
       // refuses anything outside the caller's namespace), then the engine.
-      final upload = await _prepareOriginal();
+      final upload = await _prepareOriginal(job);
       made = await _execute(
         _pendingFor(
-          idempotencyKey: key,
+          job,
           actionType: PwaActionType.signature,
           atmosphereId: atmosphereId,
           originalStoragePath: upload.originalStoragePath,
@@ -1580,35 +1977,24 @@ class PwaController extends StateNotifier<PwaState> {
         ),
       );
     } catch (e) {
-      if (!mounted) return;
+      if (!_endJob(job)) return;
       // §Failure — stay on Create with the photo, Room and Atmosphere intact
       // and the real error visible. No vision, no card, no fixture. The pending
       // record survives, so Retry reuses the same key. The bubble goes with it:
       // a failed generation must not leave "creating…" in a thread nobody is
       // looking at any more.
-      await _failGeneration(_asFailure(e), removeMessageId: loadingMsg.id);
-      state = state.copyWith(phase: PwaPhase.entry);
+      await _landFailure(job, _asFailure(e));
+      if (_isCurrent(job)) state = state.copyWith(phase: PwaPhase.entry);
       return;
     }
-    if (!mounted) return;
-    _activeGenerationKey = null;
-    // The engine has now answered both delegated questions. Adopt its answers
-    // BEFORE the vision is built, so the row this session shows and the row the
-    // database holds are the same row.
-    final chosen = _atmosphere(_adoptResolved(made, atmosphereId));
-    final v1 = _visionFrom(
-      made,
-      actionType: PwaActionType.signature,
-      atmosphereId: chosen.id,
-      title: chosen.name,
-      visionNumber: 1,
-    );
-    final intro = PwaMessage(
+    if (!_endJob(job)) return;
+    if (_activeGenerationKey == key) _forgetKey();
+    PwaMessage intro(PwaVision v, PwaAtmosphere chosen) => PwaMessage(
       id: _nextId('m'),
       role: PwaRole.ayden,
       kind: PwaMessageKind.reveal,
       text: _l10n.firstVisionIntro(chosen.name),
-      visionId: v1.versionId,
+      visionId: v.versionId,
       chips: [
         _l10n.chipWhatDoYouThink,
         _l10n.chipWarmer,
@@ -1621,7 +2007,30 @@ class PwaController extends StateNotifier<PwaState> {
         _l10n.chipCalmer,
       ],
     );
-    await _settleFirstVision(v1, intro, chosen.id,
+    if (!_isCurrent(job)) {
+      _landAway(
+        job,
+        made,
+        actionType: PwaActionType.signature,
+        requestedAtmosphereId: atmosphereId,
+        title: '',
+        reveal: intro,
+      );
+      return;
+    }
+    // The engine has now answered both delegated questions. Adopt its answers
+    // BEFORE the vision is built, so the row this session shows and the row the
+    // database holds are the same row.
+    final chosen = _atmosphere(_adoptResolved(made, atmosphereId));
+    final v1 = _visionFrom(
+      made,
+      projectId: job.projectId,
+      siblings: const [],
+      actionType: PwaActionType.signature,
+      atmosphereId: chosen.id,
+      title: chosen.name,
+    );
+    await _settleFirstVision(v1, intro(v1, chosen), chosen.id,
         replaceLoadingId: loadingMsg.id);
   }
 
@@ -1718,6 +2127,7 @@ class PwaController extends StateNotifier<PwaState> {
     final atmosphereId = state.pendingAtmosphereId;
     final parent = state.sourceVision;
     if (atmosphereId == null || parent == null) return;
+    if (_refuseWhileBusy()) return;
     final atmo = _atmosphere(atmosphereId);
 
     final userMsg = PwaMessage(
@@ -1759,52 +2169,69 @@ class PwaController extends StateNotifier<PwaState> {
       phase: PwaPhase.architect,
       clearPreview: true,
     );
-    final key = _activeGenerationKey ??= const Uuid().v4();
+    final key = _keyFor(
+      'switch_atmosphere|${state.project.projectId}|${parent.versionId}|'
+      '$atmosphereId',
+    );
+    final job = _startJob(key: key, loading: loadingMsg, request: userMsg);
 
     // A switch is a REAL generation, not a relabel: the engine renders the same
     // space in the new atmosphere and returns a new image.
     final PwaGeneratedVision made;
     try {
-      final upload = await _prepareOriginal();
+      final upload = await _prepareOriginal(job);
       made = await _execute(
         _pendingFor(
-          idempotencyKey: key,
+          job,
           actionType: PwaActionType.switchAtmosphere,
           atmosphereId: atmosphereId,
           originalStoragePath: upload.originalStoragePath,
-          visionNumber: state.versions.length + 1,
+          visionNumber: _nextVisionNumberIn(job.base.visions),
           parentVisionId: parent.versionId,
         ),
       );
     } catch (e) {
-      if (!mounted) return;
-      await _failGeneration(_asFailure(e), removeMessageId: loadingMsg.id);
+      if (!_endJob(job)) return;
+      await _landFailure(job, _asFailure(e));
       return;
     }
-    if (!mounted) return;
-    _activeGenerationKey = null;
-    _adoptResolved(made, atmosphereId);
-
-    final v = _visionFrom(
-      made,
-      actionType: PwaActionType.switchAtmosphere,
-      atmosphereId: atmosphereId,
-      title: atmo.name,
-      visionNumber: state.versions.length + 1,
-      parentVersionId: parent.versionId,
-      sourceMessageId: userMsg.id,
-    );
-    final aydenMsg = PwaMessage(
+    if (!_endJob(job)) return;
+    if (_activeGenerationKey == key) _forgetKey();
+    PwaMessage reveal(PwaVision v, PwaAtmosphere _) => PwaMessage(
       id: _nextId('m'),
       role: PwaRole.ayden,
       kind: PwaMessageKind.reveal,
       text: _repo.switchIntro(atmo),
       visionId: v.versionId,
     );
+    if (!_isCurrent(job)) {
+      _landAway(
+        job,
+        made,
+        actionType: PwaActionType.switchAtmosphere,
+        requestedAtmosphereId: atmosphereId,
+        title: atmo.name,
+        parentVersionId: parent.versionId,
+        sourceMessageId: userMsg.id,
+        reveal: reveal,
+      );
+      return;
+    }
+    _adoptResolved(made, atmosphereId);
+    final v = _visionFrom(
+      made,
+      projectId: job.projectId,
+      siblings: state.versions,
+      actionType: PwaActionType.switchAtmosphere,
+      atmosphereId: atmosphereId,
+      title: atmo.name,
+      parentVersionId: parent.versionId,
+      sourceMessageId: userMsg.id,
+    );
     _commitNewVision(
       v,
       replaceLoadingId: loadingMsg.id,
-      revealMsg: aydenMsg,
+      revealMsg: reveal(v, atmo),
       atmosphereId: atmosphereId,
     );
   }
@@ -1845,6 +2272,7 @@ class PwaController extends StateNotifier<PwaState> {
   /// keyword, not a question mark, not the chip's own text. There is exactly one
   /// brain, and money is only spent when it says so.
   Future<void> _converse(String text) async {
+    final ownerId = state.project.projectId;
     final userMsg = PwaMessage(
       id: _nextId('m'),
       role: PwaRole.user,
@@ -1879,8 +2307,32 @@ class PwaController extends StateNotifier<PwaState> {
       projectId: state.project.projectId,
       message: text,
       uiLocale: _localeCode(),
+      // THE PRIOR CONVERSATION — what Ayden and the person said before this
+      // line, ending with Ayden's last turn. That turn is what a "yes" answers:
+      // "Would you like to create a living area instead?" makes it Ayden's
+      // proposal, an objection makes it the person's own request, "A or B?"
+      // makes it a question. The server resolves the reply against it.
+      //
+      // It was the LINEAGE that travelled here first (no assistant turn at
+      // all), then the conversation with this very line still at its end —
+      // and the canonical resolvers stop at a trailing user turn. Both shapes
+      // left "yes" with nothing to refer to.
+      history: _conversationForChat(excludeId: userMsg.id),
+      // AYDEN CAN ADVISE. THE USER DECIDES. When Ayden answered a design
+      // instruction with words instead of performing it, that instruction
+      // stays outstanding, VERBATIM, so "do it anyway" resumes the person's own
+      // sentence — never a paraphrase of it — exactly as the advisory card's
+      // [Continue anyway] would resend it.
+      pendingInstruction: _declinedInstruction ?? '',
     );
     if (!mounted) return;
+    // The person left while Ayden was reading the line. The answer — and above
+    // all a render it might authorise — belongs to the project it was typed
+    // in, never to the one open now.
+    if (state.project.projectId != ownerId) {
+      _trace('chat_dropped', {'project': ownerId});
+      return;
+    }
     state = state.copyWith(
       messages: [
         for (final m in state.messages)
@@ -1891,9 +2343,29 @@ class PwaController extends StateNotifier<PwaState> {
     if (turn.shouldGenerate) {
       // A real edit. From here the already-aligned canonical path takes over —
       // parse, advise, render — with the user's own words, unaltered.
-      await applyRefine(text);
+      //
+      // A RESOLVED REPLY is the one case where the words that travel are not
+      // the ones just typed: "yes" and "do it anyway" have nothing in them to
+      // draw. The server names what they agree to — Ayden's proposal, or the
+      // person's original — and that is replayed, with `confirm`: the advice
+      // has been given and answered, and re-asking it would be arguing.
+      final override = turn.overrideInstruction;
+      _declinedInstruction = null;
+      if (override.isNotEmpty) {
+        await applyRefine(override, confirm: true);
+      } else {
+        await applyRefine(text);
+      }
       return;
     }
+
+    // Words, not a render. If the line looked like an instruction — the
+    // classifier says MIXED when it saw change intent, and MIXED is also its
+    // fallback for anything it could not place — then it stays outstanding,
+    // and the next line may confirm it. A plain question or a piece of design
+    // talk leaves nothing outstanding, so nothing can be confirmed into a
+    // render by accident.
+    _declinedInstruction = turn.intent.endsWith('mixed') ? text : null;
 
     // A conversation. No claim, no render, no Vision, and nothing added to the
     // lineage the next switch will read.
@@ -1940,12 +2412,49 @@ class PwaController extends StateNotifier<PwaState> {
     );
   }
 
+  /// The PRIOR conversation, as the canonical chat reads it: `{role, content}`,
+  /// oldest first, ending with whatever Ayden said last.
+  ///
+  /// [excludeId] is the line being sent. It is NOT part of the history: the
+  /// canonical resolvers (`pending_design_sub_intent`, Wave 4.7.7;
+  /// `_last_assistant_text`, Wave 4.11d) look for Ayden's turn at the END of
+  /// the list and give up the moment they meet a user turn there — measured,
+  /// "yes" resolves to nothing with the line included and to GENERATE without
+  /// it. Mobile includes it; the server now strips it from either shape.
+  ///
+  /// Ayden's words on a result card count as Ayden's turn. They are the thing
+  /// most often answered ("Would you like to see it warmer?"), and a history
+  /// that skipped them would make the reply look like it answered the turn
+  /// before.
+  ///
+  /// Bounded on purpose: the resolvers look a few turns back at most.
+  List<Map<String, String>> _conversationForChat({String? excludeId}) {
+    const window = 24;
+    final out = <Map<String, String>>[];
+    for (final m in state.messages) {
+      if (m.id == excludeId) continue;
+      final speech = m.kind == PwaMessageKind.text ||
+          (m.kind == PwaMessageKind.reveal && m.role == PwaRole.ayden);
+      if (!speech) continue;
+      final text = m.text.trim();
+      if (text.isEmpty) continue;
+      out.add({'role': m.role == PwaRole.user ? 'user' : 'ai', 'content': text});
+    }
+    return out.length <= window ? out : out.sublist(out.length - window);
+  }
+
   /// REFINE apply (§12) — creates exactly one child vision from the SOURCE
   /// vision. Future cost: 1 Space (informational only — NO debit in this mock).
+  /// The last design instruction Ayden answered with words instead of
+  /// performing. Null whenever nothing is outstanding — which is most of the
+  /// time, and is what stops an unrelated "yes" from buying an image.
+  String? _declinedInstruction;
+
   Future<void> applyRefine(String instruction, {bool confirm = false}) async {
     if (state.generating) return;
     final parent = state.sourceVision;
     if (parent == null) return;
+    if (_refuseWhileBusy()) return;
     final loadingMsg = PwaMessage(
       id: _nextId('m'),
       role: PwaRole.ayden,
@@ -1957,21 +2466,25 @@ class PwaController extends StateNotifier<PwaState> {
       messages: [...state.messages, loadingMsg],
       clearGenerationError: true,
     );
-    final key = _activeGenerationKey ??= const Uuid().v4();
+    final key = _keyFor(
+      'refine|${state.project.projectId}|${parent.versionId}|$confirm|'
+      '$instruction',
+    );
+    final job = _startJob(key: key, loading: loadingMsg);
 
     // The instruction is carried as a structured fact; the engine composes the
     // prompt. The parent vision is named so the backend can verify it belongs
     // to this project before branching from it.
     final PwaGeneratedVision made;
     try {
-      final upload = await _prepareOriginal();
+      final upload = await _prepareOriginal(job);
       made = await _execute(
         _pendingFor(
-          idempotencyKey: key,
+          job,
           actionType: PwaActionType.refine,
           atmosphereId: parent.atmosphereId,
           originalStoragePath: upload.originalStoragePath,
-          visionNumber: state.versions.length + 1,
+          visionNumber: _nextVisionNumberIn(job.base.visions),
           parentVisionId: parent.versionId,
           userInstruction: instruction,
           confirm: confirm,
@@ -1979,9 +2492,13 @@ class PwaController extends StateNotifier<PwaState> {
       );
     } on PwaAnswerRaised catch (answered) {
       // Words, not a render. The conversation continues and nothing was billed.
-      if (!mounted) return;
-      _activeGenerationKey = null;
-      await _pending.clear();
+      if (!_endJob(job)) return;
+      if (_activeGenerationKey == key) _forgetKey();
+      await _clearPendingIf(key);
+      if (!_isCurrent(job)) {
+        _trace('answer_dropped', {'project': job.projectId});
+        return;
+      }
       state = state.copyWith(
         generating: false,
         messages: [
@@ -1998,13 +2515,27 @@ class PwaController extends StateNotifier<PwaState> {
       if (state.versions.isNotEmpty) _syncActiveProject(bumpUpdated: false);
       return;
     } on PwaAdvisoryRaised catch (raised) {
-      if (!mounted) return;
+      if (!_endJob(job)) return;
       // Ayden objected. That is an ANSWER, not a failure: no vision, no error
       // banner, and the words are the canonical advisor's — never composed here.
       // The instruction is kept on the message so "Continue anyway" can resend
-      // it with confirm, exactly as mobile's Continue-anyway does.
-      _activeGenerationKey = null;
-      await _pending.clear();
+      // it with confirm, exactly as mobile's Continue-anyway does — and kept
+      // here as well, so TYPING the same thing works as well as tapping it.
+      //
+      // On RED too. The first cut of this left RED out, copying mobile's card
+      // contract ("RED -> [Edit request] SEULEMENT"). The product rule is the
+      // person's to set and it is explicit: Ayden advises, the user decides —
+      // "do it anyway" after "I don't recommend" must execute the original.
+      // The advisor's own charter already says it ("RED rare, toujours
+      // override + alternative", refine/advisor.py). The card now offers the
+      // same override on every verdict, so typing and tapping still agree.
+      if (_activeGenerationKey == key) _forgetKey();
+      await _clearPendingIf(key);
+      if (!_isCurrent(job)) {
+        _trace('advisory_dropped', {'project': job.projectId});
+        return;
+      }
+      _declinedInstruction = instruction;
       state = state.copyWith(
         generating: false,
         messages: [
@@ -2024,31 +2555,49 @@ class PwaController extends StateNotifier<PwaState> {
       if (state.versions.isNotEmpty) _syncActiveProject(bumpUpdated: false);
       return;
     } catch (e) {
-      if (!mounted) return;
-      await _failGeneration(_asFailure(e), removeMessageId: loadingMsg.id);
+      if (!_endJob(job)) return;
+      await _landFailure(job, _asFailure(e));
       return;
     }
-    if (!mounted) return;
-    _activeGenerationKey = null;
-    _adoptResolved(made, parent.atmosphereId);
-
-    final v = _visionFrom(
-      made,
-      actionType: PwaActionType.refine,
-      atmosphereId: parent.atmosphereId,
-      title: instruction,
-      visionNumber: state.versions.length + 1,
-      parentVersionId: parent.versionId,
-      instruction: instruction,
-    );
-    final aydenMsg = PwaMessage(
+    if (!_endJob(job)) return;
+    if (_activeGenerationKey == key) _forgetKey();
+    PwaMessage reveal(PwaVision v, PwaAtmosphere _) => PwaMessage(
       id: _nextId('m'),
       role: PwaRole.ayden,
       kind: PwaMessageKind.reveal,
       text: _repo.refineApplied(instruction),
       visionId: v.versionId,
     );
-    _commitNewVision(v, replaceLoadingId: loadingMsg.id, revealMsg: aydenMsg);
+    if (!_isCurrent(job)) {
+      _landAway(
+        job,
+        made,
+        actionType: PwaActionType.refine,
+        requestedAtmosphereId: parent.atmosphereId,
+        title: instruction,
+        parentVersionId: parent.versionId,
+        instruction: instruction,
+        reveal: reveal,
+      );
+      return;
+    }
+    _adoptResolved(made, parent.atmosphereId);
+
+    final v = _visionFrom(
+      made,
+      projectId: job.projectId,
+      siblings: state.versions,
+      actionType: PwaActionType.refine,
+      atmosphereId: parent.atmosphereId,
+      title: instruction,
+      parentVersionId: parent.versionId,
+      instruction: instruction,
+    );
+    _commitNewVision(
+      v,
+      replaceLoadingId: loadingMsg.id,
+      revealMsg: reveal(v, _atmosphere(parent.atmosphereId)),
+    );
     // The image is on screen. NOW ask whether the edit actually landed — a free
     // second look, after the fact, exactly where mobile puts it
     // (`unawaited(_kickoffRefineVerify(mySeq))`). It renders nothing unless the
@@ -2224,7 +2773,7 @@ class PwaController extends StateNotifier<PwaState> {
   PwaState _freshSession(PwaPhase phase) {
     // A new session is a new generation: never inherit the previous key, or the
     // backend would replay the old project's render for the new one.
-    _activeGenerationKey = null;
+    _forgetKey();
     // A brand-new project has no durable row yet, so nothing is agreed.
     _persistedSignature = null;
     return PwaState(
@@ -2258,6 +2807,14 @@ class PwaController extends StateNotifier<PwaState> {
   /// work must not mix, and `deleteProject` here touches only this in-memory
   /// working copy — the durable rows stay with whoever owns them.
   Future<void> reloadForIdentity() async {
+    // A generation still running belongs to the identity that started it. Its
+    // result must not land in the new one's library — the durable row is the
+    // previous identity's, and the backend has already stored it there.
+    if (_jobs.isNotEmpty) {
+      _trace('identity_changed_jobs_dropped', {'running': _jobs.length});
+    }
+    _jobs.clear();
+    _failedAway.clear();
     final p = _persistence;
     if (p == null) {
       // Offline / mock: there is no durable store and no second identity.
@@ -2312,6 +2869,18 @@ class PwaController extends StateNotifier<PwaState> {
     required PwaMessage revealMsg,
     String? atmosphereId,
   }) {
+    if (state.versions.any((o) => o.versionId == v.versionId)) {
+      // Already here — a replay answered with a vision this session holds. One
+      // vision is one vision: the placeholder goes, nothing is added.
+      state = state.copyWith(
+        generating: false,
+        messages: [
+          for (final m in state.messages)
+            if (m.id != replaceLoadingId) m,
+        ],
+      );
+      return;
+    }
     final versions = [
       for (final old in state.versions) old.copyWith(isCurrent: false),
       v,
@@ -2365,7 +2934,12 @@ class PwaController extends StateNotifier<PwaState> {
   /// The ACTIVE session as a snapshot. Pure — it reads state and the working
   /// library and writes nothing, so both the durable save seam and the
   /// pre-generation upload describe the same project the same way.
-  PwaProjectSnapshot _activeSnapshot({required bool bumpUpdated}) {
+  PwaProjectSnapshot _activeSnapshot({
+    required bool bumpUpdated,
+    // A CAPTURE (a generation remembering its project) must not consume
+    // library order numbers the way a real save does.
+    bool pure = false,
+  }) {
     final isDraft = state.versions.isEmpty;
     final existing = _repo.openProject(state.project.projectId);
     final atmoId =
@@ -2385,13 +2959,21 @@ class PwaController extends StateNotifier<PwaState> {
       selectedAtmosphereId: atmoId,
       atmosphereLabel: _atmosphere(atmoId).name,
       visions: state.versions,
-      messages: state.messages,
+      // Never a `loading` bubble. It stands for a request only this page can
+      // resolve; stored, it came back after every reload as a spinner nothing
+      // would ever replace (staging, 2026-09-10: a `generation_status` row
+      // written by a navigation in the middle of a switch).
+      messages: [
+        for (final m in state.messages)
+          if (m.kind != PwaMessageKind.loading) m,
+      ],
       currentVisionId: state.currentVisionId, // null while a Draft
       coverVisionId: state.currentVisionId, // null while a Draft
-      createdOrder: existing?.createdOrder ?? _repo.nextLibraryOrder(),
+      createdOrder:
+          existing?.createdOrder ?? (pure ? 0 : _repo.nextLibraryOrder()),
       updatedOrder: bumpUpdated
           ? _repo.nextLibraryOrder()
-          : (existing?.updatedOrder ?? _repo.nextLibraryOrder()),
+          : (existing?.updatedOrder ?? (pure ? 0 : _repo.nextLibraryOrder())),
       // The TIMESTAMP has to survive this rebuild, because it is what the card
       // localises. Dropping it left the active project falling back to
       // `updatedLabel` — a stored English sentence — so a French reader saw
@@ -2423,6 +3005,22 @@ class PwaController extends StateNotifier<PwaState> {
     // retry of the SAME source does not re-upload.
     final src = state.source;
     final replaceOriginal = src != null && !identical(src, _persistedSource);
+
+    // A generated project ALWAYS has an uploaded photo behind it — the render
+    // was made from one. Visions over a bundle-asset original with no photo
+    // bytes can only be a session that was never this person's (a fresh
+    // Create's showcase placeholder), and writing it is how a stranger's condo
+    // became somebody's "original". Refused, loudly.
+    if (_persistence != null &&
+        src == null &&
+        pwaImageSourceForPath(snapshot.originalImageAsset) ==
+            PwaImageSourceKind.bundle) {
+      _trace('persist_refused_bundle_original', {
+        'project': snapshot.projectId,
+        'original': snapshot.originalImageAsset,
+      });
+      return;
+    }
 
     // Nothing to write. Opening a project, returning Home or restoring a route
     // all land here, and an UPDATE with identical values is not free: the row's
@@ -2508,6 +3106,11 @@ class PwaController extends StateNotifier<PwaState> {
   /// the current Vision and the full conversation, and land in the Architect.
   /// Creates NO vision and starts NO generation.
   Future<void> openProject(String projectId, {String? previewVisionId}) async {
+    // Leaving a project must never be the thing that loses it — the rule Library,
+    // Profile, Home and New Project already follow.
+    if (state.versions.isNotEmpty && state.project.projectId != projectId) {
+      _syncActiveProject(bumpUpdated: false);
+    }
     final s = _repo.openProject(projectId);
     if (s == null) return;
     // §8 — a persisted zero-Vision Draft opens on the Fast Path, NEVER in the
@@ -2553,6 +3156,12 @@ class PwaController extends StateNotifier<PwaState> {
     // photo here is what keeps the next navigation from writing a row that is
     // already correct — and from re-uploading an original it just downloaded.
     _adoptPersisted(s, source);
+    // A generation this project started is still running: come back INTO it —
+    // its bubble, its wait — never into a thread that pretends nothing is
+    // happening (and would let a second, paid one start underneath).
+    final job = _jobs[s.projectId];
+    final request = job?.request;
+    final failedAway = _failedAway.remove(s.projectId);
     state = PwaState(
       phase: PwaPhase.architect,
       project: _descriptor(s),
@@ -2560,17 +3169,26 @@ class PwaController extends StateNotifier<PwaState> {
       source: source,
       sourceOrigin: source != null ? PwaImageOrigin.userUpload : null,
       selectedRoomId: s.roomId,
-      messages: s.messages,
+      messages: [
+        for (final m in s.messages)
+          if (m.kind != PwaMessageKind.loading) m,
+        if (request != null && !s.messages.any((m) => m.id == request.id))
+          request,
+        if (job != null) job.loading,
+      ],
       versions: s.visions,
       currentVisionId: s.currentVisionId,
       previewVisionId: preview,
       selectedAtmosphereId: s.selectedAtmosphereId ?? 'ayden_signature',
-      generating: false,
+      generating: job != null,
       library: _repo.listProjects(),
       librarySort: state.librarySort,
       librarySearch: state.librarySearch,
       activeTitleOverride: s.title, // adopt the opened project's name
     );
+    // A failure that happened while the person was elsewhere is said HERE,
+    // where it happened — never in the project they were in when it did.
+    if (failedAway != null) _showFailure(failedAway);
   }
 
   /// NEW PROJECT — persist the current project (if any), then start a fresh
@@ -2590,12 +3208,17 @@ class PwaController extends StateNotifier<PwaState> {
     switch (route.page) {
       case PwaPage.home:
         // '/' is the dashboard, and it drops any half-finished creation session
-        // so Back can never restore a Create still holding the last photo.
+        // so Back can never restore a Create still holding the last photo. A
+        // GENERATED project is saved first, exactly as the Home button does.
+        if (state.versions.isNotEmpty) _syncActiveProject(bumpUpdated: false);
         state = _freshSession(PwaPhase.home);
       case PwaPage.create:
         // A create URL always opens an EMPTY creation session unless one is
         // already in progress on screen (a reconcile must not wipe it).
         if (state.phase != PwaPhase.entry) {
+          if (state.versions.isNotEmpty) {
+            _syncActiveProject(bumpUpdated: false);
+          }
           state = _freshSession(PwaPhase.entry);
         }
       case PwaPage.projects:
@@ -2741,6 +3364,10 @@ class PwaController extends StateNotifier<PwaState> {
   }
 
   void deleteProject(String projectId) {
+    // A render still running for it has nowhere to land now; forgetting the job
+    // is what stops its result from quietly bringing the project back.
+    _jobs.remove(projectId);
+    _failedAway.remove(projectId);
     _repo.deleteProject(projectId); // instant local removal
     state = state.copyWith(library: _repo.listProjects());
     _enqueueDurable(
@@ -2753,4 +3380,46 @@ class PwaController extends StateNotifier<PwaState> {
 
   void setLibrarySearch(String query) =>
       state = state.copyWith(librarySearch: query);
+}
+
+/// One generation in flight, and the project it belongs to.
+class _GenerationJob {
+  _GenerationJob({
+    required this.projectId,
+    required this.key,
+    required this.loading,
+    required this.base,
+    required this.titlePinned,
+    this.request,
+  });
+
+  /// The project that asked. Where the result lands, whatever is on screen.
+  final String projectId;
+
+  /// The idempotency key: the whole operation, for the backend and for the
+  /// one pending slot.
+  final String key;
+
+  /// The bubble that stands for this job in its project's conversation.
+  final PwaMessage loading;
+
+  /// The person's own line that asked for it (a switch), if any.
+  final PwaMessage? request;
+
+  /// The project as it stood when the job started — given the durable photo
+  /// path once the upload has answered. What a result lands in when the
+  /// project has no saved copy yet (a first vision).
+  PwaProjectSnapshot base;
+
+  /// Whether the person had named the project themselves.
+  final bool titlePinned;
+}
+
+/// A structured log line — an event id and its facts, never prose: what
+/// happened is the id, the values are data. Debug consoles only; nothing here
+/// reaches a person, and nothing a person reads is decided here.
+void _trace(String event, [Map<String, Object?> facts = const {}]) {
+  final parts = [for (final e in facts.entries) '${e.key}=${e.value}'];
+  final tail = parts.join(' ');
+  debugPrint('[pwa] $event $tail');
 }

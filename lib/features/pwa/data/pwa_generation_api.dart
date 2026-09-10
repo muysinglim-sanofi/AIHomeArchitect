@@ -119,6 +119,7 @@ class PwaGenerationResult {
     required this.visionNumber,
     required this.imagePath,
     required this.replayed,
+    this.persisted = true,
     this.resolvedRoomType = '',
     this.resolvedAtmosphereId = '',
     this.resolvedAtmosphereLabel = '',
@@ -127,9 +128,18 @@ class PwaGenerationResult {
   });
 
   final String visionId;
+
+  /// The number the backend STORED the vision under — it owns the ordinal. 0
+  /// when the response did not say, which the client reads as "unknown" and
+  /// never as "Vision 1".
   final int visionNumber;
   final String imagePath;
   final bool replayed;
+
+  /// False when the image was made (and paid for) but its row could not be
+  /// written. The vision is then the CLIENT's to store; adopted as a backend
+  /// row, it would exist nowhere but on this screen.
+  final bool persisted;
 
   /// What the ENGINE decided, handed back so the browser adopts it instead of
   /// deciding anything itself.
@@ -195,9 +205,10 @@ class PwaGenerationResult {
     }
     return PwaGenerationResult(
       visionId: id,
-      visionNumber: (body['vision_number'] as num?)?.toInt() ?? 1,
+      visionNumber: (body['vision_number'] as num?)?.toInt() ?? 0,
       imagePath: path,
       replayed: body['replayed'] == true,
+      persisted: body['persisted'] != false,
       resolvedRoomType: (body['resolved_room_type'] as String?) ?? '',
       resolvedAtmosphereId: (body['resolved_atmosphere_id'] as String?) ?? '',
       resolvedAtmosphereLabel:
@@ -222,6 +233,7 @@ class PwaChatTurn {
     required this.shouldGenerate,
     this.suggestions = const [],
     this.intent = '',
+    this.overrideInstruction = '',
   });
 
   /// Nothing was decided — answer with silence and, above all, do NOT generate.
@@ -229,12 +241,20 @@ class PwaChatTurn {
     : aiMessage = '',
       shouldGenerate = false,
       suggestions = const [],
-      intent = 'unavailable';
+      intent = 'unavailable',
+      overrideInstruction = '';
 
   final String aiMessage;
   final bool shouldGenerate;
   final List<String> suggestions;
   final String intent;
+
+  /// Non-empty when the person just told Ayden to go ahead with an
+  /// instruction he had answered with words instead of performing. It carries
+  /// THAT instruction, not the confirmation: "do it anyway" has nothing in it
+  /// to draw. The caller replays it with `confirm`, exactly as mobile's
+  /// Continue-anyway does.
+  final String overrideInstruction;
 
   static PwaChatTurn parse(Map<String, Object?> body) => PwaChatTurn(
     aiMessage: ((body['ai_message'] as String?) ?? '').trim(),
@@ -246,6 +266,8 @@ class PwaChatTurn {
         if (s is String && s.trim().isNotEmpty) s.trim(),
     ],
     intent: (body['intent'] as String?) ?? '',
+    overrideInstruction:
+        ((body['override_instruction'] as String?) ?? '').trim(),
   );
 }
 
@@ -289,7 +311,7 @@ class PwaGenerationStatus {
       state: state,
       result: PwaGenerationResult(
         visionId: (body['vision_id'] as String?) ?? '',
-        visionNumber: (body['vision_number'] as num?)?.toInt() ?? 1,
+        visionNumber: (body['vision_number'] as num?)?.toInt() ?? 0,
         imagePath: (body['image_path'] as String?) ?? '',
         // It was NOT made by this call — that is exactly what makes it safe to
         // adopt without paying for a second one.
@@ -462,6 +484,15 @@ class PwaGenerationApi {
     required String projectId,
     required String message,
     String uiLocale = 'en',
+    /// THE CONVERSATION so far, oldest first, `{role, content}` with `role`
+    /// one of `user` / `ai`, and [message] itself already appended — the shape
+    /// mobile sends (`chat_screen.dart` `_send`) and the shape the canonical
+    /// confirmation resolver reads.
+    List<Map<String, String>> history = const [],
+    /// The design instruction Ayden answered without performing, while it is
+    /// still outstanding. The PWA's `AdvisoryInfo.originalMessage`: what a
+    /// typed go-ahead resumes, exactly as [Continue anyway] resumes it.
+    String pendingInstruction = '',
   }) async {
     if (_disposed) return const PwaChatTurn.silent();
     final token = await _tokenProvider();
@@ -473,6 +504,8 @@ class PwaGenerationApi {
           'project_id': projectId,
           'message': message,
           'ui_locale': uiLocale,
+          'history': history,
+          'pending_instruction': pendingInstruction,
         },
         options: Options(
           headers: {'Authorization': 'Bearer $token'},

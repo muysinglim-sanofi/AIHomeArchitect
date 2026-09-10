@@ -63,7 +63,10 @@ import '../../../shared/widgets/reveal_hero.dart';
 import '../application/pwa_controller.dart';
 import '../domain/pwa_models.dart';
 import '../l10n/pwa_l10n.dart';
+import 'pwa_architect_screen.dart' show pwaSessionRoomLabel;
 import 'pwa_architect_tokens.dart';
+import '../data/pwa_image_export.dart';
+import 'pwa_image_viewer.dart';
 import 'pwa_render_aspect.dart';
 import 'pwa_render_canvas.dart';
 import 'pwa_widgets.dart' show pwaAfterImage, pwaBeforeImage;
@@ -161,7 +164,45 @@ const double kPwaRevealFootH = 12 + 14 + 8;
 /// up under the buttons the two collided. iOS has the same four circles over
 /// its image, but its image block is taller than the contained 3:2 render is
 /// here, so the collision never arises there.
-const double kPwaRevealChromeH = 8 + 40;
+const double kPwaRevealChromeH = 8 + 40 + kPwaRevealChromeGap;
+
+/// Air between the toolbar's circles and the top of the render canvas.
+///
+/// It was zero: the canvas began exactly where the 40pt buttons ended, and on
+/// an iPhone the picture read as pressed against the toolbar. 12 is the
+/// canvas's own side inset (the block's `EdgeInsets.fromLTRB(12, …, 12, …)`),
+/// so the render now sits in one even margin on three sides. It moves the
+/// canvas DOWN and never narrows it — the width is the column's, whatever the
+/// height budget does.
+const double kPwaRevealChromeGap = 12;
+
+/// The toolbar air a PHONE gets — and what pays for it.
+///
+/// Phone review, 2026-09-10: at 12 the picture still read as pressed against
+/// the toolbar; 24–32 was asked for, and 28 sits in its middle. On an installed
+/// iPhone the hero is bounded by what the rail and the slot leave, so any air
+/// taken from the hero came out of the CANVAS — and a portrait render, which
+/// is height-bound, would have shrunk with it. The rail pays instead: it is at
+/// its 270 cap there, and its cards are clamped by WIDTH (0.86 of the screen),
+/// so a shorter rail costs the cards a little height and the render nothing.
+/// Only what the rail can give above its 150 floor is taken, and a desktop
+/// window keeps 12 — there the column's height, not the toolbar, is the limit.
+const double kPwaRevealChromeGapPhone = 28;
+
+/// Below this width the Full Reveal is laid out as a phone — the rail's own
+/// breakpoint (see [pwaRevealStripHeight]).
+const double kPwaRevealPhoneMaxWidth = 700;
+
+/// The toolbar air beyond [kPwaRevealChromeGap] for a [boxW] x [boxH] reveal.
+/// Exactly what the rail gives up, so the canvas keeps its height.
+double pwaRevealExtraGap(double boxH, double boxW) {
+  if (boxW >= kPwaRevealPhoneMaxWidth) return 0;
+  final spare = pwaRevealStripHeight(boxH, boxW) - 150.0;
+  return math.min(
+    kPwaRevealChromeGapPhone - kPwaRevealChromeGap,
+    math.max(0.0, spare),
+  );
+}
 
 /// A restrained ceiling so a 27" monitor gets a bigger picture, not a poster.
 const double kPwaRevealMaxWidth = 1080;
@@ -203,6 +244,37 @@ class _PwaRevealScreenState extends ConsumerState<PwaRevealScreen> {
     final l = context.pwaL10n;
     final state = ref.read(pwaControllerProvider);
     final title = pwaAtmosphereNameOf(state, vision.atmosphereId);
+
+    // THE PICTURE FIRST. This used to share a SENTENCE — "Check out my AI home
+    // redesign" — which is what iOS's `Share.share(...)` does, and what the
+    // person receiving it gets is a line of text with no room in it. Where the
+    // browser accepts files, the render itself goes, at the resolution the
+    // engine produced. The sentence stays as the fallback for browsers that
+    // cannot carry a file.
+    final exporter = ref.read(pwaImageExporterProvider);
+    if (exporter.canShareFiles) {
+      final resolver = ref.read(pwaImageUrlResolverProvider);
+      final url = resolver == null
+          ? vision.afterAsset
+          : await resolver.resolve(vision.afterAsset);
+      final outcome = await exporter.share(
+        url: url,
+        fileName: pwaVisionFileName(
+          visionNumber: vision.visionNumber,
+          // The room belongs in the name. Measured on preprod: the file left
+          // as `Ayden-Studio-Warm-Modern-v1.jpg`, while the contract this
+          // helper documents is `Ayden-Studio-Living-Room-Warm-Modern-v2.jpg`.
+          // In a downloads folder of renders, the room is what tells them apart.
+          roomLabel: pwaSessionRoomLabel(ref.read(pwaControllerProvider), l),
+          atmosphereLabel: title,
+        ),
+        title: l.shareVisionText(title),
+      );
+      if (outcome == PwaExportOutcome.done ||
+          outcome == PwaExportOutcome.cancelled) {
+        return;
+      }
+    }
     try {
       await Share.share(l.shareVisionText(title));
     } catch (_) {
@@ -262,7 +334,15 @@ class _PwaRevealScreenState extends ConsumerState<PwaRevealScreen> {
                 // header, the atmosphere strip and the reserved action slot —
                 // which is what makes the rail stable: nothing the person does
                 // can resize it, because nothing under it changes size.
-                final stripH = pwaRevealStripHeight(box.maxHeight, box.maxWidth);
+                //
+                // A phone's extra toolbar air comes out of the RAIL, never the
+                // render: the same points are added to the chrome band and taken
+                // from the strip, so a hero bounded by what is left keeps its
+                // canvas to the pixel (`pwaRevealExtraGap`).
+                final extraGap = pwaRevealExtraGap(box.maxHeight, box.maxWidth);
+                final chromeH = kPwaRevealChromeH + extraGap;
+                final stripH =
+                    pwaRevealStripHeight(box.maxHeight, box.maxWidth) - extraGap;
                 final belowH = kPwaRevealSectionHeaderH +
                     stripH +
                     kPwaRevealSlotH +
@@ -320,7 +400,7 @@ class _PwaRevealScreenState extends ConsumerState<PwaRevealScreen> {
                     (contentW - 24) / renderAspect,
                   ),
                   available: box.maxHeight - belowH,
-                  chromeH: kPwaRevealChromeH,
+                  chromeH: chromeH,
                   footH: kPwaRevealFootH,
                 );
 
@@ -352,6 +432,7 @@ class _PwaRevealScreenState extends ConsumerState<PwaRevealScreen> {
                             state: state,
                             vision: vision,
                             aspect: renderAspect,
+                            chromeH: chromeH,
                             onBack: () => _c.backToConversation(
                               focusVisionId: vision.versionId,
                             ),
@@ -368,6 +449,21 @@ class _PwaRevealScreenState extends ConsumerState<PwaRevealScreen> {
                             onReplay: () =>
                                 setState(() => _replayToken++),
                             onShare: () => _share(vision),
+                            onFullscreen: () => showPwaImageViewer(
+                              context,
+                              reference: vision.afterAsset,
+                              title: context.pwaL10n.visionNWithAtmosphere(
+                                  vision.visionNumber,
+                                  pwaAtmosphereNameOf(
+                                      state, vision.atmosphereId)),
+                              fileName: pwaVisionFileName(
+                                visionNumber: vision.visionNumber,
+                                roomLabel: pwaSessionRoomLabel(
+                                    state, context.pwaL10n),
+                                atmosphereLabel: pwaAtmosphereNameOf(
+                                    state, vision.atmosphereId),
+                              ),
+                            ),
                             replayToken: _replayToken,
                           ),
                         ),
@@ -428,12 +524,18 @@ class _RevealHeroBlock extends StatelessWidget {
     required this.onRefine,
     required this.onReplay,
     required this.onShare,
+    required this.onFullscreen,
     required this.replayToken,
     required this.aspect,
+    required this.chromeH,
   });
 
   final PwaState state;
   final PwaVision vision;
+
+  /// The toolbar band the canvas starts below: [kPwaRevealChromeH] plus a
+  /// phone's extra air ([pwaRevealExtraGap]).
+  final double chromeH;
 
   /// The render's measured `width / height` (3:2 until it is known).
   final double aspect;
@@ -443,6 +545,10 @@ class _RevealHeroBlock extends StatelessWidget {
   final VoidCallback onRefine;
   final VoidCallback onReplay;
   final VoidCallback onShare;
+
+  /// Open the render alone, fullscreen and zoomable. The before/after surface
+  /// owns the drag here, so this is a control rather than a tap on the image.
+  final VoidCallback onFullscreen;
 
   /// Bumped by Replay. Part of the reveal's key, and nothing else.
   final int replayToken;
@@ -473,8 +579,7 @@ class _RevealHeroBlock extends StatelessWidget {
         Padding(
           // The bottom inset is the hint's own height. Without it the block's
           // lower edge and the instruction line share the same six pixels.
-          padding: const EdgeInsets.fromLTRB(
-              12, kPwaRevealChromeH, 12, kPwaRevealFootH),
+          padding: EdgeInsets.fromLTRB(12, chromeH, 12, kPwaRevealFootH),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(22),
             child: PwaRenderCanvas(
@@ -519,7 +624,20 @@ class _RevealHeroBlock extends StatelessWidget {
           top: 8,
           left: 8,
           right: 8,
-          child: Row(
+          // SEVEN CONTROLS ON A PHONE. With two or more visions the row holds
+          // Back, Edit, Previous, the counter, Next, Replay, Fullscreen and
+          // Share — 7 × 40pt plus gaps and "Vision 1 of 3", more than a 390pt
+          // phone's 374. It overflowed (the widget test caught 110px with the
+          // test font) and pushed Share off the edge. The fullscreen control
+          // added in the previous pass is what tipped it over.
+          //
+          // So a narrow row tightens: 4pt gaps, and the counter becomes the
+          // language-neutral "1/3", with the full sentence kept for screen
+          // readers. A wide window keeps everything exactly as it was.
+          child: LayoutBuilder(builder: (context, box) {
+          final compact = box.maxWidth < 440;
+          final gap = compact ? 4.0 : 8.0;
+          return Row(
             key: const ValueKey('pwa-reveal-header'),
             children: [
               _GlassButton(
@@ -528,7 +646,7 @@ class _RevealHeroBlock extends StatelessWidget {
                 tooltip: l.backToConversation,
                 onTap: onBack,
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: gap),
               // EDIT — iOS's own pencil, in iOS's own slot (top-left, right of
               // Back: "Wave 4.9.3 — 'Refine in chat' pencil… Top-LEFT, right
               // of Back"). It is the same capability the foot pill used to
@@ -551,16 +669,25 @@ class _RevealHeroBlock extends StatelessWidget {
                   onTap: state.hasPreviousVision ? onPrev : null,
                 ),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    l.visionOfTotal(
+                  padding: EdgeInsets.symmetric(horizontal: compact ? 4 : 8),
+                  child: Semantics(
+                    label: l.visionOfTotal(
                       state.previewedIndex + 1,
                       state.versionCount,
                     ),
-                    style: av7Sans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: av7OnDark,
+                    excludeSemantics: compact,
+                    child: Text(
+                      compact
+                          ? '${state.previewedIndex + 1}/${state.versionCount}'
+                          : l.visionOfTotal(
+                              state.previewedIndex + 1,
+                              state.versionCount,
+                            ),
+                      style: av7Sans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: av7OnDark,
+                      ),
                     ),
                   ),
                 ),
@@ -569,7 +696,7 @@ class _RevealHeroBlock extends StatelessWidget {
                   tooltip: l.nextVision,
                   onTap: state.hasNextVision ? onNext : null,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: gap),
               ],
               // REPLAY — iOS's `Icons.replay` at `right: 52`, which
               // "re-triggers the cinematic reveal in place so the user never
@@ -580,11 +707,18 @@ class _RevealHeroBlock extends StatelessWidget {
                 tooltip: l.replayReveal,
                 onTap: onReplay,
               ),
-              const SizedBox(width: 8),
-              // SHARE — iOS's share circle at `right: 12`. It shares TEXT, not
-              // the render: `Share.share('Check out my AI home redesign — …')`.
-              // The web equivalent is the same call through the same package,
-              // which uses `navigator.share` where the browser has it.
+              SizedBox(width: gap),
+              // FULLSCREEN — the render alone, zoomable, with Share and Save.
+              _GlassButton(
+                key: const ValueKey('pwa-reveal-fullscreen'),
+                icon: Icons.fullscreen_rounded,
+                tooltip: l.viewFullscreen,
+                onTap: onFullscreen,
+              ),
+              SizedBox(width: gap),
+              // SHARE — iOS's share circle at `right: 12`. iOS shares TEXT; the
+              // web hands over the image FILE where the browser can
+              // (`navigator.share({files})`), and the text otherwise.
               _GlassButton(
                 key: const ValueKey('pwa-reveal-share'),
                 icon: Icons.ios_share_rounded,
@@ -592,7 +726,8 @@ class _RevealHeroBlock extends StatelessWidget {
                 onTap: onShare,
               ),
             ],
-          ),
+          );
+          }),
         ),
 
         // ── The one line of instruction ────────────────────────────────────

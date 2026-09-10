@@ -696,4 +696,7 @@ bool _isFailureFallback(String v) => const {
       "Ayden couldn't find that generation. You can try again.",
       "Your photo couldn't be uploaded. Try again.",
       "Your vision couldn't be prepared. Try again.",
+      // BUSY_ELSEWHERE — one generation at a time; rendered by its code.
+      'Ayden is still finishing a vision in another project.',
+      "You can start this one as soon as it's ready.",
     }.contains(v);

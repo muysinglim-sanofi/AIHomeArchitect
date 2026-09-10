@@ -272,43 +272,27 @@ void main() {
       expect(c.state.versions.length, 2, reason: 'the vision is created');
     });
 
-    test('a RED verdict is a REFUSAL: the override is absent, not disabled',
+    test('a RED verdict still offers the override — the user decides',
         () async {
-      // Mobile's contract, verbatim: "YELLOW → [Try anyway] + [Edit request] ;
-      // RED → [Edit request] SEULEMENT (jamais forçable, aucun confirm=true
-      // possible depuis une carte RED)" — chat_screen.dart:5304, and its
-      // handler refuses one anyway at :1811.
-      //
-      // The PWA offered "Create vision" on every verdict, which let a person pay
-      // for a render the engine had already judged wrong. The card now drops the
-      // override on red; this pins the SOURCE of that rule, because the verdict
-      // reaching the card is what the widget branches on.
+      // THE RULE CHANGED ON PURPOSE (2026-09-10, owner's brief after a phone
+      // test): "do it anyway" after "I don't recommend" executes the original.
+      // Mobile's card contract — "RED → [Edit request] SEULEMENT" — is
+      // deliberately not followed any more; the advisor's own charter agrees
+      // ("RED rare, toujours override + alternative", refine/advisor.py), and
+      // the TYPED override already honours it, so a card that withheld the
+      // button would put two answers on one screen.
       final card = File(
         'lib/features/pwa/presentation/pwa_architect_screen.dart',
       ).readAsStringSync();
-      expect(
-        card.contains("advisoryVerdict == 'red'"),
-        isTrue,
-        reason: 'the card must know a refusal when it sees one',
-      );
-      expect(
-        card.contains('advisoryVerdict: m.advisoryVerdict'),
-        isTrue,
-        reason: 'and the verdict must actually reach it',
-      );
-      // The override is inside the `if (!isRed)` branch — absent on a refusal,
-      // rather than present-but-greyed, which still reads as "available to you".
-      final actions = card.substring(card.indexOf('final isRed ='));
-      // The label is now a dictionary lookup (`PwaL10n.createVision`) rather
-      // than a literal — the RULE being pinned is unchanged: the override sits
-      // INSIDE the `if (!isRed)` branch, so a refusal has no override at all
-      // rather than a greyed one, which still reads as "available to you".
-      expect(
-        actions.indexOf('if (!isRed) ...['),
-        lessThan(actions.indexOf('createVision')),
-      );
-      expect(actions.contains('createVision'), isTrue,
-          reason: 'the override label must still be rendered on non-red');
+      expect(card.contains('advisoryVerdict: m.advisoryVerdict'), isTrue,
+          reason: 'the verdict must still reach the card');
+      expect(card.contains("advisoryVerdict == 'red'"), isTrue,
+          reason: 'red still chooses its own wording for the secondary action');
+      expect(card.contains('if (!isRed) ...['), isFalse,
+          reason: 'no action is withheld on a red verdict any more');
+      expect(card.contains('controller.applyRefine(instruction, confirm: true)'),
+          isTrue,
+          reason: 'the override resends the SAME instruction, confirmed');
     });
 
     test('a RED verdict still carries the advisor words and the instruction',
