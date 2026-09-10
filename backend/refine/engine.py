@@ -93,21 +93,28 @@ def prepare(changes: list[Change], *, mode: str = "default") -> PreparedRefine:
 
 
 async def refine_generate(client, image_bytes: bytes, mime: str, changes: list[Change],
-                          *, mode: str = "default") -> GenerateResult:
+                          *, mode: str = "default", size: str | None = None) -> GenerateResult:
     """UNE génération, SANS Verify (perceived-latency §14). Délègue à prepare() (prep
-    unique) + _execute_strategy. L'endpoint renvoie l'image puis vérifie en 2ᵉ appel."""
+    unique) + _execute_strategy. L'endpoint renvoie l'image puis vérifie en 2ᵉ appel.
+
+    `size` (2026-09-03, optionnel) : taille de sortie transmise telle quelle à
+    l'executor ; `None` (défaut) = comportement d'avant (`REFINE_SIZE`)."""
     prepared = prepare(changes, mode=mode)
-    edited = await _execute_strategy(client, image_bytes, mime, prepared.plan)
+    edited = await _execute_strategy(client, image_bytes, mime, prepared.plan, size=size)
     return GenerateResult(image=edited, changes=prepared.ordered_changes,
                           conflicts=prepared.conflicts, estimated_success=prepared.estimated_success)
 
 
-async def _execute_strategy(client, image_bytes: bytes, mime: str, p) -> bytes:
+async def _execute_strategy(client, image_bytes: bytes, mime: str, p,
+                            *, size: str | None = None) -> bytes:
     """Seam d'exécution : branche sur `p.strategy.kind`. Aujourd'hui une seule
     stratégie (combined_edit → 1 génération). Les futures (full_redesign,
-    atmosphere_switch, sequential_forced) s'ajoutent ici sans toucher le reste."""
+    atmosphere_switch, sequential_forced) s'ajoutent ici sans toucher le reste.
+    `size=None` (défaut) → l'executor applique son propre défaut, inchangé."""
     if p.strategy.kind == STRATEGY_COMBINED_EDIT:
-        return await execute(client, image_bytes, mime, p.strategy.prompt)
+        if size is None:
+            return await execute(client, image_bytes, mime, p.strategy.prompt)
+        return await execute(client, image_bytes, mime, p.strategy.prompt, size=size)
     raise NotImplementedError(f"execution strategy not implemented: {p.strategy.kind}")
 
 
