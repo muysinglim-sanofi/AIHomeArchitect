@@ -51,6 +51,7 @@ from generation_resilience import (
 # The BILLING SEAM. Same relationship as `generation_resilience`: it is where
 # the canonical Billing Engine is called from, and no balance, ledger row or
 # entitlement rule is decided in this file.
+import pwa_target
 import pwa_staging_billing as pwa_billing
 
 log = logging.getLogger("aih")
@@ -60,23 +61,33 @@ log = logging.getLogger("aih")
 _TRANSPORT_ATTEMPTS = 3
 _TRANSPORT_BACKOFF_S = 1.0
 
-router = APIRouter(prefix="/pwa/staging", tags=["pwa-staging"])
+# WHICH deployment this process is — resolved once, at import, from
+# `PWA_TARGET` (unset = staging, so nothing about the staging deployment
+# changes). The four facts that differ between staging and production live in
+# `pwa_target.py`; holding them here again is what would let the two drift.
+_TARGET = pwa_target.current()
 
-_BUCKET = "pwa-staging-images"
-_SCHEMA = "pwa_staging"
-_STAGING_REF = "eedcahzekpgxvvfxufbk"
-_PRODUCTION_REF = "vtxkciupyafukhdsgxgw"
+router = APIRouter(prefix=_TARGET.prefix, tags=[f"pwa-{_TARGET.name}"])
+
+_BUCKET = _TARGET.bucket
+_SCHEMA = _TARGET.schema
+_STAGING_REF = pwa_target.STAGING_REF
+_PRODUCTION_REF = pwa_target.PRODUCTION_REF
 
 
 def _supabase_url() -> str:
     url = os.environ.get("SUPABASE_URL", "").rstrip("/")
     # Fail closed on every request, not just at boot: a reload that re-pointed
-    # the process at production must not be able to serve one PWA call.
-    if _PRODUCTION_REF in url or _STAGING_REF not in url:
+    # the process at the OTHER project must not be able to serve one PWA call.
+    # `assert_url_matches` refuses both directions — staging pointed at
+    # production, and production pointed at staging.
+    try:
+        pwa_target.assert_url_matches(url, where="request environment")
+    except pwa_target.PwaTargetError:
         raise HTTPException(
             status_code=500,
             detail={"error_code": "STAGING_MISCONFIGURED",
-                    "user_message": "Staging is not configured correctly.",
+                    "user_message": "This deployment is not configured correctly.",
                     "retryable": False},
         )
     return url
@@ -334,6 +345,82 @@ async def _existing_vision(client: httpx.AsyncClient, token: str,
 # about. This adapter only says WHICH exceptions are transient for its client
 # (httpx) and WHICH typed error the user should see when a stage gives up.
 _RETRY_ON = (httpx.TransportError,)
+
+
+async def _next_vision_number(client: httpx.AsyncClient, token: str,
+                              project_id: str) -> int | None:
+    """The next ordinal in [project_id], read from the rows themselves.
+
+    THE ORDINAL IS THE SERVER'S. It used to be whatever the browser sent
+    (`state.versions.length + 1`), and a browser whose picture of the project
+    was stale — a reopened snapshot that had missed a vision finished while the
+    person was on another screen — sent a number that was already taken. The
+    database refused it (`UNIQUE (project_id, vision_number)`), and the refusal
+    was then handled as a transport failure: the image was returned anyway, the
+    claim was settled COMPLETED, the credit was committed — for a vision that
+    exists nowhere (staging, 2026-09-10, claim `ac4c6cb8`, vision `b7fe1dea`).
+    Every later switch then named that phantom as its parent and was refused
+    `PARENT_FORBIDDEN`.
+
+    None when the read itself fails; the caller then falls back to the client's
+    number, which is what it did before, and the unique constraint still guards.
+    """
+    r = await client.get(
+        f"{_supabase_url()}/rest/v1/pwa_visions",
+        params={"project_id": f"eq.{project_id}", "select": "vision_number",
+                "order": "vision_number.desc", "limit": "1"},
+        headers=_user_headers(token),
+    )
+    if r.status_code != 200:
+        return None
+    rows = r.json()
+    if not isinstance(rows, list):
+        return None
+    return (int(rows[0]["vision_number"]) if rows else 0) + 1
+
+
+#: How many times a vision row is offered to the database when its NUMBER was
+#: taken in between. Each retry re-reads the project, so three covers any
+#: realistic burst of concurrent landings on one project.
+_VISION_INSERT_ATTEMPTS = 3
+
+
+async def _insert_vision_row(client: httpx.AsyncClient, token: str, row: dict,
+                             *, idempotency_key: str, project_id: str):
+    """Write the vision row; returns `(response, winner)`.
+
+    A 409 is one of two different things, and they must never be confused
+    again:
+      * OUR key already has a row — a concurrent twin of this very request won.
+        `winner` is that row, and it is the answer.
+      * Another vision took this NUMBER between the read and the write. The
+        project is read again and the row offered under the next number: the
+        image is paid for, and this row is the only thing that makes it real.
+    `row["vision_number"]` always ends as the number actually tried last.
+    """
+    r = None
+    for attempt in range(_VISION_INSERT_ATTEMPTS):
+        r = await _resilient(
+            lambda: client.post(f"{_supabase_url()}/rest/v1/pwa_visions",
+                                json=dict(row),
+                                headers=_user_headers(token, write=True)),
+            what="insert vision",
+            on_failure=_PERSIST_FAILED,
+        )
+        if r.status_code != 409:
+            return r, None
+        winner = await _existing_vision(client, token, idempotency_key)
+        if winner:
+            return r, winner
+        if attempt == _VISION_INSERT_ATTEMPTS - 1:
+            break
+        taken = row["vision_number"]
+        nxt = await _next_vision_number(client, token, project_id)
+        row["vision_number"] = nxt if nxt and nxt > taken else taken + 1
+        log.warning("[pwa-staging] vision number %d already taken on project "
+                    "%s — retrying as %d", taken, project_id[:8],
+                    row["vision_number"])
+    return r, None
 
 
 async def _resilient(op, *, what: str, on_failure: HTTPException):
@@ -639,9 +726,19 @@ async def _refine_advisory(body: "PwaGenerateRequest", room_label: str = "") -> 
     }, changes
 
 
+def _image_dims(raw: bytes) -> str:
+    """`WxH` of an image, for the log line that proves orientation — or `?`."""
+    try:
+        with PilImage.open(io.BytesIO(raw)) as im:
+            return f"{im.size[0]}x{im.size[1]}"
+    except Exception:  # noqa: BLE001 — a log label must never fail a render
+        return "?"
+
+
 async def _run_canonical_refine(*, image_bytes: bytes, mime: str,
                                 user_instruction: str, changes=None,
-                                watermark: bool = False) -> tuple:
+                                watermark: bool = False,
+                                source_ref: str = "") -> tuple:
     """THE canonical REFINE engine — the same modules mobile `POST /refine` uses.
 
     Why this branch has to exist
@@ -682,11 +779,26 @@ async def _run_canonical_refine(*, image_bytes: bytes, mime: str,
     # Same order as the mobile handler: normalize once, then plan once.
     normalize_changes(changes)
     prepared = refine_prepare(changes)
-    log.info("[pwa-staging] canonical refine — changes=%d types=%s strategy=%s",
+    # ORIENTATION (2026-09-03). The executor's own default is landscape
+    # (`REFINE_SIZE = "1536x1024"`) for every refine, whatever it is editing —
+    # so a portrait vision came back landscape the moment it was refined. The
+    # bytes being edited are authoritative: the SAME rule the first vision and
+    # the atmosphere switch use (`_detect_output_size`, w>h → 1536x1024,
+    # h>w → 1024x1536, else 1024x1024) is read off them and passed through.
+    # Mobile's caller passes nothing and keeps its default; nothing here is
+    # conditional on the client.
+    size = canonical._detect_output_size(image_bytes)
+    source_dims = _image_dims(image_bytes)
+    log.info("[pwa-staging] canonical refine — changes=%d types=%s strategy=%s "
+             "source=%s source_dims=%s size=%s",
              len(prepared.ordered_changes),
              ",".join(sorted({c.type for c in prepared.ordered_changes})),
-             prepared.plan.strategy.kind)
-    result = await refine_generate(canonical.openai, image_bytes, mime, changes)
+             prepared.plan.strategy.kind,
+             source_ref or "(unnamed)", source_dims, size)
+    result = await refine_generate(canonical.openai, image_bytes, mime, changes,
+                                   size=size)
+    log.info("[pwa-staging] canonical refine — result_dims=%s (requested %s, source %s)",
+             _image_dims(result.image), size, source_dims)
     # The ORDERED plan is returned, not the raw parse: it is what was actually
     # executed, so it is what the stateless verify must be asked about. Mobile
     # echoes exactly this (`prepared.ordered_changes`, main.py:5489).
@@ -1267,7 +1379,8 @@ async def pwa_health() -> dict:
     return {
         "status": "ok",
         "target": "staging",
-        "project_ref": _STAGING_REF,
+        "target": _TARGET.name,
+        "project_ref": _TARGET.project_ref,
         # False the moment a claim has had to fail open — a deployment without
         # the durable lifecycle must not look identical to one with it.
         "durable_lifecycle": _CLAIM_FAIL_OPEN_COUNT == 0,
@@ -1399,6 +1512,260 @@ class PwaChatRequest(BaseModel):
     project_id: str
     message: str
     ui_locale: str = "en"
+    #: THE CONVERSATION, as mobile sends it (`chat_screen.dart` `_send`):
+    #: `[{"role": "user"|"ai", "content": ...}]`, oldest first, the line being
+    #: sent INCLUDED — mobile appends the user message to `_messages` before it
+    #: builds `contextMessages`, and the canonical confirmation resolver reads
+    #: that shape. Empty from an older client, which then falls back to the
+    #: lineage-derived history and simply loses confirmation resolution.
+    history: list[dict] = []
+    #: The design instruction Ayden answered WITHOUT rendering, while it is
+    #: still outstanding. This is the PWA's `AdvisoryInfo.originalMessage`
+    #: (mobile `message_model.dart`): the advisory card carries the sentence so
+    #: [Try anyway] can resend it with `confirm=true` "de facon DETERMINISTE,
+    #: sans repasser par le classifieur /chat". TYPING the go-ahead has to
+    #: resume the same sentence TAPPING it would.
+    pending_instruction: str = ""
+
+
+#: The product rule this file implements, stated once.
+#:
+#:     AYDEN CAN ADVISE. THE USER DECIDES.
+#:
+#: What mobile does, read from its source (READ-ONLY, `frontend/`):
+#:
+#:   * `/chat` decides whether a line is worth an image. `chat_screen.dart`
+#:     `_send` appends the user's line to `_messages` and THEN builds
+#:     `contextMessages` from it, so the line being answered travels as the
+#:     LAST history entry. Advisory cards are `MessageType.advisory` and are
+#:     filtered out, so an objection is never in the history at all.
+#:   * When the refine ADVISOR objects, the card holds
+#:     `AdvisoryInfo.originalMessage`; [Try anyway] resends it with
+#:     `confirm=true` "sans repasser par le classifieur /chat". RED offers
+#:     [Edit request] only. Nothing resolves a TYPED reply to an objection or
+#:     to a proposal.
+#:
+#: Measured here (staging, 2026-09-10):
+#:
+#:   1. `classify_intent("break the wall on the left and do a living room", 2)`
+#:      answers MIXED / GENERAL at 0.40 — the classifier's FALLBACK — and
+#:      `main.py` maps MIXED to `should_generate=False`. The ADVISOR, asked the
+#:      same sentence, answers GREEN. GATE 1 refers MIXED to `refine.parser`.
+#:
+#:   2. The canonical resolvers read history as PRIOR turns. Both
+#:      `pending_design_sub_intent` (Wave 4.7.7) and `_last_assistant_text`
+#:      (Wave 4.11d) give up the moment the newest entry is a user turn — and
+#:      mobile's shape makes the newest entry the line being answered. Same
+#:      message, same thread:
+#:
+#:          line INCLUDED  "yes"          -> resolve_confirmation None
+#:          line INCLUDED  "do it anyway" -> resolve_confirmation None
+#:          line EXCLUDED  "yes"          -> GENERATE (local_edit)
+#:
+#:      So `_chat_history` strips the line being answered, whichever shape the
+#:      client sends. (An earlier note here claimed that sending the
+#:      conversation was enough on its own. It was not: the thread it sent still
+#:      ended with the line itself.)
+#:
+#:   3. Even revived, those resolvers only flip `should_generate`. They never
+#:      say WHAT to render, and they cannot read a proposal Ayden made. The
+#:      phone test that reopened this: the advisor answered RED — "As your
+#:      architect, I don't recommend « add a living room behind » … Would you
+#:      like to consider creating a separate living area adjacent to the bedroom
+#:      instead?" — the reply was "yes", and it came back as words
+#:      (`intent=conversation/general should_generate=False`, Fly log 12:52:22).
+#:
+#: THE REFERENCE RESOLVER answers point 3. A short reply that follows something
+#: Ayden said is resolved against it: accept Ayden's ONE proposal, insist on the
+#: user's ORIGINAL request, ask which of several, decline, or none of these.
+#: The model READS (what Ayden offered; what kind of reply this is) and the code
+#: DECIDES, by a table. The original is never written by a model: it travels
+#: verbatim from the client. No phrase list, in any language. Measured on 52
+#: fixed cases before shipping — see `_resolve_reply`.
+
+
+#: What Ayden's last question offers, read from Ayden's message ALONE — the
+#: reply is never shown to this call, so it cannot leak into the offer.
+_OFFER_SYS = (
+    'You read one message from Ayden, an AI interior architect who edits '
+    "a photo of the user's room, and report what its LAST QUESTION offers "
+    'the user.\noffer is exactly one of:\n  "one_change": exactly one '
+    'concrete visual change ("Would you like me to make it warmer?", '
+    '"Would you like to create a living area next to the bedroom '
+    'instead?"). Write it in change as one short imperative instruction, '
+    "in the message's language, using the message's own words.\n  "
+    '"original": going ahead with something the user asked for earlier '
+    '("Try anyway?", "Shall I go ahead with it?").\n  "options": two or '
+    'more alternatives to choose between. List each, in full, in options, '
+    'and write in question one short question, in {lang}, asking which '
+    'one the user wants.\n  "nothing": no concrete offer - an open '
+    'question such as "What would you like to change?", or no question at '
+    'all.\nJSON only: {{"offer": "", "change": "", "options": [], '
+    '"question": ""}}'
+)
+
+#: What kind of reply this is, judged on the reply's OWN words. An override
+#: has to be stated; it is never inferred from the objection before it.
+_KIND_SYS = (
+    'Classify one short chat message a user sent to an assistant. Judge '
+    "ONLY the message's own words; you are not shown what came before, "
+    'and must not guess.\nkind is exactly one of:\n  "agree": a plain yes '
+    'or go-ahead with nothing added - yes, yeah, yep, sure, ok, okay, go '
+    "ahead, do it, proceed, yes please, sounds good, let's do it, oui, "
+    "d'accord, vas-y, fais-le, continue, or the same in any language.\n  "
+    '"insist": the message ITSELF says to proceed despite an objection - '
+    'it contains anyway, regardless, still, even so, quand meme, malgre '
+    'tout, or the same in any language - or it tells the assistant to do '
+    'what the user asked before (do what I asked, as I said, I still want '
+    'it).\n  "refuse": a plain no and NOTHING else - no, non, not now, no '
+    'thanks, non merci, leave it, or the same in any language. If the '
+    'message goes on to ask for anything - a change, an alternative - it '
+    'is other.\n  "pick": it points to one specific item or option rather '
+    'than giving an instruction - the desk, the second one, the first, '
+    'option A.\n  "other": anything else - an instruction or change '
+    '(including no, make the sofa blue instead / non, mets plutot un '
+    'canape bleu), a question, a comment, thanks.\nAlso write in ack one '
+    'short acknowledgment, in {lang}, that nothing will change.\nJSON '
+    'only: {{"kind": "", "ack": ""}}'
+)
+
+#: Which of several offered options a reply chooses. Asked only when there
+#: are options.
+_PICK_SYS = (
+    'OPTIONS is a numbered list of alternatives an assistant offered; '
+    "REPLY is the user's answer. Which option does REPLY choose? Answer "
+    "the option's number, or -1 if REPLY does not clearly choose "
+    'one.\nJSON only: {"index": -1}'
+)
+
+_RESOLVE_OFFERS = frozenset({"one_change", "original", "options", "nothing"})
+_RESOLVE_KINDS = frozenset({"agree", "insist", "refuse", "pick", "other"})
+_RESOLVE_LANGS = {"en": "English", "fr": "French", "km": "Khmer"}
+
+
+async def _resolve_ask(client, system: str, user: str) -> dict:
+    import json as _j
+    r = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        temperature=0,
+        max_tokens=260,
+        response_format={"type": "json_object"},
+        messages=[{"role": "system", "content": system},
+                  {"role": "user", "content": user}],
+    )
+    data = _j.loads(r.choices[0].message.content or "{}")
+    return data if isinstance(data, dict) else {}
+
+
+async def _resolve_reply(message: str, last_ai: str, pending: str, client,
+                         locale: str = "en") -> dict:
+    """What a short reply agrees to, decided against the turn it answers.
+
+    THE MODEL READS, THE CODE DECIDES. Two small concurrent reads — what
+    Ayden's last question offers (from Ayden's message alone) and what kind of
+    reply this is (from the reply alone) — then the table below, which is the
+    only place a render can be authorised. A third read maps "the second one"
+    to an option, and only when there are options.
+
+    Measured before shipping, 52 fixed cases (EN, FR, Khmer; the phone's exact
+    sequence among them): one fused decision scored 22/38; a procedural prompt
+    18/38 on gpt-4o-mini and 25/38 on gpt-4o; one call reporting both facts
+    34/38; two calls 44/52; the reply judged on its own words 51/52; that plus
+    "a no followed by a request is not a refusal" 52/52, twice. The matrix is
+    `pwa_staging_resolver_eval.py`.
+
+    FAIL-CLOSED: any error or malformed answer is `none`, which leaves the
+    canonical decision standing. `original` needs an ORIGINAL — the client's
+    verbatim copy is what renders, never text the model wrote.
+    """
+    none = {"decision": "none", "proposal": "", "options": [], "reply": ""}
+    if not message.strip() or not last_ai.strip():
+        return none
+    import asyncio as _aio
+    lang = _RESOLVE_LANGS.get((locale or "en").strip().lower()[:2], "English")
+    try:
+        offer_d, kind_d = await _aio.gather(
+            _resolve_ask(client, _OFFER_SYS.format(lang=lang),
+                         f"MESSAGE: {last_ai.strip()[:1500]}"),
+            _resolve_ask(client, _KIND_SYS.format(lang=lang),
+                         f"MESSAGE: {message.strip()[:300]}"),
+        )
+    except Exception as exc:  # noqa: BLE001 - never toward spending
+        log.warning("[pwa-staging] reply resolution failed (%s) - leaving the "
+                    "canonical decision", type(exc).__name__)
+        return none
+    offer = str(offer_d.get("offer") or "").strip().lower()
+    kind = str(kind_d.get("kind") or "").strip().lower()
+    if offer not in _RESOLVE_OFFERS or kind not in _RESOLVE_KINDS:
+        return none
+    change = str(offer_d.get("change") or "").strip()[:300]
+    options = [str(o).strip()[:200] for o in (offer_d.get("options") or [])
+               if isinstance(o, (str, int, float)) and str(o).strip()][:4]
+    question = str(offer_d.get("question") or "").strip()[:400]
+    ack = str(kind_d.get("ack") or "").strip()[:400]
+    has_original = bool(pending.strip())
+
+    # ── the table ────────────────────────────────────────────────────────────
+    if kind == "insist":
+        return dict(none, decision="original") if has_original else none
+    if kind == "refuse":
+        return dict(none, decision="decline", reply=ack)
+    if kind == "pick":
+        if offer == "options" and len(options) >= 2:
+            try:
+                listing = "\n".join(f"{i}. {o}" for i, o in enumerate(options))
+                d = await _resolve_ask(client, _PICK_SYS,
+                                       f"OPTIONS:\n{listing}\nREPLY: {message.strip()[:300]}")
+                i = int(d.get("index", -1))
+            except Exception:  # noqa: BLE001 - never toward spending
+                return none
+            return (dict(none, decision="proposal", proposal=options[i])
+                    if 0 <= i < len(options) else none)
+        if offer == "one_change" and change:
+            return dict(none, decision="proposal", proposal=change)
+        return none
+    if kind == "agree":
+        if offer == "one_change" and change:
+            return dict(none, decision="proposal", proposal=change)
+        if offer == "original" and has_original:
+            return dict(none, decision="original")
+        if offer == "options" and len(options) >= 2:
+            return dict(none, decision="choose", options=options, reply=question)
+    return none
+
+
+def _chat_history(raw: list[dict], fallback: list[dict],
+                  current: str = "") -> list[dict]:
+    """The PRIOR conversation in the canonical shape, or the lineage if none came.
+
+    Prior means prior. The canonical resolvers were written for a history that
+    ends with the ASSISTANT's turn, and they silently give up otherwise (see the
+    note above the endpoint). Mobile sends the line being answered as the last
+    entry; this client no longer does; either way, a trailing user turn equal to
+    [current] is removed here, so the canonical code always gets its contract.
+
+    Bounded and sanitised, because this list is client-supplied: only the two
+    roles the classifier reads, only non-empty text, only the tail.
+    """
+    out: list[dict] = []
+    for m in raw if isinstance(raw, list) else []:
+        if not isinstance(m, dict):
+            continue
+        role = str(m.get("role") or "").strip().lower()
+        role = "ai" if role in ("ai", "assistant") else "user" if role == "user" else ""
+        text = str(m.get("content") or "").strip()
+        if role and text:
+            out.append({"role": role, "content": text})
+    cur = current.strip()
+    if out and cur and out[-1]["role"] == "user" and out[-1]["content"] == cur:
+        out.pop()
+    return out[-_CHAT_HISTORY_TURNS:] if out else fallback
+
+
+#: How far back the conversation travels. `pending_design_sub_intent` scans 3
+#: user turns, `accumulate_refinements` windows to its own `_WINDOW`; 24 turns
+#: is comfortably past both and still small.
+_CHAT_HISTORY_TURNS = 24
 
 
 # ── the conversational turn ──────────────────────────────────────────────────
@@ -1475,6 +1842,7 @@ async def pwa_chat(
 
     import main as canonical  # already imported by the launcher
     from auth import CurrentUser
+    hist = _chat_history(body.history, _history_from(chain), current=body.message)
 
     try:
         answer = await canonical.chat(
@@ -1489,7 +1857,11 @@ async def pwa_chat(
             # to chat about yet"), which is why a project with no vision must
             # still count as 1 and not 0.
             iteration=len(rows) + 1,
-            history=_json.dumps(_history_from(chain)),
+            # THE PRIOR CONVERSATION. The lineage used to travel here (no
+            # assistant turn at all), and then the conversation with the line
+            # being answered still at its end; both leave Wave 4.7.7 and Wave
+            # 4.11d with nothing to read. See the note above the endpoint.
+            history=_json.dumps(hist),
             secondary_spaces="",
             ui_locale=body.ui_locale or "en",
             has_vision="1" if rows else "0",
@@ -1516,15 +1888,88 @@ async def pwa_chat(
 
     answer = answer if isinstance(answer, dict) else {}
     should = bool(answer.get("should_generate"))
-    log.info("[pwa-staging] chat — intent=%s/%s should_generate=%s room=%s iter=%d",
-             answer.get("intent"), answer.get("sub_intent"), should, room,
-             len(rows) + 1)
+    intent = str(answer.get("intent") or "")
+    override_of = ""
+
+    # ── RESOLVE — a short reply is read against the turn it answers ─────────
+    #
+    # "yes" after "Would you like to create a living area instead?" agrees to
+    # AYDEN'S proposal. "do it anyway" after an objection insists on the USER'S
+    # original. "yes" after "A or B?" agrees to nothing yet. None of that is in
+    # the three letters of "yes"; all of it is in the turn before, which the
+    # canonical chain does not read for this purpose. So a short reply that
+    # follows something Ayden said is resolved against it, and the resolution
+    # outranks the canonical guess in both directions: it can authorise a render
+    # the classifier called conversation, and it can withhold one the classifier
+    # called GENERATE for a bare "oui".
+    #
+    # What is rendered is never the reply. It is Ayden's proposal, or the
+    # original the client kept verbatim — replayed with `confirm`, because the
+    # advice has already been given and the person has answered it.
+    pending = body.pending_instruction.strip()
+    last_ai = hist[-1]["content"] if hist and hist[-1].get("role") == "ai" else ""
+    short = len(body.message.split()) <= 10 and len(body.message.strip()) <= 120
+    resolution = "none"
+    reply_text = ""
+    if last_ai and short:
+        import main as _c3
+        res = await _resolve_reply(body.message, last_ai, pending, _c3.openai,
+                                   locale=body.ui_locale or "en")
+        resolution = res["decision"]
+        if resolution == "proposal":
+            should, override_of = True, res["proposal"]
+        elif resolution == "original":
+            should, override_of = True, pending
+        elif resolution in ("choose", "decline"):
+            should, override_of = False, ""
+            reply_text = res["reply"]
+        if resolution != "none":
+            log.info("[pwa-staging] chat - reply resolved as %s -> %s",
+                     resolution, (override_of or reply_text)[:120])
+
+    # ── GATE 1 — a MIXED line that carries real changes is an instruction ────
+    #
+    # MIXED means the classifier saw change intent (or could not classify at
+    # all: its fallback is MIXED/GENERAL at confidence 0.40). `main.py` answers
+    # such a line with words on purpose. That is right for "I like this, maybe
+    # warmer?" and wrong for "break the wall on the left and do a living room",
+    # which the refine PARSER reads as two concrete changes and the ADVISOR
+    # passes GREEN.
+    #
+    # So MIXED is referred to the module whose actual job is reading
+    # instructions. Nothing else is: CONVERSATION and DESIGN_DISCUSSION keep
+    # answering, which is what stops "what do you think?" from buying an image
+    # — the defect this endpoint was built to close. The advisor still runs
+    # afterwards on the render path and can still object.
+    if resolution == "none" and not should and intent.endswith("mixed"):
+        try:
+            import main as _c2
+            from refine.parser import parse_changes as _parse
+            _changes = await _parse(body.message, client=_c2.openai)
+            if _changes:
+                should = True
+                log.info("[pwa-staging] chat — MIXED carried %d parsed change(s)"
+                         " → authorising the render", len(_changes))
+        except Exception as exc:  # noqa: BLE001 — fail CLOSED
+            log.warning("[pwa-staging] MIXED re-read failed (%s) — answering",
+                        type(exc).__name__)
+
+    log.info("[pwa-staging] chat — intent=%s/%s should_generate=%s resolution=%s "
+             "room=%s iter=%d", answer.get("intent"), answer.get("sub_intent"),
+             should, resolution, room, len(rows) + 1)
     return {
-        "ai_message": str(answer.get("ai_message") or ""),
+        # "Which one — A or B?" and "No problem, it stays as it is" are the
+        # resolver's; everything else is the canonical turn's own answer.
+        "ai_message": reply_text or str(answer.get("ai_message") or ""),
         "should_generate": should,
         "suggestions": [str(s) for s in (answer.get("suggestions") or [])],
-        "intent": str(answer.get("intent") or ""),
+        "intent": intent,
         "sub_intent": str(answer.get("sub_intent") or ""),
+        # Non-empty when a reply was resolved to something to render: Ayden's
+        # proposal, or the original. Replayed by the client with `confirm`.
+        "override_instruction": override_of,
+        # proposal | original | choose | decline | none — for the log and QA.
+        "resolution": resolution,
     }
 
 
@@ -1702,6 +2147,12 @@ async def _generate(
                 headers=_user_headers(token),
             )
             if not (r.status_code == 200 and r.json()):
+                # Logged with both ids: this refusal is what a client holding a
+                # vision the database never stored runs into, and "Something went
+                # wrong" on the phone must be traceable to it.
+                log.warning("[pwa-staging] PARENT_FORBIDDEN — vision %s is not in "
+                            "project %s (status=%s)", body.parent_vision_id[:8],
+                            body.project_id[:8], r.status_code)
                 raise HTTPException(
                     status_code=403,
                     detail={"error_code": "PARENT_FORBIDDEN",
@@ -2149,6 +2600,9 @@ async def _generate_claimed(
                 user_instruction=body.user_instruction,
                 changes=changes,
                 watermark=_mark,
+                # For the orientation log only: which vision these bytes are.
+                source_ref=f"parent={body.parent_vision_id or '-'} "
+                           f"path={lineage.source_path}",
             )
         else:
             generated, decided = await _run_canonical_engine(
@@ -2179,11 +2633,22 @@ async def _generate_claimed(
                       f"/generated/{vision_id}.jpg")
         await _upload_generated(client, token, image_path, generated)
 
+        # The ordinal is read NOW, after the render, so a vision that finished
+        # elsewhere while this one rendered is already counted. The engine was
+        # handed `body.vision_number` as its iteration and that is unchanged —
+        # only the number this row is STORED under is the server's.
+        number = await _next_vision_number(client, token, body.project_id)
+        if number is None:
+            number = body.vision_number
+        elif number != body.vision_number:
+            log.info("[pwa-staging] vision number: client sent %d, project %s is "
+                     "at %d — storing %d", body.vision_number,
+                     body.project_id[:8], number - 1, number)
         row = {
             "id": vision_id,
             "project_id": body.project_id,
             "owner_user_id": user_id,
-            "vision_number": body.vision_number,
+            "vision_number": number,
             "parent_vision_id": body.parent_vision_id or None,
             "action_type": body.action_type,
             "prompt_text": body.user_instruction or None,
@@ -2205,33 +2670,29 @@ async def _generate_claimed(
         }
         # The image is in Storage now, so this row is the last thing standing
         # between a paid render and an orphan file: retry the transport.
-        r = await _resilient(
-            lambda: client.post(f"{_supabase_url()}/rest/v1/pwa_visions",
-                                json=row, headers=_user_headers(token, write=True)),
-            what="insert vision",
-            on_failure=_PERSIST_FAILED,
-        )
-        if r.status_code == 409:
+        r, winner = await _insert_vision_row(
+            client, token, row, idempotency_key=body.idempotency_key,
+            project_id=body.project_id)
+        if winner:
             # Lost a concurrent race on the idempotency key — the winner's row is
             # the answer. The image just produced is discarded, never a 2nd vision.
-            winner = await _existing_vision(client, token, body.idempotency_key)
-            if winner:
-                return {"status": "completed", "replayed": True,
-                        "vision_id": winner["id"],
-                        "vision_number": winner["vision_number"],
-                        "image_path": winner["image_path"]}
+            return {"status": "completed", "replayed": True,
+                    "vision_id": winner["id"],
+                    "vision_number": winner["vision_number"],
+                    "image_path": winner["image_path"]}
         if r.status_code >= 300:
             # The image EXISTS and has been paid for. Failing the request here
             # would tell the person their vision is gone while it sits in
             # Storage, and would settle the claim FAILED so a retry buys a second
             # one. Mobile answers 200 with `message_persisted:false` and lets the
             # client carry the row (main.py:5113-5131); the same applies here.
-            log.error("[pwa-staging] vision insert failed status=%s — returning "
-                      "the image anyway, row not persisted", r.status_code)
+            log.error("[pwa-staging] vision insert failed status=%s body=%s — "
+                      "returning the image anyway, row not persisted",
+                      r.status_code, (getattr(r, "text", "") or "")[:240])
             await _settle_claim(client, token, body.idempotency_key,
                                 vision_id=vision_id)
             return {"status": "completed", "persisted": False,
-                    "vision_id": vision_id, "vision_number": body.vision_number,
+                    "vision_id": vision_id, "vision_number": row["vision_number"],
                     "image_path": image_path,
                     **_resolved_echo(decided, used_room, new_customized,
                                      applied_changes)}
@@ -2266,7 +2727,7 @@ async def _generate_claimed(
         log.info("[pwa-staging] vision %s persisted for project %s",
                  vision_id[:8], body.project_id[:8])
         return {"status": "completed", "replayed": False, "vision_id": vision_id,
-                "vision_number": body.vision_number, "image_path": image_path,
+                "vision_number": row["vision_number"], "image_path": image_path,
                 **_resolved_echo(decided, used_room, new_customized,
                                  applied_changes)}
 
