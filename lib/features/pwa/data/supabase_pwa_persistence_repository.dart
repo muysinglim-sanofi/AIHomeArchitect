@@ -1,7 +1,8 @@
 /// Phase D — the real staging persistence adapter (§7).
 ///
-/// Implements the EXISTING [PwaPersistenceRepository] over the isolated staging
-/// Supabase client, `schema('pwa_staging')`, native anonymous Auth, native
+/// Implements the EXISTING [PwaPersistenceRepository] over the isolated
+/// Supabase client, the environment's schema (`pwa` in production, `pwa_staging`
+/// in staging — [PwaEnvironment.dataSchema]), native anonymous Auth, native
 /// Storage and the deployed RPCs. No new interface, no id mapper, no sync engine.
 ///
 /// [saveProject] is the single-seam, NON-destructive save: upsert project
@@ -23,7 +24,6 @@ import 'pwa_project_serialization.dart';
 import 'pwa_repository_error.dart';
 import 'pwa_staging_supabase_client.dart';
 
-const String _kBucket = 'pwa-staging-images';
 const Uuid _uuid = Uuid();
 
 class SupabasePwaPersistenceRepository implements PwaPersistenceRepository {
@@ -40,7 +40,13 @@ class SupabasePwaPersistenceRepository implements PwaPersistenceRepository {
   final Map<String, int> _revisions = {};
 
   SupabaseClient get _c => _staging.client;
-  SupabaseQuerySchema get _db => _c.schema('pwa_staging');
+
+  /// `pwa` in production, `pwa_staging` in staging — read from the SAME
+  /// environment the client was validated against, never written here.
+  SupabaseQuerySchema get _db => _c.schema(_staging.environment.dataSchema);
+
+  /// `pwa-images` in production, `pwa-staging-images` in staging.
+  String get _bucket => _staging.environment.imageBucket;
 
   // ── identity / health ──────────────────────────────────────────────────────
   @override
@@ -342,7 +348,7 @@ class SupabasePwaPersistenceRepository implements PwaPersistenceRepository {
     try {
       await _staging.ensureSession();
       return await _c.storage
-          .from(_kBucket)
+          .from(_bucket)
           .download(snapshot.originalImageAsset);
     } catch (e) {
       _map(e, 'loadOriginalBytes');
@@ -443,7 +449,7 @@ class SupabasePwaPersistenceRepository implements PwaPersistenceRepository {
     try {
       await _staging.ensureSession();
       return await _c.storage
-          .from(_kBucket)
+          .from(_bucket)
           .createSignedUrl(path, expiresInSeconds);
     } catch (e) {
       _map(e, 'signedImageUrl');
@@ -568,7 +574,7 @@ class SupabasePwaPersistenceRepository implements PwaPersistenceRepository {
     final objectId = _uuid.v4();
     final path = 'users/$uid/projects/$projectId/original/$objectId.$ext';
     await _c.storage
-        .from(_kBucket)
+        .from(_bucket)
         .uploadBinary(
           path,
           src.bytes,

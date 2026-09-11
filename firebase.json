@@ -70,6 +70,25 @@
           ]
         },
         {
+          "source": "/kh",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "//": "Production lives under /kh: every such URL is the app shell (index.html via the rewrite), and without this rule Hosting serves it max-age=3600 - an hour of the previous build after a deploy.",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
+          "source": "/kh/**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-cache, no-store, must-revalidate"
+            }
+          ]
+        },
+        {
           "source": "/",
           "headers": [
             {

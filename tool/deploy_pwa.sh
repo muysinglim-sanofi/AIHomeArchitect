@@ -78,6 +78,20 @@ if (pre) {
       + 'cache a font (a stale icon font draws empty buttons)');
   }
 }
+// PRODUCTION lives under /kh, where every URL is the app shell served through
+// the rewrite. Hosting gives those an hour of cache unless a rule says
+// otherwise, which would keep the previous build alive after a deploy.
+const liveT = targets.find((t) => t.target === 'live');
+if (liveT) {
+  for (const path of ['/kh', '/kh/**']) {
+    const rule = (liveT.headers || []).find((r) => r.source === path);
+    const cc = rule && (rule.headers || []).find(
+      (h) => h.key.toLowerCase() === 'cache-control');
+    if (!cc || !/no-cache/.test(cc.value) || /max-age=[1-9]/.test(cc.value)) {
+      bad.push('live ' + path + ': the /kh app shell must revalidate');
+    }
+  }
+}
 if (bad.length) {
   console.error('\nREFUSING TO DEPLOY: the app shell would be cached.\n  '
     + bad.join('\n  ') + '\n');

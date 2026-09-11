@@ -16,9 +16,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/pwa_environment.dart';
 
 class PwaStagingSupabaseClient {
-  PwaStagingSupabaseClient._(this.client);
+  PwaStagingSupabaseClient._(this.client, this.environment);
 
   final SupabaseClient client;
+
+  /// The environment this client was validated against. The persistence
+  /// repository reads its schema and bucket from HERE, so the database it
+  /// queries can never disagree with the project it is connected to.
+  final PwaEnvironment environment;
 
   /// Build the isolated client. Fails CLOSED on any allowlist mismatch, BEFORE
   /// initialising anything.
@@ -46,7 +51,7 @@ class PwaStagingSupabaseClient {
     // Native persistence: supabase_flutter installs its SharedPreferences-backed
     // localStorage and restores any existing session during initialize().
     await Supabase.initialize(url: url, anonKey: env.publishableKey!);
-    return PwaStagingSupabaseClient._(Supabase.instance.client);
+    return PwaStagingSupabaseClient._(Supabase.instance.client, env);
   }
 
   /// Restore-or-create the anonymous session. Returns the stable `auth.uid()`.

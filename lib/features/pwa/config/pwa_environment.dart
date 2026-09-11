@@ -111,6 +111,12 @@ const List<String> kStagingHostDenylist = <String>[
   'ayden-api-staging.fly.dev',
 ];
 
+/// Where each target's library lives — see [PwaEnvironment.dataSchema].
+const String kProductionDataSchema = 'pwa';
+const String kStagingDataSchema = 'pwa_staging';
+const String kProductionImageBucket = 'pwa-images';
+const String kStagingImageBucket = 'pwa-staging-images';
+
 /// Resolved, validated environment configuration.
 class PwaEnvironment {
   const PwaEnvironment._(
@@ -179,6 +185,31 @@ class PwaEnvironment {
   /// resolves the same two values from `PWA_TARGET` (`backend/pwa_target.py`),
   /// so the pair is defined once on each side and nowhere else.
   String get apiPrefix => isProduction ? '/pwa' : '/pwa/staging';
+
+  /// The PostgREST schema holding projects / visions / messages, and the
+  /// private bucket holding their images — `pwa` + `pwa-images` in production,
+  /// `pwa_staging` + `pwa-staging-images` in staging. The backend resolves the
+  /// same pairs from `PWA_TARGET` (`backend/pwa_target.py`). Hard-coding the
+  /// staging pair is what sent the first production build to a schema the
+  /// production project does not expose (PGRST106, 2026-09-11).
+  ///
+  /// A mock build has no database; asking it for one is a programming error.
+  String get dataSchema => switch (environment) {
+    AydenEnvironment.production => kProductionDataSchema,
+    AydenEnvironment.staging => kStagingDataSchema,
+    AydenEnvironment.mock => throw const PwaConfigError(
+      'A mock build has no database schema.',
+    ),
+  };
+
+  /// See [dataSchema].
+  String get imageBucket => switch (environment) {
+    AydenEnvironment.production => kProductionImageBucket,
+    AydenEnvironment.staging => kStagingImageBucket,
+    AydenEnvironment.mock => throw const PwaConfigError(
+      'A mock build has no image bucket.',
+    ),
+  };
 
   /// True when this build talks to a real backend (staging or production), as
   /// opposed to the offline mock.
