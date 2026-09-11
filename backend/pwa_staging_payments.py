@@ -114,6 +114,30 @@ _TABLE = "payway_transactions"
 #: already define it. Not the gateway brand.
 PROVIDER = "khqr"
 
+
+def _rail_environment() -> str:
+    """`sandbox` | `production` — the gateway this process actually talks to.
+    Recorded with every grant; never a literal, so a production payment cannot
+    be written down as a sandbox one."""
+    try:
+        return payway.load_config().environment
+    except (payway.PayWayNotConfigured, ValueError):
+        return "unconfigured"
+
+
+def _refuse_if_closed() -> None:
+    """The SERVER-side kill switch. `PWA_PAYMENT_PROVIDER=none` closes checkout
+    here, not only on the paywall, so no client can start a payment while an
+    operator holds the rail closed. Unset, nothing changes."""
+    forced = (os.environ.get("PWA_PAYMENT_PROVIDER") or "").strip().lower()
+    if forced in ("none", "off", "closed"):
+        log.info("[payway-seam] checkout refused: rail held closed by operator")
+        raise HTTPException(status_code=503, detail={
+            "error_code": "PAYMENTS_CLOSED",
+            "user_message": "Payments are not open yet.",
+            "retryable": False,
+        })
+
 #: Rail states. Superset of the order's money states; see 0007 §1.
 CREATED = "CREATED"
 AWAITING_PAYMENT = "AWAITING_PAYMENT"
@@ -891,7 +915,7 @@ async def _grant(row: dict, status: payway.TransactionStatus) -> dict:
             raw_payload={
                 "rail": PROVIDER,
                 "gateway": "payway",
-                "environment": "sandbox",
+                "environment": _rail_environment(),
                 "tran_id": tran_id,
                 "apv": status.approval_code,
                 "payment_status": status.payment_status,
@@ -1112,6 +1136,7 @@ async def payments_checkout_plugin(
     an attempt key — and the amount, the product and the grant are still read
     from the catalogue and from Check Transaction."""
     user_id = await _caller(authorization)
+    _refuse_if_closed()
     return await start_plugin_checkout(user_id=user_id, sku=body.sku,
                                        attempt_key=body.attempt_key)
 
@@ -1127,6 +1152,7 @@ async def payments_checkout(
     Everything that decides money — the product, the price, the grant — is read
     from the catalogue and from Check Transaction, never from a header."""
     user_id = await _caller(authorization)
+    _refuse_if_closed()
     return await start_checkout(user_id=user_id, sku=body.sku,
                                 attempt_key=body.attempt_key,
                                 origin=origin or "")

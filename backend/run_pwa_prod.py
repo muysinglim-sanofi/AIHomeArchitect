@@ -52,6 +52,79 @@ def _die(msg: str) -> None:
     raise SystemExit(2)
 
 
+#: `main.py`'s startup work that belongs to the MOBILE backend. It already runs
+#: against this same production database, from Render, with the mobile code. A
+#: second copy here would race it with a different version of that code — the
+#: reconciliation worker settles generation intents and billing holds. This
+#: process serves the Web routes and starts none of it.
+_MOBILE_STARTUP = ('_start_reconciliation_worker', '_verify_claim_functions_deployed')
+
+
+def _strip_mobile_startup(app) -> list:
+    """Remove the mobile backend's startup work from THIS process. Fail closed:
+    if `main.py` no longer registers them under these names, refuse to start
+    rather than guess what would now run against the shared database."""
+    handlers = list(app.router.on_startup)
+    names = [getattr(h, '__name__', '') for h in handlers]
+    missing = [n for n in _MOBILE_STARTUP if n not in names]
+    if missing:
+        _die('main.py no longer registers ' + ', '.join(missing) + ' at startup — '
+             'review what this process would run against the shared production '
+             'database before starting it.')
+    app.router.on_startup[:] = [h for h in handlers
+                                if getattr(h, '__name__', '') not in _MOBILE_STARTUP]
+    return [getattr(h, '__name__', '') for h in app.router.on_startup]
+
+
+class _WebRoutesOnly:
+    """ASGI gate: this process answers under the Web prefix, and nowhere else.
+
+    `main.app` also carries the mobile API (`/generate`, `/refine`, `/chat`,
+    `/webhooks/revenuecat`, `/admin/*`, `/internal/*`). The mobile backend
+    serves those; here they would be a second, differently-versioned door onto
+    the same production data. Each `closed` entry is refused with everything
+    under it — `{prefix}/engine` (the staging diagnostic that publishes the
+    engine's configuration) and `{prefix}/staging`.
+    """
+
+    def __init__(self, app, prefix: str, closed: tuple = ()):
+        self.app = app
+        self.prefix = prefix.rstrip('/')
+        self.closed = tuple(c.rstrip('/') for c in closed)
+
+    def allows(self, path: str) -> bool:
+        under = path == self.prefix or path.startswith(self.prefix + '/')
+        shut = any(path == c or path.startswith(c + '/') for c in self.closed)
+        return under and not shut
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] == 'http' and not self.allows(scope.get('path', '')):
+            body = b'{"detail":"Not Found"}'
+            await send({'type': 'http.response.start', 'status': 404,
+                        'headers': [(b'content-type', b'application/json'),
+                                    (b'content-length', str(len(body)).encode())]})
+            await send({'type': 'http.response.body', 'body': body})
+            return
+        if scope['type'] == 'websocket' and not self.allows(scope.get('path', '')):
+            await send({'type': 'websocket.close', 'code': 1008})
+            return
+        await self.app(scope, receive, send)
+
+
+#: The Web GENERATION surface. Closed in production until the Web launch itself
+#: (`PWA_PROD_GENERATION_OPEN=1`): its tables (`pwa_projects`, `pwa_visions`,
+#: the generation claims) do not exist in the production project yet, and it
+#: spends Spaces on the shared ledger. The payment-validation phase needs none of it.
+_GENERATION_PATHS = ('/generate', '/chat', '/refine', '/generation')
+
+
+def _closed_paths(prefix: str) -> tuple:
+    closed = [prefix + '/engine', prefix + '/staging']
+    if os.environ.get('PWA_PROD_GENERATION_OPEN', '').strip() != '1':
+        closed += [prefix + p for p in _GENERATION_PATHS]
+    return tuple(closed)
+
+
 def main() -> None:
     sys.path.insert(0, str(HERE))
     os.chdir(HERE)
@@ -126,6 +199,11 @@ def main() -> None:
     canonical.app.include_router(pwa_payments.router)
     print(f'[pwa-prod] adapter    : mounted at {target.prefix}')
 
+    # 7b) None of the mobile backend's background work in this process.
+    left = _strip_mobile_startup(canonical.app)
+    print('[pwa-prod] mobile     : reconciliation worker + claim probe NOT started '
+          '(the mobile backend owns them); startup left: ' + (', '.join(left) or 'none'))
+
     _pw = payway.redacted_config()
     if _pw.get('configured'):
         print(f'[pwa-prod] payments   : rail=khqr gateway=payway '
@@ -166,6 +244,12 @@ def main() -> None:
     print(f'[pwa-prod] CORS       : {len(origins)} allowed origin(s) — '
           + ', '.join(origins)
           + (f'  + regex {origin_regex}' if origin_regex else ''))
+
+    # 9) Added LAST, so it is the outermost layer: nothing outside the Web
+    #    prefix is answered by this process, and the diagnostic is closed.
+    closed = _closed_paths(target.prefix)
+    canonical.app.add_middleware(_WebRoutesOnly, prefix=target.prefix, closed=closed)
+    print(f'[pwa-prod] routes     : {target.prefix}/* only; closed: ' + ', '.join(closed))
 
     import uvicorn  # noqa: PLC0415
 

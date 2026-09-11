@@ -1,0 +1,104 @@
+# AYDEN STUDIO — WEB PRODUCTION API on Fly.io.  NOT DEPLOYED.
+#
+# The production sibling of `fly.toml`, and a separate app on purpose:
+#
+#   ayden-api-staging   staging Supabase, PayWay sandbox, preview channels
+#   ayden-api           production Supabase, PayWay production, the live PWA
+#
+# The native iOS backend stays where it is — Render, `prod-backend` pinned to
+# the deployed SHA. Nothing in this file touches it. Two hosts is the point:
+# the frozen mobile API keeps its own release cadence and its own blast radius.
+#
+# WHY NOT ONE APP WITH A SWITCH. Because the switch would be a variable, and a
+# variable that decides which project real money lands in is a variable someone
+# will one day set by accident. Two apps, two secret stores, two names.
+#
+# HOW TO USE IT (Phase B2, after approval — do not run it now):
+#   flyctl apps create ayden-api
+#   flyctl secrets set -a ayden-api SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=...
+#                                    SUPABASE_PUBLISHABLE_KEY=... OPENAI_API_KEY=...
+#                                    PAYWAY_MERCHANT_ID=... PAYWAY_API_KEY=...
+#   flyctl deploy -a ayden-api -c fly.prod.toml
+#   flyctl certs create -a ayden-api api.aydenstudio.com
+#
+# Every value below is configuration, not a credential. The eight secrets above
+# never appear in this file, in the image, or in the repository.
+
+app = "ayden-api"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+# THE LAUNCHER. The image's CMD is the STAGING launcher (`Dockerfile`, shared
+# with ayden-api-staging), which refuses a production database at boot. This
+# app overrides the command instead of editing the image, so the staging image
+# and `fly.toml` stay exactly as they are.
+[processes]
+  app = "python run_pwa_prod.py"
+
+[env]
+  PORT = "8080"
+
+  # THE variable that decides everything else: schema `pwa`, bucket
+  # `pwa-images`, routes under `/pwa`, and the production project ref that
+  # `pwa_target.assert_url_matches` checks SUPABASE_URL against, both ways.
+  PWA_TARGET = "production"
+
+  APP_ENV = "production"
+
+  # The validated engine configuration. `run_pwa_prod.py` refuses to start
+  # without it rather than serving a recipe nobody benched.
+  BIMODAL_ENABLED = "1"
+
+  # THE browser origins allowed to make credentialed calls. No preview-channel
+  # regex here, deliberately: a preview build points at STAGING, and a
+  # production API that answered every `ayden-studio--*.web.app` would let an
+  # unreviewed bundle spend real Spaces.
+  PWA_ALLOWED_ORIGINS = "https://ayden-studio.web.app,https://app.aydenstudio.com"
+
+  # ── PayWay, production ───────────────────────────────────────────────────
+  # `payway.load_config` accepts `production` only when ALL of these hold:
+  # PWA_TARGET=production, a public callback URL, a required signature, and a
+  # return base. Any one missing is a refusal at boot, not a silent sandbox.
+  PAYWAY_ENV = "production"
+  PAYWAY_CALLBACK_URL = "https://api.aydenstudio.com/pwa/payments/payway/callback"
+  PAYWAY_CALLBACK_SIGNATURE_MODE = "required"
+  PAYWAY_RETURN_BASE_URL = "https://ayden-studio.web.app"
+  PAYWAY_VIEW_TYPE = "hosted_view"
+  PAYWAY_CURRENCY = "USD"
+
+[http_service]
+  processes = ["app"]
+  internal_port = 8080
+  force_https = true
+  # A payment callback may arrive at any hour, and a suspended machine that
+  # cold-boots the whole engine is a callback that times out. Production keeps
+  # a machine warm; the doorbell is answered immediately and Check Transaction
+  # decides. (Staging suspends because nothing there is real money.)
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 20
+    hard_limit = 40
+
+[[vm]]
+  # A generation holds a request open for ~2 minutes while OpenAI works, and the
+  # image pipeline decodes JPEGs in-process. 1 GB is the floor that does not OOM
+  # on a 1536x1024 re-encode — measured on staging, unchanged here.
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[checks.health]
+  type = "http"
+  port = 8080
+  method = "GET"
+  # The production adapter answers under `/pwa`, not `/pwa/staging`.
+  path = "/pwa/health"
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "60s"
