@@ -2680,6 +2680,291 @@ def test_the_conversational_turn_is_mobiles_own(api) -> None:
 
 
 
+def test_an_accepted_proposal_reaches_the_engine_in_english(api) -> None:
+    """RED, then "oui": what renders is Ayden's proposal as an ENGLISH
+    IMPERATIVE, and what the person reads is the same change in French.
+
+    The phone's defect (preprod, 2026-09-10): the offer reader returned the
+    proposal as Ayden's own French QUESTION, it went to the engine as it was,
+    the frozen normalizer placed it "on the coffee table or main visible
+    surface", and a charged render came back identical to its parent. The
+    engine is not what changes here — what it is handed is.
+    """
+    print("\n== 38) An accepted proposal reaches the engine in English ==")
+    import asyncio as _a
+    import importlib
+    import json as _j
+
+    import main as _canon
+
+    saved = (getattr(_canon, "openai", None), getattr(_canon, "chat", None))
+    # The REAL parser and normalizer, for this test only: the check under test
+    # asks the frozen engine how it reads an instruction, and a stub cannot
+    # answer that. The suite's stubs are put back afterwards.
+    stubs = {k: sys.modules.pop(k) for k in ("refine", "refine.parser",
+                                             "refine.normalizer")
+             if k in sys.modules}
+    importlib.import_module("refine.normalizer")
+    original = "break the wall on the left and add a living room behind"
+    red = ("As your architect, I don't recommend « add a living room behind » — "
+           "a living room behind the bedroom would cut the circulation. Would you "
+           "like to consider creating a cozy reading nook in the master bedroom "
+           "instead?")
+    offer_fr = "Créer un coin lecture confortable dans la chambre principale ?"
+    exec_en = ("Create a cozy reading nook in the left corner of the bedroom with "
+               "an armchair and a floor lamp.")
+    display_fr = "Créer un coin lecture confortable dans le coin gauche de la chambre"
+    asked: list = []
+    # How the canonical parser reads a zone written as a list of its furniture,
+    # as the bench measured it: split, and the zone left without a place.
+    listed = ("Create a cozy reading nook by adding an armchair, a side table "
+              "and a floor lamp.")
+    # And a zone "with" a piece of furniture, each with a place: two changes,
+    # which the render's own reading may split differently.
+    furnished = ("Create a cozy reading nook by the window with an armchair "
+                 "in the corner.")
+    readings = {listed: [
+        {"type": "add", "object": "reading nook", "detail": "",
+         "raw": "Create a cozy reading nook"},
+        {"type": "add", "object": "armchair", "detail": "",
+         "raw": "adding an armchair"}],
+        furnished: [
+        {"type": "add", "object": "reading nook", "detail": "by the window",
+         "raw": "Create a cozy reading nook by the window"},
+        {"type": "add", "object": "armchair", "detail": "in the corner",
+         "raw": "with an armchair in the corner"}]}
+
+    def _client(create):
+        return types.SimpleNamespace(chat=types.SimpleNamespace(
+            completions=types.SimpleNamespace(create=create)))
+
+    def _answer(text: str):
+        msg = types.SimpleNamespace(content=text)
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=msg)])
+
+    def run(kind: str, rewrites: list, *, canonical_generate: bool = False) -> dict:
+        todo = list(rewrites)
+        asked.clear()
+
+        async def create(**kw):
+            system = kw["messages"][0]["content"]
+            user = kw["messages"][-1]["content"]
+            if system.startswith("You read one message from Ayden"):
+                who, body = "offer", {"offer": "one_change", "change": offer_fr,
+                                      "options": [], "question": ""}
+            elif system.startswith("Classify one short chat message"):
+                who, body = "kind", {"kind": kind, "ack": "D'accord, rien ne change."}
+            elif system.startswith("Ayden, an AI interior architect who edits"):
+                who, body = "exec", (todo.pop(0) if todo else {})
+            elif system.startswith("Extract the DISTINCT requested changes"):
+                # The canonical refine PARSER, reading the rewrite the way the
+                # render will.
+                who, body = "engine", {"changes": readings.get(user.strip(), [
+                    {"type": "add", "object": "reading nook",
+                     "detail": "in the left corner", "raw": user.strip()}])}
+            else:
+                who, body = "other", {}
+            asked.append((who, user))
+            return _answer(_j.dumps(body))
+
+        _canon.openai = _client(create)
+
+        async def _chat(**_kw):
+            return {"ai_message": "Great — what would you like to change?",
+                    "should_generate": canonical_generate, "suggestions": [],
+                    "intent": "conversation", "sub_intent": "general"}
+
+        _canon.chat = _chat
+        _install_fake_httpx(api, {
+            "/auth/v1/user": _Resp(200, {"id": UID}),
+            "/rest/v1/pwa_projects": _Resp(200, [{"id": PROJECT,
+                                                  "owner_user_id": UID,
+                                                  "room_label": "Bedroom"}]),
+            "/rest/v1/pwa_visions": _Resp(200, [
+                _row("v1", 1, "initial", room="Bedroom", customized=False)]),
+        }, [])
+        body = api.PwaChatRequest(
+            project_id=PROJECT, message="oui", ui_locale="fr",
+            history=[{"role": "user", "content": original},
+                     {"role": "ai", "content": red}],
+            pending_instruction=original)
+        return _a.run(api.pwa_chat(body, f"Bearer {TOKEN}"))
+
+    try:
+        out = run("agree", [{"instruction": exec_en, "display": display_fr}])
+        check("PROP01: the reply is resolved to Ayden's proposal and authorised",
+              out["resolution"] == "proposal" and out["should_generate"] is True,
+              str(out))
+        check("PROP02: the ENGINE is handed the English imperative",
+              out["override_instruction"] == exec_en, out["override_instruction"])
+        check("PROP03: and never the offer as Ayden worded it — no French, no '?'",
+              offer_fr not in out["override_instruction"]
+              and "?" not in out["override_instruction"], out["override_instruction"])
+        check("PROP04: the person reads the same change in French, without a '?'",
+              out["override_display"] == display_fr, out["override_display"])
+        rewrite = next((u for w, u in asked if w == "exec"), "")
+        check("PROP05: the rewrite is given the original (for WHERE) and the room",
+              f"USER'S EARLIER REQUEST: {original}" in rewrite
+              and "ROOM: Bedroom" in rewrite, rewrite)
+
+        out = run("agree", [
+            {"instruction": "Would you like to create a cozy reading nook?",
+             "display": "x"},
+            {"instruction": exec_en, "display": display_fr}])
+        check("PROP06: a rewrite that is still a question is refused and asked "
+              "again", out["override_instruction"] == exec_en
+              and [w for w, _u in asked].count("exec") == 2, str(asked))
+
+        out = run("agree", [
+            {"instruction": offer_fr, "display": offer_fr},
+            {"instruction": "Consider creating a reading nook instead.",
+             "display": "x"}], canonical_generate=True)
+        check("PROP07: FAIL CLOSED — no checked instruction, nothing authorised, "
+              "even over a canonical GENERATE",
+              out["should_generate"] is False and out["override_instruction"] == ""
+              and out["resolution"] == "none", str(out))
+
+        out = run("insist", [])
+        check("PROP08: 'do it anyway' still replays the ORIGINAL, verbatim, and "
+              "nothing rewrites it",
+              out["resolution"] == "original"
+              and out["override_instruction"] == original
+              and out["override_display"] == ""
+              and "exec" not in [w for w, _u in asked], str(out))
+
+        v = api._exec_violation
+        check("PROP09: the checks read the instruction's form, not a phrase list",
+              v("Create a cozy reading nook in the left corner.") == ""
+              and v("Créer un coin lecture ?") == "a question mark"
+              and v("Consider creating a nook in the corner.").startswith("offer")
+              and v("Would you like a nook").startswith("offer")
+              and v("Ajoute un fauteuil dans le coin.") == "not English"
+              and v("A reading nook in the corner.") == "not an imperative"
+              and v("Paint the wall behind the bed a warm terracotta.") == "")
+
+        out = run("agree", [{"instruction": listed, "display": "x"},
+                            {"instruction": exec_en, "display": display_fr}])
+        note = next((u for w, u in asked if w == "exec" and "BROKE A RULE" in u), "")
+        check("PROP10: a rewrite the frozen engine would put on the coffee table "
+              "is refused and asked again — judged by the engine's OWN parser "
+              "and normalizer, read and not changed",
+              out["override_instruction"] == exec_en
+              and [w for w, _u in asked].count("engine") == 2
+              and "on a table" in note and "reading nook" in note, str(asked))
+        out = run("agree", [{"instruction": furnished, "display": "x"},
+                            {"instruction": exec_en, "display": display_fr}])
+        note = next((u for w, u in asked if w == "exec" and "BROKE A RULE" in u), "")
+        check("PROP12: a rewrite the engine reads as TWO changes is refused too — "
+              "the render reads it again, and must read it the same way",
+              out["override_instruction"] == exec_en
+              and "2 separate changes" in note, note or str(asked))
+        from refine.normalizer import _ADD_DEFAULT, normalize
+        from refine.parser import Change
+        check("PROP11: the engine's small-object placement is still what that "
+              "check looks for — a bare add still gets it",
+              _ADD_DEFAULT in normalize(Change(type="add", object="reading nook",
+                                               detail="", raw="add a reading nook")))
+
+        raw = ("As your architect, I don't recommend « break the wall on the left » "
+               "— it would require major structural changes.. Would you like to "
+               "Consider creating a cozy reading nook in the master bedroom instead.?")
+        check("TIDY01: the template's seams are closed — '..', '.?', 'to Consider'",
+              api._tidy_advisory(raw) == (
+                  "As your architect, I don't recommend « break the wall on the "
+                  "left » — it would require major structural changes. Would you "
+                  "like to consider creating a cozy reading nook in the master "
+                  "bedroom instead?"), api._tidy_advisory(raw))
+        clean = "Hmm... « remove the partition » may be difficult. Try anyway?"
+        check("TIDY02: and nothing else moves — an ellipsis, a clean question",
+              api._tidy_advisory(clean) == clean, api._tidy_advisory(clean))
+
+        sent: list = []
+
+        async def translate(**kw):
+            sent.append(kw)
+            return _answer("Essayer quand même ?")
+
+        api._L10N_CACHE.clear()
+        check("L10N01: English stays English — no call is made",
+              _a.run(api._localize_text(_client(translate), "Try anyway?", "en"))
+              == "Try anyway?" and not sent)
+        check("L10N02: a French screen gets French, translated from Ayden's words",
+              _a.run(api._localize_text(_client(translate), "Try anyway?", "fr"))
+              == "Essayer quand même ?"
+              and "French" in sent[-1]["messages"][0]["content"], str(sent[-1:]))
+
+        async def masked(**kw):
+            sent.append(kw)
+            assert "«" not in kw["messages"][-1]["content"], kw["messages"][-1]
+            return _answer("[[Q0]] peut être difficile à réaliser. Essayer quand même ?")
+
+        api._L10N_CACHE.clear()
+        warning = "« add a living room behind » may be difficult to achieve. Try anyway?"
+        check("L10N05: the person's own words are shown as typed — they never "
+              "reach the translator",
+              _a.run(api._localize_text(_client(masked), warning, "fr"))
+              == "« add a living room behind » peut être difficile à réaliser. "
+                 "Essayer quand même ?")
+
+        async def lossy(**kw):
+            sent.append(kw)
+            return _answer("Ajouter un salon derrière peut être difficile.")
+
+        api._L10N_CACHE.clear()
+        check("L10N06: a translation that lost them is not shown — the English is",
+              _a.run(api._localize_text(_client(lossy), warning, "fr")) == warning)
+
+        async def down(**_kw):
+            raise RuntimeError("provider down")
+
+        api._L10N_CACHE.clear()
+        check("L10N03: a failed translation keeps the English — it never blocks",
+              _a.run(api._localize_text(_client(down), "Still missing", "km"))
+              == "Still missing")
+        sent.clear()
+
+        async def reading(**kw):
+            sent.append(kw)
+            return _answer("Would you like a reading nook instead?")
+
+        api._L10N_CACHE.clear()
+        km = "តើអ្នកចង់បង្កើតកន្លែងអាននៅក្នុងបន្ទប់គេងទេ?"
+        check("READ01: a Khmer message is read through English",
+              _a.run(api._read_in_english(_client(reading), km))
+              == "Would you like a reading nook instead?"
+              and "into plain English" in sent[-1]["messages"][0]["content"])
+        sent.clear()
+        check("READ02: English and French are read as they are — no call",
+              _a.run(api._read_in_english(_client(reading), red)) == red
+              and _a.run(api._read_in_english(_client(reading),
+                                              "Voulez-vous un coin lecture ?"))
+              == "Voulez-vous un coin lecture ?" and not sent)
+        api._L10N_CACHE.clear()
+        check("READ03: a failed reading keeps the Khmer — it never blocks",
+              _a.run(api._read_in_english(_client(down), km)) == km)
+        check("L10N04: the verify report is told the screen's language",
+              api.PwaVerifyRequest(project_id=PROJECT, before_path="a",
+                                   after_path="b").ui_locale == "en"
+              and api.PwaVerifyRequest(project_id=PROJECT, before_path="a",
+                                       after_path="b", ui_locale="fr").ui_locale == "fr")
+
+        src = pathlib.Path("pwa_staging_api.py").read_text(encoding="utf-8")
+        adv = src.split("async def _refine_advisory", 1)[1].split("\ndef ", 1)[0]
+        check("ADV01: the warning the PWA shows is tidied and localized, over the "
+              "canonical template — which is called, not copied",
+              "_tidy_advisory(build_advisory_message(advice)" in adv
+              and "_localize_text(" in adv)
+        ver = src.split("async def pwa_refine_verify", 1)[1].split("\n@router", 1)[0]
+        check("ADV02: so is the verify report", "_localize_text(" in ver
+              and "body.ui_locale" in ver)
+    finally:
+        _canon.openai, _canon.chat = saved
+        api._L10N_CACHE.clear()
+        for k in ("refine", "refine.parser", "refine.normalizer"):
+            sys.modules.pop(k, None)
+        sys.modules.update(stubs)
+
+
 # ── billing: stubbed HERE, measured elsewhere ────────────────────────────────
 #
 # `_generate` now consults the canonical Billing Engine, which needs a
@@ -2788,6 +3073,7 @@ def main() -> int:
     test_verify_is_the_second_call_mobile_makes(api)
     test_the_running_engine_can_be_asked_what_it_is(api)
     test_the_conversational_turn_is_mobiles_own(api)
+    test_an_accepted_proposal_reaches_the_engine_in_english(api)
 
     print(f"\n{'=' * 60}")
     if _failed:

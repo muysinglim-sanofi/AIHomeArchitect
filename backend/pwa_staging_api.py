@@ -34,6 +34,7 @@ import asyncio
 import io
 import logging
 import os
+import re
 import uuid
 
 import httpx
@@ -230,6 +231,11 @@ class PwaGenerateRequest(BaseModel):
     action_type: str = Field(default="initial")
     parent_vision_id: str = ""
     user_instruction: str = ""
+    #: What the person READS for this refine when it is not what the engine
+    #: executes — an accepted proposal, in their language (see
+    #: `_proposal_execution`). Stored as the vision's title, `action_summary`;
+    #: never sent to the engine.
+    display_instruction: str = ""
     vision_number: int = 1
     ui_locale: str = "en"
 
@@ -667,6 +673,104 @@ async def _converse(body: "PwaGenerateRequest", room_label: str = "") -> str:
                 "like different and I'll take care of it.")
 
 
+# ── what the advisor SAYS, as this client shows it ───────────────────────────
+#
+# `build_advisory_message` is the canonical advisor's own template, shared with
+# mobile and frozen with the refine engine, so it is not edited. Two things are
+# done to its OUTPUT, on this surface only:
+#
+#   * its seams are closed. The template adds "." after a reason and wraps an
+#     alternative in "Would you like to …?", while the model that writes reason
+#     and alternative already ends them with a full stop and sometimes opens
+#     with a capital. The phone showed "changes..", "to Consider", "instead.?".
+#   * it is said in the person's language. The PWA sends its UI locale and the
+#     template is English: a French screen showed an English warning, and the
+#     person's "oui" was then resolved against English text.
+#
+# Neither changes what is decided. The verdict, the flagged changes and the
+# `confirm` contract are untouched, and a failed translation keeps the English.
+def _tidy_advisory(text: str) -> str:
+    """The advisor's sentence with the template's punctuation seams closed."""
+    s = re.sub(r"(?<!\.)\.\.(?!\.)", ".", text or "")      # "changes.."   -> "changes."
+    s = re.sub(r"[ \t]*[.,;:!]+[ \t]*\?", "?", s)           # "instead.?"   -> "instead?"
+    s = re.sub(r"\?[ \t]*\.(?!\.)", "?", s)                 # "instead?."   -> "instead?"
+    s = re.sub(r"\b(Would you like to) ([A-Z])(?=[a-z])",  # "to Consider" -> "to consider"
+               lambda m: f"{m.group(1)} {m.group(2).lower()}", s)
+    s = re.sub(r"[ \t]{2,}", " ", s)
+    return s.strip()
+
+
+#: The languages this surface translates Ayden's own words into. English is the
+#: advisor's language and is never sent anywhere.
+_L10N_LANGS = {"fr": "French", "km": "Khmer"}
+
+_L10N_SYS = (
+    "Translate this message from Ayden, an AI interior architect, into "
+    "natural, concise {lang}. Translation only: the same meaning, tone, line "
+    "breaks and symbols, and a closing question stays a question. Tokens "
+    "like [[Q0]] stand for the user's own words: keep every one exactly as it "
+    "is, where it belongs in the sentence. Keep atmosphere and style names "
+    "(Warm Modern, Japandi, Nordic...) as they are. Output only the "
+    "translated message."
+)
+
+#: The person's own words, as the advisor quotes them. They are the person's —
+#: shown as typed, never translated (measured live on preprod, 2026-09-11: asked
+#: in words to copy them, the model still translated « add a living room
+#: behind » into French). So they are taken out before translation and put
+#: back after.
+_QUOTED = re.compile(r"«[^«»]*»")
+
+#: (lang, english) -> translation. Deterministic (temperature 0), bounded, and
+#: gone on restart.
+_L10N_CACHE = {}
+
+
+async def _localize_text(client, text: str, locale: str) -> str:
+    """[text] in the UI language when that is French or Khmer; unchanged else.
+
+    Not `normalization.localize_reply`, on purpose: that one leaves text alone
+    as soon as `_detect_language` calls it non-English, and an advisory quotes
+    the person's own words — French words, on a French screen — inside an
+    English template. Never raises: any failure keeps the English.
+    """
+    lang = _L10N_LANGS.get((locale or "en").strip().lower()[:2])
+    if not lang or not text or not text.strip():
+        return text
+    key = (lang, text)
+    if key in _L10N_CACHE:
+        return _L10N_CACHE[key]
+    quotes = _QUOTED.findall(text)
+    masked = text
+    for i, q in enumerate(quotes):
+        masked = masked.replace(q, f"[[Q{i}]]", 1)
+    try:
+        r = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0,
+            max_tokens=700,
+            messages=[{"role": "system", "content": _L10N_SYS.format(lang=lang)},
+                      {"role": "user", "content": masked}],
+        )
+        out = (r.choices[0].message.content or "").strip()
+    except Exception as exc:  # noqa: BLE001 — a translation never blocks an answer
+        log.warning("[pwa-staging] localize to %s failed (%s) — keeping English",
+                    lang, type(exc).__name__)
+        return text
+    # A token the model lost is a sentence it rewrote around the person's
+    # words: the English is kept rather than a message missing what was asked.
+    if not out or any(out.count(f"[[Q{i}]]") != 1 for i in range(len(quotes))):
+        return text
+    for i, q in enumerate(quotes):
+        out = out.replace(f"[[Q{i}]]", q)
+    # The model ends lines with Markdown's two-space break; a chat bubble does
+    # not need it.
+    out = "\n".join(line.rstrip() for line in out.splitlines())
+    if len(_L10N_CACHE) < 512:
+        _L10N_CACHE[key] = out
+    return out
+
+
 async def _refine_advisory(body: "PwaGenerateRequest", room_label: str = "") -> tuple:
     """Run the canonical advisor. Returns `(advisory | None, changes)`.
 
@@ -712,10 +816,15 @@ async def _refine_advisory(body: "PwaGenerateRequest", room_label: str = "") -> 
 
     log.info("[pwa-staging] advisor verdict=%s changes=%d — NO render",
              advice.overall.value, len(changes))
+    # The advisor's words, seams closed, in the person's language — see
+    # `_tidy_advisory`. What was decided is not touched.
+    message = await _localize_text(
+        canonical.openai, _tidy_advisory(build_advisory_message(advice) or ""),
+        body.ui_locale)
     return {
         "status": "advisory",
         "verdict": advice.overall.value,
-        "message": build_advisory_message(advice),
+        "message": message,
         "flagged": [
             {"raw": a.change.raw, "verdict": a.verdict.value,
              "reason": a.reason, "alternative": a.alternative}
@@ -1643,12 +1752,62 @@ _RESOLVE_KINDS = frozenset({"agree", "insist", "refuse", "pick", "other"})
 _RESOLVE_LANGS = {"en": "English", "fr": "French", "km": "Khmer"}
 
 
-async def _resolve_ask(client, system: str, user: str) -> dict:
+#: Khmer script. Two characters or more make a message Khmer, as
+#: `meta_intent._detect_language` counts it.
+_KHMER = re.compile(r"[ក-៿]")
+
+_READ_EN_SYS = (
+    "Translate this message from Ayden, an AI interior architect, into plain "
+    "English. Translation only: the same meaning, and every question stays a "
+    "question. Text between « and » quotes the user: translate it too, and "
+    "keep the « » around it. Output only the translation."
+)
+
+
+async def _read_in_english(client, text: str) -> str:
+    """[text] in English when it is written in Khmer; unchanged otherwise.
+
+    What Ayden OFFERED is read from Ayden's message, and in Khmer that reading
+    is not reliable. Measured on one warning translated three ways, gpt-4o-mini
+    read the request Ayden advised AGAINST as a second "option" 0/10, 2/10 and
+    9/10 times — never in English or French (`pwa_staging_resolver_eval.py`,
+    2026-09-11). So a Khmer message is read through English, as everything the
+    engine reads is. The person's reply is still judged in its own words, and
+    what they are shown stays Khmer. Never raises: a failure reads the Khmer as
+    before.
+    """
+    if len(_KHMER.findall(text or "")) < 2:
+        return text
+    key = ("English", text)
+    if key in _L10N_CACHE:
+        return _L10N_CACHE[key]
+    try:
+        r = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            temperature=0,
+            max_tokens=700,
+            messages=[{"role": "system", "content": _READ_EN_SYS},
+                      {"role": "user", "content": text}],
+        )
+        out = (r.choices[0].message.content or "").strip()
+    except Exception as exc:  # noqa: BLE001 — reading falls back, never blocks
+        log.warning("[pwa-staging] reading Khmer through English failed (%s)",
+                    type(exc).__name__)
+        return text
+    if not out:
+        return text
+    if len(_L10N_CACHE) < 512:
+        _L10N_CACHE[key] = out
+    return out
+
+
+async def _resolve_ask(client, system: str, user: str,
+                       max_tokens: int = 260) -> dict:
     import json as _j
     r = await client.chat.completions.create(
         model="gpt-4o-mini",
         temperature=0,
-        max_tokens=260,
+        max_tokens=max_tokens,
         response_format={"type": "json_object"},
         messages=[{"role": "system", "content": system},
                   {"role": "user", "content": user}],
@@ -1683,10 +1842,17 @@ async def _resolve_reply(message: str, last_ai: str, pending: str, client,
         return none
     import asyncio as _aio
     lang = _RESOLVE_LANGS.get((locale or "en").strip().lower()[:2], "English")
+
+    async def _offer() -> dict:
+        # A Khmer message is read through English — see `_read_in_english`.
+        # Anything else is read as it is, exactly as before.
+        text = await _read_in_english(client, last_ai.strip()[:1500])
+        return await _resolve_ask(client, _OFFER_SYS.format(lang=lang),
+                                  f"MESSAGE: {text}")
+
     try:
         offer_d, kind_d = await _aio.gather(
-            _resolve_ask(client, _OFFER_SYS.format(lang=lang),
-                         f"MESSAGE: {last_ai.strip()[:1500]}"),
+            _offer(),
             _resolve_ask(client, _KIND_SYS.format(lang=lang),
                          f"MESSAGE: {message.strip()[:300]}"),
         )
@@ -1732,6 +1898,189 @@ async def _resolve_reply(message: str, last_ai: str, pending: str, client,
         if offer == "options" and len(options) >= 2:
             return dict(none, decision="choose", options=options, reply=question)
     return none
+
+
+# ── the proposal, as the ENGINE receives it ──────────────────────────────────
+#
+# An accepted proposal has two readers, and they need two texts.
+#
+#   DISPLAY   — the person's. Localized, conversational: what they agreed to,
+#               in their language, for the chat and the vision's title.
+#   EXECUTION — the engine's. Canonical English, imperative, no question: a
+#               transformation the refine parser and normalizer can carry out.
+#
+# They used to be one string, and the phone paid for it (preprod, 2026-09-10).
+# The offer reader returned Ayden's question in the UI language — "Créer un
+# coin lecture confortable dans la chambre principale ?" — the refine parser
+# read it as an `add` with no location, the frozen normalizer gave it the
+# small-object placement "on the coffee table or main visible surface", and a
+# charged render came back pixel-identical to its parent. Parser and
+# normalizer did their jobs; they were handed a question.
+#
+# So an accepted proposal is rewritten ONCE, here, into the instruction, with
+# the display text written alongside. There is no structured form to reuse on
+# this path: the canonical chat's offers are prose, and the advisor's
+# `alternative` is prose too ("Consider creating … instead.") that never
+# reaches this endpoint. The rewrite reads the offer, Ayden's message around
+# it, the person's original request (for WHERE) and the room — and it is
+# CHECKED before anything is authorised: a question mark, offer wording, a
+# non-English sentence, a non-imperative opening, or a sentence the frozen
+# engine would read the phone's way (`_engine_reading`) is refused, asked once
+# more, and then FAILS CLOSED. The offer itself never goes to the engine.
+#
+# The person's ORIGINAL is untouched by all of this: "do it anyway" replays the
+# client's verbatim copy, and a direct instruction travels as typed.
+_EXEC_SYS = (
+    "Ayden, an AI interior architect who edits a photo of the user's room, "
+    "offered the user a change, and the user accepted it. Write it for the "
+    "image editor that will carry it out.\n"
+    "instruction: ONE change, in ONE short English sentence of a single "
+    "clause, in the imperative, starting with the action verb (Create, Add, "
+    "Turn, Replace, Paint, Make, Move, Remove...). It is the change to "
+    "perform, not an offer: no question mark, and none of would you like, "
+    "consider, perhaps, maybe, should we, try, instead. Keep the proposal's "
+    "subject and its concrete details (materials, colours, size) as words "
+    "that describe it - never as further items: no list, and no 'with...' or "
+    "'and...' that adds pieces of furniture. A zone (a reading nook, a "
+    "sitting area, a workspace) is named, not furnished. Say WHERE it happens "
+    "as a spot inside the photo - in the left corner, along the right wall, "
+    "by the window, next to the bed - taken from the proposal, else from the "
+    "user's earlier request, else the most natural visible spot. A place "
+    "outside the photo (next door, behind a wall, in another room) is not a "
+    "place: the change happens in this room. Add nothing else, and never "
+    "bring back what the proposal replaces: if Ayden advised against a "
+    "structural change, the instruction does not make it.\n"
+    "display: the same change as a short title in {lang}, ten words at most, "
+    "in the imperative like the instruction - no question mark.\n"
+    'JSON only: {{"instruction": "", "display": ""}}'
+)
+
+#: Wording that turns an instruction back into an offer.
+_EXEC_HEDGE = re.compile(
+    r"\b(would you|could you|should we|shall we|let'?s|how about|what about|"
+    r"consider(?:ing)?|perhaps|maybe|possibly|might|try|instead)\b", re.I)
+
+#: What gives a non-English sentence away: Khmer script, or French function
+#: words. Accents alone do not — an English instruction may say "décor".
+_EXEC_NOT_ENGLISH = re.compile(
+    r"[ក-៿]|\b(le|la|les|des|une|dans|avec|sur|du|aux|votre|"
+    r"chambre)\b", re.I)
+
+#: Openings that are not an action: a question, a pronoun, a hedge, a reply, or
+#: an article — "A reading nook in the corner" names a thing, it does not ask
+#: for one.
+_EXEC_OPENERS = frozenset({
+    "would", "could", "should", "shall", "can", "may", "might", "do", "does",
+    "did", "is", "are", "will", "how", "what", "why", "perhaps", "maybe",
+    "please", "i", "we", "you", "let's", "lets", "consider", "it", "this",
+    "that", "there", "yes", "ok", "okay", "sure", "a", "an", "the", "my",
+    "your", "our",
+})
+
+
+def _one_line(s: str) -> str:
+    return re.sub(r"\s+", " ", s or "").strip().strip('"“”«» ').strip()
+
+
+def _exec_violation(text: str) -> str:
+    """The first rule an execution instruction breaks, or "" when it is sound."""
+    if not text:
+        return "empty"
+    if len(text) > 320:
+        return "too long"
+    if "?" in text or "？" in text:
+        return "a question mark"
+    hedge = _EXEC_HEDGE.search(text)
+    if hedge:
+        return f"offer wording '{hedge.group(0)}'"
+    if _EXEC_NOT_ENGLISH.search(text):
+        return "not English"
+    first = re.match(r"[A-Za-z']+", text)
+    if not first or first.group(0).lower() in _EXEC_OPENERS:
+        return "not an imperative"
+    return ""
+
+
+async def _engine_reading(instruction: str, client) -> str:
+    """How the frozen refine engine would read [instruction]: "" when every
+    change keeps its place, else what goes wrong, worded as a note for the
+    rewrite.
+
+    READ, never changed: the canonical parser and normalizer are the modules
+    the render runs. The reading that loses a proposal is the phone's — an
+    `add` whose place the normalizer does not recognise gets the small-object
+    placement "on the coffee table or main visible surface". Measured on the
+    bench before this check existed (`pwa_staging_resolver_eval.py`,
+    2026-09-11): a zone written as a list of its furniture ("… by adding an
+    armchair, a side table and a lamp") is split into several adds, and those
+    left without a place land on the coffee table — 7/33 and 13/34 rewrites on
+    two runs.
+
+    It also has to be read the SAME way at render, where the parser runs
+    again. One change in one clause is read as one change every time; a zone
+    "with a comfortable armchair" passed this check once and was split by the
+    next reading, armchair on the coffee table (bench, same day). So a reading
+    of more than one change is refused too.
+    """
+    from refine.normalizer import _ADD_DEFAULT, normalize
+    from refine.parser import parse_changes
+    changes = await parse_changes(instruction, client=client)
+    if not changes:
+        return "the editor reads no change in it"
+    for c in changes:
+        if _ADD_DEFAULT in normalize(c):
+            return (f"the editor would put '{c.object or c.raw}' on a table - "
+                    "write ONE change and say where it goes in the room")
+    if len(changes) > 1:
+        return (f"the editor reads {len(changes)} separate changes in it - "
+                "write ONE change, in a single clause")
+    return ""
+
+
+async def _proposal_execution(proposal: str, last_ai: str, pending: str,
+                              room: str, client, locale: str = "en") -> dict | None:
+    """The accepted proposal as `{"instruction", "display"}` — or None.
+
+    `instruction` is canonical English, imperative, with no question and no
+    hedge: what the engine receives. `display` is the same change in the UI
+    language, for the person. None means no instruction passed the checks, and
+    the caller then authorises nothing (FAIL CLOSED).
+    """
+    offer = _one_line(proposal)[:300]
+    if not offer:
+        return None
+    lang = _RESOLVE_LANGS.get((locale or "en").strip().lower()[:2], "English")
+    ask = (f"PROPOSAL: {offer}\n"
+           f"AYDEN'S MESSAGE: {last_ai.strip()[:1500]}\n"
+           f"USER'S EARLIER REQUEST: {pending.strip()[:300] or '(none)'}\n"
+           f"ROOM: {(room or '').strip() or 'unknown'}")
+    retry = ""
+    for _attempt in range(2):
+        try:
+            d = await _resolve_ask(client, _EXEC_SYS.format(lang=lang),
+                                   ask + retry, max_tokens=600)
+        except Exception as exc:  # noqa: BLE001 — never toward spending
+            log.warning("[pwa-staging] proposal execution failed (%s)",
+                        type(exc).__name__)
+            return None
+        instruction = _one_line(str(d.get("instruction") or ""))
+        broken = _exec_violation(instruction)
+        if not broken:
+            try:
+                broken = await _engine_reading(instruction, client)
+            except Exception as exc:  # noqa: BLE001 — never toward spending
+                log.warning("[pwa-staging] engine reading failed (%s)",
+                            type(exc).__name__)
+                return None
+        if not broken:
+            display = _one_line(str(d.get("display") or "")).rstrip(" ?？")
+            return {"instruction": instruction,
+                    "display": display or offer.rstrip(" ?？")}
+        log.info("[pwa-staging] proposal execution refused (%s): %s",
+                 broken, instruction[:160])
+        retry = (f"\nYOUR PREVIOUS ANSWER BROKE A RULE ({broken}): "
+                 f"{instruction[:200]}\nWrite it again.")
+    return None
 
 
 def _chat_history(raw: list[dict], fallback: list[dict],
@@ -1911,19 +2260,34 @@ async def pwa_chat(
     short = len(body.message.split()) <= 10 and len(body.message.strip()) <= 120
     resolution = "none"
     reply_text = ""
+    override_display = ""
     if last_ai and short:
         import main as _c3
         res = await _resolve_reply(body.message, last_ai, pending, _c3.openai,
                                    locale=body.ui_locale or "en")
         resolution = res["decision"]
         if resolution == "proposal":
-            should, override_of = True, res["proposal"]
+            # The offer as Ayden worded it is the PERSON's text. The engine gets
+            # its own — see `_proposal_execution` — and never the offer instead.
+            ex = await _proposal_execution(res["proposal"], last_ai, pending, room,
+                                           _c3.openai, locale=body.ui_locale or "en")
+            if ex:
+                should, override_of = True, ex["instruction"]
+                override_display = ex["display"]
+            else:
+                should, override_of, resolution = False, "", "none"
+                log.warning("[pwa-staging] chat - proposal accepted but no checked "
+                            "execution instruction - nothing authorised")
         elif resolution == "original":
             should, override_of = True, pending
         elif resolution in ("choose", "decline"):
             should, override_of = False, ""
             reply_text = res["reply"]
-        if resolution != "none":
+        if resolution == "proposal":
+            log.info("[pwa-staging] chat - reply resolved as proposal -> execution "
+                     "(en): %s | display (%s): %s", override_of[:200],
+                     body.ui_locale or "en", override_display[:120])
+        elif resolution != "none":
             log.info("[pwa-staging] chat - reply resolved as %s -> %s",
                      resolution, (override_of or reply_text)[:120])
 
@@ -1966,8 +2330,12 @@ async def pwa_chat(
         "intent": intent,
         "sub_intent": str(answer.get("sub_intent") or ""),
         # Non-empty when a reply was resolved to something to render: Ayden's
-        # proposal, or the original. Replayed by the client with `confirm`.
+        # proposal as its EXECUTION instruction (English, imperative), or the
+        # original, verbatim. Replayed by the client with `confirm`.
         "override_instruction": override_of,
+        # The same proposal in the person's language, for the chat and the
+        # vision's title. Empty for an original: those are their own words.
+        "override_display": override_display,
         # proposal | original | choose | decline | none — for the log and QA.
         "resolution": resolution,
     }
@@ -1980,6 +2348,8 @@ class PwaVerifyRequest(BaseModel):
     before_path: str
     after_path: str
     changes: list = Field(default_factory=list)
+    #: The language the report is SHOWN in. The verdict never depends on it.
+    ui_locale: str = "en"
 
 
 # ── the verify SECOND call ───────────────────────────────────────────────────
@@ -2030,12 +2400,17 @@ async def pwa_refine_verify(
 
         result = await refine_verify(canonical.openai, before, "image/jpeg",
                                      after, parsed)
+        # `build_report` returns None when there is nothing worth saying.
+        # Normalised to "" because the client's rule is "empty report → stay
+        # silent", and null and "" must not mean two different things. Said in
+        # the person's language: an English "Still missing" on a French screen
+        # was one of the phone's findings.
+        report = build_report(result, parsed) or ""
+        if report:
+            report = await _localize_text(canonical.openai, report, body.ui_locale)
         return {
             "verification": result.status.value,
-            # `build_report` returns None when there is nothing worth saying.
-            # Normalised to "" because the client's rule is "empty report → stay
-            # silent", and null and "" must not mean two different things.
-            "report": build_report(result, parsed) or "",
+            "report": report,
             "missing": [_change_to_dict(c) for c in missing_changes(result, parsed)],
             "identity_preserved": result.identity_preserved,
             "needs_refinement": result.needs_refinement,
@@ -2668,6 +3043,10 @@ async def _generate_claimed(
             "lineage_customized": new_customized,
             "room_label": used_room or None,
         }
+        if body.display_instruction.strip():
+            # The title the person reads in the history: the proposal in their
+            # language. `prompt_text` stays what the engine was handed.
+            row["action_summary"] = body.display_instruction.strip()[:300]
         # The image is in Storage now, so this row is the last thing standing
         # between a paid render and an orphan file: retry the transport.
         r, winner = await _insert_vision_row(
