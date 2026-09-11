@@ -18,22 +18,31 @@ import 'pwa_external_launcher.dart';
 import 'pwa_image_export.dart';
 
 /// Real browser history bridge (pushState / replaceState / popstate).
+///
+/// [prefix] is the build's route prefix (`/kh` in production, `''` elsewhere):
+/// removed on every read, restored on every write — see [pwaStripRoutePrefix].
 class WebPwaUrlBridge implements PwaUrlBridge {
+  WebPwaUrlBridge({this.prefix = ''});
+
+  final String prefix;
   JSFunction? _listener;
 
   @override
   Uri current() {
     final loc = web.window.location;
-    return Uri.parse('${loc.pathname}${loc.search}');
+    return pwaStripRoutePrefix(
+      Uri.parse('${loc.pathname}${loc.search}'),
+      prefix,
+    );
   }
 
   @override
-  void push(String location) =>
-      web.window.history.pushState(null, '', location);
+  void push(String location) => web.window.history
+      .pushState(null, '', pwaApplyRoutePrefix(location, prefix));
 
   @override
-  void replace(String location) =>
-      web.window.history.replaceState(null, '', location);
+  void replace(String location) => web.window.history
+      .replaceState(null, '', pwaApplyRoutePrefix(location, prefix));
 
   @override
   void onPop(void Function(Uri) callback) {

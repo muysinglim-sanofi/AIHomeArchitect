@@ -25,8 +25,9 @@ if [[ -z "$TARGET" ]]; then
   exit 2
 fi
 
-# 1. The bundle must be the PWA's, built by tool/build_pwa.sh.
-node tool/verify_pwa_build.mjs
+# 1. The bundle must be the PWA's, built by tool/build_pwa.sh — and the RIGHT
+#    one for this target: production only to --live, never staging to --live.
+node tool/verify_pwa_build.mjs "$TARGET"
 
 # 2. The shell must not be cached forever. This is the RELEASE-CRITICAL rule:
 #    build/web is served under filenames that never change, so an immutable
@@ -88,8 +89,9 @@ JS
 
 if [[ "$TARGET" == "--live" ]]; then
   echo ""
-  echo "This deploys to LIVE staging (ayden-studio.web.app), replacing what"
-  echo "everyone who has the link is running."
+  echo "This deploys the PRODUCTION PWA to site ayden-studio — served at"
+  echo "https://app.aydenstudio.com/kh (and ayden-studio.web.app) — replacing"
+  echo "what everyone who has the link is running."
   read -r -p "Type the word live to continue: " ok
   [[ "$ok" == "live" ]] || { echo "aborted"; exit 1; }
   # `--only hosting` would deploy EVERY target, live and preprod together.

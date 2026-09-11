@@ -87,7 +87,11 @@ Future<void> main() async {
   final env = PwaEnvironment.current();
 
   // The live browser-history bridge + the durable boot route (both PWA-only).
-  final bridge = WebPwaUrlBridge();
+  // Production lives under `/kh` (app.aydenstudio.com/kh); every other build at
+  // the root. The prefix is a build define, validated here, invisible to routes.
+  final bridge = WebPwaUrlBridge(
+    prefix: pwaRoutePrefix(const String.fromEnvironment('AYDEN_ROUTE_PREFIX')),
+  );
   final bootRoute = PwaRoute.parse(bridge.current());
 
   // Staging and production take the SAME path: the same client, the same

@@ -36,6 +36,12 @@
 # reason to echo it into a terminal or a CI log either.
 set -euo pipefail
 
+# Git Bash (MSYS) rewrites any argument that LOOKS like a POSIX path before it
+# reaches a Windows program: `--dart-define=AYDEN_ROUTE_PREFIX=/kh` arrived in
+# the bundle as "C:/Program Files/Git/kh" (2026-09-11), which the app refuses
+# at boot — a blank page. No-op on Linux and macOS.
+export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
+
 MODE="${1:-staging}"
 ENTRY="lib/main_pwa.dart"
 ENV_FILE="${AYDEN_ENV_FILE:-../AIHomeArchitect/backend/.env.pwa-staging.local}"
@@ -141,8 +147,15 @@ case "$MODE" in
     echo "    entrypoint : $ENTRY"
     echo "    supabase   : vtxkciupyafukhdsgxgw (production)"
     echo "    api        : https://api.aydenstudio.com  (prefix /pwa)"
-    flutter build web --release -t "$ENTRY"       --dart-define=AYDEN_ENV=production       --dart-define=AYDEN_PROD_SUPABASE_URL=https://vtxkciupyafukhdsgxgw.supabase.co       --dart-define=AYDEN_PROD_PROJECT_REF=vtxkciupyafukhdsgxgw       --dart-define=AYDEN_PROD_SUPABASE_PUBLISHABLE_KEY="$PKEY"       --dart-define=AYDEN_PROD_BACKEND_URL=https://api.aydenstudio.com       --no-web-resources-cdn
+    flutter build web --release -t "$ENTRY"       --dart-define=AYDEN_ENV=production       --dart-define=AYDEN_PROD_SUPABASE_URL=https://vtxkciupyafukhdsgxgw.supabase.co       --dart-define=AYDEN_PROD_PROJECT_REF=vtxkciupyafukhdsgxgw       --dart-define=AYDEN_PROD_SUPABASE_PUBLISHABLE_KEY="$PKEY"       --dart-define=AYDEN_PROD_BACKEND_URL=https://api.aydenstudio.com       --dart-define=AYDEN_ROUTE_PREFIX=/kh       --no-web-resources-cdn
     strip_dotenv
+    # What the compiler actually received, not what this script meant.
+    if ! grep -qF '("/kh")' build/web/main.dart.js \
+       || grep -qE '[A-Z]:/Program Files/' build/web/main.dart.js; then
+      echo "REFUSING: the compiled route prefix is not exactly \"/kh\"." >&2
+      exit 2
+    fi
+    echo "==> route prefix compiled as \"/kh\""
     ;;
   *)
     echo "usage: $0 [staging|production|mock]" >&2
@@ -159,10 +172,12 @@ esac
 # prefix. No key, no token, no secret — the same three facts the health
 # endpoint already publishes, on the frontend side, so an operator can prove
 # which backend a deployed page talks to without reading the bundle.
+# routePrefix: where the APP lives on its origin — `/kh` in production
+# (app.aydenstudio.com/kh), the root everywhere else. The deploy guard checks it.
 case "$MODE" in
-  staging)    DIAG_REF="eedcahzekpgxvvfxufbk"; DIAG_API="https://ayden-api-staging.fly.dev"; DIAG_PREFIX="/pwa/staging" ;;
-  production) DIAG_REF="vtxkciupyafukhdsgxgw"; DIAG_API="https://api.aydenstudio.com";      DIAG_PREFIX="/pwa" ;;
-  *)          DIAG_REF="(none)";               DIAG_API="(none)";                          DIAG_PREFIX="(none)" ;;
+  staging)    DIAG_REF="eedcahzekpgxvvfxufbk"; DIAG_API="https://ayden-api-staging.fly.dev"; DIAG_PREFIX="/pwa/staging"; DIAG_ROUTE="" ;;
+  production) DIAG_REF="vtxkciupyafukhdsgxgw"; DIAG_API="https://api.aydenstudio.com";      DIAG_PREFIX="/pwa";         DIAG_ROUTE="/kh" ;;
+  *)          DIAG_REF="(none)";               DIAG_API="(none)";                          DIAG_PREFIX="(none)";       DIAG_ROUTE="" ;;
 esac
 
 cat > build/web/ayden-build.json <<JSON
@@ -172,6 +187,7 @@ cat > build/web/ayden-build.json <<JSON
   "supabaseProjectRef": "$DIAG_REF",
   "apiOrigin": "$DIAG_API",
   "apiPrefix": "$DIAG_PREFIX",
+  "routePrefix": "$DIAG_ROUTE",
   "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 JSON

@@ -87,3 +87,50 @@ class FakePwaUrlBridge implements PwaUrlBridge {
 final pwaUrlBridgeProvider = Provider<PwaUrlBridge>(
   (ref) => FakePwaUrlBridge(),
 );
+
+// ── The route prefix ────────────────────────────────────────────────────────
+//
+// Production serves the app under ONE path segment — `https://app.aydenstudio
+// .com/kh` — while every other deployment (preprod, previews, the local mock)
+// serves it at the origin root. The app's own routes ([PwaRoute]) never know:
+// the prefix is removed where the browser URL is READ and put back where it is
+// WRITTEN, and nowhere else. So `/kh/projects/a/architect` is the Architect of
+// project `a`, a refresh keeps the prefix, and a pre-prefix bookmark
+// (`/projects/a/architect`) still opens — it is simply re-written under `/kh`.
+
+/// The validated prefix for this build: `''` or one lowercase segment (`/kh`).
+/// Anything else is a build mistake and refuses loudly rather than routing
+/// every page to Home.
+String pwaRoutePrefix(String raw) {
+  final p = raw.trim();
+  if (p.isEmpty) return '';
+  if (!RegExp(r'^/[a-z]{2,8}$').hasMatch(p)) {
+    throw ArgumentError.value(
+      raw,
+      'AYDEN_ROUTE_PREFIX',
+      'must be empty or one lowercase path segment such as /kh',
+    );
+  }
+  return p;
+}
+
+/// Browser URI → app URI: the prefix is removed. `/kh` and `/kh/` are Home;
+/// a path outside the prefix (`/khmer`, an old bookmark) is read unchanged.
+Uri pwaStripRoutePrefix(Uri uri, String prefix) {
+  if (prefix.isEmpty) return uri;
+  final path = uri.path;
+  if (path == prefix || path == '$prefix/') return uri.replace(path: '/');
+  if (path.startsWith('$prefix/')) {
+    return uri.replace(path: path.substring(prefix.length));
+  }
+  return uri;
+}
+
+/// App location → browser location, under the prefix. Home is `/kh`, not
+/// `/kh/`, so the public address is exactly the one that is printed.
+String pwaApplyRoutePrefix(String location, String prefix) {
+  if (prefix.isEmpty || !location.startsWith('/')) return location;
+  if (location == '/') return prefix;
+  if (location.startsWith('/?')) return '$prefix${location.substring(1)}';
+  return '$prefix$location';
+}
