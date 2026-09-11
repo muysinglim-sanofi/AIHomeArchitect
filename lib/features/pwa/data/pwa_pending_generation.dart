@@ -50,6 +50,7 @@ class PwaPendingGeneration {
     required this.visionNumber,
     this.parentVisionId = '',
     this.userInstruction = '',
+    this.displayInstruction = '',
     this.confirm = false,
     this.failed = false,
     this.startedAtMs = 0,
@@ -66,6 +67,11 @@ class PwaPendingGeneration {
   final int visionNumber;
   final String parentVisionId;
   final String userInstruction;
+
+  /// What the person reads for this refine when it is not [userInstruction]
+  /// (an accepted proposal, in their language). Kept so a generation landed
+  /// after a reload is titled the way it was asked for.
+  final String displayInstruction;
 
   /// The user read the advisor's objection and chose to continue. Persisted so
   /// a replay after a reload does not re-ask a question already answered.
@@ -126,6 +132,7 @@ class PwaPendingGeneration {
     visionNumber: visionNumber,
     parentVisionId: parentVisionId,
     userInstruction: userInstruction,
+    displayInstruction: displayInstruction,
     confirm: confirm,
     failed: failed,
     startedAtMs: startedAtMs ?? this.startedAtMs,
@@ -143,6 +150,7 @@ class PwaPendingGeneration {
     'vision_number': visionNumber,
     'parent_vision_id': parentVisionId,
     'user_instruction': userInstruction,
+    if (displayInstruction.isNotEmpty) 'display_instruction': displayInstruction,
     'confirm': confirm,
     'failed': failed,
     'started_at_ms': startedAtMs,
@@ -170,6 +178,7 @@ class PwaPendingGeneration {
       visionNumber: (raw['vision_number'] as num?)?.toInt() ?? 1,
       parentVisionId: s('parent_vision_id'),
       userInstruction: s('user_instruction'),
+      displayInstruction: s('display_instruction'),
       confirm: raw['confirm'] == true,
       failed: raw['failed'] == true,
       startedAtMs: (raw['started_at_ms'] as num?)?.toInt() ?? 0,

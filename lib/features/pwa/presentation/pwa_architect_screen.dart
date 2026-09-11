@@ -1597,54 +1597,127 @@ class _V7RefineConfirmCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: busy
-                        ? null
-                        : () => controller.dismissRefine(messageId),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: pwaInk,
-                      side: const BorderSide(color: pwaHairline, width: 1.5),
-                      shape: const StadiumBorder(),
-                    ),
-                    // On a refusal the only action left is to rephrase, so the
-                    // button says that rather than "Cancel".
-                    child: Text(isRed ? context.pwaL10n.editRequest : context.pwaL10n.cancel),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: FilledButton(
-                    // Consume the offer FIRST (strip pendingRefine) so the card
-                    // collapses to plain advice and cannot be re-fired into a
-                    // duplicate child, then create exactly one child vision.
-                    onPressed: busy
-                        ? null
-                        : () {
-                            controller.dismissRefine(messageId);
-                            // The person read the objection and chose to go on:
-                            // that is exactly what confirm carries. Without it
-                            // the advisor simply objects again and the button
-                            // does nothing — mobile sends refineConfirm:true
-                            // here (chat_screen.dart:1813-1817).
-                            controller.applyRefine(instruction, confirm: true);
-                          },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: pwaInk,
-                      foregroundColor: pwaSurface,
-                      shape: const StadiumBorder(),
-                    ),
-                    child: Text(busy ? context.pwaL10n.creating : context.pwaL10n.createVision),
-                  ),
-                ),
-              ],
+            _V7CardActions(
+              // On a refusal the only action left is to rephrase, so the
+              // secondary action says that rather than "Cancel".
+              secondaryLabel:
+                  isRed ? context.pwaL10n.editRequest : context.pwaL10n.cancel,
+              primaryLabel:
+                  busy ? context.pwaL10n.creating : context.pwaL10n.createVision,
+              onSecondary:
+                  busy ? null : () => controller.dismissRefine(messageId),
+              // Consume the offer FIRST (strip pendingRefine) so the card
+              // collapses to plain advice and cannot be re-fired into a
+              // duplicate child, then create exactly one child vision.
+              onPrimary: busy
+                  ? null
+                  : () {
+                      controller.dismissRefine(messageId);
+                      // The person read the objection and chose to go on: that
+                      // is exactly what confirm carries. Without it the advisor
+                      // simply objects again and the button does nothing —
+                      // mobile sends refineConfirm:true here
+                      // (chat_screen.dart:1813-1817).
+                      controller.applyRefine(instruction, confirm: true);
+                    },
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The confirm card's two actions: side by side when both labels fit on one
+/// line, stacked — the primary first — when they do not.
+///
+/// The row used to be fixed at 1 : 2, and the secondary pill kept the theme's
+/// 32 px of horizontal padding on each side. At 390 px that left it about 36 px
+/// of text: "Annuler" broke as "Annul/er" and "Modifier la demande" over four
+/// lines (preprod, 2026-09-10). A label is never broken or cut now, in any
+/// language: the LAYOUT gives way instead of the words.
+class _V7CardActions extends StatelessWidget {
+  const _V7CardActions({
+    required this.secondaryLabel,
+    required this.primaryLabel,
+    required this.onSecondary,
+    required this.onPrimary,
+  });
+
+  final String secondaryLabel;
+  final String primaryLabel;
+  final VoidCallback? onSecondary;
+  final VoidCallback? onPrimary;
+
+  static const double _gap = 10;
+  static const EdgeInsets _padding =
+      EdgeInsets.symmetric(horizontal: 16, vertical: 12);
+
+  /// Whether both labels fit on one line in a row of [width], at the size the
+  /// buttons actually draw them (the theme's `PwaType.button`, scaled).
+  static bool fitsInRow(
+    BuildContext context,
+    double width,
+    String secondary,
+    String primary,
+  ) {
+    double needs(String label) {
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: PwaType.button()),
+        maxLines: 1,
+        textDirection: Directionality.of(context),
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      final w = painter.width;
+      painter.dispose();
+      // Padding both sides, the 1.5 px outline both sides, and a small margin
+      // for glyph overhang.
+      return w + _padding.horizontal + 3 + 6;
+    }
+
+    final third = (width - _gap) / 3;
+    return needs(secondary) <= third && needs(primary) <= 2 * third;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final secondary = OutlinedButton(
+      onPressed: onSecondary,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: pwaInk,
+        side: const BorderSide(color: pwaHairline, width: 1.5),
+        shape: const StadiumBorder(),
+        padding: _padding,
+      ),
+      child: Text(secondaryLabel, maxLines: 1, softWrap: false),
+    );
+    final primary = FilledButton(
+      onPressed: onPrimary,
+      style: FilledButton.styleFrom(
+        backgroundColor: pwaInk,
+        foregroundColor: pwaSurface,
+        shape: const StadiumBorder(),
+        padding: _padding,
+      ),
+      child: Text(primaryLabel, maxLines: 1, softWrap: false),
+    );
+    return LayoutBuilder(
+      builder: (context, box) {
+        if (fitsInRow(context, box.maxWidth, secondaryLabel, primaryLabel)) {
+          return Row(
+            children: [
+              Expanded(child: secondary),
+              const SizedBox(width: _gap),
+              Expanded(flex: 2, child: primary),
+            ],
+          );
+        }
+        return Column(
+          key: const ValueKey('pwa-card-actions-stacked'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [primary, const SizedBox(height: 8), secondary],
+        );
+      },
     );
   }
 }

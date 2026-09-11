@@ -1311,6 +1311,7 @@ class PwaController extends StateNotifier<PwaState> {
     required int visionNumber,
     String parentVisionId = '',
     String userInstruction = '',
+    String displayInstruction = '',
     bool confirm = false,
   }) {
     final atmo = _atmosphere(atmosphereId);
@@ -1329,6 +1330,7 @@ class PwaController extends StateNotifier<PwaState> {
       visionNumber: visionNumber,
       parentVisionId: parentVisionId,
       userInstruction: userInstruction,
+      displayInstruction: displayInstruction,
       confirm: confirm,
     );
   }
@@ -1356,6 +1358,7 @@ class PwaController extends StateNotifier<PwaState> {
           actionType: p.actionType,
           parentVisionId: p.parentVisionId,
           userInstruction: p.userInstruction,
+          displayInstruction: p.displayInstruction,
           confirm: p.confirm,
           // Carried for the advisor's reply, which is conversational text.
           // The generation prompt itself is composed server-side and never
@@ -1781,7 +1784,11 @@ class PwaController extends StateNotifier<PwaState> {
         // for. On a delegated "Ayden Signature" the two differ, and naming the
         // delegation back at the person says nothing about their room.
         PwaActionType.signature => _l10n.firstVisionIntro(resolvedAtmo.name),
-        PwaActionType.refine => _repo.refineApplied(p.userInstruction),
+        PwaActionType.refine => _repo.refineApplied(
+          p.displayInstruction.isNotEmpty
+              ? p.displayInstruction
+              : p.userInstruction,
+        ),
         PwaActionType.switchAtmosphere => _repo.switchIntro(
           _atmosphere(p.atmosphereId),
         ),
@@ -1789,7 +1796,9 @@ class PwaController extends StateNotifier<PwaState> {
       visionId: v.versionId,
     );
     final title = action == PwaActionType.refine
-        ? p.userInstruction
+        ? (p.displayInstruction.isNotEmpty
+              ? p.displayInstruction
+              : p.userInstruction)
         : p.atmosphereLabel;
     if (!_isCurrent(job)) {
       _landAway(
@@ -2352,7 +2361,14 @@ class PwaController extends StateNotifier<PwaState> {
       final override = turn.overrideInstruction;
       _declinedInstruction = null;
       if (override.isNotEmpty) {
-        await applyRefine(override, confirm: true);
+        // Ayden's PROPOSAL arrives as the backend's execution instruction —
+        // English, imperative, never the question it was offered as — with
+        // the same change in the person's language to show for it.
+        await applyRefine(
+          override,
+          confirm: true,
+          display: turn.overrideDisplay,
+        );
       } else {
         await applyRefine(text);
       }
@@ -2450,11 +2466,21 @@ class PwaController extends StateNotifier<PwaState> {
   /// time, and is what stops an unrelated "yes" from buying an image.
   String? _declinedInstruction;
 
-  Future<void> applyRefine(String instruction, {bool confirm = false}) async {
+  /// [instruction] is what the ENGINE is handed. [display] is what the person
+  /// reads for it — the chat line and the vision's title — when the two
+  /// differ: an accepted proposal travels as the backend's English execution
+  /// instruction and is shown as the same change in the person's language.
+  /// Empty means the instruction is the person's own words, shown as they are.
+  Future<void> applyRefine(
+    String instruction, {
+    bool confirm = false,
+    String display = '',
+  }) async {
     if (state.generating) return;
     final parent = state.sourceVision;
     if (parent == null) return;
     if (_refuseWhileBusy()) return;
+    final shown = display.trim().isEmpty ? instruction : display.trim();
     final loadingMsg = PwaMessage(
       id: _nextId('m'),
       role: PwaRole.ayden,
@@ -2487,6 +2513,7 @@ class PwaController extends StateNotifier<PwaState> {
           visionNumber: _nextVisionNumberIn(job.base.visions),
           parentVisionId: parent.versionId,
           userInstruction: instruction,
+          displayInstruction: shown == instruction ? '' : shown,
           confirm: confirm,
         ),
       );
@@ -2565,7 +2592,7 @@ class PwaController extends StateNotifier<PwaState> {
       id: _nextId('m'),
       role: PwaRole.ayden,
       kind: PwaMessageKind.reveal,
-      text: _repo.refineApplied(instruction),
+      text: _repo.refineApplied(shown),
       visionId: v.versionId,
     );
     if (!_isCurrent(job)) {
@@ -2574,7 +2601,7 @@ class PwaController extends StateNotifier<PwaState> {
         made,
         actionType: PwaActionType.refine,
         requestedAtmosphereId: parent.atmosphereId,
-        title: instruction,
+        title: shown,
         parentVersionId: parent.versionId,
         instruction: instruction,
         reveal: reveal,
@@ -2589,7 +2616,7 @@ class PwaController extends StateNotifier<PwaState> {
       siblings: state.versions,
       actionType: PwaActionType.refine,
       atmosphereId: parent.atmosphereId,
-      title: instruction,
+      title: shown,
       parentVersionId: parent.versionId,
       instruction: instruction,
     );
@@ -2629,6 +2656,9 @@ class PwaController extends StateNotifier<PwaState> {
         beforePath: beforePath,
         afterPath: afterPath,
         changes: changes,
+        // The report is SHOWN in the person's language; "Still missing" in
+        // English on a French screen was one of the phone's findings.
+        uiLocale: _localeCode(),
       );
     } catch (_) {
       return; // a verify NEVER disturbs the image already shown

@@ -189,6 +189,7 @@ class PwaGenerationIntent {
     this.userInstruction = '',
     this.confirm = false,
     this.uiLocale = 'en',
+    this.displayInstruction = '',
   });
 
   final String projectId;
@@ -215,6 +216,12 @@ class PwaGenerationIntent {
   /// structured facts, by the frozen composer. A locale can change what Ayden
   /// SAYS; it can never change what Ayden DRAWS.
   final String uiLocale;
+
+  /// What the person READS for this refine when it is not [userInstruction]
+  /// — an accepted proposal, which travels as the backend's English
+  /// execution instruction and is shown in the person's language. Stored as
+  /// the vision's title; never part of what is drawn.
+  final String displayInstruction;
 }
 
 abstract class PwaGenerationService {
@@ -252,6 +259,8 @@ abstract class PwaGenerationService {
     required String beforePath,
     required String afterPath,
     required List<Map<String, Object?>> changes,
+    /// The language the report is SHOWN in. The verdict never depends on it.
+    String uiLocale = 'en',
   });
 
   void dispose();
@@ -309,6 +318,7 @@ class PwaStagingGenerationService implements PwaGenerationService {
           actionType: intent.actionType,
           parentVisionId: intent.parentVisionId,
           userInstruction: intent.userInstruction,
+          displayInstruction: intent.displayInstruction,
           visionNumber: intent.visionNumber,
           confirm: intent.confirm,
           uiLocale: intent.uiLocale,
@@ -374,12 +384,14 @@ class PwaStagingGenerationService implements PwaGenerationService {
     required String beforePath,
     required String afterPath,
     required List<Map<String, Object?>> changes,
+    String uiLocale = 'en',
   }) async {
     final res = await _api.verifyRefine(
       projectId: projectId,
       beforePath: beforePath,
       afterPath: afterPath,
       changes: changes,
+      uiLocale: uiLocale,
     );
     // SILENCE except `incomplete` — mobile's rule, verbatim. It is the only
     // verdict where what is missing is actually known, so the only one where a
@@ -494,6 +506,7 @@ class PwaFakeGenerationService implements PwaGenerationService {
     required String beforePath,
     required String afterPath,
     required List<Map<String, Object?>> changes,
+    String uiLocale = 'en',
   }) async {
     verifyCalls++;
     return verification;

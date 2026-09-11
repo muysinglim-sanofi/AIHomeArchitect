@@ -14,8 +14,10 @@ import 'package:ai_home_architect/features/pwa/application/pwa_controller.dart';
 import 'package:ai_home_architect/features/pwa/auth/pwa_auth_controller.dart';
 import 'package:ai_home_architect/features/pwa/auth/pwa_auth_service.dart';
 import 'package:ai_home_architect/features/pwa/data/mock_pwa_experience_repository.dart';
+import 'package:ai_home_architect/features/pwa/data/pwa_generation_api.dart';
 import 'package:ai_home_architect/features/pwa/data/pwa_generation_service.dart';
 import 'package:ai_home_architect/features/pwa/data/pwa_mock_generation_service.dart';
+import 'package:ai_home_architect/features/pwa/data/pwa_pending_generation.dart';
 import 'package:ai_home_architect/features/pwa/l10n/pwa_l10n.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_account_chip.dart';
 import 'package:ai_home_architect/features/pwa/presentation/pwa_account_sheet.dart';
@@ -99,6 +101,7 @@ class _ScriptedChat implements PwaGenerationService {
   final List<List<Map<String, String>>> historySeen =
       <List<Map<String, String>>>[];
   final List<String> refined = <String>[];
+  final List<String> displayed = <String>[];
   final List<bool> refineConfirms = <bool>[];
   final List<PwaChatTurn> script = <PwaChatTurn>[];
   PwaGenerationAdvisory? advisory;
@@ -120,6 +123,7 @@ class _ScriptedChat implements PwaGenerationService {
   Future<PwaGeneratedVision> generate(PwaGenerationIntent intent) async {
     if (intent.actionType == 'refine') {
       refined.add(intent.userInstruction);
+      displayed.add(intent.displayInstruction);
       refineConfirms.add(intent.confirm);
     }
     final a = advisory;
@@ -147,13 +151,14 @@ Widget _app(
   ProviderContainer c, {
   Size size = const Size(390, 844),
   Widget home = const PwaExperience(),
+  Locale locale = const Locale('en'),
 }) =>
     MediaQuery(
       data: MediaQueryData(disableAnimations: true, size: size),
       child: UncontrolledProviderScope(
         container: c,
         child: MaterialApp(
-          locale: const Locale('en'),
+          locale: locale,
           localizationsDelegates: const [
             AppLocalizations.delegate,
             GlobalMaterialLocalizations.delegate,
@@ -581,6 +586,245 @@ void main() {
           c.read(pwaControllerProvider).messages.any((m) => m.text == question),
           isTrue,
           reason: 'the question is asked, in Ayden\'s voice');
+    });
+
+    testWidgets('REFINE-09  an accepted proposal renders the ENGLISH execution '
+        "instruction and is shown in the person's language", (tester) async {
+      // The phone's defect (2026-09-10): the proposal reached the engine as
+      // Ayden's French QUESTION and came back pixel-identical. The server now
+      // sends two texts; the engine gets one, the person reads the other.
+      final (c, chat) = await session();
+      final n = c.read(pwaControllerProvider.notifier);
+      chat.advisory = const PwaGenerationAdvisory(verdict: 'red', message: warning);
+      await n.applyRefine('break the wall on the left and add a living room behind');
+      await tester.pump(const Duration(milliseconds: 50));
+      chat.advisory = null;
+      const execution = 'Create a cozy reading nook in the left corner.';
+      const display = 'Créez un coin lecture confortable dans le coin gauche';
+      chat.script.add(const PwaChatTurn(
+        aiMessage: '',
+        shouldGenerate: true,
+        intent: 'conversation',
+        overrideInstruction: execution,
+        overrideDisplay: display,
+      ));
+      n.sendUserText('oui');
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(chat.refined.last, execution,
+          reason: 'the ENGINE is handed the execution instruction');
+      expect(chat.displayed.last, display,
+          reason: 'and the backend is told what the person reads, for the title');
+      expect(chat.refineConfirms.last, isTrue);
+      final s = c.read(pwaControllerProvider);
+      expect(s.versions.last.title, display,
+          reason: "the vision is titled in the person's language");
+      expect(s.versions.last.instruction, execution,
+          reason: 'and remembers what was actually executed');
+      expect(s.messages.any((m) => m.text.contains(display)), isTrue,
+          reason: 'the reveal names the change the way the person reads it');
+      expect(s.messages.any((m) => m.text.contains(execution)), isFalse,
+          reason: "the engine's English never reaches the conversation");
+    });
+
+    testWidgets('REFINE-10  a direct instruction and "do it anyway" travel as '
+        'typed, with nothing shown in their place', (tester) async {
+      final (c, chat) = await session();
+      final n = c.read(pwaControllerProvider.notifier);
+      await n.applyRefine('make the sofa blue');
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(chat.refined.last, 'make the sofa blue');
+      expect(chat.displayed.last, '');
+      expect(c.read(pwaControllerProvider).versions.last.title,
+          'make the sofa blue');
+
+      chat.advisory = const PwaGenerationAdvisory(verdict: 'red', message: warning);
+      await n.applyRefine('break the wall on the left and add a living room behind');
+      await tester.pump(const Duration(milliseconds: 50));
+      chat.advisory = null;
+      chat.script.add(const PwaChatTurn(
+        aiMessage: '',
+        shouldGenerate: true,
+        intent: 'conversation',
+        overrideInstruction:
+            'break the wall on the left and add a living room behind',
+      ));
+      n.sendUserText('do it anyway');
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(chat.refined.last,
+          'break the wall on the left and add a living room behind',
+          reason: 'the ORIGINAL, verbatim');
+      expect(chat.displayed.last, '',
+          reason: "the original is the person's own words — nothing replaces it");
+    });
+
+    test('REFINE-11  the display text survives a reload, and an ordinary '
+        'refine is recorded exactly as before', () {
+      const p = PwaPendingGeneration(
+        projectId: 'p',
+        idempotencyKey: 'k',
+        actionType: 'refine',
+        roomId: '',
+        roomLabel: '',
+        atmosphereId: 'warm_modern',
+        atmosphereLabel: 'Warm Modern',
+        originalStoragePath: 'users/u/projects/p/original/o.jpg',
+        visionNumber: 2,
+        userInstruction: 'Create a cozy reading nook in the left corner.',
+        displayInstruction: 'Créez un coin lecture confortable',
+      );
+      final back = PwaPendingGeneration.tryParse(p.toJson())!;
+      expect(back.userInstruction, p.userInstruction);
+      expect(back.displayInstruction, 'Créez un coin lecture confortable');
+
+      const plain = PwaPendingGeneration(
+        projectId: 'p',
+        idempotencyKey: 'k',
+        actionType: 'refine',
+        roomId: '',
+        roomLabel: '',
+        atmosphereId: 'warm_modern',
+        atmosphereLabel: 'Warm Modern',
+        originalStoragePath: 'users/u/projects/p/original/o.jpg',
+        visionNumber: 2,
+        userInstruction: 'make the sofa blue',
+      );
+      expect(plain.toJson().containsKey('display_instruction'), isFalse);
+      expect(PwaPendingGeneration.tryParse(plain.toJson())!.displayInstruction,
+          '');
+
+      const ordinary = PwaGenerationRequest(
+        projectId: 'p',
+        roomId: '',
+        roomLabel: '',
+        atmosphereId: 'warm_modern',
+        atmosphereLabel: 'Warm Modern',
+        originalImagePath: 'o',
+        idempotencyKey: 'k',
+        userInstruction: 'make the sofa blue',
+      );
+      expect(ordinary.toJson().containsKey('display_instruction'), isFalse,
+          reason: 'an ordinary refine request is unchanged');
+      const proposal = PwaGenerationRequest(
+        projectId: 'p',
+        roomId: '',
+        roomLabel: '',
+        atmosphereId: 'warm_modern',
+        atmosphereLabel: 'Warm Modern',
+        originalImagePath: 'o',
+        idempotencyKey: 'k',
+        userInstruction: 'Create a cozy reading nook in the left corner.',
+        displayInstruction: 'Créez un coin lecture',
+      );
+      expect(proposal.toJson()['display_instruction'], 'Créez un coin lecture');
+
+      final t = PwaChatTurn.parse({
+        'ai_message': '',
+        'should_generate': true,
+        'override_instruction': 'Create a cozy reading nook in the left corner.',
+        'override_display': 'Créez un coin lecture',
+      });
+      expect(t.overrideInstruction,
+          'Create a cozy reading nook in the left corner.');
+      expect(t.overrideDisplay, 'Créez un coin lecture');
+      expect(
+          PwaChatTurn.parse({'should_generate': true, 'override_instruction': 'x'})
+              .overrideDisplay,
+          '');
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  group('CARD  the confirm card never breaks or cuts a label', () {
+    const warning = "As your architect, I don't recommend « add a living room "
+        'behind ». Would you like to consider creating a cozy reading nook '
+        'instead?';
+
+    Future<void> card(
+      WidgetTester tester,
+      Size size,
+      Locale locale,
+      String verdict,
+    ) async {
+      await tester.binding.setSurfaceSize(size);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final repo = MockPwaExperienceRepository(workDelay: Duration.zero);
+      final chat = _ScriptedChat(PwaMockGenerationService(repo));
+      final c = ProviderContainer(overrides: [
+        pwaRepositoryProvider.overrideWithValue(repo),
+        pwaGenerationServiceProvider.overrideWithValue(chat),
+      ]);
+      addTearDown(c.dispose);
+      await tester.pumpWidget(_app(c, size: size, locale: locale));
+      final n = c.read(pwaControllerProvider.notifier);
+      await _visions(n);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      chat.advisory = PwaGenerationAdvisory(verdict: verdict, message: warning);
+      await n.applyRefine('break the wall on the left and add a living room behind');
+      chat.advisory = null;
+      await _frames(tester);
+    }
+
+    Future<void> scrollTo(WidgetTester tester, String label) async {
+      await tester.scrollUntilVisible(
+        find.text(label),
+        220.0,
+        scrollable: find
+            .descendant(
+              of: find.byKey(const ValueKey('av7-chat-feed')),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+        maxScrolls: 60,
+      );
+      await _frames(tester, 3);
+    }
+
+    /// Drawn on ONE line and in FULL: no wrap, no clip.
+    void whole(WidgetTester tester, String label) {
+      final box = tester.renderObject<RenderBox>(find.text(label));
+      expect(box.getMaxIntrinsicWidth(double.infinity),
+          lessThanOrEqualTo(box.size.width + 0.5),
+          reason: '« $label » is not cut');
+      expect(box.size.height,
+          lessThanOrEqualTo(box.getMinIntrinsicHeight(double.infinity) + 0.5),
+          reason: '« $label » is on one line');
+    }
+
+    final fr = pwaL10nFor(const Locale('fr'));
+
+    testWidgets('CARD-01  390 px, French, RED: « Modifier la demande » and '
+        '« Créer la vision » are whole', (tester) async {
+      await card(tester, const Size(390, 844), const Locale('fr'), 'red');
+      await scrollTo(tester, fr.editRequest);
+      expect(find.byKey(const ValueKey('pwa-card-actions-stacked')),
+          findsOneWidget,
+          reason: 'at 390 px the actions stack rather than squeeze');
+      whole(tester, fr.editRequest);
+      whole(tester, fr.createVision);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('CARD-02  390 px, French, YELLOW: « Annuler » is whole',
+        (tester) async {
+      await card(tester, const Size(390, 844), const Locale('fr'), 'yellow');
+      await scrollTo(tester, fr.cancel);
+      whole(tester, fr.cancel);
+      whole(tester, fr.createVision);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('CARD-03  a wide screen keeps the two actions side by side',
+        (tester) async {
+      await card(tester, const Size(1440, 900), const Locale('en'), 'red');
+      await scrollTo(tester, _en.editRequest);
+      expect(find.byKey(const ValueKey('pwa-card-actions-stacked')),
+          findsNothing);
+      whole(tester, _en.editRequest);
+      whole(tester, _en.createVision);
+      expect(tester.takeException(), isNull);
     });
   });
 }

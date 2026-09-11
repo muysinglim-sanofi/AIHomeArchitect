@@ -66,6 +66,7 @@ class PwaGenerationRequest {
     this.actionType = 'initial',
     this.parentVisionId = '',
     this.userInstruction = '',
+    this.displayInstruction = '',
     this.visionNumber = 1,
     this.uiLocale = 'en',
     this.confirm = false,
@@ -87,6 +88,11 @@ class PwaGenerationRequest {
   final String actionType;
   final String parentVisionId;
   final String userInstruction;
+
+  /// What the person READS for this refine, when it is not [userInstruction]:
+  /// an accepted proposal, in their language. The backend stores it as the
+  /// vision's title; it never reaches the engine.
+  final String displayInstruction;
   final int visionNumber;
   final String uiLocale;
 
@@ -105,6 +111,7 @@ class PwaGenerationRequest {
     'action_type': actionType,
     'parent_vision_id': parentVisionId,
     'user_instruction': userInstruction,
+    if (displayInstruction.isNotEmpty) 'display_instruction': displayInstruction,
     'vision_number': visionNumber,
     'ui_locale': uiLocale,
     'confirm': confirm,
@@ -234,6 +241,7 @@ class PwaChatTurn {
     this.suggestions = const [],
     this.intent = '',
     this.overrideInstruction = '',
+    this.overrideDisplay = '',
   });
 
   /// Nothing was decided — answer with silence and, above all, do NOT generate.
@@ -242,7 +250,8 @@ class PwaChatTurn {
       shouldGenerate = false,
       suggestions = const [],
       intent = 'unavailable',
-      overrideInstruction = '';
+      overrideInstruction = '',
+      overrideDisplay = '';
 
   final String aiMessage;
   final bool shouldGenerate;
@@ -256,6 +265,13 @@ class PwaChatTurn {
   /// Continue-anyway does.
   final String overrideInstruction;
 
+  /// When [overrideInstruction] is Ayden's PROPOSAL, it is the backend's
+  /// execution instruction — canonical English, imperative, never the question
+  /// the proposal was offered as. This is the same change as the person reads
+  /// it, in their language: the chat line and the vision's title. Empty for an
+  /// original, which is the person's own words already.
+  final String overrideDisplay;
+
   static PwaChatTurn parse(Map<String, Object?> body) => PwaChatTurn(
     aiMessage: ((body['ai_message'] as String?) ?? '').trim(),
     // `== true` and never a truthy cast: an absent or malformed field must read
@@ -268,6 +284,7 @@ class PwaChatTurn {
     intent: (body['intent'] as String?) ?? '',
     overrideInstruction:
         ((body['override_instruction'] as String?) ?? '').trim(),
+    overrideDisplay: ((body['override_display'] as String?) ?? '').trim(),
   );
 }
 
@@ -562,6 +579,8 @@ class PwaGenerationApi {
     required String beforePath,
     required String afterPath,
     required List<Map<String, Object?>> changes,
+    /// The language the report is SHOWN in. The verdict never depends on it.
+    String uiLocale = 'en',
   }) async {
     const silent = <String, Object?>{'verification': 'unavailable'};
     if (_disposed || changes.isEmpty) return silent;
@@ -575,6 +594,7 @@ class PwaGenerationApi {
           'before_path': beforePath,
           'after_path': afterPath,
           'changes': changes,
+          'ui_locale': uiLocale,
         },
         options: Options(
           headers: {'Authorization': 'Bearer $token'},

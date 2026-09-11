@@ -89,6 +89,7 @@ class PwaMockGenerationService implements PwaGenerationService {
     required String beforePath,
     required String afterPath,
     required List<Map<String, Object?>> changes,
+    String uiLocale = 'en',
   }) async => null;
 
   String _assetForAtmosphere(String id) {
