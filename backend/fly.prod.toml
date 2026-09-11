@@ -64,7 +64,12 @@ primary_region = "sin"
   PAYWAY_ENV = "production"
   PAYWAY_CALLBACK_URL = "https://api.aydenstudio.com/pwa/payments/payway/callback"
   PAYWAY_CALLBACK_SIGNATURE_MODE = "required"
-  PAYWAY_RETURN_BASE_URL = "https://ayden-studio.web.app"
+  # The PWA's production origin — also the ONE domain ABA whitelists, because
+  # the plugin's Purchase is posted by the browser from this page.
+  PAYWAY_RETURN_BASE_URL = "https://app.aydenstudio.com"
+  # `/checkout/plugin` refuses any other value (503 plugin_option_misconfigured):
+  # the plugin is sized for KHQR, and cards are not offered.
+  PAYWAY_PAYMENT_OPTION = "abapay_khqr"
   PAYWAY_VIEW_TYPE = "hosted_view"
   PAYWAY_CURRENCY = "USD"
 
