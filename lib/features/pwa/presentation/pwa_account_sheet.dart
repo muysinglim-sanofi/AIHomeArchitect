@@ -255,6 +255,9 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
   Future<void> _facebook() =>
       ref.read(pwaAuthProvider.notifier).startFacebook(signIn: _signInMode);
 
+  Future<void> _telegram() =>
+      ref.read(pwaAuthProvider.notifier).startTelegram(signIn: _signInMode);
+
   /// The person was told the identity belongs to an existing account and
   /// CHOSE to sign in to it. The only place the journey flips — by their hand.
   Future<void> _continueToExisting() async {
@@ -270,6 +273,8 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
         _afterSend();
       case PwaAuthMethod.facebook:
         await c.startFacebook(signIn: true);
+      case PwaAuthMethod.telegram:
+        await c.startTelegram(signIn: true);
     }
   }
 
@@ -321,6 +326,13 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
     final adding = auth.isIdentified && !_signInMode;
     final fbDoor =
         controller.canFacebook && !(adding && auth.hasProvider('facebook'));
+    // Second door of the Cambodia launch. `canTelegram` is the SERVER's answer
+    // (the backend gate), so a provider that exists but is disabled shows no
+    // button at all rather than a button that refuses on arrival.
+    final telegramDoor =
+        controller.canTelegram && !(adding && auth.hasProvider('telegram'));
+    // The phone transport is hidden for this launch (`kPwaPhoneDoorHidden`);
+    // `canPhone` already answers false, and this keeps the derivation honest.
     final phoneDoor = controller.canPhone &&
         !(adding && (auth.hasProvider('phone') || auth.phone.isNotEmpty));
     final emailDoor =
@@ -361,7 +373,8 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
         secondary: switch (auth.method) {
           PwaAuthMethod.email => l.accountChangeEmail,
           PwaAuthMethod.phone => l.authChangePhone,
-          PwaAuthMethod.facebook => l.authChooseAnother,
+          PwaAuthMethod.facebook || PwaAuthMethod.telegram =>
+            l.authChooseAnother,
         },
         onSecondary: () {
           setState(() => _signInMode = false);
@@ -391,7 +404,7 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
           }
         },
       );
-    } else if (adding && !fbDoor && !phoneDoor && !emailDoor) {
+    } else if (adding && !fbDoor && !telegramDoor && !phoneDoor && !emailDoor) {
       // Everything this project offers is already attached. There is nothing
       // to secure and nothing to add — so the sheet says what IS, not what to
       // do. Placed before the method steps on purpose: on a deployment that
@@ -433,17 +446,20 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
     } else {
       // The chooser. A Facebook outcome that was not a success (cancelled,
       // no email, provider off) is shown here, under the doors, once.
+      final oauthMethod = auth.method == PwaAuthMethod.facebook ||
+          auth.method == PwaAuthMethod.telegram;
       body = _Chooser(
         signInMode: _signInMode,
         busy: auth.busy,
         facebook: fbDoor,
+        telegram: telegramDoor,
         phone: phoneDoor,
         email: emailDoor,
-        leaving: auth.busy && auth.method == PwaAuthMethod.facebook,
-        failure: (_oauthShown || auth.method == PwaAuthMethod.facebook)
-            ? auth.failure
-            : null,
+        leaving: auth.busy && oauthMethod,
+        leavingMethod: auth.method,
+        failure: (_oauthShown || oauthMethod) ? auth.failure : null,
         onFacebook: _facebook,
+        onTelegram: _telegram,
         onPhone: () => setState(() => _method = PwaAuthMethod.phone),
         onEmail: () => setState(() => _method = PwaAuthMethod.email),
         onToggleMode: () {
@@ -492,11 +508,14 @@ class _Chooser extends StatelessWidget {
     required this.signInMode,
     required this.busy,
     required this.facebook,
+    required this.telegram,
     required this.phone,
     this.email = true,
     required this.leaving,
+    required this.leavingMethod,
     required this.failure,
     required this.onFacebook,
+    required this.onTelegram,
     required this.onPhone,
     required this.onEmail,
     required this.onToggleMode,
@@ -504,15 +523,24 @@ class _Chooser extends StatelessWidget {
 
   final bool signInMode;
   final bool busy;
+
+  /// THE order of this launch: Facebook first and primary, Telegram second,
+  /// Guest last. The phone door is hidden (`kPwaPhoneDoorHidden`).
   final bool facebook;
+  final bool telegram;
   final bool phone;
 
   /// The e-mail door. Off only for an account that already has an e-mail: a
   /// door to something you already have is not a choice.
   final bool email;
   final bool leaving;
+
+  /// Which door the page is leaving through, so the line under the spinner
+  /// names the right destination.
+  final PwaAuthMethod leavingMethod;
   final PwaVerificationFailure? failure;
   final VoidCallback onFacebook;
+  final VoidCallback onTelegram;
   final VoidCallback onPhone;
   final VoidCallback onEmail;
   final VoidCallback onToggleMode;
@@ -535,18 +563,30 @@ class _Chooser extends StatelessWidget {
             key: const ValueKey('pwa-auth-facebook'),
             label: l.authContinueFacebook,
             leading: const _FacebookMark(),
-            busy: leaving,
+            busy: leaving && leavingMethod == PwaAuthMethod.facebook,
             onPressed: busy ? null : onFacebook,
           ),
-          if (leaving) ...[
-            const SizedBox(height: PwaGap.xs),
-            // The page is about to navigate away. Said in words, under the
-            // spinner, so a slow redirect does not look like a hang.
-            Text(l.authFacebookLeaving,
-                textAlign: TextAlign.center,
-                style: pwaSans(fontSize: 12, color: pwaFaint)),
-          ],
           const SizedBox(height: PwaGap.sm),
+        ],
+        if (telegram) ...[
+          _OutlinedButton(
+            key: const ValueKey('pwa-auth-telegram'),
+            label: l.authContinueTelegram,
+            icon: Icons.send,
+            onPressed: busy ? null : onTelegram,
+          ),
+          const SizedBox(height: PwaGap.sm),
+        ],
+        if (leaving) ...[
+          // The page is about to navigate away. Said in words, under the
+          // doors, so a slow redirect does not look like a hang.
+          Text(
+              leavingMethod == PwaAuthMethod.telegram
+                  ? l.authTelegramLeaving
+                  : l.authFacebookLeaving,
+              textAlign: TextAlign.center,
+              style: pwaSans(fontSize: 12, color: pwaFaint)),
+          const SizedBox(height: PwaGap.xs),
         ],
         if (phone)
           _OutlinedButton(

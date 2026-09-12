@@ -16,10 +16,19 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+/// Cambodia launch (2026-09-12): the phone door is HIDDEN, whatever the
+/// project says. The transport stays in the code — `pwa.auth_phone_change_release`
+/// is deployed and the OTP channel is tested — but the launch offers Facebook,
+/// Telegram and Guest, and a fourth door nobody chose would dilute that.
+///
+/// Flip this to false to bring the phone door back; nothing else changes.
+const bool kPwaPhoneDoorHidden = true;
+
 class PwaAuthProviders {
   const PwaAuthProviders({
     this.facebook = false,
     this.phone = false,
+    this.telegram = false,
     this.email = true,
   });
 
@@ -27,12 +36,30 @@ class PwaAuthProviders {
   static const PwaAuthProviders emailOnly = PwaAuthProviders();
 
   final bool facebook;
+
+  /// What the PROJECT says about the phone provider. [kPwaPhoneDoorHidden]
+  /// decides whether the door is offered — see [phoneDoor].
   final bool phone;
+
+  /// `custom:telegram`, and only when the SERVER says it is really enabled.
+  /// GoTrue's `/auth/v1/settings` never mentions custom providers, so this
+  /// flag comes from the backend gate, never from a build define.
+  final bool telegram;
   final bool email;
+
+  /// The phone door as the UI must treat it.
+  bool get phoneDoor => phone && !kPwaPhoneDoorHidden;
 
   /// True when there is a choice to make. With email alone the sheet opens
   /// straight on the address field, as it always has.
-  bool get hasPrimaryChoice => facebook || phone;
+  bool get hasPrimaryChoice => facebook || telegram || phoneDoor;
+
+  PwaAuthProviders copyWith({bool? telegram}) => PwaAuthProviders(
+        facebook: facebook,
+        phone: phone,
+        telegram: telegram ?? this.telegram,
+        email: email,
+      );
 
   /// GoTrue's `/auth/v1/settings` body → the three flags. Unknown or
   /// malformed input reads as email only.
@@ -52,8 +79,33 @@ class PwaAuthProviders {
   }
 
   @override
-  String toString() =>
-      'PwaAuthProviders(facebook: $facebook, phone: $phone, email: $email)';
+  String toString() => 'PwaAuthProviders(facebook: $facebook, phone: $phone, '
+      'telegram: $telegram, email: $email)';
+}
+
+/// Ask the BACKEND which custom providers are really enabled. One GET, no
+/// token: the answer is booleans about the deployment, not about the person.
+/// Every failure is "no custom door" — a button that leads to a refusal is
+/// worse than no button at all.
+Future<bool> fetchPwaTelegramEnabled({
+  required String backendUrl,
+  required String apiPrefix,
+  http.Client? client,
+  Duration timeout = const Duration(seconds: 4),
+}) async {
+  final c = client ?? http.Client();
+  try {
+    final uri = Uri.parse('${backendUrl.replaceAll(RegExp(r'/+$'), '')}'
+        '$apiPrefix/auth/providers');
+    final res = await c.get(uri).timeout(timeout);
+    if (res.statusCode != 200) return false;
+    final body = jsonDecode(res.body);
+    return body is Map && body['telegram'] == true;
+  } catch (_) {
+    return false;
+  } finally {
+    if (client == null) c.close();
+  }
 }
 
 /// Ask the project which providers are on. One GET with the publishable key,

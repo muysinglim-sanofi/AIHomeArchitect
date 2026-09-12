@@ -24,6 +24,7 @@ class PwaAuthController extends StateNotifier<PwaAuthState> {
       _service?.providers ?? PwaAuthProviders.emailOnly;
   bool get canPhone => _service?.canPhone ?? false;
   bool get canFacebook => _service?.canFacebook ?? false;
+  bool get canTelegram => _service?.canTelegram ?? false;
 
   bool looksValid(String destination) =>
       _service?.looksValid(destination) ?? false;
@@ -47,9 +48,17 @@ class PwaAuthController extends StateNotifier<PwaAuthState> {
   /// are different GoTrue endpoints, and nothing here infers one from the
   /// other. On the Web the page navigates away; the state is only read back
   /// when the redirect was refused before it happened.
-  Future<void> startFacebook({required bool signIn}) => _run(() =>
-      _service!.startFacebook(
-          signIn ? PwaOAuthJourney.signIn : PwaOAuthJourney.link));
+  Future<void> startFacebook({required bool signIn}) =>
+      startOAuth(PwaOAuthProviderKind.facebook, signIn: signIn);
+
+  /// Leave for Telegram. Same two journeys, same measurement on return; only
+  /// the provider slug differs (`custom:telegram`).
+  Future<void> startTelegram({required bool signIn}) =>
+      startOAuth(PwaOAuthProviderKind.telegram, signIn: signIn);
+
+  Future<void> startOAuth(PwaOAuthProviderKind kind, {required bool signIn}) =>
+      _run(() => _service!.startOAuth(
+          kind, signIn ? PwaOAuthJourney.signIn : PwaOAuthJourney.link));
 
   Future<void> submitCode(String destination, String code) =>
       _run(() => _service!.submitCode(destination, code));

@@ -948,8 +948,11 @@ void main() {
   // ── The sheet: Facebook + phone dominant, email secondary ─────────────────
 
   group('UI  the account sheet', () {
-    testWidgets('UI01 with Facebook and phone on, the chooser leads with them '
-        'and email is a text link below "or"', (tester) async {
+    testWidgets('UI01 the chooser leads with Facebook and email is a text link '
+        'below "or" — the phone door is hidden for this launch', (tester) async {
+      // 2026-09-12: the launch offers Facebook, Telegram and Guest. The phone
+      // TRANSPORT is untouched (UI05 still drives it end to end); what changed
+      // is that the chooser no longer offers it — `kPwaPhoneDoorHidden`.
       final r = _rig();
       await _openSheet(tester, r.service);
       expect(find.text(l.authSecureTitle), findsOneWidget);
@@ -958,12 +961,11 @@ void main() {
       final ph = find.byKey(const ValueKey('pwa-auth-phone'));
       final em = find.byKey(const ValueKey('pwa-auth-email'));
       expect(fb, findsOneWidget);
-      expect(ph, findsOneWidget);
+      expect(ph, findsNothing);
       expect(em, findsOneWidget);
       expect(find.text(l.authOr), findsOneWidget);
       // Order, as geometry.
-      expect(tester.getTopLeft(ph).dy, greaterThan(tester.getTopLeft(fb).dy));
-      expect(tester.getTopLeft(em).dy, greaterThan(tester.getTopLeft(ph).dy));
+      expect(tester.getTopLeft(em).dy, greaterThan(tester.getTopLeft(fb).dy));
       // The primary is a filled pill, the email door is a text button.
       expect(find.descendant(of: fb, matching: find.byType(FilledButton)),
           findsOneWidget);
@@ -1011,9 +1013,9 @@ void main() {
     testWidgets('UI05 phone: +855 by default, a code screen, then the '
         'account is settled', (tester) async {
       final r = _rig();
-      await _openSheet(tester, r.service);
-      await tester.tap(find.byKey(const ValueKey('pwa-auth-phone')));
-      await tester.pumpAndSettle();
+      // The door is hidden from the chooser, so the step is opened the way
+      // Profile opens it — directly. The transport itself is unchanged.
+      await _openSheet(tester, r.service, method: PwaAuthMethod.phone);
       final dial = tester.widget<TextField>(find.byKey(const ValueKey('pwa-auth-dial')));
       expect(dial.controller!.text, '+855');
       await tester.enterText(
@@ -1141,7 +1143,33 @@ void main() {
           // (which fill the sheet's width) are capped, whatever the window.
           final door = tester.getSize(find.byKey(const ValueKey('pwa-auth-facebook')));
           expect(door.width, lessThanOrEqualTo(560), reason: '$code $size');
-          await tester.tap(find.byKey(const ValueKey('pwa-auth-phone')));
+          // The phone door is not in the chooser any more (the launch hides
+          // it), so the step is opened directly — the layout it must hold is
+          // the same one.
+          await tester.tapAt(const Offset(5, 5));
+          await tester.pumpAndSettle();
+          await tester.pumpWidget(ProviderScope(
+            overrides: [pwaAuthServiceProvider.overrideWithValue(r.service)],
+            child: MaterialApp(
+              locale: Locale(code),
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [Locale('en'), Locale('km'), Locale('fr')],
+              home: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () => showPwaAccountSheet(context,
+                      method: PwaAuthMethod.phone),
+                  child: const Text('open phone'),
+                ),
+              ),
+            ),
+          ));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('open phone'));
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull, reason: 'phone $code');
           await tester.enterText(

@@ -261,17 +261,24 @@ Future<void> _bootPwaStaging(
   // Which sign-in doors exist is the PROJECT's answer (`/auth/v1/settings`),
   // read alongside the library restore rather than after it. Fails closed to
   // email only, which is the screen that shipped before Cambodia auth.
-  final (base, providers) = await (
+  final (base, providers, telegramOn) = await (
     pwaResolveBootRestore(persistence, route: bootRoute),
     fetchPwaAuthProviders(
       supabaseUrl: env.supabaseUrl!,
       publishableKey: env.publishableKey!,
     ),
+    // CUSTOM providers (Telegram) are invisible to `/auth/v1/settings`, so the
+    // SERVER is asked instead. Fails closed: no answer, no Telegram door.
+    fetchPwaTelegramEnabled(
+      backendUrl: env.backendUrl!,
+      apiPrefix: env.apiPrefix,
+    ),
   ).wait;
 
   final auth = PwaAuthService(
     auth: client.client.auth,
-    providers: providers,
+    // The project's own answer, plus the one door it cannot advertise.
+    providers: providers.copyWith(telegram: telegramOn),
     // The phone link's PREPARE step: the backend clears expired
     // `phone_change` rows for the number and reports any still live.
     phoneLinkChannel: providers.phone

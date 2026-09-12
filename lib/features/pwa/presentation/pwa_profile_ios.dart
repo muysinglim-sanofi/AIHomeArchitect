@@ -353,6 +353,7 @@ class _IdentityCard extends StatelessWidget {
         : null;
     final avatarIcon = switch (connectedVia) {
       PwaAuthMethod.facebook => Icons.facebook,
+      PwaAuthMethod.telegram => Icons.send,
       PwaAuthMethod.phone => Icons.phone_iphone,
       _ => Icons.person_outline,
     };

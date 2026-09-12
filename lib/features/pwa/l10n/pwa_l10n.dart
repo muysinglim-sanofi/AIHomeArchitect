@@ -819,6 +819,7 @@ class PwaL10n {
   String get authSecureBody => _get('pwaAuthSecureBody');
   String get authSignInChooserBody => _get('pwaAuthSignInChooserBody');
   String get authContinueFacebook => _get('pwaAuthContinueFacebook');
+  String get authContinueTelegram => _get('pwaAuthContinueTelegram');
   String get authContinuePhone => _get('pwaAuthContinuePhone');
   String get authOr => _get('pwaAuthOr');
   String get authUseEmail => _get('pwaAuthUseEmail');
@@ -842,6 +843,9 @@ class PwaL10n {
   String get authExistsEmail => _get('pwaAuthExistsEmail');
   String get authContinueExisting => _get('pwaAuthContinueExisting');
   String get authFacebookLeaving => _get('pwaAuthFacebookLeaving');
+  String get authTelegramLeaving => _get('pwaAuthTelegramLeaving');
+  String get authExistsTelegram => _get('pwaAuthExistsTelegram');
+  String get authConnectedTelegram => _get('pwaAuthConnectedTelegram');
   String get authConnectedFacebook => _get('pwaAuthConnectedFacebook');
   String get authConnectedPhone => _get('pwaAuthConnectedPhone');
   String get authConnectedEmail => _get('pwaAuthConnectedEmail');
@@ -856,12 +860,14 @@ class PwaL10n {
   /// "This X already has an Ayden account", per method.
   String authExistsFor(PwaAuthMethod m) => switch (m) {
         PwaAuthMethod.facebook => authExistsFacebook,
+        PwaAuthMethod.telegram => authExistsTelegram,
         PwaAuthMethod.phone => authExistsPhone,
         PwaAuthMethod.email => authExistsEmail,
       };
 
   String authConnectedVia(PwaAuthMethod m) => switch (m) {
         PwaAuthMethod.facebook => authConnectedFacebook,
+        PwaAuthMethod.telegram => authConnectedTelegram,
         PwaAuthMethod.phone => authConnectedPhone,
         PwaAuthMethod.email => authConnectedEmail,
       };

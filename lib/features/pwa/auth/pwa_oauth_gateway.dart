@@ -36,9 +36,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../application/pwa_intro_gate.dart' show PwaSessionStore;
 import 'pwa_verification_channel.dart';
 
-/// The one social provider this launch ships. An enum rather than a string
-/// so a typo cannot select a provider that is not configured.
-enum PwaOAuthProviderKind { facebook }
+/// The social providers this launch ships. An enum rather than a string so a
+/// typo cannot select a provider that is not configured.
+///
+/// Telegram is a Supabase CUSTOM OIDC provider (`custom:telegram`): Telegram
+/// publishes a standard OpenID Connect discovery document, GoTrue resolves the
+/// `custom:` prefix before its built-in list, and identity LINKING takes the
+/// same path as sign-in — so an anonymous visitor keeps their user id, exactly
+/// as with Facebook.
+enum PwaOAuthProviderKind { facebook, telegram }
 
 /// Which journey a redirect belongs to. Persisted across the page reload, so
 /// the boot code can tell a link from a sign-in WITHOUT inferring it from what
@@ -65,8 +71,11 @@ class SupabasePwaOAuthGateway implements PwaOAuthGateway {
 
   final GoTrueClient _auth;
 
+  /// The slug GoTrue expects. `custom:` is not decoration: it is the prefix
+  /// GoTrue matches before its built-in provider switch.
   static OAuthProvider _of(PwaOAuthProviderKind p) => switch (p) {
         PwaOAuthProviderKind.facebook => OAuthProvider.facebook,
+        PwaOAuthProviderKind.telegram => const OAuthProvider('custom:telegram'),
       };
 
   @override

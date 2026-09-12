@@ -72,7 +72,7 @@ enum PwaAuthJourney { none, linkNewIdentity, signInExisting }
 
 /// The transport a journey rides on. The UI labels fields and picks keyboards
 /// from it; it never branches on a vendor.
-enum PwaAuthMethod { email, phone, facebook }
+enum PwaAuthMethod { email, phone, facebook, telegram }
 
 class PwaAuthState {
   const PwaAuthState({
@@ -329,7 +329,9 @@ class PwaAuthService {
                 : null),
         _phoneSignIn = phoneSignInChannel ??
             (providers.phone ? PwaPhoneOtpChannel.signInExisting(auth) : null),
-        _oauth = oauth ?? (providers.facebook
+        // ONE gateway for every social door: the journey carries which
+        // provider, so Telegram does not duplicate the Facebook stack.
+        _oauth = oauth ?? ((providers.facebook || providers.telegram)
             ? SupabasePwaOAuthGateway(auth)
             : null),
         _handoffStore = handoffStore,
@@ -409,9 +411,16 @@ class PwaAuthService {
   /// What this deployment can offer. Read at boot from the project itself.
   PwaAuthProviders get providers => _providers;
 
-  bool get canPhone => _providers.phone && _phoneLink != null;
+  /// `phoneDoor`, not `phone`: the transport exists, the LAUNCH hides it
+  /// (`kPwaPhoneDoorHidden`).
+  bool get canPhone => _providers.phoneDoor && _phoneLink != null;
   bool get canFacebook =>
       _providers.facebook && _oauth != null && _handoffStore != null;
+
+  /// Telegram is offered only when the SERVER confirmed the custom provider is
+  /// really enabled — `/auth/v1/settings` never mentions custom providers.
+  bool get canTelegram =>
+      _providers.telegram && _oauth != null && _handoffStore != null;
 
   /// What the email transport needs from the person.
   PwaVerificationKind get verificationKind => _link.kind;
@@ -648,27 +657,43 @@ class PwaAuthService {
   ///
   /// The returned state is only meaningful when the navigation did NOT
   /// happen (a refusal before the redirect). When it did, the page is gone.
-  Future<PwaAuthState> startFacebook(PwaOAuthJourney journey) async {
+  Future<PwaAuthState> startFacebook(PwaOAuthJourney journey) =>
+      startOAuth(PwaOAuthProviderKind.facebook, journey);
+
+  /// The same journey for any social door. Telegram does NOT get its own copy
+  /// of this: the provider is a parameter, so the hand-off, the measurement on
+  /// return and the collision fork are one implementation, proved once.
+  static PwaAuthMethod methodOf(PwaOAuthProviderKind kind) => switch (kind) {
+        PwaOAuthProviderKind.facebook => PwaAuthMethod.facebook,
+        PwaOAuthProviderKind.telegram => PwaAuthMethod.telegram,
+      };
+
+  bool _canUse(PwaOAuthProviderKind kind) => switch (kind) {
+        PwaOAuthProviderKind.facebook => _providers.facebook,
+        PwaOAuthProviderKind.telegram => _providers.telegram,
+      };
+
+  Future<PwaAuthState> startOAuth(
+      PwaOAuthProviderKind kind, PwaOAuthJourney journey) async {
+    final method = methodOf(kind);
     final gw = _oauth;
     final store = _handoffStore;
-    if (gw == null || store == null || !_providers.facebook) {
-      return _refused(PwaAuthMethod.facebook, '');
+    if (gw == null || store == null || !_canUse(kind)) {
+      return _refused(method, '');
     }
     if (journey == PwaOAuthJourney.link) await _ensureSession();
     final before = _auth.currentUserId ?? '';
     PwaAuthHandoff(
       journey: journey,
-      provider: PwaOAuthProviderKind.facebook,
+      provider: kind,
       userId: before,
       projectIds: _projectIds(),
       startedAtMs: DateTime.now().millisecondsSinceEpoch,
     ).save(store);
     try {
       final launched = journey == PwaOAuthJourney.link
-          ? await gw.startLink(PwaOAuthProviderKind.facebook,
-              redirectTo: _redirectTo)
-          : await gw.startSignIn(PwaOAuthProviderKind.facebook,
-              redirectTo: _redirectTo);
+          ? await gw.startLink(kind, redirectTo: _redirectTo)
+          : await gw.startSignIn(kind, redirectTo: _redirectTo);
       if (!launched) {
         // The URL was minted but the browser did not go. Not a collision,
         // not a cancel: the door is simply shut right now.
@@ -678,7 +703,7 @@ class PwaAuthService {
           journey: journey == PwaOAuthJourney.link
               ? PwaAuthJourney.linkNewIdentity
               : PwaAuthJourney.signInExisting,
-          method: PwaAuthMethod.facebook,
+          method: method,
           failure: PwaVerificationFailure.providerRefused,
         );
       }
@@ -691,7 +716,7 @@ class PwaAuthService {
         journey: journey == PwaOAuthJourney.link
             ? PwaAuthJourney.linkNewIdentity
             : PwaAuthJourney.signInExisting,
-        method: PwaAuthMethod.facebook,
+        method: method,
         failure: PwaOAuthReturn.failureOfException(e),
       );
     }
@@ -699,7 +724,7 @@ class PwaAuthService {
       journey: journey == PwaOAuthJourney.link
           ? PwaAuthJourney.linkNewIdentity
           : PwaAuthJourney.signInExisting,
-      method: PwaAuthMethod.facebook,
+      method: method,
       busy: true,
     );
   }
@@ -720,13 +745,17 @@ class PwaAuthService {
     final journey = handoff.journey == PwaOAuthJourney.link
         ? PwaAuthJourney.linkNewIdentity
         : PwaAuthJourney.signInExisting;
+    // WHICH door this return belongs to is written in the hand-off, never
+    // assumed: a Telegram collision reported as "Facebook" would show the
+    // person the wrong sentence about the wrong account (AUTH10).
+    final method = methodOf(handoff.provider);
 
     final failure = PwaOAuthReturn.failureOf(ret);
     if (ret.isError && failure != null) {
       return base.copyWith(
         stage: base.isIdentified ? PwaAuthStage.identified : PwaAuthStage.guest,
         journey: journey,
-        method: PwaAuthMethod.facebook,
+        method: method,
         failure: failure,
         oauthPending: true,
       );
@@ -739,7 +768,7 @@ class PwaAuthService {
       // (a used or expired flow state) or the SDK could not persist it.
       return base.copyWith(
         journey: journey,
-        method: PwaAuthMethod.facebook,
+        method: method,
         failure: PwaVerificationFailure.providerRefused,
         oauthPending: true,
       );
