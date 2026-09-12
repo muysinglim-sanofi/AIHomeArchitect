@@ -33,6 +33,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException
@@ -62,6 +63,73 @@ def _service_key() -> str:
 
 class PhonePrepareRequest(BaseModel):
     phone: str = Field(min_length=8, max_length=20)
+
+
+# ── Which CUSTOM providers this project actually has ────────────────────────
+#
+# GoTrue's public `/auth/v1/settings` lists a FIXED struct of built-in providers
+# (`internal/api/settings.go`) and says nothing about custom OAuth/OIDC ones. So
+# the browser cannot discover `custom:telegram` the way it discovers Facebook,
+# and a build flag would be a second source of truth that drifts from the
+# project. This route is the answer: the SERVER asks the admin API with its own
+# service key and reports one boolean per custom door.
+#
+# It returns booleans ONLY — never the identifier's client id, never a secret.
+# Fails CLOSED: any error is "no custom door", so a button never appears for a
+# provider that would refuse the person on arrival.
+
+#: The one custom provider this launch knows about.
+TELEGRAM_IDENTIFIER = "custom:telegram"
+
+#: Cache for the admin lookup. The answer changes when an operator flips the
+#: provider, which is rare; every boot of every visitor asking GoTrue's admin
+#: API would not be.
+_PROVIDERS_TTL_S = 60.0
+_providers_cache: tuple[float, dict] | None = None
+
+
+def telegram_enabled(payload: object) -> bool:
+    """True only when the admin API says `custom:telegram` exists AND is enabled.
+
+    Pure, so the contract is tested without a network: anything unexpected —
+    a missing list, a different identifier, a non-boolean — reads as closed.
+    """
+    if not isinstance(payload, dict):
+        return False
+    providers = payload.get("providers")
+    if not isinstance(providers, list):
+        return False
+    for p in providers:
+        if isinstance(p, dict) and p.get("identifier") == TELEGRAM_IDENTIFIER:
+            return p.get("enabled") is True
+    return False
+
+
+@router.get("/providers")
+async def auth_providers() -> dict:
+    """The custom doors this deployment can actually open. Booleans only."""
+    global _providers_cache  # noqa: PLW0603 — one process-wide memo, by design
+    now = time.monotonic()
+    if _providers_cache and now - _providers_cache[0] < _PROVIDERS_TTL_S:
+        return _providers_cache[1]
+
+    key = _service_key()
+    answer = {"telegram": False}
+    if key:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                r = await client.get(
+                    f"{_supabase_url()}/auth/v1/admin/custom-providers",
+                    headers={"apikey": key, "Authorization": f"Bearer {key}"},
+                )
+            if r.status_code == 200:
+                answer = {"telegram": telegram_enabled(r.json())}
+            else:
+                log.warning("[pwa-auth] custom-providers status %s", r.status_code)
+        except (httpx.HTTPError, ValueError) as exc:
+            log.warning("[pwa-auth] custom-providers unreachable: %s", type(exc).__name__)
+    _providers_cache = (now, answer)
+    return answer
 
 
 def _unavailable(why: str) -> HTTPException:
