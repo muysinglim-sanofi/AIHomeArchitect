@@ -51,6 +51,15 @@ primary_region = "sin"
   # without it rather than serving a recipe nobody benched.
   BIMODAL_ENABLED = "1"
 
+  # THE Web generation surface (`/pwa/generate`, `/pwa/chat`, `/pwa/refine`,
+  # `/pwa/generation`). Closed by default in `run_pwa_prod.py` and opened here
+  # only once production actually had what generation needs: the library tables
+  # (20260911), the reservation (20260912) and the private `pwa-images` bucket
+  # (20260904 storage). Opening it spends real provider credits — the free tier
+  # is 3 generations per account — so it is a deliberate line, not a default.
+  # `/pwa/engine` and `/pwa/staging` stay closed whatever this says.
+  PWA_PROD_GENERATION_OPEN = "1"
+
   # THE browser origins allowed to make credentialed calls. No preview-channel
   # regex here, deliberately: a preview build points at STAGING, and a
   # production API that answered every `ayden-studio--*.web.app` would let an
