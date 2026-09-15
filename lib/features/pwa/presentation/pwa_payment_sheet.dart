@@ -383,6 +383,15 @@ class _Body extends StatelessWidget {
           title: l.paywallUnavailableTitle,
           body: l.paywallUnavailableBody,
         ),
+      // A Guest reached checkout. Not a failure and not a refusal of money —
+      // the paywall opens the account door; this is only what the surface says
+      // if it is somehow on screen when the answer arrives.
+      PwaPaymentState.accountRequired => _Outcome(
+          icon: Icons.person_outline,
+          tone: pwaMuted,
+          title: l.authSecurePurchaseTitle,
+          body: l.authSecurePurchaseBody,
+        ),
     };
   }
 }

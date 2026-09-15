@@ -857,6 +857,8 @@ class PwaL10n {
   String get authAdd => _get('pwaAuthAdd');
   String get authGuestBody => _get('pwaAuthGuestBody');
   String get authSecureCta => _get('pwaAuthSecureCta');
+  String get authSecurePurchaseTitle => _get('pwaAuthSecurePurchaseTitle');
+  String get authSecurePurchaseBody => _get('pwaAuthSecurePurchaseBody');
 
   /// "This X already has an Ayden account", per method.
   String authExistsFor(PwaAuthMethod m) => switch (m) {

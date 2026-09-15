@@ -478,6 +478,10 @@ const Map<String, String> pwaEnTranslations = {
   'pwaAuthAdd': 'Add',
   'pwaAuthGuestBody': 'Your designs are saved on this device.',
   'pwaAuthSecureCta': 'Secure my account',
+  'pwaAuthSecurePurchaseTitle': 'Secure your account to buy Spaces',
+  'pwaAuthSecurePurchaseBody':
+      'Your designs, your Spaces and your purchases stay yours — on every '
+      'device, not just this browser.',
 
   // ── Errors ─────────────────────────────────────────────────────────────────
   'pwaErrSessionExpired': 'Your session expired. Reload the page to continue.',
@@ -928,6 +932,10 @@ const Map<String, String> pwaKmTranslations = {
   'pwaAuthAdd': 'បន្ថែម',
   'pwaAuthGuestBody': 'ការ​រចនា​របស់​អ្នក​ត្រូវ​បាន​រក្សា​ទុក​នៅ​លើ​ឧបករណ៍​នេះ។',
   'pwaAuthSecureCta': 'ការពារ​គណនី​របស់​ខ្ញុំ',
+  'pwaAuthSecurePurchaseTitle': 'ការពារ​គណនី​ដើម្បី​ទិញ Spaces',
+  'pwaAuthSecurePurchaseBody':
+      'ការ​រចនា Spaces និង​ការ​ទិញ​របស់​អ្នក​នៅ​ជា​របស់​អ្នក — លើ​គ្រប់​ឧបករណ៍ '
+      'មិន​ត្រឹម​តែ​កម្មវិធី​រុករក​នេះ​ទេ។',
 
   // ── Errors ─────────────────────────────────────────────────────────────────
   'pwaErrSessionExpired': 'វគ្គ​របស់​អ្នក​ផុត​កំណត់។ សូម​ផ្ទុក​ទំព័រ​ឡើង​វិញ​ដើម្បី​បន្ត។',
@@ -1381,6 +1389,10 @@ const Map<String, String> pwaFrTranslations = {
   'pwaAuthAdd': 'Ajouter',
   'pwaAuthGuestBody': 'Vos créations sont enregistrées sur cet appareil.',
   'pwaAuthSecureCta': 'Sécuriser mon compte',
+  'pwaAuthSecurePurchaseTitle': 'Sécurisez votre compte pour acheter des Spaces',
+  'pwaAuthSecurePurchaseBody':
+      'Vos créations, vos Spaces et vos achats restent à vous — sur tous vos '
+      'appareils, pas seulement dans ce navigateur.',
 
   // ── Errors ─────────────────────────────────────────────────────────────────
   'pwaErrSessionExpired':

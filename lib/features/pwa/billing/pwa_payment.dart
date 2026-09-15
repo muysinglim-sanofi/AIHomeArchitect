@@ -71,6 +71,15 @@ enum PwaPaymentState {
   /// We could not reach our own server. NOT a refusal — the attempt may well
   /// still be alive, and the next poll asks again.
   unreachable,
+
+  /// The server will not open a purchase for an ANONYMOUS account.
+  ///
+  /// Not a refusal of money — no gateway was asked, no transaction exists, and
+  /// nothing failed. It is a prerequisite: buy a pack with a session that lives
+  /// only in one browser's storage and the entitlement outlives the only way
+  /// back to it. The screen's answer is the secure-account flow, never a
+  /// payment error.
+  accountRequired,
 }
 
 /// WHERE a payment result came from — the fact the UI needs and the server
@@ -116,6 +125,11 @@ enum PwaPaymentErrorClass {
   /// payment — including, especially, one that already succeeded.
   auth,
 
+  /// The caller is a Guest, and a Guest may not buy. An account prerequisite,
+  /// deliberately its own class so that no surface can render it as money
+  /// having gone wrong.
+  account,
+
   /// The rail is closed or misconfigured, or this product cannot be sold here.
   /// No payment was ever attempted.
   availability,
@@ -140,6 +154,9 @@ PwaPaymentErrorClass pwaClassifyPaymentError(String code) =>
       // The gateway itself said no to the purchase. The server has already
       // written the attempt terminal.
       'PAYMENT_PROVIDER_REFUSED' => PwaPaymentErrorClass.payment,
+
+      // The secured-account guard. 403, before any transaction is created.
+      'ACCOUNT_REQUIRED' => PwaPaymentErrorClass.account,
 
       // `_caller` -> `_verify_user`: 401 on every payment route, including the
       // `GET /payments/open` that runs at every cold start.
@@ -364,6 +381,7 @@ class PwaPayment {
   static PwaPaymentState stateForErrorClass(PwaPaymentErrorClass cls) =>
       switch (cls) {
         PwaPaymentErrorClass.payment => PwaPaymentState.failed,
+        PwaPaymentErrorClass.account => PwaPaymentState.accountRequired,
         PwaPaymentErrorClass.availability => PwaPaymentState.unavailable,
         // Auth, contract and technical all share the ONE state this class
         // already had for "no answer, and the attempt may well still be

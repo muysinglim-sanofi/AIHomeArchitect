@@ -25,6 +25,8 @@ import 'dart:typed_data';
 
 import 'package:ai_home_architect/core/l10n/app_localizations.dart';
 import 'package:ai_home_architect/core/providers/locale_provider.dart';
+import 'package:ai_home_architect/features/pwa/auth/pwa_auth_controller.dart';
+import 'package:ai_home_architect/features/pwa/auth/pwa_auth_service.dart';
 import 'package:ai_home_architect/features/pwa/billing/pwa_entitlement.dart';
 import 'package:ai_home_architect/features/pwa/billing/pwa_entitlement_controller.dart';
 import 'package:ai_home_architect/features/pwa/billing/pwa_payment.dart';
@@ -146,6 +148,19 @@ class _CountingEntitlement extends PwaEntitlementController {
   Future<void> refresh() async {
     refreshes++;
     await super.refresh();
+  }
+}
+
+/// A SECURED account — the precondition a purchase now has.
+///
+/// Since 2026-09-15 a Guest may not open a paid checkout: the entitlement would
+/// attach to a user id that lives in one browser's storage, and the first real
+/// production purchase showed what that costs somebody who then loses it. These
+/// tests are about the PLUGIN, not about that rule (which is
+/// `pwa_secured_purchase_guard_test.dart`), so they buy as somebody.
+class _SecuredAuth extends PwaAuthController {
+  _SecuredAuth() : super(null) {
+    state = const PwaAuthState(stage: PwaAuthStage.identified);
   }
 }
 
@@ -2282,6 +2297,7 @@ void main() {
         const PwaPaywallSheet(),
         overrides: [
           pwaEntitlementProvider.overrideWith((ref) => entitlement),
+          pwaAuthProvider.overrideWith((ref) => _SecuredAuth()),
           pwaPaymentGatewayProvider.overrideWithValue(gateway),
           pwaAbaPluginProvider.overrideWithValue(plugin),
         ],
@@ -2535,6 +2551,7 @@ void main() {
         ),
         overrides: [
           pwaEntitlementProvider.overrideWith((ref) => entitlement),
+          pwaAuthProvider.overrideWith((ref) => _SecuredAuth()),
           pwaPaymentGatewayProvider.overrideWithValue(gateway),
           pwaAbaPluginProvider.overrideWithValue(plugin),
         ],

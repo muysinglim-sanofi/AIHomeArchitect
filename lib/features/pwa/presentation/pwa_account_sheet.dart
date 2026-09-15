@@ -54,6 +54,7 @@ Future<bool> showPwaAccountSheet(
   BuildContext context, {
   bool signIn = false,
   PwaAuthMethod? method,
+  bool forPurchase = false,
 }) async {
   final done = await showModalBottomSheet<bool>(
     context: context,
@@ -66,7 +67,8 @@ Future<bool> showPwaAccountSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
-    builder: (_) => _PwaAccountSheet(signIn: signIn, method: method),
+    builder: (_) =>
+        _PwaAccountSheet(signIn: signIn, method: method, forPurchase: forPurchase),
   );
   return done ?? false;
 }
@@ -94,7 +96,15 @@ Future<void> pwaHydrateForIdentity(
 }
 
 class _PwaAccountSheet extends ConsumerStatefulWidget {
-  const _PwaAccountSheet({this.signIn = false, this.method});
+  const _PwaAccountSheet(
+      {this.signIn = false, this.method, this.forPurchase = false});
+
+  /// Opened because somebody tried to BUY. Only the two lines at the top of the
+  /// chooser change: the doors, the journey and the link semantics are the same
+  /// ones, because securing an account for a purchase is not a different act
+  /// from securing it for the work — it is the same act, asked at the moment it
+  /// finally matters to the reader.
+  final bool forPurchase;
 
   /// Which journey the sheet OPENS on. The caller decides, because the caller
   /// is the one that knows which question was asked.
@@ -449,6 +459,7 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
       final oauthMethod = auth.method == PwaAuthMethod.facebook ||
           auth.method == PwaAuthMethod.telegram;
       body = _Chooser(
+        forPurchase: widget.forPurchase && !_signInMode,
         signInMode: _signInMode,
         busy: auth.busy,
         facebook: fbDoor,
@@ -505,6 +516,7 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
 
 class _Chooser extends StatelessWidget {
   const _Chooser({
+    this.forPurchase = false,
     required this.signInMode,
     required this.busy,
     required this.facebook,
@@ -520,6 +532,9 @@ class _Chooser extends StatelessWidget {
     required this.onEmail,
     required this.onToggleMode,
   });
+
+  /// Swaps the two lines at the top for the purchase wording. Nothing else.
+  final bool forPurchase;
 
   final bool signInMode;
   final bool busy;
@@ -552,10 +567,23 @@ class _Chooser extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(signInMode ? l.accountSignInTitle : l.authSecureTitle,
+        Text(
+            signInMode
+                ? l.accountSignInTitle
+                : forPurchase
+                    ? l.authSecurePurchaseTitle
+                    : l.authSecureTitle,
+            key: ValueKey(forPurchase && !signInMode
+                ? 'pwa-auth-title-purchase'
+                : 'pwa-auth-title'),
             style: pwaSerif(fontSize: 24, fontWeight: FontWeight.w500)),
         const SizedBox(height: PwaGap.sm),
-        Text(signInMode ? l.authSignInChooserBody : l.authSecureBody,
+        Text(
+            signInMode
+                ? l.authSignInChooserBody
+                : forPurchase
+                    ? l.authSecurePurchaseBody
+                    : l.authSecureBody,
             style: pwaSans(fontSize: 14, color: pwaMuted, height: 1.5)),
         const SizedBox(height: PwaGap.lg),
         if (facebook) ...[

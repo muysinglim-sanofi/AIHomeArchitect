@@ -48,6 +48,34 @@ import 'pwa_theme.dart';
 import 'pwa_type.dart'
     show kPwaKhmerFamilyName, kPwaPaywallDisplayFamily, kPwaPaywallScriptFamily;
 
+/// Make sure there is an ACCOUNT to attach a purchase to, and say whether
+/// there now is one.
+///
+/// WHY A PURCHASE NEEDS THIS AND A GENERATION DOES NOT. A Guest may look
+/// around, make projects and spend a free trial: lose that session and nothing
+/// bought is lost with it. A pack is different. Its entitlement attaches to a
+/// user id that lives in one browser's storage, so the day that storage goes,
+/// the ledger is still exactly right and the customer has still — from where
+/// they stand — paid and received nothing. The first real production purchase
+/// demonstrated exactly that.
+///
+/// The door offered is the LINK journey (`signIn: false`), deliberately: it
+/// attaches the identity to the CURRENT user, so the projects, the free Spaces
+/// and the purchase about to be made all stay on the same id. A sign-in would
+/// switch accounts and leave the work behind.
+///
+/// The answer is RE-READ from the auth state afterwards rather than assumed:
+/// the sheet may have been dismissed, the identity may have collided with
+/// another account, or the session may simply not have settled yet. Pressing a
+/// Telegram button is not the same fact as having an account.
+Future<bool> pwaEnsureSecuredForPurchase(
+    BuildContext context, WidgetRef ref) async {
+  if (ref.read(pwaAuthProvider).isIdentified) return true;
+  await showPwaAccountSheet(context, forPurchase: true);
+  if (!context.mounted) return false;
+  return ref.read(pwaAuthProvider).isIdentified;
+}
+
 /// Show the paywall for the state the BILLING ENGINE named.
 ///
 /// [refusal] is the `billing_state` a 402 carried, when the paywall was opened
@@ -251,6 +279,13 @@ class _PwaPaywallSheetState extends ConsumerState<PwaPaywallSheet> {
           // Nobody should be left on a purchase screen for something they
           // have just bought. The success card is the watcher's.
           Navigator.of(context).maybePop();
+        }
+        // The guard fired server-side — a stale bundle, a replayed request, or
+        // a link that had not settled when Buy was pressed. Same answer as the
+        // tap: offer the account, never an error about money.
+        if (next == PwaPaymentState.accountRequired) {
+          ref.read(pwaPaymentProvider.notifier).reset();
+          pwaEnsureSecuredForPurchase(context, ref);
         }
       },
     );
@@ -526,10 +561,24 @@ class _PwaPaywallSheetState extends ConsumerState<PwaPaywallSheet> {
                                 // controller hands the signed fields to ABA's
                                 // plugin, which presents the checkout over
                                 // this Wallet. No PwaPaymentSheet is mounted.
-                                ? () => ref
-                                    .read(pwaPaymentProvider.notifier)
-                                    .start(selected.sku)
+                                ? () async {
+                                    // Nothing is created until there is an
+                                    // account to create it for: no attempt, no
+                                    // order, no tran_id, no QR.
+                                    if (!await pwaEnsureSecuredForPurchase(
+                                        context, ref)) {
+                                      return;
+                                    }
+                                    ref
+                                        .read(pwaPaymentProvider.notifier)
+                                        .start(selected.sku);
+                                  }
                                 : () async {
+                                    if (!await pwaEnsureSecuredForPurchase(
+                                        context, ref)) {
+                                      return;
+                                    }
+                                    if (!context.mounted) return;
                                     final granted = await showPwaPaymentSheet(
                                         context, ref, selected);
                                     // A completed purchase closes the paywall
@@ -1178,6 +1227,9 @@ class _PaymentInline extends StatelessWidget {
       PwaPaymentState.expired => errorLine(l.payExpiredTitle),
       PwaPaymentState.unreachable => errorLine(l.payUnreachableTitle),
       // Cancelled is a decision, not a problem: back to the Wallet, no line.
+      // `accountRequired` likewise: the sheet above is the whole answer, and a
+      // red line saying something went wrong would contradict it.
+      PwaPaymentState.accountRequired ||
       PwaPaymentState.cancelled ||
       PwaPaymentState.granted ||
       PwaPaymentState.unavailable ||
