@@ -268,9 +268,14 @@ def _bearer(authorization: str | None) -> str:
     return authorization.split(" ", 1)[1].strip()
 
 
-async def _verify_user(client: httpx.AsyncClient, token: str) -> str:
-    """Resolve the caller server-side. The client's claim of who it is is never
-    trusted — the id used for every subsequent check comes from GoTrue."""
+async def _verify_user_claims(client: httpx.AsyncClient, token: str) -> dict:
+    """The caller's GoTrue record, resolved server-side.
+
+    THE one token path. `_verify_user` is the id-only view of this; anything
+    that needs to know MORE about the caller than their id — whether the
+    account is anonymous, say, which decides whether it may be charged money —
+    reads it here rather than opening a second route to GoTrue.
+    """
     r = await client.get(
         f"{_supabase_url()}/auth/v1/user",
         headers={"apikey": _anon_key(), "Authorization": f"Bearer {token}"},
@@ -282,12 +287,18 @@ async def _verify_user(client: httpx.AsyncClient, token: str) -> str:
                     "user_message": "Your session expired. Reload to continue.",
                     "retryable": False},
         )
-    uid = (r.json() or {}).get("id", "")
-    if not uid:
+    user = r.json() or {}
+    if not isinstance(user, dict) or not user.get("id"):
         raise HTTPException(status_code=401, detail={"error_code": "SESSION_EXPIRED",
                                                      "user_message": "Session invalid.",
                                                      "retryable": False})
-    return uid
+    return user
+
+
+async def _verify_user(client: httpx.AsyncClient, token: str) -> str:
+    """Resolve the caller server-side. The client's claim of who it is is never
+    trusted — the id used for every subsequent check comes from GoTrue."""
+    return (await _verify_user_claims(client, token))["id"]
 
 
 def _assert_owned_path(path: str, user_id: str, project_id: str) -> None:

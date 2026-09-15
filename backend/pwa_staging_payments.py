@@ -960,6 +960,74 @@ async def _caller(authorization: str | None) -> str:
         return await api._verify_user(client, token)
 
 
+def caller_is_secured(user: object) -> bool:
+    """Whether this account is somebody's, rather than a browser's.
+
+    WHY MONEY NEEDS THIS AND NOTHING ELSE DOES. An anonymous session is a
+    perfectly good way to look around, make projects and spend a free trial:
+    lose it and you lose nothing you paid for. Buy a pack with it and the
+    entitlement is attached to a user id that exists only in one browser's
+    local storage — so the day that storage goes, the ledger is still exactly
+    right and the customer has still, from where they stand, paid and received
+    nothing. That is not a billing bug to fix afterwards; it is a purchase not
+    to open in the first place.
+
+    Pure, and deliberately not a one-liner on `is_anonymous`: GoTrue is the
+    authority, but a missing field must not be read as a yes. Proved against
+    production — an anonymous caller answers `is_anonymous: true` with an empty
+    `app_metadata`, a Telegram account answers false with
+    `providers: ["custom:telegram"]`.
+    """
+    if not isinstance(user, dict):
+        return False
+    anonymous = user.get("is_anonymous")
+    if anonymous is True:
+        return False
+    if anonymous is False:
+        return True
+    # The field is absent. Decide on the identities actually attached, and
+    # refuse when there are none: a purchase is never opened on an account we
+    # cannot show belongs to someone.
+    meta = user.get("app_metadata")
+    provs = meta.get("providers") if isinstance(meta, dict) else None
+    if isinstance(provs, list) and any(
+            isinstance(p, str) and p.strip() and p.strip().lower() != "anonymous"
+            for p in provs):
+        return True
+    return bool(str(user.get("email") or "").strip()
+                or str(user.get("phone") or "").strip())
+
+
+async def _caller_secured(authorization: str | None) -> str:
+    """The caller, refused unless the account is secured. CHECKOUT ONLY.
+
+    DEFENCE IN DEPTH, and the depth is the point: the Buy button already knows
+    not to offer this, but a stale bundle, a replayed request or a second tab
+    racing a half-finished link must not be able to open a paid transaction on
+    an id nobody can sign back into. The check is made HERE, against GoTrue,
+    at the moment the checkout is created — not from what the browser claims,
+    and not from the fact that a Telegram button was pressed a second ago.
+
+    It is NOT a payment failure and must never be rendered as one: no money was
+    refused, no gateway said no. It is a prerequisite, and the client's own
+    vocabulary keeps it in a class of its own.
+    """
+    import pwa_staging_api as api  # noqa: PLC0415
+
+    token = api._bearer(authorization)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+        user = await api._verify_user_claims(client, token)
+    if not caller_is_secured(user):
+        log.info("[payway-seam] checkout refused: caller is not a secured account")
+        raise HTTPException(
+            status_code=403,
+            detail={"error_code": "ACCOUNT_REQUIRED",
+                    "user_message": "Secure your account to buy Spaces.",
+                    "retryable": False},
+        )
+    return user["id"]
+
+
 @router.get("/config")
 async def payments_config() -> dict:
     """What this deployment can do, as the SERVER sees it. No secret, ever."""
@@ -1135,7 +1203,7 @@ async def payments_checkout_plugin(
     server signs. The browser still gets to say exactly two things — a sku and
     an attempt key — and the amount, the product and the grant are still read
     from the catalogue and from Check Transaction."""
-    user_id = await _caller(authorization)
+    user_id = await _caller_secured(authorization)
     _refuse_if_closed()
     return await start_plugin_checkout(user_id=user_id, sku=body.sku,
                                        attempt_key=body.attempt_key)
@@ -1151,7 +1219,7 @@ async def payments_checkout(
     if that origin is one this deployment already serves (`return_base_for`).
     Everything that decides money — the product, the price, the grant — is read
     from the catalogue and from Check Transaction, never from a header."""
-    user_id = await _caller(authorization)
+    user_id = await _caller_secured(authorization)
     _refuse_if_closed()
     return await start_checkout(user_id=user_id, sku=body.sku,
                                 attempt_key=body.attempt_key,
