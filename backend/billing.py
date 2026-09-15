@@ -234,6 +234,50 @@ async def _active_pass_id(supa, user_id: str) -> Optional[str]:
         return None
 
 
+async def _pass_is_web_pack(supa, pass_id: str) -> bool:
+    """2026-09-15 — ce pass ACTIF vient-il du rail WEB (ABA/KHQR) sur un pack de
+    credits ? Discriminateur AUTORITAIRE : la commande qui a cree le pass
+    (`orders.provider = khqr`) ET le type du produit (`products.type = CREDIT_PACK`).
+    JAMAIS la date de fin du pass : le caractere perpetuel est une CONSEQUENCE du
+    produit achete, pas une identite de rail.
+
+    Sert a une seule chose : un pack achete sur le web ne doit pas confisquer le droit
+    gratuit (bug P0 « 3 + 10 = 10 »), alors qu'un ABONNEMENT store (RevenueCat) le
+    supprime comme aujourd'hui. Meme regle que `billing_try_hold`, cote SQL.
+
+    FAIL-CLOSED : toute erreur ou donnee manquante renvoie False -> comportement
+    RevenueCat strictement inchange."""
+    if not pass_id:
+        return False
+    try:
+        res = await asyncio.to_thread(
+            lambda: supa.table("passes").select("source_order_id, product_id")
+            .eq("id", pass_id).limit(1).execute()
+        )
+        rows = getattr(res, "data", None) or []
+        if not rows:
+            return False
+        order_id = rows[0].get("source_order_id")
+        product_id = rows[0].get("product_id")
+        if not order_id or not product_id:
+            return False
+        res_o = await asyncio.to_thread(
+            lambda: supa.table("orders").select("provider").eq("id", order_id).limit(1).execute()
+        )
+        o = getattr(res_o, "data", None) or []
+        if not o or o[0].get("provider") != "khqr":
+            return False
+        res_p = await asyncio.to_thread(
+            lambda: supa.table("products").select("type").eq("id", product_id).limit(1).execute()
+        )
+        pr = getattr(res_p, "data", None) or []
+        return bool(pr) and pr[0].get("type") == "CREDIT_PACK"
+    except Exception as exc:  # noqa: BLE001 — FAIL-CLOSED : jamais de free fantome
+        log.warning("[BILLING] web-pack lookup failed pass=%s err=%s",
+                    (pass_id or "")[:8], type(exc).__name__)
+        return False
+
+
 async def _pass_owner(supa, pass_id: str) -> Optional[str]:
     """PATCH 2 (2026-07-16) — user_id PROPRIÉTAIRE d'un pass, ou None. Sert à vérifier qu'un
     pass retrouvé par grant_purchase appartient bien au user COURANT avant de déclarer un pass
@@ -545,11 +589,15 @@ async def reserve_decision(
     #    + TRIAL projeté). Un pass EXPIRÉ ne contribue pas (GRANT scoppé à un pass_id
     #    inactif → hors des deux buckets lus ici) → plus de crédits fantômes.
     pass_id = await _active_pass_id(supa, user_id)
-    # Trial projeté (+3) UNIQUEMENT pour le FREE tier sans pass actif (cohérent avec
-    # apply_billing qui ne grant_trial que si is_free ET active is None) → pas de free
-    # fantôme ni pour un pass-holder frais, ni pour un premium au pass expiré.
+    # Trial projeté (+3) pour le FREE tier SANS pass actif — ET, depuis 2026-09-15,
+    # avec un pass actif qui est un PACK ACHETE SUR LE WEB (ABA/KHQR + CREDIT_PACK) :
+    # un pack de credits s'AJOUTE au droit gratuit, il ne le confisque pas. Un
+    # ABONNEMENT store (RevenueCat) le supprime toujours, exactement comme avant —
+    # pas de free fantome pour un abonne frais ni pour un premium au pass expire.
+    pass_is_web_pack = await _pass_is_web_pack(supa, pass_id) if pass_id else False
     free_credits = await _free_bucket_available(
-        supa, user_id, project_trial=(is_free and pass_id is None))
+        supa, user_id,
+        project_trial=(is_free and (pass_id is None or pass_is_web_pack)))
     pass_credits = await _pass_bucket_available(supa, user_id, pass_id) if pass_id else 0
     total = free_credits + pass_credits
     allow = total >= 1
