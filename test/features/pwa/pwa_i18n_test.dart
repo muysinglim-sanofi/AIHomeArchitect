@@ -104,6 +104,7 @@ void main() {
       const brandIdentical = {
         'pwaArchitectLabel', // AYDEN ARCHITECT
         'pwaAuthMethodFacebook', // Facebook — a brand, in every language
+        'pwaAuthMethodTelegram', // Telegram — likewise
       };
       for (final code in ['km', 'fr']) {
         final same = _dict(code).entries

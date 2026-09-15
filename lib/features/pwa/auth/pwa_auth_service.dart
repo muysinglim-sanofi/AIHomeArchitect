@@ -130,12 +130,38 @@ class PwaAuthState {
 
   bool get isIdentified => stage == PwaAuthStage.identified;
 
-  bool hasProvider(String p) => providers.contains(p);
+  /// Whether [p] is one of the identities actually attached.
+  ///
+  /// GoTrue stores a CUSTOM OIDC provider under its full identifier, prefix
+  /// and all: production's Telegram account carries
+  /// `app_metadata.providers == ["custom:telegram"]`, never `["telegram"]`.
+  /// Comparing the raw strings therefore answered "no Telegram here" for an
+  /// account whose only identity IS Telegram — which is why the profile could
+  /// not say how such a person was connected, and why the sign-in methods card
+  /// had nothing to tick. Both sides are normalised so the caller may go on
+  /// asking the question in the product's own vocabulary.
+  bool hasProvider(String p) {
+    final want = _bareProvider(p);
+    return providers.any((a) => _bareProvider(a) == want);
+  }
 
-  /// How the account is "connected", for the profile card. Facebook first
-  /// because it carries a name; phone next; email last.
+  /// `custom:telegram` -> `telegram`; everything else unchanged.
+  static String _bareProvider(String p) {
+    const prefix = 'custom:';
+    final v = p.trim().toLowerCase();
+    return v.startsWith(prefix) ? v.substring(prefix.length) : v;
+  }
+
+  /// How the account is "connected", for the profile card. The two social
+  /// doors first because they carry a name; phone next; email last.
+  ///
+  /// Telegram belongs here for the same reason Facebook does — and its absence
+  /// was visible: a Telegram-only account (no e-mail, no phone) answered null,
+  /// so the profile and the account chip said nothing at all about how the
+  /// person had signed in.
   PwaAuthMethod? get connectedVia {
     if (hasProvider('facebook')) return PwaAuthMethod.facebook;
+    if (hasProvider('telegram')) return PwaAuthMethod.telegram;
     if (hasProvider('phone') || phone.isNotEmpty) return PwaAuthMethod.phone;
     if (hasProvider('email') || email.isNotEmpty) return PwaAuthMethod.email;
     return null;
@@ -776,7 +802,11 @@ class PwaAuthService {
     return base.copyWith(
       stage: PwaAuthStage.identified,
       journey: journey,
-      method: PwaAuthMethod.facebook,
+      // The hand-off, like every other branch above. This one said `facebook`
+      // outright, so a SUCCESSFUL Telegram return was recorded as a Facebook
+      // one — the same defect AUTH10 caught on the collision fork, left behind
+      // on the path that actually succeeds.
+      method: method,
       failure: null,
       identityPreserved: preserved,
       switchedAccount: !preserved,

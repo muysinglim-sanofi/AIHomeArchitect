@@ -543,6 +543,11 @@ class _SignInMethodsCard extends ConsumerWidget {
       if (providers.facebook)
         (PwaAuthMethod.facebook, Icons.facebook, l.authMethodFacebook,
             auth.hasProvider('facebook')),
+      // The Cambodia launch's first social door had no row here at all, so a
+      // Telegram account's profile listed only the e-mail it does not have.
+      if (providers.telegram)
+        (PwaAuthMethod.telegram, Icons.send, l.authMethodTelegram,
+            auth.hasProvider('telegram')),
       if (providers.phone)
         (PwaAuthMethod.phone, Icons.phone_iphone, l.authMethodPhone,
             auth.hasProvider('phone') || auth.phone.isNotEmpty),

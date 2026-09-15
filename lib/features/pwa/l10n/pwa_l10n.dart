@@ -851,6 +851,7 @@ class PwaL10n {
   String get authConnectedEmail => _get('pwaAuthConnectedEmail');
   String get authMethodsTitle => _get('pwaAuthMethodsTitle');
   String get authMethodFacebook => _get('pwaAuthMethodFacebook');
+  String get authMethodTelegram => _get('pwaAuthMethodTelegram');
   String get authMethodPhone => _get('pwaAuthMethodPhone');
   String get authMethodEmail => _get('pwaAuthMethodEmail');
   String get authAdd => _get('pwaAuthAdd');
