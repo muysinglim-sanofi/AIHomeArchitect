@@ -1722,10 +1722,32 @@ void main() {
         expect(pwaPaymentResultKindFor(s), isNull,
             reason: '$s: PayWay may still legitimately say PENDING');
       }
+      // The watcher now asks the question that includes this one: a state may
+      // be a verdict AND still not be this person's news. Non-verdicts stay
+      // silent from either origin, which is what this guard has always been
+      // about — see PAY05-PAY07 for the restored-failure half.
+      for (final origin in PwaPaymentOrigin.values) {
+        for (final s in [
+          PwaPaymentState.idle,
+          PwaPaymentState.starting,
+          PwaPaymentState.created,
+          PwaPaymentState.awaitingPayment,
+          PwaPaymentState.paidPendingVerification,
+          PwaPaymentState.unreachable,
+          PwaPaymentState.unavailable,
+        ]) {
+          expect(pwaPaymentAnnouncementFor(s, origin),
+              PwaPaymentAnnouncement.none,
+              reason: '$s/$origin: PayWay may still legitimately say PENDING');
+        }
+      }
       final watcher = File(
         'lib/features/pwa/presentation/pwa_experience.dart',
       ).readAsStringSync();
-      expect(watcher.contains('pwaPaymentResultKindFor(next) == null'), isTrue,
+      expect(
+          watcher.contains('pwaPaymentAnnouncementFor(next.state, next.origin)')
+              && watcher.contains('PwaPaymentAnnouncement.none'),
+          isTrue,
           reason: 'the return watcher shows the card on verdicts only');
     });
 

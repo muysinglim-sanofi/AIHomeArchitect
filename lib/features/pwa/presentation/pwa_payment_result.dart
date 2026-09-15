@@ -59,6 +59,66 @@ PwaPaymentResultKind? pwaPaymentResultKindFor(PwaPaymentState state) =>
       _ => null,
     };
 
+/// What, if anything, a payment state is allowed to INTERRUPT someone with.
+///
+/// [pwaPaymentResultKindFor] answers "which card would this be"; this answers
+/// the prior question, "is this person owed a card at all". They are different
+/// questions and conflating them is the whole of the bug this exists to close:
+/// a stale attempt's verdict is a perfectly correct card that nobody asked for.
+enum PwaPaymentAnnouncement {
+  /// Show nothing. The server has reconciled whatever it reconciled, and that
+  /// was the entire point of asking.
+  none,
+
+  /// Money moved. The confirming surface, then the success card.
+  success,
+
+  /// A payment this person was waiting on did not go through.
+  failure,
+}
+
+/// Whether [state] from [origin] earns the full-screen result card.
+///
+/// THE TWO RULES, and why they are not symmetrical
+///
+/// A SUCCESS is announced from either origin. Suppressing a restored success is
+/// how somebody pays, closes the tab, comes back and never learns that they
+/// paid — which is the exact failure `restore()` was written to prevent, and it
+/// costs them money rather than merely confusing them.
+///
+/// A FAILURE is announced only from [PwaPaymentOrigin.activeCheckout]. The
+/// server must still reconcile a stale attempt — it does, before this is ever
+/// called, and nothing here asks it not to — but "Payment failed / cancelled"
+/// and "No credits were added" are sentences about the reader's money, and to
+/// someone who abandoned that attempt days ago, or who has since bought
+/// something else entirely, both sentences are false in the way that matters.
+PwaPaymentAnnouncement pwaPaymentAnnouncementFor(
+  PwaPaymentState state,
+  PwaPaymentOrigin origin,
+) {
+  // `verified` is not a verdict yet, but it IS money in motion, and the sheet
+  // has a surface for it that turns into the success card in place.
+  if (state == PwaPaymentState.verified ||
+      pwaPaymentResultKindFor(state) == PwaPaymentResultKind.success) {
+    return PwaPaymentAnnouncement.success;
+  }
+  if (pwaPaymentResultKindFor(state) != PwaPaymentResultKind.failure) {
+    return PwaPaymentAnnouncement.none;
+  }
+  return origin == PwaPaymentOrigin.restore
+      ? PwaPaymentAnnouncement.none
+      : PwaPaymentAnnouncement.failure;
+}
+
+/// True when a failure verdict belongs to an attempt the person did not just
+/// start — so no surface, modal or inline, may render it as a payment failure.
+bool pwaPaymentFailureIsRestored(
+  PwaPaymentState state,
+  PwaPaymentOrigin origin,
+) =>
+    pwaPaymentResultKindFor(state) == PwaPaymentResultKind.failure &&
+    origin == PwaPaymentOrigin.restore;
+
 /// Money is moving and the server is settling it: the surface is already
 /// Ayden's near-black, so the verdict that follows does not flip the card.
 bool pwaPaymentIsConfirming(PwaPaymentState state) =>

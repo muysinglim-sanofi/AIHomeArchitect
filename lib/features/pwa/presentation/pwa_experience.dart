@@ -134,23 +134,28 @@ class _PwaPaymentReturnWatcherState
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<PwaPaymentState>(
-      pwaPaymentProvider.select((p) => p.state),
+    ref.listen<({PwaPaymentState state, PwaPaymentOrigin origin})>(
+      pwaPaymentProvider.select((p) => (state: p.state, origin: p.origin)),
       (_, next) {
         // A new attempt re-arms the card. This watcher was written for the
         // cold-boot return, where one showing per session was the whole story;
         // on the plugin path it is ALSO the success surface for payments
         // started in this very session, and a person may buy twice.
-        if (next == PwaPaymentState.starting || next == PwaPaymentState.idle) {
+        if (next.state == PwaPaymentState.starting ||
+            next.state == PwaPaymentState.idle) {
           _shown = false;
           return;
         }
         if (_shown) return;
-        // Money moving (verified, granted) or a VERDICT against it (failed,
-        // cancelled, expired). Never awaiting/pending: while PayWay may still
-        // say PENDING there is nothing to conclude.
-        if (next != PwaPaymentState.verified &&
-            pwaPaymentResultKindFor(next) == null) {
+        // Money moving (verified, granted) or a VERDICT the person is waiting
+        // on. Never awaiting/pending — while PayWay may still say PENDING there
+        // is nothing to conclude — and never a failure verdict that `restore()`
+        // went looking for: the server has reconciled that attempt, which is
+        // all it needed, and interrupting someone with "Payment failed — no
+        // credits were added" for a checkout they abandoned days ago says
+        // something false about money they still have.
+        if (pwaPaymentAnnouncementFor(next.state, next.origin) ==
+            PwaPaymentAnnouncement.none) {
           return;
         }
         _shown = true;

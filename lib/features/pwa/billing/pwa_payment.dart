@@ -73,6 +73,99 @@ enum PwaPaymentState {
   unreachable,
 }
 
+/// WHERE a payment result came from — the fact the UI needs and the server
+/// cannot supply.
+///
+/// The server is authoritative about what a transaction IS. It is not
+/// authoritative about whether the person in front of the screen is expecting
+/// an answer about it, and that is a different question with a different
+/// consequence: a full-screen "Payment failed / cancelled — no credits were
+/// added" is correct for a purchase someone just attempted, and a lie about
+/// their money for an attempt they abandoned two days ago and have forgotten.
+///
+/// This is carried explicitly rather than inferred from the age of a tran_id,
+/// because age is a proxy: a genuine checkout that a person leaves open for
+/// half an hour is old, and a stale attempt reconciled the second the app
+/// opens is young. Intent is what matters, and only the client knows it.
+enum PwaPaymentOrigin {
+  /// The person pressed Buy in THIS journey. Every verdict is theirs to see.
+  activeCheckout,
+
+  /// `restore()` asked the server, at boot or on resume, whether anything was
+  /// still open. Whatever came back, nobody asked for it just now.
+  restore,
+}
+
+/// WHAT a backend refusal was about. Five kinds, because exactly one of them
+/// is entitled to tell a person that their payment failed.
+///
+/// THE DEFECT THIS REPLACES. Every code the client did not recognise used to
+/// become [PwaPaymentState.failed], and [PwaPaymentState.failed] is the state
+/// the full-screen red card is built on. So an expired session token, a rail an
+/// operator had closed, and a typo in a product sku all rendered as "Payment
+/// failed / cancelled" and "No credits were added" — a statement about
+/// somebody's money, made by code that had just failed to ask the question.
+///
+/// Fail closed technically; do not lie financially.
+enum PwaPaymentErrorClass {
+  /// The gateway refused the purchase, or the transaction itself is terminal.
+  /// The ONLY class allowed to say a payment failed.
+  payment,
+
+  /// The caller has no usable session. Nothing whatsoever is known about any
+  /// payment — including, especially, one that already succeeded.
+  auth,
+
+  /// The rail is closed or misconfigured, or this product cannot be sold here.
+  /// No payment was ever attempted.
+  availability,
+
+  /// The request could not be understood, or named something the server does
+  /// not have. A defect on one side or the other, never a decline.
+  contract,
+
+  /// No answer, or an answer in a vocabulary this build does not know. The
+  /// default, deliberately: an unrecognised code is an unknown, and an unknown
+  /// is not a failed payment.
+  technical,
+}
+
+/// Classify one backend `error_code`.
+///
+/// The vocabulary is the backend's, read from `pwa_staging_payments.py`. A code
+/// added there and not added here lands on [PwaPaymentErrorClass.technical] —
+/// which is why the default matters more than the table.
+PwaPaymentErrorClass pwaClassifyPaymentError(String code) =>
+    switch (code.toUpperCase()) {
+      // The gateway itself said no to the purchase. The server has already
+      // written the attempt terminal.
+      'PAYMENT_PROVIDER_REFUSED' => PwaPaymentErrorClass.payment,
+
+      // `_caller` -> `_verify_user`: 401 on every payment route, including the
+      // `GET /payments/open` that runs at every cold start.
+      'SESSION_EXPIRED' || 'MISSING_TOKEN' => PwaPaymentErrorClass.auth,
+
+      // The operator's kill switch and the two "not configured" refusals. Note
+      // the backend has BOTH spellings, singular and plural; they are one
+      // meaning and both belong here.
+      'PAYMENTS_CLOSED' ||
+      'PAYMENTS_UNAVAILABLE' ||
+      'PAYMENT_UNAVAILABLE' ||
+      // A product this deployment may not sell is the same answer to the
+      // person: there is nothing to buy here, and no money moved.
+      'UNKNOWN_PRODUCT' ||
+      'PRODUCT_NOT_WEB_SELLABLE' ||
+      'PRODUCT_NOT_PRICED' =>
+        PwaPaymentErrorClass.availability,
+
+      'UNKNOWN_TRANSACTION' || 'BAD_REQUEST' => PwaPaymentErrorClass.contract,
+
+      'UNREACHABLE' || 'CANCELLED' || 'PAYMENT_PROVIDER_UNREACHABLE' =>
+        PwaPaymentErrorClass.technical,
+
+      _ => PwaPaymentErrorClass.technical,
+    };
+
 /// A payment attempt, exactly as the server described it.
 /// `checkout_mode` when ABA's own plugin presents the checkout and the BROWSER
 /// posts the signed purchase — the active Web path since 2026-09-05. The other
@@ -97,6 +190,7 @@ class PwaPayment {
     this.failureReason = '',
     this.newAttemptRequired = false,
     this.pollIntervalMs = 3000,
+    this.origin = PwaPaymentOrigin.activeCheckout,
   });
 
   const PwaPayment.idle() : this(state: PwaPaymentState.idle);
@@ -153,6 +247,34 @@ class PwaPayment {
   final bool newAttemptRequired;
 
   final int pollIntervalMs;
+
+  /// Whether this answer belongs to a checkout the person just started, or to
+  /// one `restore()` went looking for. Stamped by the controller — a parsed
+  /// server body cannot know it, and defaults to [PwaPaymentOrigin.activeCheckout]
+  /// so that forgetting to stamp can only ever be over-informative, never
+  /// silent about a real payment.
+  final PwaPaymentOrigin origin;
+
+  /// The same answer, attributed to [origin].
+  PwaPayment withOrigin(PwaPaymentOrigin origin) => PwaPayment(
+        state: state,
+        tranId: tranId,
+        sku: sku,
+        credits: credits,
+        amount: amount,
+        currency: currency,
+        checkoutUrl: checkoutUrl,
+        checkoutMode: checkoutMode,
+        checkoutStale: checkoutStale,
+        qrString: qrString,
+        qrImage: qrImage,
+        deeplink: deeplink,
+        expiresAt: expiresAt,
+        failureReason: failureReason,
+        newAttemptRequired: newAttemptRequired,
+        pollIntervalMs: pollIntervalMs,
+        origin: origin,
+      );
 
   /// Whether the sheet should keep asking. False on every terminal state, so a
   /// finished payment stops polling rather than being stopped by a timer.
@@ -233,6 +355,26 @@ class PwaPayment {
         _ => PwaPaymentState.created,
       };
 
+  /// The state a refusal of [cls] is rendered as.
+  ///
+  /// Only [PwaPaymentErrorClass.payment] may reach [PwaPaymentState.failed],
+  /// which is the state the red "Payment failed / cancelled — no credits were
+  /// added" card is built on. Everything else lands on a state that says we
+  /// have no verdict, because we have no verdict.
+  static PwaPaymentState stateForErrorClass(PwaPaymentErrorClass cls) =>
+      switch (cls) {
+        PwaPaymentErrorClass.payment => PwaPaymentState.failed,
+        PwaPaymentErrorClass.availability => PwaPaymentState.unavailable,
+        // Auth, contract and technical all share the ONE state this class
+        // already had for "no answer, and the attempt may well still be
+        // alive": nothing is concluded, the next ask decides, and the person
+        // is never told about money that did not move.
+        PwaPaymentErrorClass.auth ||
+        PwaPaymentErrorClass.contract ||
+        PwaPaymentErrorClass.technical =>
+          PwaPaymentState.unreachable,
+      };
+
   /// Parse one server answer.
   ///
   /// The failure branch is deliberate: a non-2xx carries a machine code, and
@@ -241,16 +383,12 @@ class PwaPayment {
   static PwaPayment parse(Map<String, Object?> body) {
     if (body['ok'] != true) {
       final code = (body['error_code'] as String?) ?? '';
-      final state = switch (code) {
-        'PAYMENTS_UNAVAILABLE' => PwaPaymentState.unavailable,
-        'UNREACHABLE' || 'MISSING_TOKEN' || 'CANCELLED' =>
-          PwaPaymentState.unreachable,
-        'PAYMENT_PROVIDER_UNREACHABLE' => PwaPaymentState.unreachable,
-        'CHECKOUT_BUSY' => PwaPaymentState.created,
-        _ => PwaPaymentState.failed,
-      };
       return PwaPayment(
-        state: state,
+        state: code == 'CHECKOUT_BUSY'
+            // Not an error at all: the server is already opening this very
+            // attempt and says so. Stay on the preparing screen.
+            ? PwaPaymentState.created
+            : stateForErrorClass(pwaClassifyPaymentError(code)),
         failureReason: (body['reason'] as String?)?.toUpperCase() ?? code,
         newAttemptRequired: body['new_attempt_required'] == true,
       );

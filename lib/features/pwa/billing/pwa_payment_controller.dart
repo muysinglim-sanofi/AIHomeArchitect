@@ -91,6 +91,14 @@ class PwaPaymentController extends StateNotifier<PwaPayment> {
   String _attemptKey = '';
   bool _granted = false;
 
+  /// WHOSE question the current answer is answering.
+  ///
+  /// Set in exactly two places — [_open] and [restore] — and stamped onto every
+  /// state this controller publishes. It is the whole of the active-versus-
+  /// recovered distinction, and it lives here because this object is the only
+  /// one that knows which of its own methods was called.
+  PwaPaymentOrigin _origin = PwaPaymentOrigin.activeCheckout;
+
   /// The attempt token for the purchase in progress. Exposed for tests and for
   /// the retry path; it is not a secret and it identifies nothing on its own.
   String get attemptKey => _attemptKey;
@@ -132,6 +140,9 @@ class PwaPaymentController extends StateNotifier<PwaPayment> {
     _timer?.cancel();
     _granted = false;
     lastPluginLaunch = null;
+    // The person pressed Buy. From here until the next `restore()`, every
+    // verdict — including a failure — is one they are waiting for.
+    _origin = PwaPaymentOrigin.activeCheckout;
     state = const PwaPayment.starting();
 
     final plugin = _plugin;
@@ -190,6 +201,11 @@ class PwaPaymentController extends StateNotifier<PwaPayment> {
     if (!mounted) return;
     final restored = PwaPayment.parse(body);
     if (restored.state == PwaPaymentState.idle) return;
+    // NOBODY asked for this. Whatever the server reconciled, it was found by
+    // looking rather than by paying, and the surfaces downstream are entitled
+    // to treat a failure verdict differently from one the person is waiting on.
+    // A success is still announced — that is what `restore()` is for.
+    _origin = PwaPaymentOrigin.restore;
     // The attempt key is not recoverable from the server (it never leaves the
     // browser that minted it) and it is not needed: a restored attempt is
     // driven by its tran_id, and "try again" starts a fresh one.
@@ -229,7 +245,10 @@ class PwaPaymentController extends StateNotifier<PwaPayment> {
       _schedule(state.pollIntervalMs);
       return;
     }
-    state = next;
+    // The server answered the question; this records WHOSE question it was.
+    // A parsed body cannot carry it — the server has no idea which of our
+    // methods asked — so it is stamped exactly once, here, on the way in.
+    state = next.withOrigin(_origin);
     if (next.state == PwaPaymentState.granted && !_granted) {
       _granted = true;
       unawaited(_onGranted?.call() ?? Future<void>.value());

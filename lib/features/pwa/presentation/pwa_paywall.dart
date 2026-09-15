@@ -41,6 +41,7 @@ import '../billing/pwa_payment_controller.dart';
 import '../data/pwa_aba_plugin.dart';
 import '../l10n/pwa_l10n.dart';
 import 'pwa_account_sheet.dart';
+import 'pwa_payment_result.dart';
 import 'pwa_payment_sheet.dart';
 import 'pwa_aba_marks.dart';
 import 'pwa_theme.dart';
@@ -1137,6 +1138,14 @@ class _PaymentInline extends StatelessWidget {
               style: pwaSans(
                   fontSize: 12.5, color: const Color(0xFFE8A9A0), height: 1.4)),
         );
+
+    // The same rule the result card follows, for the same reason: a verdict
+    // against an attempt `restore()` dug up is not this person's news. The
+    // quiet line under the CTA is less intrusive than the modal, but "could
+    // not start" about a purchase they never made is still a wrong sentence.
+    if (pwaPaymentFailureIsRestored(payment.state, payment.origin)) {
+      return const SizedBox.shrink();
+    }
 
     final body = switch (payment.state) {
       PwaPaymentState.starting ||
