@@ -638,6 +638,35 @@ class PwaGenerationApi {
     );
   }
 
+  /// Mark the guest that a SIGN-OUT just created as having had its trial.
+  ///
+  /// Returns true only on a confirmed 2xx. Every other outcome — a refusal, a
+  /// timeout, a dropped connection — is false, and false means the caller keeps
+  /// its pending flag and tries again. The backend keys the marker on the
+  /// user's own id, so a retry is always safe and never writes twice.
+  ///
+  /// The body is empty on purpose: WHICH guest gets marked is read from the
+  /// token by the server, never named by us.
+  Future<bool> postSignoutGuest() async {
+    if (_disposed) return false;
+    final token = await _tokenProvider();
+    if (token == null || token.isEmpty) return false;
+    try {
+      final res = await _dio.post<Object?>(
+        '$_prefix/auth/post-signout-guest',
+        data: const <String, Object?>{},
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+          receiveTimeout: const Duration(seconds: 20),
+        ),
+      );
+      final code = res.statusCode ?? 0;
+      return code >= 200 && code < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// What this user may do, according to the BILLING ENGINE. A read.
   ///
   /// The paywall is driven by this and never by a local counter: the browser

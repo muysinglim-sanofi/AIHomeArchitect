@@ -270,13 +270,7 @@ class _PwaProfileIosState extends ConsumerState<PwaProfileIos> {
                         icon: Icons.logout,
                         label: l.accountSignOut,
                         destructive: true,
-                        onTap: () async {
-                          await authController.signOut();
-                          // Signing out IS a change of user: the previous
-                          // account's projects must not stay in the library.
-                          await pwaHydrateForIdentity(ref,
-                              switchedUser: true);
-                        },
+                        onTap: () => pwaSignOutAndSecureGuest(ref),
                       ),
                     ],
                   ),

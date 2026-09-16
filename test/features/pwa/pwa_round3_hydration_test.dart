@@ -158,15 +158,28 @@ void main() {
         expect(src, isNot(contains('onIdentityChanged()')),
             reason: '$f still hydrates by hand');
       }
+      // Sign-out now goes through ONE more seam still: the helper that also
+      // raises the post-sign-out anti-abuse flag before the entitlement is
+      // re-read. Either the caller hydrates directly, or it delegates to the
+      // helper that does — and the helper is checked for both.
       for (final f in const [
         'lib/features/pwa/presentation/pwa_profile_ios.dart',
         'lib/features/pwa/presentation/pwa_account_chip.dart',
       ]) {
         final src = File(f).readAsStringSync();
-        expect(src, contains('pwaHydrateForIdentity('),
+        expect(
+            src.contains('pwaHydrateForIdentity(') ||
+                src.contains('pwaSignOutAndSecureGuest('),
+            isTrue,
             reason: '\$f signs out without reloading the library');
-        expect(src, contains('switchedUser: true'), reason: f);
       }
+      final seam = File('lib/features/pwa/presentation/pwa_account_sheet.dart')
+          .readAsStringSync();
+      final helper = seam.substring(
+          seam.indexOf('Future<void> pwaSignOutAndSecureGuest'),
+          seam.indexOf('/// Make the app BE the current identity'));
+      expect(helper, contains('pwaHydrateForIdentity('));
+      expect(helper, contains('switchedUser: true'));
     });
   });
 

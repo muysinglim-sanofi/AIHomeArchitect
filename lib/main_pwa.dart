@@ -26,6 +26,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'core/providers/locale_provider.dart';
+import 'core/providers/post_signout_pending_provider.dart';
 import 'features/pwa/application/pwa_controller.dart';
 import 'features/pwa/application/pwa_intro_gate.dart';
 import 'features/pwa/application/pwa_route.dart';
@@ -328,6 +329,17 @@ Future<void> _bootPwaStaging(
         pwaBootRestoreProvider.overrideWithValue(restore),
         // The paywall reads THIS and never a local counter (§9).
         pwaEntitlementReaderProvider.overrideWithValue(api.entitlement),
+        // THE ANTI-ABUSE MARKER for the guest a sign-out creates. The provider
+        // and its persistence are the ones the mobile rail already uses; only
+        // the transport differs, which is exactly what its test seam is for —
+        // the Web route lives under `/pwa`, and the mobile one is not served
+        // on this host at all.
+        postSignoutPendingProvider.overrideWith(
+          (ref) => PostSignoutPendingNotifier(
+            postMarker: api.postSignoutGuest,
+            isAnonymous: () => client.client.auth.currentUser?.isAnonymous,
+          ),
+        ),
         // The KHQR payment rail. Four server calls and no gateway: the browser
         // holds no merchant id, no api key and no signing material, because a
         // credential in a web bundle is a credential published.

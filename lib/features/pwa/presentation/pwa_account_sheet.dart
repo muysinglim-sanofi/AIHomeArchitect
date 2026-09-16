@@ -24,6 +24,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/providers/post_signout_pending_provider.dart';
 import '../application/pwa_controller.dart';
 import '../auth/pwa_auth_controller.dart';
 import '../auth/pwa_auth_service.dart';
@@ -72,6 +73,41 @@ Future<bool> showPwaAccountSheet(
         _PwaAccountSheet(signIn: signIn, method: method, forPurchase: forPurchase),
   );
   return done ?? false;
+}
+
+/// Leave the account, and do not hand the guest that replaces it a free trial.
+///
+/// WHY THIS IS NOT JUST `signOut()`. Signing out mints a NEW anonymous user,
+/// and the Billing Engine projects a fresh trial onto any new anonymous user —
+/// it cannot tell this one from a first-ever visitor, because at one second old
+/// they are the same thing. Reproduced on staging: three successive fresh
+/// guests, three full trials. So sign in, sign out, and round again.
+///
+/// The client that just signed out is the only party that knows, so it is the
+/// one that marks the guest. THE ORDER MATTERS, and it is the whole of the
+/// fail-closed guarantee:
+///
+///   1. sign out — the person is never held on an account they left;
+///   2. raise the pending flag, PERSISTED, before anything can be generated;
+///   3. then refresh entitlement, which may well still project a trial — it is
+///      simply not spendable while the flag is up;
+///   4. try the marker. Confirmed → flag down. Not confirmed → flag stays, and
+///      the boot retry picks it up after a reload, a closed tab, anything.
+///
+/// Losing the network at step 4 therefore costs the guest nothing and gains
+/// them nothing: they wait, not generate.
+Future<void> pwaSignOutAndSecureGuest(WidgetRef ref) async {
+  await ref.read(pwaAuthProvider.notifier).signOut();
+  // BEFORE the entitlement is re-read, so there is no frame in which the
+  // projected Spaces are both visible and spendable.
+  final pending = ref.read(postSignoutPendingProvider.notifier);
+  await pending.setPending(true);
+  // Signing out IS a change of user: the previous account's projects must not
+  // stay in the library, and its entitlement must not be carried forward.
+  await pwaHydrateForIdentity(ref, switchedUser: true);
+  // Best effort, and safe to fail: `resolve` lowers the flag only on a
+  // confirmed marker, and is retried at every boot until it is.
+  await pending.resolve();
 }
 
 /// Make the app BE the current identity: entitlement, and — when the user

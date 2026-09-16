@@ -25,6 +25,7 @@ import '../data/pwa_experience_repository.dart';
 import '../data/pwa_generation_service.dart';
 import '../data/pwa_image_url_resolver.dart';
 import '../data/pwa_mock_generation_service.dart';
+import '../../../core/providers/post_signout_pending_provider.dart';
 import '../data/pwa_pending_generation.dart';
 import '../data/pwa_persistence_repository.dart';
 import '../data/pwa_project_serialization.dart';
@@ -109,6 +110,10 @@ final pwaControllerProvider = StateNotifierProvider<PwaController, PwaState>((
     // READ, not watch: the controller must not be rebuilt (and the whole
     // conversation lost) because someone changed the interface language.
     localeCode: () => ref.read(localeProvider).languageCode,
+    // READ, not watch: a pending marker must not rebuild the controller and
+    // throw away the conversation. It is consulted at the moment Generate is
+    // pressed, which is the only moment it decides anything.
+    guestSetupPending: () => ref.read(postSignoutPendingProvider),
   );
 });
 
@@ -746,10 +751,12 @@ class PwaController extends StateNotifier<PwaState> {
     PwaPersistenceRepository? persistence,
     PwaBootRestore? restore,
     String Function()? localeCode,
+    bool Function()? guestSetupPending,
   }) : _generation = generation,
        _pending = pending,
        _persistence = persistence,
        _localeCode = localeCode ?? _englishOnly,
+       _guestSetupPending = guestSetupPending ?? _neverPending,
        super(_initialState(_repo, restore)) {
     // The first-frame screen was already chosen from `restore` (no async
     // flash). Seed the in-memory working library so My Projects + open/duplicate
@@ -1119,6 +1126,43 @@ class PwaController extends StateNotifier<PwaState> {
   /// generation started in another project while the first one ran would
   /// overwrite it — and the first one's recovery with it. So the second one is
   /// refused, and the person told why, instead of silently racing the first.
+  /// True while the guest created by a SIGN-OUT still owes its anti-abuse
+  /// marker. Injected, and `false` everywhere it is not wired — the offline
+  /// build and the tests have no sign-out to recover from.
+  final bool Function() _guestSetupPending;
+
+  static bool _neverPending() => false;
+
+  /// THE FAIL-CLOSED HALF of the post-sign-out marker.
+  ///
+  /// Signing out mints a new anonymous user, and the Billing Engine projects a
+  /// fresh trial onto ANY new anonymous user — it cannot tell that guest from a
+  /// first-ever visitor, because at one second old they are identical. The
+  /// client that just signed out is the only thing that knows, so it marks the
+  /// guest. Until that marker is CONFIRMED, the projected Spaces must not be
+  /// spendable: otherwise losing the network, or simply being quick, is the
+  /// whole exploit.
+  ///
+  /// Refusing here rather than at the button is deliberate — this is the choke
+  /// point every generation entry already passes through, so there is no second
+  /// door to forget. It is checked BEFORE `_refuseWhileBusy`, and therefore
+  /// before any state is written.
+  bool _refuseWhileGuestSetupPending() {
+    if (!_guestSetupPending()) return false;
+    _trace('refused_guest_setup_pending', const {});
+    state = state.copyWith(clearGenerationError: true);
+    state = state.copyWith(
+      generationError: _l10n.guestSetupPending,
+      generationErrorCode: 'GUEST_SETUP_PENDING',
+      generationRetryable: true,
+    );
+    return true;
+  }
+
+  /// Whether a NEW generation may start at all. One place, two reasons.
+  bool _refuseNewGeneration() =>
+      _refuseWhileGuestSetupPending() || _refuseWhileBusy();
+
   bool _refuseWhileBusy() {
     if (_jobs.isEmpty) return false;
     final here = _jobs.containsKey(state.project.projectId);
@@ -1729,7 +1773,7 @@ class PwaController extends StateNotifier<PwaState> {
   }) async {
     if (!mounted || state.generating) return;
     if (state.activeProjectId != p.projectId) return;
-    if (_refuseWhileBusy()) return;
+    if (_refuseNewGeneration()) return;
     final isFirst = state.versions.isEmpty;
     // A retry inside the conversation must SHOW that it restarted. The failure
     // banner removed the original placeholder, so without putting one back the
@@ -1936,7 +1980,7 @@ class PwaController extends StateNotifier<PwaState> {
     // Decide / null; Atmosphere defaults to Ayden Signature). A photo is required.
     if (state.source == null) return;
     // One at a time: a render still running elsewhere holds the pending slot.
-    if (_refuseWhileBusy()) return;
+    if (_refuseNewGeneration()) return;
     // Set synchronously, BEFORE the first await: a second tap finds `generating`
     // already true and returns, so one click is one upload and one generation.
     // ENTER THE SESSION NOW. Tapping Generate opens the Design Session and the
@@ -2136,7 +2180,7 @@ class PwaController extends StateNotifier<PwaState> {
     final atmosphereId = state.pendingAtmosphereId;
     final parent = state.sourceVision;
     if (atmosphereId == null || parent == null) return;
-    if (_refuseWhileBusy()) return;
+    if (_refuseNewGeneration()) return;
     final atmo = _atmosphere(atmosphereId);
 
     final userMsg = PwaMessage(
@@ -2479,7 +2523,7 @@ class PwaController extends StateNotifier<PwaState> {
     if (state.generating) return;
     final parent = state.sourceVision;
     if (parent == null) return;
-    if (_refuseWhileBusy()) return;
+    if (_refuseNewGeneration()) return;
     final shown = display.trim().isEmpty ? instruction : display.trim();
     final loadingMsg = PwaMessage(
       id: _nextId('m'),

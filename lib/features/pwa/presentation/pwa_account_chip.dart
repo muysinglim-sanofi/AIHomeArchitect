@@ -83,11 +83,10 @@ class PwaAccountChip extends ConsumerWidget {
                 // from the guest. Nothing merges.
                 await showPwaAccountSheet(context, signIn: true);
               case 'signout':
-                await controller.signOut();
-                // A new anonymous Guest is a different user with different
-                // entitlement AND different work. Re-read both; never carry
-                // the old answer — or the old library — forward.
-                await pwaHydrateForIdentity(ref, switchedUser: true);
+                // One helper for both doors: sign out, raise the anti-abuse
+                // flag before anything can be generated, re-read identity,
+                // then confirm the marker.
+                await pwaSignOutAndSecureGuest(ref);
             }
           },
           itemBuilder: (context) => [

@@ -858,6 +858,7 @@ class PwaL10n {
   String get authGuestBody => _get('pwaAuthGuestBody');
   String get authSecureCta => _get('pwaAuthSecureCta');
   String get authSecurePurchaseTitle => _get('pwaAuthSecurePurchaseTitle');
+  String get guestSetupPending => _get('pwaGuestSetupPending');
   String get authTgExistsTitle => _get('pwaAuthTgExistsTitle');
 
   /// What stays behind, said as a number rather than as a mechanism.

@@ -479,6 +479,7 @@ const Map<String, String> pwaEnTranslations = {
   'pwaAuthGuestBody': 'Your designs are saved on this device.',
   'pwaAuthSecureCta': 'Secure my account',
   'pwaAuthSecurePurchaseTitle': 'Secure your account to buy Spaces',
+  'pwaGuestSetupPending': 'Finishing guest setup. One moment.',
   'pwaAuthTgExistsTitle': 'You already have an Ayden account',
   'pwaAuthTgExistsBody':
       'Your {n} guest designs will stay on this device. They will not be '
@@ -942,6 +943,7 @@ const Map<String, String> pwaKmTranslations = {
   'pwaAuthGuestBody': 'ការ​រចនា​របស់​អ្នក​ត្រូវ​បាន​រក្សា​ទុក​នៅ​លើ​ឧបករណ៍​នេះ។',
   'pwaAuthSecureCta': 'ការពារ​គណនី​របស់​ខ្ញុំ',
   'pwaAuthSecurePurchaseTitle': 'ការពារ​គណនី​ដើម្បី​ទិញ Spaces',
+  'pwaGuestSetupPending': 'កំពុង​បញ្ចប់​ការ​រៀបចំ​គណនី​ភ្ញៀវ។ សូម​រង់ចាំ​មួយ​ភ្លែត។',
   'pwaAuthTgExistsTitle': 'អ្នក​មាន​គណនី Ayden រួច​ហើយ',
   'pwaAuthTgExistsBody':
       'ការ​រចនា​ភ្ញៀវ {n} របស់​អ្នក​នឹង​នៅ​លើ​ឧបករណ៍​នេះ។ វា​មិន​ត្រូវ​បាន​ផ្ទេរ​ទៅ​គណនី​ដែល​មាន​ស្រាប់​ទេ។',
@@ -1406,6 +1408,7 @@ const Map<String, String> pwaFrTranslations = {
   'pwaAuthGuestBody': 'Vos créations sont enregistrées sur cet appareil.',
   'pwaAuthSecureCta': 'Sécuriser mon compte',
   'pwaAuthSecurePurchaseTitle': 'Sécurisez votre compte pour acheter des Spaces',
+  'pwaGuestSetupPending': 'Finalisation de votre compte invité. Un instant.',
   'pwaAuthTgExistsTitle': 'Vous avez déjà un compte Ayden',
   'pwaAuthTgExistsBody':
       'Vos {n} créations d’invité resteront sur cet appareil. Elles ne '
