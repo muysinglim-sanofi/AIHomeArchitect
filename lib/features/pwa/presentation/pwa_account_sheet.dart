@@ -28,6 +28,7 @@ import '../application/pwa_controller.dart';
 import '../auth/pwa_auth_controller.dart';
 import '../auth/pwa_auth_service.dart';
 import '../auth/pwa_phone_number.dart';
+import '../auth/pwa_telegram_journey.dart';
 import '../auth/pwa_verification_channel.dart';
 import '../billing/pwa_entitlement_controller.dart';
 import '../l10n/pwa_l10n.dart';
@@ -265,8 +266,43 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
   Future<void> _facebook() =>
       ref.read(pwaAuthProvider.notifier).startFacebook(signIn: _signInMode);
 
-  Future<void> _telegram() =>
-      ref.read(pwaAuthProvider.notifier).startTelegram(signIn: _signInMode);
+  /// ONE tap. Ayden works out whether that means "secure this guest" or
+  /// "sign me in", so the person never has to — and so that the common cases
+  /// cost exactly one trip through Telegram.
+  ///
+  /// The footprint is read from the SERVER's answers here, at the moment of the
+  /// tap: the Billing Engine's entitlement and the restored library. Anything
+  /// not yet known reads as "not empty", which sends us down the link path that
+  /// never loses anything. Facebook does not come through here.
+  Future<void> _telegram() {
+    final journey = pwaTelegramJourneyFor(
+      isAnonymous: !ref.read(pwaAuthProvider).isIdentified,
+      userAskedSignIn: _signInMode,
+      footprint: _guestFootprint(),
+    );
+    return ref
+        .read(pwaAuthProvider.notifier)
+        .startTelegram(signIn: journey == PwaOAuthJourney.signIn);
+  }
+
+  /// What the server says this guest is carrying. Never a local guess: an
+  /// entitlement still loading, or a library that has not come back, is
+  /// reported as unknown rather than as zero.
+  PwaGuestFootprint _guestFootprint() {
+    final e = ref.read(pwaEntitlementProvider);
+    if (!e.isKnown) return PwaGuestFootprint.unknown;
+    final library = ref.read(pwaControllerProvider).library;
+    return PwaGuestFootprint(
+      entitlementKnown: true,
+      libraryRestored: true,
+      projects: library.length,
+      visions: library.fold(0, (n, p) => n + p.visions.length),
+      freeCredits: e.freeCredits,
+      passCredits: e.passCredits,
+      creditsAvailable: e.creditsAvailable,
+      hasActivePass: e.hasActivePass,
+    );
+  }
 
   /// The person was told the identity belongs to an existing account and
   /// CHOSE to sign in to it. The only place the journey flips — by their hand.
@@ -372,11 +408,24 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
     } else if (auth.failure ==
         PwaVerificationFailure.destinationAlreadyRegistered) {
       // A fork, not an error. Nothing happens until the person picks.
+      //
+      // TELEGRAM gets its own words. This is the one journey GoTrue cannot do
+      // in a single authorisation — a spent link attempt yields no session, and
+      // there is no route that attaches an identity from a token — so the
+      // person really is about to go back to Telegram, and really is about to
+      // leave their guest work behind. Both are said plainly. "Welcome back"
+      // said neither, and on a real iPhone it read as "the login failed":
+      // the tester went through Telegram three times.
+      final telegramFork = auth.method == PwaAuthMethod.telegram;
+      final guestDesigns = ref.read(pwaControllerProvider).library.length;
       body = _Message(
-        title: l.authWelcomeBack,
-        body: l.authExistsFor(auth.method),
-        note: l.accountExistsBody,
-        primary: l.authContinueExisting,
+        title: telegramFork ? l.authTgExistsTitle : l.authWelcomeBack,
+        body: telegramFork
+            ? l.authTgExistsBody(guestDesigns)
+            : l.authExistsFor(auth.method),
+        note: telegramFork ? l.authTgExistsNotice : l.accountExistsBody,
+        primary:
+            telegramFork ? l.authTgExistsPrimary : l.authContinueExisting,
         primaryKey: const ValueKey('pwa-auth-continue-existing'),
         busy: auth.busy,
         onPrimary: _continueToExisting,

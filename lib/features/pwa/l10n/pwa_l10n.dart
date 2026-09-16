@@ -858,6 +858,16 @@ class PwaL10n {
   String get authGuestBody => _get('pwaAuthGuestBody');
   String get authSecureCta => _get('pwaAuthSecureCta');
   String get authSecurePurchaseTitle => _get('pwaAuthSecurePurchaseTitle');
+  String get authTgExistsTitle => _get('pwaAuthTgExistsTitle');
+
+  /// What stays behind, said as a number rather than as a mechanism.
+  /// `{n}` is the guest's own designs; the zero case is a different
+  /// sentence because "0 designs will stay" is a strange thing to read.
+  String authTgExistsBody(int n) => n == 0
+      ? _get('pwaAuthTgExistsBodyNone')
+      : _get('pwaAuthTgExistsBody').replaceAll('{n}', '$n');
+  String get authTgExistsPrimary => _get('pwaAuthTgExistsPrimary');
+  String get authTgExistsNotice => _get('pwaAuthTgExistsNotice');
   String get authSecurePurchaseBody => _get('pwaAuthSecurePurchaseBody');
 
   /// "This X already has an Ayden account", per method.

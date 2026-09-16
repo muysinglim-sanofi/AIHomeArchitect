@@ -479,6 +479,15 @@ const Map<String, String> pwaEnTranslations = {
   'pwaAuthGuestBody': 'Your designs are saved on this device.',
   'pwaAuthSecureCta': 'Secure my account',
   'pwaAuthSecurePurchaseTitle': 'Secure your account to buy Spaces',
+  'pwaAuthTgExistsTitle': 'You already have an Ayden account',
+  'pwaAuthTgExistsBody':
+      'Your {n} guest designs will stay on this device. They will not be '
+      'moved to your existing account.',
+  'pwaAuthTgExistsBodyNone':
+      'Your guest work will stay on this device. It will not be moved to '
+      'your existing account.',
+  'pwaAuthTgExistsPrimary': 'Sign in to my existing account',
+  'pwaAuthTgExistsNotice': 'Telegram will ask you to confirm once more.',
   'pwaAuthSecurePurchaseBody':
       'Your designs, your Spaces and your purchases stay yours — on every '
       'device, not just this browser.',
@@ -933,6 +942,13 @@ const Map<String, String> pwaKmTranslations = {
   'pwaAuthGuestBody': 'ការ​រចនា​របស់​អ្នក​ត្រូវ​បាន​រក្សា​ទុក​នៅ​លើ​ឧបករណ៍​នេះ។',
   'pwaAuthSecureCta': 'ការពារ​គណនី​របស់​ខ្ញុំ',
   'pwaAuthSecurePurchaseTitle': 'ការពារ​គណនី​ដើម្បី​ទិញ Spaces',
+  'pwaAuthTgExistsTitle': 'អ្នក​មាន​គណនី Ayden រួច​ហើយ',
+  'pwaAuthTgExistsBody':
+      'ការ​រចនា​ភ្ញៀវ {n} របស់​អ្នក​នឹង​នៅ​លើ​ឧបករណ៍​នេះ។ វា​មិន​ត្រូវ​បាន​ផ្ទេរ​ទៅ​គណនី​ដែល​មាន​ស្រាប់​ទេ។',
+  'pwaAuthTgExistsBodyNone':
+      'ការងារ​ភ្ញៀវ​របស់​អ្នក​នឹង​នៅ​លើ​ឧបករណ៍​នេះ។ វា​មិន​ត្រូវ​បាន​ផ្ទេរ​ទៅ​គណនី​ដែល​មាន​ស្រាប់​ទេ។',
+  'pwaAuthTgExistsPrimary': 'ចូល​ទៅ​គណនី​ដែល​មាន​ស្រាប់',
+  'pwaAuthTgExistsNotice': 'Telegram នឹង​សុំ​ឱ្យ​អ្នក​បញ្ជាក់​ម្ដង​ទៀត។',
   'pwaAuthSecurePurchaseBody':
       'ការ​រចនា Spaces និង​ការ​ទិញ​របស់​អ្នក​នៅ​ជា​របស់​អ្នក — លើ​គ្រប់​ឧបករណ៍ '
       'មិន​ត្រឹម​តែ​កម្មវិធី​រុករក​នេះ​ទេ។',
@@ -1390,6 +1406,15 @@ const Map<String, String> pwaFrTranslations = {
   'pwaAuthGuestBody': 'Vos créations sont enregistrées sur cet appareil.',
   'pwaAuthSecureCta': 'Sécuriser mon compte',
   'pwaAuthSecurePurchaseTitle': 'Sécurisez votre compte pour acheter des Spaces',
+  'pwaAuthTgExistsTitle': 'Vous avez déjà un compte Ayden',
+  'pwaAuthTgExistsBody':
+      'Vos {n} créations d’invité resteront sur cet appareil. Elles ne '
+      'seront pas transférées vers votre compte existant.',
+  'pwaAuthTgExistsBodyNone':
+      'Votre travail d’invité restera sur cet appareil. Il ne sera pas '
+      'transféré vers votre compte existant.',
+  'pwaAuthTgExistsPrimary': 'Se connecter à mon compte existant',
+  'pwaAuthTgExistsNotice': 'Telegram vous demandera une nouvelle confirmation.',
   'pwaAuthSecurePurchaseBody':
       'Vos créations, vos Spaces et vos achats restent à vous — sur tous vos '
       'appareils, pas seulement dans ce navigateur.',
