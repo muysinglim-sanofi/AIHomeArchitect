@@ -166,7 +166,14 @@ import subprocess
 diff = subprocess.run(
     ["git", "diff", "--name-only", "--", "backend"],
     cwd=str(HERE.parent), capture_output=True, text=True).stdout.split()
-allowed = {"backend/pwa_staging_api.py", "backend/pwa_staging_billing.py"}
+# Test files are not a production surface — and this file editing itself would
+# otherwise make the check circular.
+diff = [p for p in diff if not p.endswith("_test.py")]
+# The auth adapter joined the set when the post-sign-out marker route was
+# added. What matters is unchanged and asserted by TM14 below: the billing
+# CORE, the payment rail and the mobile identity route are untouched.
+allowed = {"backend/pwa_staging_api.py", "backend/pwa_staging_billing.py",
+           "backend/pwa_staging_auth_api.py"}
 check("TM13 only the adapter and its route changed",
       set(diff) <= allowed, str(sorted(set(diff) - allowed)))
 for untouched in ("backend/billing.py", "backend/pwa_staging_payments.py",

@@ -40,7 +40,8 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 import pwa_target
-from pwa_staging_api import _bearer, _supabase_url, _verify_user
+from pwa_staging_api import (_bearer, _supabase_url, _verify_user,
+                            _verify_user_claims)
 
 log = logging.getLogger("aih")
 
@@ -130,6 +131,69 @@ async def auth_providers() -> dict:
             log.warning("[pwa-auth] custom-providers unreachable: %s", type(exc).__name__)
     _providers_cache = (now, answer)
     return answer
+
+
+@router.post("/post-signout-guest")
+async def post_signout_guest(
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Mark the guest created BY A SIGN-OUT as having already had its trial.
+
+    THE ABUSE THIS CLOSES, reproduced on staging (2026-09-16): nothing fires on
+    account creation and the free bucket ADDS the trial for as long as no TRIAL
+    row exists, so every new anonymous user is projected a fresh one. Sign in,
+    sign out, and the guest you land on has a full trial again — round and round,
+    one Telegram authorisation per lap.
+
+    The backend cannot tell that guest from a first-ever visitor: both are
+    brand-new anonymous users, one second old, with no history. Only the client
+    that just performed the sign-out knows, which is why it is the client that
+    calls this — and why a first visit, which never calls it, keeps its trial.
+
+    WHAT IT WRITES. Exactly what the mobile rail already writes, through the
+    same canonical function: one `TRIAL(delta 0)` row on the idempotency key
+    `trial:<uid>`. No credit is granted, none is taken, nothing is debited. The
+    checks that already exist then read `trial_granted = true` and a free
+    balance of 0 — the projection simply stops.
+
+    THE USER IS THE TOKEN. `user_id` comes from GoTrue and from nowhere else:
+    a body that named a victim would be a way to burn somebody else's trial.
+    And the caller must be ANONYMOUS — marking a real account would be a bug
+    with a permanent consequence, so it is refused outright.
+    """
+    token = _bearer(authorization)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=10.0)) as client:
+        user = await _verify_user_claims(client, token)
+
+    if user.get("is_anonymous") is not True:
+        # Not a guest: this marker has no meaning here, and writing it would
+        # silently cost a real account its trial.
+        raise HTTPException(
+            status_code=400,
+            detail={"error_code": "NOT_ANONYMOUS",
+                    "user_message": "Only a guest account applies here.",
+                    "retryable": False},
+        )
+
+    import billing  # noqa: PLC0415 — lazy, mirrors the adapter's other callers
+
+    try:
+        # Idempotent by construction: the key is `trial:<uid>`, so a replay
+        # inserts nothing and the client may retry as often as it needs to.
+        marked = await billing.mark_trial_consumed(user_id=user["id"])
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[pwa-auth] post-signout marker failed user=%s err=%s",
+                    user["id"][:8], type(exc).__name__)
+        raise HTTPException(
+            status_code=503,
+            detail={"error_code": "POST_SIGNOUT_UNAVAILABLE",
+                    "user_message": "Finishing guest setup. Please try again.",
+                    "retryable": True},
+        ) from exc
+
+    log.info("[pwa-auth] post-signout guest marked user=%s new=%s",
+             user["id"][:8], marked)
+    return {"status": "ok", "marked": bool(marked)}
 
 
 def _unavailable(why: str) -> HTTPException:
