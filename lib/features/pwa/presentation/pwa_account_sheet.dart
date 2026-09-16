@@ -295,6 +295,7 @@ class _PwaAccountSheetState extends ConsumerState<_PwaAccountSheet> {
     return PwaGuestFootprint(
       entitlementKnown: true,
       libraryRestored: true,
+      trialMaterialized: e.trialMaterialized,
       projects: library.length,
       visions: library.fold(0, (n, p) => n + p.visions.length),
       freeCredits: e.freeCredits,

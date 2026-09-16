@@ -180,6 +180,7 @@ class PwaEntitlement {
     this.products = const [],
     this.paymentProvider = 'none',
     this.paymentConfigured = false,
+    this.trialMaterialized = true,
   });
 
   /// Before the first answer. Deliberately `canGenerate: false` — but the UI
@@ -215,6 +216,15 @@ class PwaEntitlement {
   /// assume ABA, or any provider, is wired.
   final String paymentProvider;
   final bool paymentConfigured;
+
+  /// Whether the free trial has a LEDGER ROW yet, as the server reports it.
+  ///
+  /// The displayed Spaces are a PROJECTION until the first hold writes a
+  /// TRIAL row, so a guest whose generation was released is back at the same
+  /// visible balance while its trial is materialised. Only this tells the two
+  /// apart. Defaults to TRUE — an answer we were not given is read as "it has
+  /// been", which is the conservative side for every caller.
+  final bool trialMaterialized;
 
   bool get isKnown => state != PwaBillingState.loading;
 
@@ -265,6 +275,9 @@ class PwaEntitlement {
       state = PwaBillingState.freeAvailable;
     }
 
+    // Absent on a server that predates the field: read as "materialised",
+    // never as "virgin".
+    final trialRow = body['trial_materialized'] != false;
     final payment = body['payment'];
     return PwaEntitlement(
       state: state,
@@ -283,6 +296,7 @@ class PwaEntitlement {
       paymentProvider:
           payment is Map ? (payment['provider'] as String?) ?? 'none' : 'none',
       paymentConfigured: payment is Map && payment['configured'] == true,
+      trialMaterialized: trialRow,
     );
   }
 
@@ -307,5 +321,6 @@ class PwaEntitlement {
         products: products,
         paymentProvider: paymentProvider,
         paymentConfigured: paymentConfigured,
+        trialMaterialized: trialMaterialized,
       );
 }

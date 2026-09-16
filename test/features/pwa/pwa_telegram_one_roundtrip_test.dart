@@ -34,6 +34,7 @@ library;
 
 import 'package:ai_home_architect/features/pwa/application/pwa_intro_gate.dart';
 import 'package:ai_home_architect/features/pwa/auth/pwa_auth_service.dart';
+import 'package:ai_home_architect/features/pwa/billing/pwa_entitlement.dart';
 import 'package:ai_home_architect/features/pwa/auth/pwa_oauth_gateway.dart';
 import 'package:ai_home_architect/features/pwa/auth/pwa_telegram_journey.dart';
 import 'package:ai_home_architect/features/pwa/auth/pwa_verification_channel.dart';
@@ -208,6 +209,7 @@ PwaOAuthReturn _cancelled() => PwaOAuthReturn.parse(
 const _virgin = PwaGuestFootprint(
   entitlementKnown: true,
   libraryRestored: true,
+  trialMaterialized: false,
   projects: 0,
   visions: 0,
   freeCredits: 3,
@@ -220,6 +222,7 @@ const _virgin = PwaGuestFootprint(
 const _withWork = PwaGuestFootprint(
   entitlementKnown: true,
   libraryRestored: true,
+  trialMaterialized: true,
   projects: 2,
   visions: 3,
   freeCredits: 1,
@@ -350,34 +353,42 @@ void main() {
       final doubts = <String, PwaGuestFootprint>{
         'entitlement not read yet': PwaGuestFootprint.unknown,
         'entitlement still loading': const PwaGuestFootprint(
+            trialMaterialized: false,
             entitlementKnown: false, libraryRestored: true, projects: 0,
             visions: 0, freeCredits: 3, passCredits: 0, creditsAvailable: 3,
             hasActivePass: false),
         'library not restored yet': const PwaGuestFootprint(
+            trialMaterialized: false,
             entitlementKnown: true, libraryRestored: false, projects: 0,
             visions: 0, freeCredits: 3, passCredits: 0, creditsAvailable: 3,
             hasActivePass: false),
         'has a project': const PwaGuestFootprint(
+            trialMaterialized: false,
             entitlementKnown: true, libraryRestored: true, projects: 1,
             visions: 0, freeCredits: 3, passCredits: 0, creditsAvailable: 3,
             hasActivePass: false),
         'has a vision': const PwaGuestFootprint(
+            trialMaterialized: false,
             entitlementKnown: true, libraryRestored: true, projects: 0,
             visions: 1, freeCredits: 3, passCredits: 0, creditsAvailable: 3,
             hasActivePass: false),
         'holds a pass': const PwaGuestFootprint(
+            trialMaterialized: false,
             entitlementKnown: true, libraryRestored: true, projects: 0,
             visions: 0, freeCredits: 3, passCredits: 0, creditsAvailable: 3,
             hasActivePass: true),
         'holds paid credits': const PwaGuestFootprint(
+            trialMaterialized: false,
             entitlementKnown: true, libraryRestored: true, projects: 0,
             visions: 0, freeCredits: 3, passCredits: 10, creditsAvailable: 13,
             hasActivePass: false),
         'wallet does not add up': const PwaGuestFootprint(
+            trialMaterialized: false,
             entitlementKnown: true, libraryRestored: true, projects: 0,
             visions: 0, freeCredits: 3, passCredits: 0, creditsAvailable: 7,
             hasActivePass: false),
         'nothing left to spend': const PwaGuestFootprint(
+            trialMaterialized: false,
             entitlementKnown: true, libraryRestored: true, projects: 0,
             visions: 0, freeCredits: 0, passCredits: 0, creditsAvailable: 0,
             hasActivePass: false),
@@ -427,6 +438,85 @@ void main() {
               'can ever return to an abandoned anonymous user, so its '
               'projection is not a second spendable trial');
       expect(r.gw.authorisations, 1);
+    });
+
+    test('TG-TRIAL-04 a HELD-then-RELEASED guest is NOT virgin', () {
+      // The exact ambiguity `trial_materialized` was added to close. This guest
+      // started a generation, it was released, and the balance came back to
+      // three. By arithmetic it is indistinguishable from a guest that never
+      // touched anything — and it is not the same thing at all: its trial has
+      // a row, so abandoning it would orphan that row and project a SECOND
+      // trial onto the account it becomes.
+      const heldThenReleased = PwaGuestFootprint(
+        entitlementKnown: true,
+        libraryRestored: true,
+        trialMaterialized: true, // the one field that differs
+        projects: 0,
+        visions: 0,
+        freeCredits: 3,
+        passCredits: 0,
+        creditsAvailable: 3,
+        hasActivePass: false,
+      );
+      // Every OTHER signal says "virgin". Only the server's row says otherwise.
+      expect(heldThenReleased.creditsAvailable, _virgin.creditsAvailable);
+      expect(heldThenReleased.projects, _virgin.projects);
+      expect(heldThenReleased.visions, _virgin.visions);
+
+      expect(heldThenReleased.nothingToLose, isFalse);
+      expect(
+          pwaTelegramJourneyFor(
+              isAnonymous: true,
+              userAskedSignIn: false,
+              footprint: heldThenReleased),
+          PwaOAuthJourney.link,
+          reason: 'LINK, never SIGN IN — its trial is already written down');
+    });
+
+    test('TG-TRIAL-05 a genuinely virgin guest may sign in', () {
+      expect(_virgin.trialMaterialized, isFalse);
+      expect(_virgin.projects, 0);
+      expect(_virgin.visions, 0);
+      expect(_virgin.passCredits, 0);
+      expect(_virgin.hasActivePass, isFalse);
+      expect(_virgin.nothingToLose, isTrue);
+      expect(
+          pwaTelegramJourneyFor(
+              isAnonymous: true, userAskedSignIn: false, footprint: _virgin),
+          PwaOAuthJourney.signIn);
+    });
+
+    test('TG-TRIAL-06 an entitlement we could not read fails CLOSED', () {
+      // `PwaGuestFootprint.unknown` is what an unread entitlement produces, and
+      // it carries trialMaterialized: true — the conservative answer. The
+      // server helper answers the same way when its own read throws.
+      expect(PwaGuestFootprint.unknown.trialMaterialized, isTrue);
+      expect(PwaGuestFootprint.unknown.nothingToLose, isFalse);
+      expect(
+          pwaTelegramJourneyFor(
+              isAnonymous: true,
+              userAskedSignIn: false,
+              footprint: PwaGuestFootprint.unknown),
+          PwaOAuthJourney.link);
+
+      // And a payload with the key ABSENT — an older server — is read the same
+      // conservative way, never as "virgin".
+      final noKey = PwaEntitlement.parse(const {
+        'can_generate': true,
+        'free_credits': 3,
+        'credits_available': 3,
+        'products': <Object?>[],
+      });
+      expect(noKey.trialMaterialized, isTrue,
+          reason: 'absent must not read as false');
+      final saysFalse = PwaEntitlement.parse(const {
+        'can_generate': true,
+        'free_credits': 3,
+        'credits_available': 3,
+        'trial_materialized': false,
+        'products': <Object?>[],
+      });
+      expect(saysFalse.trialMaterialized, isFalse);
     });
 
     test('TG-TRIAL-02 the same Telegram always lands on the same account',

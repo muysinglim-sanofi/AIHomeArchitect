@@ -51,6 +51,7 @@ class PwaGuestFootprint {
   const PwaGuestFootprint({
     required this.entitlementKnown,
     required this.libraryRestored,
+    required this.trialMaterialized,
     required this.projects,
     required this.visions,
     required this.freeCredits,
@@ -63,6 +64,7 @@ class PwaGuestFootprint {
   static const PwaGuestFootprint unknown = PwaGuestFootprint(
     entitlementKnown: false,
     libraryRestored: false,
+    trialMaterialized: true,
     projects: 0,
     visions: 0,
     freeCredits: 0,
@@ -77,6 +79,14 @@ class PwaGuestFootprint {
   /// True once the server's library answer has arrived. A boot that has not
   /// finished restoring reports zero projects, and zero must not be believed.
   final bool libraryRestored;
+
+  /// The SERVER's answer to "does this account's trial have a ledger row yet".
+  ///
+  /// The clause that closes the last ambiguity. A guest whose generation was
+  /// held and then released is back at the same displayed balance as a guest
+  /// that has never touched anything — the numbers cannot tell them apart, and
+  /// only one of them is safe to abandon. This can.
+  final bool trialMaterialized;
 
   final int projects;
   final int visions;
@@ -97,9 +107,17 @@ class PwaGuestFootprint {
   /// adds the trial only while no TRIAL row exists). So abandoning a guest in
   /// this state leaves nothing behind to orphan, and the account it becomes is
   /// projected the same trial by the same rule: 3 before, 3 after, once.
+  ///
+  /// And "has never held anything" is asked of the SERVER rather than inferred
+  /// from the balance. A generation that was held and then released leaves the
+  /// balance exactly where it started AND a TRIAL row behind it: arithmetic
+  /// alone cannot tell that guest from a virgin one. `trialMaterialized` can.
   bool get nothingToLose =>
       entitlementKnown &&
       libraryRestored &&
+      // Nothing has been written down for this account yet. Not a projection
+      // that happens to add up to the same number — nothing.
+      !trialMaterialized &&
       projects == 0 &&
       visions == 0 &&
       !hasActivePass &&
