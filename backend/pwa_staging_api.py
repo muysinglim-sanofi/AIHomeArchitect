@@ -1480,6 +1480,13 @@ async def pwa_entitlement(
         "reason": gate.reason or "",
         "billing_state": "" if gate.allow else pwa_billing.billing_state_for(gate.reason),
         **ctx.public_state,
+        # WHETHER THE TRIAL HAS A ROW YET. Read only, decided nowhere else: the
+        # displayed Spaces are a projection until the first hold materialises a
+        # TRIAL row, so a guest that has started a generation and had it
+        # released looks untouched while it is not. The Web auth seam needs the
+        # difference to tell a virgin guest from one it must not abandon.
+        # Nothing branches on it here; it is reported, not applied.
+        "trial_materialized": await pwa_billing.trial_materialized(user_id),
         "products": products,
         # The payment seam is declared, not implemented. The client renders a
         # provider-unavailable state from THIS, rather than from a hardcoded

@@ -64,6 +64,7 @@ asserts the TRIAL row that lands is +1.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 from dataclasses import dataclass
@@ -199,6 +200,42 @@ async def resolve(user_id: str) -> tuple:
         tier=decision.tier,
     )
     return decision, gate
+
+
+async def trial_materialized(user_id: str) -> bool:
+    """Whether this account's free trial has a LEDGER ROW yet. A pure read.
+
+    WHY THE NAME. The 3 Spaces a fresh account displays are a PROJECTION, not a
+    balance: nothing fires on account creation, and `_free_bucket_available`
+    ADDS the trial for as long as no TRIAL row exists. So "granted" would be
+    the wrong word in both directions — the credits are offered before the row
+    exists, and the row can exist with a zero delta (the sign-out marker).
+    Materialised says exactly what is being asked: is there a row.
+
+    WHO NEEDS IT. The Web auth seam, to tell a genuinely untouched guest from
+    one that merely LOOKS untouched. A guest who started a generation that was
+    released is back at the same visible balance, but its trial IS materialised
+    — abandoning that account is not the same act as abandoning a virgin one.
+
+    READ ONLY, and fail-CLOSED for its caller: any error answers True, i.e.
+    "assume it has been", which sends the caller down its conservative path.
+    Nothing here writes, holds, projects or decides anything about credits.
+    """
+    import billing  # noqa: PLC0415 — lazy, mirrors `resolve` above
+
+    try:
+        res = await asyncio.to_thread(
+            lambda: billing._get_supa().table("ledger_entries")
+            .select("entry_type")
+            .eq("user_id", user_id).eq("entry_type", "TRIAL")
+            .limit(1).execute()
+        )
+        return bool(getattr(res, "data", None))
+    except Exception as exc:  # noqa: BLE001 — a read that fails says "yes"
+        log.warning("[pwa-billing] trial_materialized read failed user=%s err=%s "
+                    "→ answering True (fail-closed for the caller)",
+                    user_id[:8], type(exc).__name__)
+        return True
 
 
 async def open_gate(*, user_id: str, idempotency_key: str) -> PwaBillingContext:
