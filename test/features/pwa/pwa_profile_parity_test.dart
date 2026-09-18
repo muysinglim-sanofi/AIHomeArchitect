@@ -664,7 +664,10 @@ void main() {
       await tester.pumpAndSettle();
       // The paywall that already exists, in the state the SERVER put us in —
       // this screen neither builds one nor chooses which one to show.
-      expect(find.text(l.paywallFreeUsedTitle), findsOneWidget);
+      // The Profile CTA and the paywall headline are one string by design,
+      // so the sentence is on screen twice here. What this asserts is that
+      // the paywall opened at all.
+      expect(find.text(l.paywallFreeUsedTitle), findsWidgets);
       expect(tester.takeException(), isNull);
     });
   });
@@ -990,7 +993,10 @@ void main() {
           reason: 'the authoritative balance is still what the row states');
       expect(find.byKey(const ValueKey('pwa-profile-get-spaces')),
           findsOneWidget);
-      expect(find.text(l.getMoreSpaces), findsOneWidget);
+      // The paywall this CTA opens is TITLED with the same sentence, on
+      // purpose and from the same string. Identify the CTA by its key.
+      expect(find.byKey(const ValueKey('pwa-profile-get-spaces')),
+          findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -1012,7 +1018,7 @@ void main() {
 
     for (final (code, label) in const [
       ('en', 'Get more Spaces'),
-      ('fr', 'Acheter des Spaces'),
+      ('fr', 'Obtenir plus de Spaces'),
       ('km', 'ទិញ Spaces បន្ថែម'),
     ]) {
       testWidgets('the line reads "$label" in $code', (tester) async {

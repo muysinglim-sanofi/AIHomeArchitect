@@ -261,13 +261,11 @@ const Map<String, String> pwaEnTranslations = {
   'pwaRedesignOne': '1 redesign',
   'pwaStatVisions': 'Visions',
   'pwaPaywallTitle': 'Keep designing',
-  'pwaPaywallFreeUsedTitle': 'Your free vision is used',
   'pwaPaywallFreeUsedBody':
-      'You have seen what Ayden can do with your space. Unlock more visions to '
-      'keep refining it.',
+      'One-time purchase. No subscription. Your Spaces never expire.',
   'pwaPaywallPassExhaustedTitle': 'No spaces left',
   'pwaPaywallPassExhaustedBody':
-      'Your pass has been fully used. Add more spaces to continue.',
+      'You have used all your Spaces. Add more to continue.',
   'pwaPaywallPassRequiredTitle': 'Restore your access',
   'pwaPaywallPassRequiredBody':
       'Your account has Premium, but no active pass was found. Restore your '
@@ -276,10 +274,11 @@ const Map<String, String> pwaEnTranslations = {
   'pwaPaywallErrorTitle': "We couldn't check your account",
   'pwaPaywallErrorBody':
       'Your access could not be confirmed just now. You can try again.',
-  'pwaPaywallActiveTitle': 'Your pass is active',
-  'pwaPaywallActiveBody': 'No watermark. Design as much as you like.',
-  'pwaPaywallSpaces': '{n} spaces',
-  'pwaPaywallSpaceOne': '1 space',
+  'pwaPaywallActiveTitle': 'Your Spaces are ready',
+  'pwaPaywallActiveBody':
+      'One-time purchase. No subscription. Your Spaces never expire.',
+  'pwaPaywallSpaces': '{n} Spaces',
+  'pwaPaywallSpaceOne': '1 Space',
   'pwaPaywallDays': '{n} days',
   'pwaPaywallUnavailableTitle': 'Payments are not open yet',
   'pwaPaywallUnavailableBody':
@@ -288,7 +287,7 @@ const Map<String, String> pwaEnTranslations = {
   'pwaPaywallStoreOnly': 'Available in the mobile app',
   'pwaPaywallDiscount': '{n}% OFF',
   'pwaProductBadgeStarter': 'STARTER',
-  'pwaProductBadgePopular': 'POPULAR',
+  'pwaProductBadgePopular': 'MOST POPULAR',
   'pwaProductBadgeBestValue': 'BEST VALUE',
   'pwaPaywallRestore': 'I already paid',
   'pwaPaywallClose': 'Not now',
@@ -734,13 +733,11 @@ const Map<String, String> pwaKmTranslations = {
   'pwaRedesignOne': 'ការ​រចនា​ឡើង​វិញ 1',
   'pwaStatVisions': 'ទស្សនៈ',
   'pwaPaywallTitle': 'បន្ត​រចនា​ត​ទៅ​ទៀត',
-  'pwaPaywallFreeUsedTitle': 'ទស្សនៈ​ឥត​គិត​ថ្លៃ​របស់​អ្នក​ត្រូវ​បាន​ប្រើ​អស់​ហើយ',
   'pwaPaywallFreeUsedBody':
-      'អ្នក​បាន​ឃើញ​ហើយ​ថា Ayden អាច​ធ្វើ​អ្វី​ខ្លះ​ជាមួយ​ទីកន្លែង​របស់​អ្នក។ '
-      'ដោះ​សោ​ទស្សនៈ​បន្ថែម ដើម្បី​បន្ត​កែ​លម្អ​វា។',
+      'ទូទាត់​តែ​ម្ដង។ គ្មាន​ការ​ជាវ​ប្រចាំ។ Spaces របស់​អ្នក​មិន​ផុត​កំណត់​ទេ។',
   'pwaPaywallPassExhaustedTitle': 'គ្មាន Spaces នៅ​សល់​ទេ',
   'pwaPaywallPassExhaustedBody':
-      'Pass របស់​អ្នក​ត្រូវ​បាន​ប្រើ​អស់​ហើយ។ បន្ថែម Spaces ដើម្បី​បន្ត។',
+      'អ្នក​បាន​ប្រើ Spaces អស់​ហើយ។ បន្ថែម​ទៀត ដើម្បី​បន្ត។',
   'pwaPaywallPassRequiredTitle': 'ស្ដារ​សិទ្ធិ​ចូល​ប្រើ​របស់​អ្នក',
   'pwaPaywallPassRequiredBody':
       'គណនី​របស់​អ្នក​មាន Premium ប៉ុន្តែ​រក​មិន​ឃើញ Pass សកម្ម​ទេ។ '
@@ -749,8 +746,9 @@ const Map<String, String> pwaKmTranslations = {
   'pwaPaywallErrorTitle': 'យើង​មិន​អាច​ពិនិត្យ​គណនី​របស់​អ្នក​បាន​ទេ',
   'pwaPaywallErrorBody':
       'សិទ្ធិ​ចូល​ប្រើ​របស់​អ្នក​មិន​អាច​បញ្ជាក់​បាន​ឥឡូវ​នេះ​ទេ។ អ្នក​អាច​ព្យាយាម​ម្ដង​ទៀត។',
-  'pwaPaywallActiveTitle': 'Pass របស់​អ្នក​កំពុង​សកម្ម',
-  'pwaPaywallActiveBody': 'គ្មាន​ហត្ថលេខា​ទឹក។ រចនា​បាន​តាម​ចិត្ត។',
+  'pwaPaywallActiveTitle': 'Spaces របស់​អ្នក​រួច​រាល់​ហើយ',
+  'pwaPaywallActiveBody':
+      'ទូទាត់​តែ​ម្ដង។ គ្មាន​ការ​ជាវ​ប្រចាំ។ Spaces របស់​អ្នក​មិន​ផុត​កំណត់​ទេ។',
   'pwaPaywallSpaces': '{n} Spaces',
   'pwaPaywallSpaceOne': '1 Space',
   'pwaPaywallDays': '{n} ថ្ងៃ',
@@ -761,7 +759,7 @@ const Map<String, String> pwaKmTranslations = {
   'pwaPaywallStoreOnly': 'មាន​នៅ​ក្នុង​កម្មវិធី​ទូរស័ព្ទ',
   'pwaPaywallDiscount': 'បញ្ចុះ​តម្លៃ {n}%',
   'pwaProductBadgeStarter': 'ចាប់​ផ្ដើម',
-  'pwaProductBadgePopular': 'ពេញ​និយម',
+  'pwaProductBadgePopular': 'ពេញ​និយម​បំផុត',
   'pwaProductBadgeBestValue': 'តម្លៃ​ល្អ​បំផុត',
   'pwaPaywallRestore': 'ខ្ញុំ​បាន​ទូទាត់​រួច​ហើយ',
   'pwaPaywallClose': 'មិន​ទាន់​ទេ',
@@ -1135,7 +1133,7 @@ const Map<String, String> pwaFrTranslations = {
 
   // ── Projects ───────────────────────────────────────────────────────────────
   'pwaYourSpaces': 'VOS ESPACES',
-  'pwaGetMoreSpaces': 'Acheter des Spaces',
+  'pwaGetMoreSpaces': 'Obtenir plus de Spaces',
   'pwaContinueShapingHome': 'Continuez à façonner votre maison.',
   'pwaReturnToProject':
       'Revenez à un projet, explorez ses visions, ou commencez un nouvel espace.',
@@ -1196,13 +1194,11 @@ const Map<String, String> pwaFrTranslations = {
   'pwaRedesignOne': '1 redesign',
   'pwaStatVisions': 'Visions',
   'pwaPaywallTitle': 'Continuer à créer',
-  'pwaPaywallFreeUsedTitle': 'Votre vision gratuite est utilisée',
   'pwaPaywallFreeUsedBody':
-      "Vous avez vu ce qu'Ayden peut faire de votre espace. Débloquez plus de "
-      "visions pour continuer à l'affiner.",
+      "Paiement unique. Sans abonnement. Vos Spaces n'expirent pas.",
   'pwaPaywallPassExhaustedTitle': 'Plus aucun Space',
   'pwaPaywallPassExhaustedBody':
-      'Votre pass a été entièrement utilisé. Ajoutez des Spaces pour continuer.',
+      'Vous avez utilisé tous vos Spaces. Ajoutez-en pour continuer.',
   'pwaPaywallPassRequiredTitle': 'Restaurez votre accès',
   'pwaPaywallPassRequiredBody':
       "Votre compte est Premium, mais aucun pass actif n'a été trouvé. "
@@ -1212,8 +1208,9 @@ const Map<String, String> pwaFrTranslations = {
   'pwaPaywallErrorBody':
       "Votre accès n'a pas pu être confirmé pour le moment. Vous pouvez "
       'réessayer.',
-  'pwaPaywallActiveTitle': 'Votre pass est actif',
-  'pwaPaywallActiveBody': 'Sans filigrane. Créez autant que vous voulez.',
+  'pwaPaywallActiveTitle': 'Vos Spaces sont prêts',
+  'pwaPaywallActiveBody':
+      "Paiement unique. Sans abonnement. Vos Spaces n'expirent pas.",
   'pwaPaywallSpaces': '{n} Spaces',
   'pwaPaywallSpaceOne': '1 Space',
   'pwaPaywallDays': '{n} jours',
@@ -1224,7 +1221,7 @@ const Map<String, String> pwaFrTranslations = {
   'pwaPaywallStoreOnly': "Disponible dans l'application mobile",
   'pwaPaywallDiscount': '-{n}%',
   'pwaProductBadgeStarter': 'DÉCOUVERTE',
-  'pwaProductBadgePopular': 'POPULAIRE',
+  'pwaProductBadgePopular': 'LE PLUS POPULAIRE',
   'pwaProductBadgeBestValue': 'MEILLEURE OFFRE',
   'pwaPaywallRestore': "J'ai déjà payé",
   'pwaPaywallClose': 'Pas maintenant',

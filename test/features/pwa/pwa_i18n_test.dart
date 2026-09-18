@@ -105,6 +105,8 @@ void main() {
         'pwaArchitectLabel', // AYDEN ARCHITECT
         'pwaAuthMethodFacebook', // Facebook — a brand, in every language
         'pwaAuthMethodTelegram', // Telegram — likewise
+        'pwaPaywallSpaces',   // "Spaces" is the product's own noun, kept
+        'pwaPaywallSpaceOne', // in Khmer and French exactly as in English
       };
       for (final code in ['km', 'fr']) {
         final same = _dict(code).entries

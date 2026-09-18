@@ -656,7 +656,10 @@ class PwaL10n {
 
   // ── Paywall ────────────────────────────────────────────────────────────────
   String get paywallTitle => _get('pwaPaywallTitle');
-  String get paywallFreeUsedTitle => _get('pwaPaywallFreeUsedTitle');
+  /// The same sentence the Profile CTA carries — deliberately one string,
+  /// not two that could drift: the button says "Get more Spaces" and the
+  /// sheet it opens is titled "Get more Spaces".
+  String get paywallFreeUsedTitle => getMoreSpaces;
   String get paywallFreeUsedBody => _get('pwaPaywallFreeUsedBody');
   String get paywallPassExhaustedTitle => _get('pwaPaywallPassExhaustedTitle');
   String get paywallPassExhaustedBody => _get('pwaPaywallPassExhaustedBody');

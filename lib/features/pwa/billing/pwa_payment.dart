@@ -32,6 +32,8 @@
 ///                            "something broke"
 library;
 
+import 'pwa_entitlement.dart' show pwaMoney;
+
 /// Where a payment attempt is, as the SERVER sees it.
 enum PwaPaymentState {
   /// Nothing in progress. The paywall shows products.
@@ -442,7 +444,7 @@ class PwaPayment {
     final value = amount;
     if (value == null) return '';
     return currency == 'USD'
-        ? '\$${value.toStringAsFixed(2)}'
-        : '${value.toStringAsFixed(2)} $currency';
+        ? '\$${pwaMoney(value)}'
+        : '${pwaMoney(value)} $currency';
   }
 }

@@ -1591,11 +1591,13 @@ void main() {
             findsOneWidget);
         expect(find.text('Purchase summary'), findsOneWidget);
         // The pack line and the amount are the server's echo of the ORDER.
-        expect(textOf(tester, 'pwa-pay-result-pack'), '$credits spaces');
+        expect(textOf(tester, 'pwa-pay-result-pack'),
+            pwaL10nFor(const Locale('en')).paywallSpaces(credits));
         expect(textOf(tester, 'pwa-pay-result-amount'), price);
         // The new balance is what the entitlement answered after the grant.
         expect(find.text('New balance'), findsOneWidget);
-        expect(textOf(tester, 'pwa-pay-result-balance'), '$credits spaces');
+        expect(textOf(tester, 'pwa-pay-result-balance'),
+            pwaL10nFor(const Locale('en')).paywallSpaces(credits));
         expect(find.byKey(const ValueKey('pwa-pay-result-continue')),
             findsOneWidget);
         expect(find.text('Continue'), findsOneWidget);
@@ -1686,8 +1688,10 @@ void main() {
       // say 25, and must never have worked that out itself.
       final controller = await settled('GRANTED', credits: 10, amount: 4.99);
       await pumpCard(tester, controller, entitlement: holding(25));
-      expect(textOf(tester, 'pwa-pay-result-balance'), '25 spaces');
-      expect(textOf(tester, 'pwa-pay-result-pack'), '10 spaces');
+      expect(textOf(tester, 'pwa-pay-result-balance'),
+          pwaL10nFor(const Locale('en')).paywallSpaces(25));
+      expect(textOf(tester, 'pwa-pay-result-pack'),
+          pwaL10nFor(const Locale('en')).paywallSpaces(10));
       await _teardown(tester);
     });
 
@@ -1709,7 +1713,8 @@ void main() {
       });
       await tester.pump();
       await tester.pump();
-      expect(textOf(tester, 'pwa-pay-result-balance'), '10 spaces');
+      expect(textOf(tester, 'pwa-pay-result-balance'),
+          pwaL10nFor(const Locale('en')).paywallSpaces(10));
       await _teardown(tester);
     });
 

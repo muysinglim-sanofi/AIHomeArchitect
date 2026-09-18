@@ -746,7 +746,9 @@ void main() {
     test('PAY11 every locale carries the whole paywall + account vocabulary',
         () {
       const required = [
-        'pwaPaywallFreeUsedTitle',
+        // The free-exhausted headline now REUSES the Profile CTA's own
+        // string, so the vocabulary check follows it there.
+        'pwaGetMoreSpaces',
         'pwaPaywallPassRequiredTitle',
         'pwaPaywallUnavailableTitle',
         'pwaPaywallStoreOnly',

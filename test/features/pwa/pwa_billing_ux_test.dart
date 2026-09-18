@@ -560,7 +560,11 @@ void main() {
       final texts = tester
           .widgetList<Text>(find.byType(Text))
           .map((t) => (t.data ?? '').toLowerCase())
-          .join(' | ');
+          .join(' | ')
+          // The Cambodia packs say "One-time purchase. No subscription." —
+          // a DENIAL, and the whole point of the copy. What this test is for
+          // is a store product being OFFERED here.
+          .replaceAll('no subscription', '');
       for (final banned in const [
         'apple',
         'revenuecat',

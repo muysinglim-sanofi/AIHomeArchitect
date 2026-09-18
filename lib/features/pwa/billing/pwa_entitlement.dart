@@ -51,6 +51,17 @@ enum PwaBillingState {
 
 /// A product as the canonical `products` table defines it. The client never
 /// invents a price, a SKU or a credit count.
+/// A price as a person reads it: cents only when there are cents.
+///
+/// Cambodia's packs are $2.50, $5, $8 and $14 — and "$5.00" on a card reads as
+/// a form field, not a price. Two decimals are kept the moment they carry
+/// information, so nothing is ever rounded away: 2.50 stays "2.50", 14.00
+/// becomes "14".
+String pwaMoney(double amount) {
+  final fixed = amount.toStringAsFixed(2);
+  return fixed.endsWith('.00') ? fixed.substring(0, fixed.length - 3) : fixed;
+}
+
 class PwaProduct {
   const PwaProduct({
     required this.sku,
@@ -143,8 +154,7 @@ class PwaProduct {
   String get priceLabel {
     final p = priceUsd;
     if (p == null) return '';
-    final amount = p.toStringAsFixed(2);
-    return currency == 'USD' ? '\$$amount' : '$amount $currency';
+    return currency == 'USD' ? '\$${pwaMoney(p)}' : '${pwaMoney(p)} $currency';
   }
 
   static PwaProduct? parse(Object? raw) {
